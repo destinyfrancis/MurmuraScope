@@ -68,8 +68,8 @@ def _build_domain_keywords() -> dict[str, list[str]]:
     return result
 
 
-# Backward compat alias
-_DOMAIN_KEYWORDS = _STATIC_DOMAIN_KEYWORDS
+# Module-level cache: populated from DomainPackRegistry on import, with static fallback
+_DOMAIN_KEYWORDS = _build_domain_keywords()
 
 
 # ---------------------------------------------------------------------------

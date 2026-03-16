@@ -57,18 +57,19 @@ class SignalGenerator:
 
         For each contract:
         1. Get current market price (YES outcome price)
-        2. Estimate probability from agent consensus
+        2. Estimate probability from agent consensus (using domain pack weights)
         3. Compute alpha = engine_prob - market_price
         4. Determine direction and strength
         """
         signals: list[TradingSignal] = []
+        domain_pack_id = await self._get_session_domain_pack(session_id)
 
         for match in matched_contracts:
             contract = match.contract
 
             try:
                 estimate = await self._estimator.estimate_probability(
-                    session_id, contract.question
+                    session_id, contract.question, domain_pack_id=domain_pack_id
                 )
             except Exception:
                 logger.exception(
@@ -129,6 +130,20 @@ class SignalGenerator:
             await self._persist_signals(session_id, signals)
 
         return signals
+
+    async def _get_session_domain_pack(self, session_id: str) -> str | None:
+        """Look up the domain pack ID for a session from the DB."""
+        try:
+            async with get_db() as db:
+                cursor = await db.execute(
+                    "SELECT domain_pack FROM simulation_sessions WHERE id = ?",
+                    (session_id,),
+                )
+                row = await cursor.fetchone()
+                return row[0] if row and row[0] else None
+        except Exception:
+            logger.debug("Could not fetch domain_pack for session=%s", session_id)
+            return None
 
     async def _persist_signals(
         self, session_id: str, signals: list[TradingSignal]

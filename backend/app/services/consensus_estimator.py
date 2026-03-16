@@ -63,6 +63,7 @@ class ConsensusEstimator:
         session_id: str,
         contract_question: str,
         signal_weights: dict[str, float] | None = None,
+        domain_pack_id: str | None = None,
     ) -> ConsensusEstimate:
         """Estimate P(YES) for a contract question from simulation state.
 
@@ -71,12 +72,13 @@ class ConsensusEstimator:
         2. Decision signal — directional life decisions
         3. Sentiment signal — overall positive/negative ratio
 
-        *signal_weights* can override default weights (belief=0.40, decision=0.35,
-        sentiment=0.25). When None, uses defaults or loads from domain pack.
+        *signal_weights* overrides all weight logic.
+        When None, loads weights from *domain_pack_id* if provided, else uses defaults
+        (belief=0.40, decision=0.35, sentiment=0.25).
 
         Returns a ConsensusEstimate with probability, confidence, and breakdown.
         """
-        weights = signal_weights or {"belief": 0.40, "decision": 0.35, "sentiment": 0.25}
+        weights = signal_weights or self._load_weights(domain_pack_id)
 
         belief_signal = await self._compute_belief_signal(session_id, contract_question)
         decision_signal = await self._compute_decision_signal(session_id)
@@ -119,6 +121,21 @@ class ConsensusEstimator:
             sentiment_signal=round(sentiment_signal, 4),
             evidence_summary=evidence,
         )
+
+    @staticmethod
+    def _load_weights(domain_pack_id: str | None) -> dict[str, float]:
+        """Load consensus weights from the domain pack, falling back to defaults."""
+        _defaults: dict[str, float] = {"belief": 0.40, "decision": 0.35, "sentiment": 0.25}
+        if not domain_pack_id:
+            return _defaults
+        try:
+            from backend.app.domain.base import DomainPackRegistry  # noqa: PLC0415
+            pack = DomainPackRegistry.get(domain_pack_id)
+            if pack.consensus_weights:
+                return dict(pack.consensus_weights)
+        except Exception:
+            logger.debug("Could not load consensus_weights for pack=%s", domain_pack_id)
+        return _defaults
 
     async def _compute_belief_signal(
         self, session_id: str, question: str
