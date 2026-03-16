@@ -1,0 +1,41 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5001:5001"
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - .env
+    environment:
+      - DATABASE_PATH=/app/data/hksimengine.db
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Development overrides — run with: docker compose --profile dev up app-dev
+  # ---------------------------------------------------------------------------
+  app-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    ports:
+      - "5001:5001"
+    volumes:
+      - ./backend:/app/backend
+      - ./data:/app/data
+    env_file:
+      - .env
+    environment:
+      - DATABASE_PATH=/app/data/hksimengine.db
+      - DEBUG=true
+    command: >
+      uvicorn backend.run:app
+      --host 0.0.0.0
+      --port 5001
+      --reload
+      --reload-dir /app/backend
+    profiles:
+      - dev

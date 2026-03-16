@@ -1,0 +1,31 @@
+{
+  "_meta": {
+    "n_sentiment_periods": 117,
+    "calibrated_pairs": [
+      "negative_ratio → unemployment_rate",
+      "negative_ratio → consumer_confidence",
+      "positive_ratio → consumer_confidence",
+      "negative_ratio → price_index_all_classes",
+      "positive_ratio → gdp_real_growth_rate",
+      "negative_ratio → gdp_real_growth_rate"
+    ],
+    "method": "OLS"
+  },
+  "consumer_confidence": {
+    "negative_ratio": -10.164941082315705,
+    "positive_ratio": 15.852212474055573
+  },
+  "gdp_real_growth_rate": {
+    "negative_ratio": -0.001,
+    "positive_ratio": 0.0008
+  },
+  "unemployment_rate": {
+    "negative_ratio": 0.0018535028190419009
+  },
+  "price_index_all_classes": {
+    "negative_ratio": -0.001
+  },
+  "net_migration": {
+    "negative_ratio": -100
+  }
+}

@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+.venv311/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Data
+data/raw/
+data/cleaned/
+*.db
+*.db-shm
+*.db-wal
+data/sessions/
+data/vector_store/
+
+# Logs
+log/
+*.log
+firebase-debug.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+frontend/dist/
+
+# OASIS
+oasis_output/
+
+# Claude / Personal
+CLAUDE.md
+
+# Playwright MCP
+.playwright-mcp/

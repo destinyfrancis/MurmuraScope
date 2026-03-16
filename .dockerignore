@@ -1,0 +1,10 @@
+.venv311/
+data/sessions/
+data/vector_store/
+log/
+node_modules/
+.git/
+__pycache__/
+*.pyc
+.playwright-mcp/
+.claude/
