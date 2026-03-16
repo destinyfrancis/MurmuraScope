@@ -3,6 +3,32 @@ import { ref, onMounted, computed } from 'vue'
 import { getForecast, getBacktest, listSessions } from '../api/simulation.js'
 import { getStockTickers, getStockForecast, getStockBacktest, getStockSummary } from '../api/stock.js'
 
+// ── Backtest cache (5-min TTL) ────────────────────────────────────────────────
+const BACKTEST_CACHE_TTL = 5 * 60 * 1000
+const backtestCache = new Map()
+
+function getCachedBacktest(metric, trainEnd, horizon) {
+  const key = `${metric}:${trainEnd}:${horizon}`
+  const entry = backtestCache.get(key)
+  if (entry && Date.now() - entry.timestamp < BACKTEST_CACHE_TTL) {
+    return entry.data
+  }
+  return null
+}
+
+function setCachedBacktest(metric, trainEnd, horizon, data) {
+  const key = `${metric}:${trainEnd}:${horizon}`
+  backtestCache.set(key, { data, timestamp: Date.now() })
+}
+
+async function cachedGetBacktest(metric, trainEnd, horizon) {
+  const cached = getCachedBacktest(metric, trainEnd, horizon)
+  if (cached) return cached
+  const result = await getBacktest(metric, trainEnd, horizon)
+  setCachedBacktest(metric, trainEnd, horizon, result)
+  return result
+}
+
 // ── Tab state ────────────────────────────────────────────────────────────────
 const activeTab = ref('macro')
 
@@ -44,7 +70,7 @@ async function loadMetric(metric) {
   try {
     const [fcRes, btRes] = await Promise.allSettled([
       getForecast(metric, 12),
-      getBacktest(metric, '2022-Q4', 8),
+      cachedGetBacktest(metric, '2022-Q4', 8),
     ])
     forecastData.value = fcRes.status === 'fulfilled' ? fcRes.value?.data?.data : null
     backtestData.value = btRes.status === 'fulfilled' ? btRes.value?.data?.data : null
@@ -59,7 +85,7 @@ async function loadMetric(metric) {
 async function loadAllBacktests() {
   loadingSummary.value = true
   const results = await Promise.allSettled(
-    METRICS.map(m => getBacktest(m.key, '2022-Q4', 8).then(r => ({
+    METRICS.map(m => cachedGetBacktest(m.key, '2022-Q4', 8).then(r => ({
       metric: m.key,
       label: m.label,
       ...r?.data?.data,
@@ -544,7 +570,7 @@ onMounted(() => {
   max-width: 1200px;
   margin: 0 auto;
   padding: 2rem;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: var(--font-sans);
 }
 .dashboard-header {
   margin-bottom: 1.5rem;
@@ -552,9 +578,10 @@ onMounted(() => {
 .dashboard-header h1 {
   font-size: 1.8rem;
   margin: 0 0 0.5rem;
+  color: var(--text-primary);
 }
 .subtitle {
-  color: #666;
+  color: var(--text-secondary);
   margin: 0;
 }
 
@@ -562,7 +589,7 @@ onMounted(() => {
 .tab-switcher {
   display: flex;
   gap: 0;
-  border-bottom: 2px solid #e5e7eb;
+  border-bottom: 2px solid var(--border-color);
   margin-bottom: 1.5rem;
 }
 .tab-btn {
@@ -572,20 +599,20 @@ onMounted(() => {
   background: none;
   cursor: pointer;
   font-size: 0.95rem;
-  color: #666;
+  color: var(--text-muted);
   margin-bottom: -2px;
-  transition: color 0.15s, border-color 0.15s;
+  transition: var(--transition);
 }
 .tab-btn:hover {
-  color: #4f46e5;
+  color: var(--accent-blue);
 }
 .tab-btn.active {
-  color: #4f46e5;
-  border-bottom-color: #4f46e5;
+  color: var(--accent-blue);
+  border-bottom-color: var(--accent-blue);
   font-weight: 600;
 }
 
-/* ── Macro tab — unchanged styles ─────────────────────────────────────────── */
+/* ── Macro tab ─────────────────────────────────────────────────────────────── */
 .metric-selector {
   display: flex;
   flex-wrap: wrap;
@@ -594,21 +621,22 @@ onMounted(() => {
 }
 .metric-btn {
   padding: 0.4rem 0.8rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-color);
   border-radius: 6px;
-  background: #fff;
+  background: var(--bg-card);
+  color: var(--text-secondary);
   cursor: pointer;
   font-size: 0.85rem;
-  transition: all 0.2s;
+  transition: var(--transition);
 }
 .metric-btn:hover {
-  border-color: #4f46e5;
-  color: #4f46e5;
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
 }
 .metric-btn.active {
-  background: #4f46e5;
-  color: #fff;
-  border-color: #4f46e5;
+  background: var(--accent-blue);
+  color: #0d1117;
+  border-color: var(--accent-blue);
 }
 .panels {
   display: grid;
@@ -617,14 +645,15 @@ onMounted(() => {
   margin-bottom: 1.5rem;
 }
 .panel {
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 1.5rem;
 }
 .panel h2 {
   font-size: 1.1rem;
   margin: 0 0 1rem;
+  color: var(--text-primary);
 }
 .backtest-metrics {
   display: flex;
@@ -638,19 +667,20 @@ onMounted(() => {
 .metric-value {
   font-size: 1.6rem;
   font-weight: 700;
+  font-family: var(--font-mono);
 }
 .metric-label {
   font-size: 0.8rem;
-  color: #666;
+  color: var(--text-muted);
   margin-top: 0.25rem;
 }
 .loading {
-  color: #999;
+  color: var(--text-muted);
   padding: 2rem;
   text-align: center;
 }
 .no-data {
-  color: #999;
+  color: var(--text-muted);
   padding: 2rem;
   text-align: center;
 }
@@ -658,23 +688,29 @@ table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.9rem;
+  font-family: var(--font-mono);
 }
 th {
   text-align: left;
   padding: 0.5rem;
-  border-bottom: 2px solid #e5e7eb;
-  color: #666;
+  border-bottom: 2px solid var(--border-color);
+  color: var(--accent-blue);
   font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 td {
   padding: 0.5rem;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-secondary);
 }
 td.val {
   font-weight: 600;
+  color: var(--text-primary);
 }
 td.ci {
-  color: #999;
+  color: var(--text-muted);
 }
 .summary-table {
   width: 100%;
@@ -683,7 +719,7 @@ td.ci {
   cursor: pointer;
 }
 .clickable:hover {
-  background: #f9fafb;
+  background: rgba(0, 212, 255, 0.04);
 }
 .summary-panel {
   grid-column: span 2;
@@ -698,22 +734,23 @@ td.ci {
 }
 .group-btn {
   padding: 0.4rem 1rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-color);
   border-radius: 20px;
-  background: #fff;
+  background: var(--bg-card);
+  color: var(--text-secondary);
   cursor: pointer;
   font-size: 0.85rem;
   font-weight: 500;
-  transition: all 0.2s;
+  transition: var(--transition);
 }
 .group-btn:hover {
-  border-color: #4f46e5;
-  color: #4f46e5;
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
 }
 .group-btn.active {
-  background: #4f46e5;
-  color: #fff;
-  border-color: #4f46e5;
+  background: var(--accent-blue);
+  color: #0d1117;
+  border-color: var(--accent-blue);
 }
 
 /* ── Stock tab — ticker selector ─────────────────────────────────────────── */
@@ -723,8 +760,8 @@ td.ci {
   gap: 0.4rem;
   margin-bottom: 1.25rem;
   padding: 0.75rem 1rem;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   min-height: 2.5rem;
   align-items: flex-start;
@@ -734,20 +771,21 @@ td.ci {
   flex-direction: column;
   align-items: center;
   padding: 0.35rem 0.65rem;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border-color);
   border-radius: 6px;
-  background: #fff;
+  background: var(--bg-card);
+  color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: var(--transition);
   min-width: 72px;
 }
 .ticker-btn:hover {
-  border-color: #4f46e5;
+  border-color: var(--accent-blue);
 }
 .ticker-btn.active {
-  background: #4f46e5;
-  border-color: #4f46e5;
-  color: #fff;
+  background: var(--accent-blue);
+  border-color: var(--accent-blue);
+  color: #0d1117;
 }
 .ticker-code {
   font-size: 0.8rem;
@@ -774,30 +812,34 @@ td.ci {
 }
 .session-label {
   font-size: 0.85rem;
-  color: #555;
+  color: var(--text-secondary);
   white-space: nowrap;
 }
 .session-select {
   padding: 0.35rem 0.6rem;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   font-size: 0.85rem;
-  background: #fff;
+  background: var(--bg-input);
+  color: var(--text-primary);
   min-width: 240px;
   max-width: 400px;
 }
+.session-select option {
+  background: var(--bg-input);
+}
 .session-hint {
   font-size: 0.8rem;
-  color: #9ca3af;
+  color: var(--text-muted);
   font-style: italic;
 }
 
 /* ── Stock tab — error banner ─────────────────────────────────────────────── */
 .error-banner {
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  background: var(--accent-red-light);
+  border: 1px solid rgba(255, 68, 68, 0.3);
   border-radius: 6px;
-  color: #dc2626;
+  color: var(--accent-red);
   padding: 0.75rem 1rem;
   margin-bottom: 1rem;
   font-size: 0.9rem;
@@ -808,13 +850,13 @@ td.ci {
   margin-bottom: 1.25rem;
 }
 .ticker-heading {
-  font-family: monospace;
+  font-family: var(--font-mono);
   font-size: 1rem;
-  color: #4f46e5;
+  color: var(--accent-blue);
 }
 .ticker-heading-zh {
   font-size: 0.95rem;
-  color: #555;
+  color: var(--text-secondary);
   margin-left: 0.4rem;
 }
 
@@ -827,7 +869,7 @@ td.ci {
 
 /* ── Stock tab — signal adjusted row ─────────────────────────────────────── */
 .signal-adjusted-row {
-  background: #f0fdf4;
+  background: rgba(0, 217, 101, 0.06);
 }
 
 /* ── Stock tab — signal panel ────────────────────────────────────────────── */
@@ -842,7 +884,7 @@ td.ci {
   align-items: center;
   justify-content: center;
   padding: 2rem 1rem;
-  color: #9ca3af;
+  color: var(--text-muted);
   text-align: center;
   flex: 1;
 }
@@ -856,11 +898,11 @@ td.ci {
 }
 .signal-note {
   font-size: 0.78rem !important;
-  color: #d1d5db;
+  color: var(--text-muted);
 }
 .signal-net {
   font-size: 0.9rem;
-  color: #374151;
+  color: var(--text-secondary);
   margin-bottom: 0.75rem;
   font-weight: 500;
 }
@@ -882,8 +924,8 @@ td.ci {
   gap: 0.15rem 0.5rem;
   padding: 0.5rem 0.6rem;
   border-radius: 6px;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
   font-size: 0.85rem;
   align-items: center;
 }
@@ -896,7 +938,7 @@ td.ci {
 .signal-name {
   grid-row: 1;
   grid-column: 2;
-  color: #374151;
+  color: var(--text-secondary);
   font-weight: 500;
 }
 .signal-contribution {
@@ -910,7 +952,7 @@ td.ci {
   grid-row: 2;
   grid-column: 1 / 4;
   height: 4px;
-  background: #e5e7eb;
+  background: var(--border-color);
   border-radius: 2px;
   overflow: hidden;
 }
@@ -924,22 +966,22 @@ td.ci {
   grid-column: 1 / 4;
   margin: 0.15rem 0 0;
   font-size: 0.75rem;
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 
 /* Signal colour classes */
 .signal-bullish {
-  color: #16a34a;
-  border-color: #bbf7d0 !important;
-  background: #f0fdf4 !important;
+  color: #00d965;
+  border-color: rgba(0, 217, 101, 0.3) !important;
+  background: rgba(0, 217, 101, 0.06) !important;
 }
 .signal-bearish {
-  color: #dc2626;
-  border-color: #fecaca !important;
-  background: #fef2f2 !important;
+  color: #ff4444;
+  border-color: rgba(255, 68, 68, 0.3) !important;
+  background: rgba(255, 68, 68, 0.06) !important;
 }
 .signal-neutral {
-  color: #6b7280;
+  color: var(--text-muted);
 }
 
 /* Responsive */

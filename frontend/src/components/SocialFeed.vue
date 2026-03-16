@@ -284,7 +284,7 @@ function getFbReactions(post) {
   justify-content: center;
   font-size: 14px;
   font-weight: 700;
-  color: #fff;
+  color: #e8eef5;
   flex-shrink: 0;
   box-shadow: none;
 }

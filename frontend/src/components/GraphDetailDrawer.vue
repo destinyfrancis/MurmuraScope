@@ -234,7 +234,7 @@ const typeColors = {
   border-radius: var(--radius-pill);
   font-size: 11px;
   font-weight: 600;
-  color: #fff;
+  color: #0d1117;
   flex-shrink: 0;
 }
 

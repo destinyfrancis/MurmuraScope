@@ -102,7 +102,7 @@ function injectShock() {
   padding: 10px 16px;
   border-radius: 8px;
   border: 2px solid;
-  color: #fff;
+  color: #0d1117;
   font-size: 13px;
   font-weight: 600;
   transition: background 0.4s, border-color 0.4s;
@@ -115,7 +115,7 @@ function injectShock() {
 .shock-btn {
   padding: 8px 20px;
   background: var(--accent-blue, #2563EB);
-  color: #fff;
+  color: #0d1117;
   border: none;
   border-radius: var(--radius-md, 8px);
   font-size: 13px;

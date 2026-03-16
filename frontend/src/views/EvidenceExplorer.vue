@@ -157,8 +157,8 @@ function sentimentClass(score) {
 <style scoped>
 .evidence-explorer {
   min-height: 100vh;
-  background: #0f1428;
-  color: #e0e0e0;
+  background: var(--bg-primary);
+  color: var(--text-primary);
   padding: 24px;
 }
 .explorer-header {
@@ -168,13 +168,13 @@ function sentimentClass(score) {
   margin-bottom: 24px;
 }
 .back-btn {
-  color: #4ecca3;
+  color: var(--accent-blue);
   text-decoration: none;
   font-size: 0.9em;
 }
 .back-btn:hover { text-decoration: underline; }
-h1 { font-size: 1.5em; margin: 0; }
-.session-info { color: #666; font-size: 0.8em; margin-left: auto; }
+h1 { font-size: 1.5em; margin: 0; color: var(--text-primary); }
+.session-info { color: var(--text-muted); font-size: 0.8em; margin-left: auto; }
 .search-bar {
   display: flex;
   align-items: center;
@@ -183,39 +183,39 @@ h1 { font-size: 1.5em; margin: 0; }
 }
 .search-input {
   flex: 1;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(78, 204, 163, 0.3);
-  color: #e0e0e0;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
   padding: 12px 16px;
   border-radius: 8px;
   font-size: 1em;
   outline: none;
 }
-.search-input:focus { border-color: #4ecca3; }
-.result-count { color: #4ecca3; font-size: 0.9em; white-space: nowrap; }
+.search-input:focus { border-color: var(--accent-blue); }
+.result-count { color: var(--accent-blue); font-size: 0.9em; white-space: nowrap; }
 .results-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 16px;
 }
-.result-col h3 { margin: 0 0 12px; font-size: 0.95em; color: #a0a0ff; }
+.result-col h3 { margin: 0 0 12px; font-size: 0.95em; color: var(--accent-blue); }
 .result-card {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 12px;
   margin-bottom: 8px;
   cursor: pointer;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
 }
-.result-card:hover { border-color: #4ecca3; }
-.card-agent { font-size: 0.8em; color: #4ecca3; margin-bottom: 4px; }
-.card-label { font-weight: bold; margin-bottom: 4px; }
-.card-type { font-size: 0.75em; color: #a0a0ff; margin-bottom: 4px; }
+.result-card:hover { border-color: var(--accent-blue); transform: translateY(-2px); box-shadow: var(--shadow-glow-cyan); }
+.card-agent { font-size: 0.8em; color: var(--accent-blue); margin-bottom: 4px; }
+.card-label { font-weight: bold; margin-bottom: 4px; color: var(--text-primary); }
+.card-type { font-size: 0.75em; color: var(--accent-purple); margin-bottom: 4px; }
 .card-content {
   font-size: 0.85em;
   line-height: 1.4;
-  color: #ccc;
+  color: var(--text-secondary);
   margin-bottom: 8px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -223,11 +223,11 @@ h1 { font-size: 1.5em; margin: 0; }
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
 }
-.card-meta { display: flex; gap: 8px; font-size: 0.75em; color: #666; }
-.sentiment.positive { color: #4ecca3; }
-.sentiment.negative { color: #e94560; }
-.sentiment.neutral { color: #888; }
-.empty-state { text-align: center; padding: 80px 20px; color: #666; }
+.card-meta { display: flex; gap: 8px; font-size: 0.75em; color: var(--text-muted); }
+.sentiment.positive { color: var(--accent-green); }
+.sentiment.negative { color: var(--accent-red); }
+.sentiment.neutral { color: var(--text-muted); }
+.empty-state { text-align: center; padding: 80px 20px; color: var(--text-muted); }
 .empty-icon { font-size: 3em; margin-bottom: 16px; }
 .detail-panel {
   position: fixed;
@@ -239,8 +239,8 @@ h1 { font-size: 1.5em; margin: 0; }
   z-index: 100;
 }
 .detail-content {
-  background: #1a2040;
-  border: 1px solid rgba(78, 204, 163, 0.3);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 24px;
   max-width: 600px;
@@ -255,9 +255,9 @@ h1 { font-size: 1.5em; margin: 0; }
   right: 12px;
   background: none;
   border: none;
-  color: #666;
+  color: var(--text-muted);
   cursor: pointer;
   font-size: 1.1em;
 }
-.detail-json { font-size: 0.8em; color: #4ecca3; white-space: pre-wrap; word-break: break-all; }
+.detail-json { font-size: 0.8em; color: var(--accent-blue); white-space: pre-wrap; word-break: break-all; }
 </style>

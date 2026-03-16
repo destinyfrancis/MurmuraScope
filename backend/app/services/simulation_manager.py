@@ -259,6 +259,7 @@ class SimulationManager:
                     "Session %s task raised unhandled exception: %s",
                     session_id,
                     task.exception(),
+                    exc_info=task.exception(),
                 )
 
         task = asyncio.create_task(_run_and_finalize(), name=f"sim-{session_id}")

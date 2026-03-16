@@ -91,6 +91,8 @@ class ShardCoordinator:
         self._merge_queue: asyncio.Queue[dict | None] = asyncio.Queue()
         # Round-sync barrier: shard_id → asyncio.Event
         self._sync_events: dict[int, asyncio.Event] = {}
+        # Track reader tasks so they can be cancelled on shutdown
+        self._reader_tasks: list[asyncio.Task] = []
         # Patch file shared across shards
         self._patch_file: Path = Path(
             tempfile.mktemp(prefix=f"hksim_patch_{session_id}_", suffix=".json")
@@ -118,10 +120,11 @@ class ShardCoordinator:
             self._shards[cfg.shard_id] = state
             self._sync_events[cfg.shard_id] = asyncio.Event()
             # Start background reader for this shard
-            asyncio.create_task(
+            reader_task = asyncio.create_task(
                 self._shard_reader(state),
                 name=f"shard-reader-{cfg.shard_id}",
             )
+            self._reader_tasks.append(reader_task)
             logger.info(
                 "Launched shard %d: agents %d–%d (pid=%s)",
                 cfg.shard_id,
@@ -199,7 +202,7 @@ class ShardCoordinator:
         )
 
     async def shutdown_all(self) -> None:
-        """Kill all shard subprocesses and clean up the patch file."""
+        """Kill all shard subprocesses, cancel reader tasks, and clean up the patch file."""
         for shard_id, state in self._shards.items():
             if state.process is not None and state.process.returncode is None:
                 try:
@@ -210,9 +213,17 @@ class ShardCoordinator:
                         logger.warning(
                             "Shard %d did not exit within 3s after kill", shard_id
                         )
-                except ProcessLookupError:
-                    pass  # Already dead
+                except OSError:
+                    pass  # Process already dead or otherwise inaccessible
                 logger.info("Shard %d terminated", shard_id)
+
+        # Cancel all reader tasks
+        for task in self._reader_tasks:
+            if not task.done():
+                task.cancel()
+        if self._reader_tasks:
+            await asyncio.gather(*self._reader_tasks, return_exceptions=True)
+        self._reader_tasks.clear()
 
         if self._patch_file.exists():
             try:

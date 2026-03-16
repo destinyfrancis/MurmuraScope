@@ -639,7 +639,7 @@ async function startSimulation() {
 .shock-add-btn {
   padding: 8px 14px;
   background: var(--accent-orange);
-  color: #fff;
+  color: #0d1117;
   border: none;
   border-radius: var(--radius-sm);
   font-size: 16px;
@@ -666,7 +666,7 @@ async function startSimulation() {
 .start-btn {
   padding: 14px 48px;
   background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
-  color: #fff;
+  color: #0d1117;
   border: none;
   border-radius: var(--radius-md);
   font-size: 16px;
@@ -747,7 +747,7 @@ async function startSimulation() {
   background: var(--accent-blue);
   border: none;
   border-radius: var(--radius-md);
-  color: #fff;
+  color: #0d1117;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -819,7 +819,7 @@ async function startSimulation() {
 
 .apply-btn:hover {
   background: var(--accent-blue);
-  color: #fff;
+  color: #0d1117;
 }
 
 .mode-toggle {

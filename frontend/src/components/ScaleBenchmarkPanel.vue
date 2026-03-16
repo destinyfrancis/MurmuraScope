@@ -303,7 +303,7 @@ onMounted(fetchBenchmarks)
 .run-btn {
   padding: 6px 14px;
   background: var(--accent-blue);
-  color: #fff;
+  color: #0d1117;
   border: none;
   border-radius: 6px;
   font-size: 12px;

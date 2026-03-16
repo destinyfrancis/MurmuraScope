@@ -609,7 +609,7 @@ async function startBuild() {
   width: 100%;
   padding: 12px;
   background: var(--accent-blue);
-  color: #fff;
+  color: #0d1117;
   border: none;
   border-radius: var(--radius-md);
   font-size: 15px;
@@ -641,7 +641,7 @@ async function startBuild() {
 
 .analyze-btn:hover:not(:disabled) {
   background: var(--accent-blue);
-  color: #fff;
+  color: #0d1117;
 }
 
 .analyze-btn:disabled {
@@ -794,7 +794,7 @@ async function startBuild() {
   flex-shrink: 0;
   padding: 5px 12px;
   background: var(--accent-blue);
-  color: #fff;
+  color: #0d1117;
   border: none;
   border-radius: var(--radius-sm);
   font-size: 12px;

@@ -57,6 +57,10 @@ class VectorStore:
         safe = session_id.replace("-", "")[:12]
         return f"mem_{safe}"
 
+    async def close(self) -> None:
+        """Release the LanceDB connection to free resources."""
+        self._db = None
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------

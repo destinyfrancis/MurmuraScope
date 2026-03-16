@@ -273,7 +273,7 @@ watch(() => props.currentRound, (r) => {
 .round-chip.active {
   background: var(--accent-blue);
   border-color: var(--accent-blue);
-  color: #fff;
+  color: #0d1117;
 }
 
 .state-msg {

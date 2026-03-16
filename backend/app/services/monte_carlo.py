@@ -8,6 +8,8 @@ in the ``ensemble_results`` table.
 
 from __future__ import annotations
 
+import asyncio
+import concurrent.futures
 import json
 from pathlib import Path
 from typing import Any
@@ -275,23 +277,38 @@ class MonteCarloEngine:
             # Replace first n_correlated columns with copula-transformed samples
             lhs_samples = np.column_stack([copula_samples, lhs_samples[:, n_correlated:]])
 
-        for trial_idx in range(n_trials):
-            # Map LHS samples to perturbations
-            correlated_deltas: dict[str, float] = {}
+        def _trial_worker(trial_idx: int) -> dict[str, float]:
+            """Execute a single MC trial and return its outcome dict."""
+            trial_rng = np.random.default_rng(rng.integers(0, 2**31) + trial_idx)
+            correlated_deltas_local: dict[str, float] = {}
             if cov_matrix is not None:
-                # Map copula-uniform samples to normal, then scale by std dev
                 sd = np.sqrt(np.diag(cov_matrix))
                 for i, var in enumerate(_CORRELATED_VARS):
                     z = scipy_stats.norm.ppf(np.clip(lhs_samples[trial_idx, i], 1e-8, 1 - 1e-8))
-                    correlated_deltas[var] = float(z * sd[i] * ci_multiplier)
+                    correlated_deltas_local[var] = float(z * sd[i] * ci_multiplier)
 
-            outcome = self._run_single_trial(
-                base_data, rng, ci_multiplier, calibrated_coefs,
-                correlated_deltas=correlated_deltas,
+            return MonteCarloEngine._run_single_trial(
+                base_data, trial_rng, ci_multiplier, calibrated_coefs,
+                correlated_deltas=correlated_deltas_local,
                 pair_std_errs=pair_std_errs,
             )
-            for metric in metrics:
-                trial_results[metric].append(outcome.get(metric, 0.0))
+
+        # Parallelize trials for large runs
+        if n_trials >= 30:
+            loop = asyncio.get_event_loop()
+            with concurrent.futures.ProcessPoolExecutor(max_workers=4) as pool:
+                outcomes = await loop.run_in_executor(
+                    None,
+                    lambda: list(pool.map(_trial_worker, range(n_trials))),
+                )
+            for outcome in outcomes:
+                for metric in metrics:
+                    trial_results[metric].append(outcome.get(metric, 0.0))
+        else:
+            for trial_idx in range(n_trials):
+                outcome = _trial_worker(trial_idx)
+                for metric in metrics:
+                    trial_results[metric].append(outcome.get(metric, 0.0))
 
         # Compute distribution bands
         bands: list[DistributionBand] = []

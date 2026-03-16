@@ -544,7 +544,7 @@ watch(currentRound, (r) => {
   right: 0;
   padding: 8px 14px;
   background: rgba(239, 68, 68, 0.9);
-  color: #fff;
+  color: #0d1117;
   font-size: 13px;
   font-weight: 600;
   text-align: center;

@@ -235,7 +235,7 @@ watch([() => props.sessionId, () => props.agentId], fetchFeed)
   color: var(--text-muted);
 }
 
-.sent-positive { color: #059669; background: #D1FAE5; }
-.sent-negative { color: #DC2626; background: #FEE2E2; }
+.sent-positive { color: var(--accent-green); background: rgba(0, 217, 101, 0.12); }
+.sent-negative { color: var(--accent-red); background: rgba(255, 68, 68, 0.12); }
 .sent-neutral { color: var(--text-muted); }
 </style>

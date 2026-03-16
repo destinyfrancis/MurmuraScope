@@ -219,9 +219,9 @@ watch([() => props.sessionId, () => props.agentId], fetchBeliefs)
   border-radius: 4px;
 }
 
-.stance-positive { background: #D1FAE5; color: #059669; }
-.stance-negative { background: #FEE2E2; color: #DC2626; }
-.stance-neutral { background: #F3F4F6; color: #6B7280; }
+.stance-positive { background: rgba(0, 217, 101, 0.15); color: var(--accent-green); }
+.stance-negative { background: rgba(255, 68, 68, 0.15); color: var(--accent-red); }
+.stance-neutral { background: var(--bg-secondary); color: var(--text-muted); }
 
 .stance-track {
   position: relative;
@@ -308,9 +308,9 @@ watch([() => props.sessionId, () => props.agentId], fetchBeliefs)
   text-align: right;
 }
 
-.conf-high { color: #059669; }
-.conf-medium { color: #D97706; }
-.conf-low { color: #DC2626; }
+.conf-high { color: var(--accent-green); }
+.conf-medium { color: var(--accent-orange); }
+.conf-low { color: var(--accent-red); }
 
 .evidence-info {
   display: flex;

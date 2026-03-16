@@ -61,16 +61,20 @@ watch([customAgents, customRounds], () => {
 </script>
 
 <style scoped>
+.preset-selector h3 { color: var(--text-primary); }
 .preset-cards { display: flex; flex-wrap: wrap; gap: 12px; margin: 12px 0; }
 .preset-card {
-  flex: 1; min-width: 120px; padding: 16px; border: 2px solid #e0e0e0; border-radius: 12px;
-  cursor: pointer; text-align: center; transition: border-color 0.2s;
+  flex: 1; min-width: 120px; padding: 16px; border: 2px solid var(--border-color); border-radius: 12px;
+  cursor: pointer; text-align: center; transition: border-color 0.2s, background 0.2s, box-shadow 0.2s, transform 0.2s;
+  background: var(--bg-card); color: var(--text-primary);
 }
-.preset-card.active { border-color: #4f46e5; background: #f0f0ff; }
-.preset-card:hover { border-color: #a0a0ff; }
+.preset-card.active { border-color: var(--accent-blue); background: rgba(0, 212, 255, 0.08); box-shadow: 0 0 16px rgba(0, 212, 255, 0.15); }
+.preset-card:hover { border-color: var(--accent-blue); transform: translateY(-2px); }
+.preset-card p { color: var(--text-secondary); font-size: 13px; }
 .preset-icon { font-size: 24px; display: block; margin-bottom: 8px; }
-.time-est { color: #888; font-size: 13px; }
-.byok-badge { color: #e67e22; font-size: 11px; font-weight: 600; margin-top: 4px; }
+.time-est { color: var(--text-muted); font-size: 13px; }
+.byok-badge { color: var(--accent-orange); font-size: 11px; font-weight: 600; margin-top: 4px; }
 .custom-fields { display: flex; gap: 16px; margin-top: 12px; }
-.custom-fields input { width: 80px; padding: 4px 8px; border: 1px solid #ccc; border-radius: 6px; }
+.custom-fields label { color: var(--text-secondary); }
+.custom-fields input { width: 80px; padding: 4px 8px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-input); color: var(--text-primary); }
 </style>

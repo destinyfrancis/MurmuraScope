@@ -125,6 +125,10 @@ class TimeSeriesForecaster:
         print(result.to_dict())
     """
 
+    def __init__(self) -> None:
+        # Cache fitted models: metric -> (data_length, fitted_sf_object, model_name)
+        self._model_cache: dict[str, tuple[int, Any, str]] = {}
+
     async def forecast(
         self,
         metric: str,
@@ -716,8 +720,6 @@ class TimeSeriesForecaster:
         next_labels = self._next_period_labels(last_label, horizon)
 
         try:
-            models = [AutoARIMA(season_length=season_length)]
-
             # Use monthly frequency when season_length=12, else quarterly
             pd_freq = "MS" if season_length == 12 else "QS"
             sf_freq = "ME" if season_length == 12 else "QE"
@@ -738,8 +740,24 @@ class TimeSeriesForecaster:
                 "ds": pd.date_range(start_date, periods=len(values), freq=pd_freq),
                 "y": values,
             })
-            sf = StatsForecast(models=models, freq=sf_freq, n_jobs=1)
-            sf.fit(df)
+
+            # Check model cache: reuse fitted model if data length changed by <=2
+            cached = self._model_cache.get(metric)
+            if cached is not None:
+                cached_len, cached_sf, cached_name = cached
+                if abs(len(values) - cached_len) <= 2 and cached_name == "AutoARIMA":
+                    sf = cached_sf
+                else:
+                    models = [AutoARIMA(season_length=season_length)]
+                    sf = StatsForecast(models=models, freq=sf_freq, n_jobs=1)
+                    sf.fit(df)
+                    self._model_cache[metric] = (len(values), sf, "AutoARIMA")
+            else:
+                models = [AutoARIMA(season_length=season_length)]
+                sf = StatsForecast(models=models, freq=sf_freq, n_jobs=1)
+                sf.fit(df)
+                self._model_cache[metric] = (len(values), sf, "AutoARIMA")
+
             forecast_df = sf.predict(h=horizon, level=[80, 95])
 
             points: list[ForecastPoint] = []

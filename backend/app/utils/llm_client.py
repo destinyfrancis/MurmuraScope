@@ -361,7 +361,10 @@ class LLMClient:
         if system_text:
             kwargs["system"] = system_text
 
-        response = await client.messages.create(**kwargs)
+        try:
+            response = await client.messages.create(**kwargs)
+        finally:
+            await client.close()
 
         content_text = ""
         for block in response.content:

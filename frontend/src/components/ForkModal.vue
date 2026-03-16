@@ -220,7 +220,7 @@ function handleSubmit() {
   background: #7c3aed;
   border: none;
   border-radius: var(--radius-sm);
-  color: #fff;
+  color: #0d1117;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;

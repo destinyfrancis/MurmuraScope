@@ -406,7 +406,7 @@ defineExpose({ resetMessages })
 .send-btn {
   padding: 10px 20px;
   background: var(--accent-blue);
-  color: #fff;
+  color: #0d1117;
   border: none;
   border-radius: var(--radius-md);
   font-size: 14px;

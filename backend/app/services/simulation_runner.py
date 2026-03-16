@@ -333,7 +333,7 @@ class SimulationRunner(
                             "Failed to wait for process %d to die, proceeding.",
                             process.pid,
                         )
-                except ProcessLookupError:
+                except OSError:
                     pass  # Process already exited between check and kill
 
             self._processes.pop(session_id, None)
@@ -346,6 +346,12 @@ class SimulationRunner(
             self._activation_rngs.pop(session_id, None)
             # Phase 3: clean up pending arousal deltas
             self._pending_arousal_deltas.pop(session_id, None)
+            # Close LanceDB connection to free resources
+            if self._vector_store is not None:
+                try:
+                    await self._vector_store.close()
+                except Exception:
+                    logger.debug("VectorStore close failed session=%s", session_id)
             # Close log file — guarded so it's safe if open() itself failed
             if log_file is not None:
                 log_file.close()
@@ -510,6 +516,11 @@ class SimulationRunner(
                 session_id,
                 self._process_emotional_contagion(session_id, round_num),
             )
+
+        # Clean up posts buffer for completed round to prevent memory growth
+        session_buf = self._posts_buffer.get(session_id)
+        if session_buf is not None:
+            session_buf.pop(round_num, None)
 
     async def stop(self, session_id: str) -> None:
         """Stop a running simulation subprocess (SIGTERM → SIGKILL).

@@ -374,14 +374,32 @@ class DecisionDeliberator:
             )
 
         all_decisions: list[AgentDecision] = []
-        # Split into batches
-        for start in range(0, len(eligible_agents), batch_size):
-            chunk = eligible_agents[start : start + batch_size]
-            batch_decisions = await self._deliberate_one_batch(
-                chunk, macro_state, decision_type, session_id, round_number,
-                contagion_map=contagion_map,
-            )
-            all_decisions.extend(batch_decisions)
+        # Split into batches and run concurrently with limited parallelism
+        chunks = [
+            eligible_agents[start : start + batch_size]
+            for start in range(0, len(eligible_agents), batch_size)
+        ]
+        sem = asyncio.Semaphore(3)
+
+        async def _limited_batch(chunk: list[AgentProfile]) -> list[AgentDecision]:
+            async with sem:
+                return await self._deliberate_one_batch(
+                    chunk, macro_state, decision_type, session_id, round_number,
+                    contagion_map=contagion_map,
+                )
+
+        batch_results = await asyncio.gather(
+            *[_limited_batch(chunk) for chunk in chunks],
+            return_exceptions=True,
+        )
+        for result in batch_results:
+            if isinstance(result, Exception):
+                logger.error(
+                    "Batch deliberation failed for type=%s session=%s: %s",
+                    decision_type, session_id, result,
+                )
+            else:
+                all_decisions.extend(result)
 
         logger.info(
             "Deliberated %d decisions for type=%s session=%s round=%d",

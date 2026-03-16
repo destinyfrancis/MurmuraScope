@@ -149,6 +149,8 @@ class BatchWriter:
                 return written
             except Exception:
                 logger.exception("BatchWriter.flush failed table=%s rows=%d", table, len(rows))
+                # Clear buffer on failure to prevent retrying stale/bad rows forever
+                self._buffers[table] = []
                 return 0
 
     async def flush_all(self, db: "aiosqlite.Connection") -> int:

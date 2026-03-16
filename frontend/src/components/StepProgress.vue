@@ -121,13 +121,13 @@ function stepState(num) {
 .step-circle.completed {
   border-color: var(--accent-green, #059669);
   background: var(--accent-green, #059669);
-  color: #fff;
+  color: #0d1117;
 }
 
 .step-circle.active {
   border-color: var(--accent-blue, #2563EB);
   background: var(--accent-blue, #2563EB);
-  color: #fff;
+  color: #0d1117;
 }
 
 .step-check {

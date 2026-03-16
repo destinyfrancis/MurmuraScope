@@ -44,6 +44,21 @@ let graphInstance = null
 let resizeObserver = null
 let hullCache = new Map()
 
+// Hull memoization: skip recomputation when cluster membership unchanged
+let lastClusterFingerprint = ''
+
+function computeClusterFingerprint(data) {
+  if (!data?.nodes) return ''
+  const parts = []
+  for (const node of data.nodes) {
+    if (node.cluster_id !== undefined && node.cluster_id !== null) {
+      parts.push(`${node.id}:${node.cluster_id}`)
+    }
+  }
+  parts.sort()
+  return parts.join('|')
+}
+
 // Thought bubble state
 let thoughtBubbles = []
 let frameCounter = 0
@@ -102,6 +117,13 @@ function drawHulls(ctx, globalScale) {
   const data = graphInstance?.graphData()
   if (!data) return
 
+  // Memoize: only recompute hulls when cluster membership changes
+  const fingerprint = computeClusterFingerprint(data)
+  const membershipChanged = fingerprint !== lastClusterFingerprint
+  if (membershipChanged) {
+    lastClusterFingerprint = fingerprint
+  }
+
   const clusters = new Map()
   for (const node of data.nodes) {
     const cid = node.cluster_id
@@ -110,7 +132,9 @@ function drawHulls(ctx, globalScale) {
     clusters.get(cid).push(node)
   }
 
-  hullCache = new Map()
+  if (membershipChanged) {
+    hullCache = new Map()
+  }
 
   for (const [cid, clusterNodes] of clusters) {
     if (clusterNodes.length < 2) continue
@@ -529,7 +553,8 @@ defineExpose({
   z-index: 20;
   max-width: 280px;
   padding: 10px 14px;
-  background: rgba(255, 255, 255, 0.97);
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
   border: 1px solid var(--border-color);
   border-radius: 8px;
   pointer-events: none;

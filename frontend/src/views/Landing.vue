@@ -77,26 +77,26 @@ function goWorkspace() {
           <div class="mini-graph">
             <svg viewBox="0 0 300 250" class="mini-graph-svg">
               <!-- Edges -->
-              <line x1="150" y1="40" x2="60" y2="110" stroke="#E5E7EB" stroke-width="1.5" />
-              <line x1="150" y1="40" x2="240" y2="110" stroke="#E5E7EB" stroke-width="1.5" />
-              <line x1="60" y1="110" x2="100" y2="200" stroke="#E5E7EB" stroke-width="1.5" />
-              <line x1="240" y1="110" x2="200" y2="200" stroke="#E5E7EB" stroke-width="1.5" />
-              <line x1="100" y1="200" x2="200" y2="200" stroke="#E5E7EB" stroke-width="1.5" />
-              <line x1="60" y1="110" x2="240" y2="110" stroke="#E5E7EB" stroke-width="1" opacity="0.5" />
-              <line x1="150" y1="40" x2="100" y2="200" stroke="#E5E7EB" stroke-width="1" opacity="0.5" />
-              <line x1="150" y1="40" x2="200" y2="200" stroke="#E5E7EB" stroke-width="1" opacity="0.5" />
+              <line x1="150" y1="40" x2="60" y2="110" stroke="#2a3d52" stroke-width="1.5" />
+              <line x1="150" y1="40" x2="240" y2="110" stroke="#2a3d52" stroke-width="1.5" />
+              <line x1="60" y1="110" x2="100" y2="200" stroke="#2a3d52" stroke-width="1.5" />
+              <line x1="240" y1="110" x2="200" y2="200" stroke="#2a3d52" stroke-width="1.5" />
+              <line x1="100" y1="200" x2="200" y2="200" stroke="#2a3d52" stroke-width="1.5" />
+              <line x1="60" y1="110" x2="240" y2="110" stroke="#2a3d52" stroke-width="1" opacity="0.5" />
+              <line x1="150" y1="40" x2="100" y2="200" stroke="#2a3d52" stroke-width="1" opacity="0.5" />
+              <line x1="150" y1="40" x2="200" y2="200" stroke="#2a3d52" stroke-width="1" opacity="0.5" />
               <!-- Nodes -->
-              <circle cx="150" cy="40" r="12" fill="#059669" class="node-pulse" />
-              <circle cx="60" cy="110" r="10" fill="#2563EB" />
-              <circle cx="240" cy="110" r="10" fill="#7C3AED" />
-              <circle cx="100" cy="200" r="9" fill="#D97706" />
-              <circle cx="200" cy="200" r="9" fill="#0891B2" />
+              <circle cx="150" cy="40" r="12" fill="#00d965" class="node-pulse" />
+              <circle cx="60" cy="110" r="10" fill="#00d4ff" />
+              <circle cx="240" cy="110" r="10" fill="#a78bfa" />
+              <circle cx="100" cy="200" r="9" fill="#ff9f43" />
+              <circle cx="200" cy="200" r="9" fill="#00d4ff" />
               <!-- Labels -->
-              <text x="150" y="18" text-anchor="middle" fill="#4B5563" font-size="10">HIBOR</text>
-              <text x="40" y="105" text-anchor="middle" fill="#4B5563" font-size="10">首置</text>
-              <text x="265" y="105" text-anchor="middle" fill="#4B5563" font-size="10">滙豐</text>
-              <text x="85" y="222" text-anchor="middle" fill="#4B5563" font-size="10">印花稅</text>
-              <text x="215" y="222" text-anchor="middle" fill="#4B5563" font-size="10">移民</text>
+              <text x="150" y="18" text-anchor="middle" fill="#9aa8ba" font-size="10">HIBOR</text>
+              <text x="40" y="105" text-anchor="middle" fill="#9aa8ba" font-size="10">首置</text>
+              <text x="265" y="105" text-anchor="middle" fill="#9aa8ba" font-size="10">滙豐</text>
+              <text x="85" y="222" text-anchor="middle" fill="#9aa8ba" font-size="10">印花稅</text>
+              <text x="215" y="222" text-anchor="middle" fill="#9aa8ba" font-size="10">移民</text>
             </svg>
           </div>
         </div>
@@ -213,7 +213,7 @@ function goWorkspace() {
 .btn-primary {
   padding: 12px 28px;
   background: var(--accent-blue);
-  color: #fff;
+  color: #0d1117;
   border: none;
   border-radius: var(--radius-md);
   font-size: 15px;
@@ -223,8 +223,8 @@ function goWorkspace() {
 }
 
 .btn-primary:hover {
-  background: #1d4ed8;
-  box-shadow: var(--shadow-glow-blue);
+  background: rgba(0, 212, 255, 0.8);
+  box-shadow: var(--shadow-glow-cyan);
 }
 
 .btn-secondary {
@@ -333,7 +333,7 @@ function goWorkspace() {
   line-height: 32px;
   border-radius: 50%;
   background: var(--accent-blue);
-  color: #fff;
+  color: #0d1117;
   font-weight: 700;
   font-size: 14px;
   margin: 0 auto 12px;

@@ -96,7 +96,7 @@ const emit = defineEmits(['next', 'dismiss'])
 .btn-next {
   padding: 6px 16px;
   background: var(--accent-blue);
-  color: #fff;
+  color: #0d1117;
   border: none;
   border-radius: var(--radius-md);
   font-size: 13px;

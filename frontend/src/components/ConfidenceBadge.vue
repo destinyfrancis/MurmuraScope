@@ -144,30 +144,33 @@ function breakdownLevel(val) {
 }
 
 .confidence-high {
-  background: var(--accent-green-light, #D1FAE5);
-  color: var(--accent-green, #059669);
+  background: rgba(0, 217, 101, 0.12);
+  border: 1px solid rgba(0, 217, 101, 0.3);
+  color: var(--accent-green);
 }
 
 .confidence-high .confidence-dot {
-  background: var(--accent-green, #059669);
+  background: var(--accent-green);
 }
 
 .confidence-medium {
-  background: var(--accent-orange-light, #FEF3C7);
-  color: var(--accent-orange, #D97706);
+  background: rgba(255, 159, 67, 0.12);
+  border: 1px solid rgba(255, 159, 67, 0.3);
+  color: var(--accent-orange);
 }
 
 .confidence-medium .confidence-dot {
-  background: var(--accent-orange, #D97706);
+  background: var(--accent-orange);
 }
 
 .confidence-low {
-  background: var(--accent-red-light, #FEE2E2);
-  color: var(--accent-red, #DC2626);
+  background: rgba(255, 68, 68, 0.12);
+  border: 1px solid rgba(255, 68, 68, 0.3);
+  color: var(--accent-red);
 }
 
 .confidence-low .confidence-dot {
-  background: var(--accent-red, #DC2626);
+  background: var(--accent-red);
 }
 
 .confidence-pct {
@@ -180,9 +183,9 @@ function breakdownLevel(val) {
   font-weight: 700;
 }
 
-.trend-up { color: #059669; }
-.trend-down { color: #DC2626; }
-.trend-flat { color: #6B7280; }
+.trend-up { color: var(--accent-green); }
+.trend-down { color: var(--accent-red); }
+.trend-flat { color: var(--text-muted); }
 
 /* Tooltip */
 .confidence-tooltip {
@@ -190,12 +193,12 @@ function breakdownLevel(val) {
   top: calc(100% + 8px);
   left: 50%;
   transform: translateX(-50%);
-  background: var(--bg-card, #fff);
-  border: 1px solid var(--border-color, #E5E7EB);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 10px 12px;
   min-width: 160px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
   z-index: 100;
   pointer-events: none;
 }
@@ -203,7 +206,7 @@ function breakdownLevel(val) {
 .tooltip-title {
   font-size: 11px;
   font-weight: 700;
-  color: var(--text-primary, #111);
+  color: var(--text-primary);
   margin-bottom: 8px;
   text-align: center;
 }
@@ -224,9 +227,9 @@ function breakdownLevel(val) {
   font-weight: 600;
 }
 
-.bd-high { color: #059669; }
-.bd-medium { color: #D97706; }
-.bd-low { color: #DC2626; }
+.bd-high { color: var(--accent-green); }
+.bd-medium { color: var(--accent-orange); }
+.bd-low { color: var(--accent-red); }
 
 .tooltip-fade-enter-active,
 .tooltip-fade-leave-active {

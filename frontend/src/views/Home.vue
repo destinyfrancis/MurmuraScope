@@ -309,21 +309,22 @@ function startScenario(key) {
   font-size: 14px;
   font-family: inherit;
   resize: vertical;
-  background: var(--bg-secondary, #f9fafb);
+  background: var(--bg-input);
   color: var(--text-primary);
   transition: border-color 0.2s;
 }
 
 .quick-start-input textarea:focus {
   outline: none;
-  border-color: #4ecca3;
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.15);
 }
 
 .quick-start-btn {
   align-self: flex-end;
   padding: 10px 28px;
-  background: #4ecca3;
-  color: #0f1428;
+  background: var(--accent-blue);
+  color: #0d1117;
   border: none;
   border-radius: 8px;
   font-size: 15px;
@@ -333,8 +334,9 @@ function startScenario(key) {
 }
 
 .quick-start-btn:hover:not(:disabled) {
-  background: #3db88e;
+  background: rgba(0, 212, 255, 0.8);
   transform: translateY(-1px);
+  box-shadow: var(--shadow-glow-cyan);
 }
 
 .quick-start-btn:disabled {
@@ -375,12 +377,12 @@ function startScenario(key) {
 
 .domain-tab:hover {
   color: var(--text-primary);
-  background: rgba(78, 204, 163, 0.08);
+  background: rgba(0, 212, 255, 0.08);
 }
 
 .domain-tab.active {
-  background: #4ecca3;
-  color: #0f1428;
+  background: var(--accent-blue);
+  color: #0d1117;
   font-weight: 700;
 }
 
@@ -409,7 +411,7 @@ function startScenario(key) {
 
 .tool-toggle:hover {
   color: var(--text-primary);
-  border-color: #4ecca3;
+  border-color: var(--accent-blue);
 }
 
 .god-view-btn {

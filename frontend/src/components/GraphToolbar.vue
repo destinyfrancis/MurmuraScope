@@ -127,7 +127,7 @@ function onSearch() {
 
 .filter-chip.active {
   border-color: var(--chip-color);
-  background: color-mix(in srgb, var(--chip-color) 10%, white);
+  background: color-mix(in srgb, var(--chip-color) 15%, var(--bg-card));
   color: var(--chip-color);
 }
 

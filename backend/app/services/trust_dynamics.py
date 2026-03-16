@@ -214,14 +214,12 @@ class TrustDynamicsService:
                 }
 
                 # 5. Compute new scores in Python (zero DB round-trips)
+                # Pre-build reverse lookup to avoid O(n) scan per pair
+                id_to_username: dict[int, str] = {v: k for k, v in username_to_id.items()}
                 upsert_rows: list[tuple[str, int, int, str, float, float]] = []
                 for aid, bid, sentiment_a in pair_data:
-                    uname_a = next(
-                        (u for u, i in username_to_id.items() if i == aid), ""
-                    )
-                    uname_b = next(
-                        (u for u, i in username_to_id.items() if i == bid), ""
-                    )
+                    uname_a = id_to_username.get(aid, "")
+                    uname_b = id_to_username.get(bid, "")
                     alignment = _sentiment_alignment_score(sentiment_a)
                     stance_a = username_to_stance.get(uname_a, 0.5)
                     stance_b = username_to_stance.get(uname_b, 0.5)

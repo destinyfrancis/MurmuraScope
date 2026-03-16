@@ -319,7 +319,7 @@ function formatFileSize(bytes) {
 .dcp-subtitle { font-size: 13px; color: var(--text-muted, #9CA3AF); margin: 0; }
 
 .dcp-error {
-  background: #FEF2F2;
+  background: rgba(255, 68, 68, 0.08);
   border: 1px solid #FCA5A5;
   border-radius: 8px;
   color: #B91C1C;
@@ -519,7 +519,7 @@ function formatFileSize(bytes) {
 .btn-primary {
   align-self: flex-start;
   background: var(--accent-blue, #2563EB);
-  color: #fff;
+  color: #0d1117;
   border: none;
   border-radius: 8px;
   padding: 8px 16px;
@@ -538,7 +538,7 @@ function formatFileSize(bytes) {
   width: 14px;
   height: 14px;
   border: 2px solid rgba(255,255,255,0.4);
-  border-top-color: #fff;
+  border-top-color: var(--text-primary);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
 }

@@ -290,7 +290,7 @@ watch(() => props.sessionId, () => {
 .score-badge {
   font-size: 12px;
   font-weight: 700;
-  color: #fff;
+  color: #0d1117;
   padding: 2px 8px;
   border-radius: 4px;
 }
@@ -321,8 +321,8 @@ watch(() => props.sessionId, () => {
   font-size: 10px;
 }
 
-.strat-denial { background: #FEE2E2; color: #DC2626; }
-.strat-rational { background: #FEF9C3; color: #D97706; }
-.strat-change { background: #D1FAE5; color: #059669; }
-.strat-none { background: #F3F4F6; color: #6B7280; }
+.strat-denial { background: rgba(255, 68, 68, 0.15); color: var(--accent-red); }
+.strat-rational { background: rgba(255, 159, 67, 0.15); color: var(--accent-orange); }
+.strat-change { background: rgba(0, 217, 101, 0.15); color: var(--accent-green); }
+.strat-none { background: var(--bg-secondary); color: var(--text-muted); }
 </style>

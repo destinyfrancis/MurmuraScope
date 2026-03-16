@@ -180,7 +180,7 @@ function getSentimentRow(session, roundNum) {
 .compare-btn {
   padding: 9px 20px;
   background: var(--accent-blue);
-  color: #fff;
+  color: #0d1117;
   border: none;
   border-radius: var(--radius-sm);
   font-size: 13px;

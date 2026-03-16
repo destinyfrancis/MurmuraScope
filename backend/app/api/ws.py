@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections import defaultdict
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -18,6 +19,28 @@ router = APIRouter(prefix="/ws", tags=["websocket"])
 # ---------------------------------------------------------------------------
 _progress_store: dict[str, list[dict]] = defaultdict(list)
 _progress_queues: dict[str, asyncio.Queue] = {}
+_store_timestamps: dict[str, float] = {}
+
+# Cap buffered entries per session to prevent unbounded memory growth
+_MAX_BUFFERED_ENTRIES = 500
+
+# Max idle pings before breaking the WS loop (60 pings * 30s = 30min)
+_MAX_IDLE_PINGS = 60
+
+
+def _cleanup_stale_progress() -> None:
+    """Remove progress store entries older than 1 hour."""
+    now = time.monotonic()
+    stale = [
+        sid for sid, ts in _store_timestamps.items()
+        if now - ts > 3600.0
+    ]
+    for sid in stale:
+        _progress_store.pop(sid, None)
+        _progress_queues.pop(sid, None)
+        _store_timestamps.pop(sid, None)
+    if stale:
+        logger.debug("Cleaned up %d stale progress entries", len(stale))
 
 
 def get_progress_queue(session_id: str) -> asyncio.Queue:
@@ -36,13 +59,19 @@ async def push_progress(session_id: str, update: dict) -> None:
     """
     q = get_progress_queue(session_id)
     await q.put(update)
-    _progress_store[session_id].append(update)
+    buf = _progress_store[session_id]
+    buf.append(update)
+    # Cap buffer size to prevent memory leak
+    if len(buf) > _MAX_BUFFERED_ENTRIES:
+        _progress_store[session_id] = buf[-_MAX_BUFFERED_ENTRIES:]
+    _store_timestamps[session_id] = time.monotonic()
 
 
 def clear_progress(session_id: str) -> None:
     """Remove buffered progress data for a completed or failed session."""
     _progress_store.pop(session_id, None)
     _progress_queues.pop(session_id, None)
+    _store_timestamps.pop(session_id, None)
 
 
 @router.websocket("/progress/{session_id}")
@@ -57,6 +86,9 @@ async def simulation_progress(websocket: WebSocket, session_id: str) -> None:
        alive through proxies.
     """
     await websocket.accept()
+
+    # Clean up stale entries from other sessions on each new connection
+    _cleanup_stale_progress()
 
     q = get_progress_queue(session_id)
 
@@ -73,14 +105,23 @@ async def simulation_progress(websocket: WebSocket, session_id: str) -> None:
                 return
 
     # Stream live updates.
+    idle_ping_count = 0
     try:
         while True:
             try:
                 update = await asyncio.wait_for(q.get(), timeout=30.0)
+                idle_ping_count = 0  # reset on real message
                 await websocket.send_json(update)
                 if update.get("type") in ("complete", "error"):
                     break
             except asyncio.TimeoutError:
+                idle_ping_count += 1
+                if idle_ping_count >= _MAX_IDLE_PINGS:
+                    logger.info(
+                        "WebSocket idle limit reached for session %s (%d pings), closing",
+                        session_id, idle_ping_count,
+                    )
+                    break
                 # Send a ping to keep the connection alive.
                 await websocket.send_json({"type": "ping"})
     except WebSocketDisconnect:

@@ -41,8 +41,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
             await db.execute("ALTER TABLE reports ADD COLUMN share_token TEXT")
             await db.commit()
         logger.info("Added share_token column to reports")
-    except Exception:
-        pass  # Column already exists
+    except Exception as exc:
+        if "duplicate column" in str(exc).lower():
+            pass  # Column already exists
+        else:
+            logger.warning("share_token migration unexpected error: %s", exc)
 
     # Runtime migration: add domain_pack_id to simulation_sessions table
     try:
@@ -53,8 +56,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
             )
             await db.commit()
         logger.info("Added domain_pack_id column to simulation_sessions")
-    except Exception:
-        pass  # Column already exists
+    except Exception as exc:
+        if "duplicate column" in str(exc).lower():
+            pass  # Column already exists
+        else:
+            logger.warning("domain_pack_id migration unexpected error: %s", exc)
 
     # Runtime migration: create users table (Phase 4.8 Auth)
     try:
@@ -221,8 +227,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
             await db.execute("ALTER TABLE market_data ADD COLUMN granularity TEXT DEFAULT 'daily'")
             await db.commit()
         logger.info("Added granularity column to market_data")
-    except Exception:
-        pass  # Column already exists
+    except Exception as exc:
+        if "duplicate column" in str(exc).lower():
+            pass  # Column already exists
+        else:
+            logger.warning("granularity migration unexpected error: %s", exc)
 
     # Runtime migration: create Phase 1C network_events table
     try:

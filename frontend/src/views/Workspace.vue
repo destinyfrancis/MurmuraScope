@@ -218,7 +218,7 @@ onMounted(fetchSessions)
 }
 
 .btn-admin.active {
-  background: rgba(37, 99, 235, 0.08);
+  background: rgba(0, 212, 255, 0.08);
   border-color: var(--accent-blue);
   color: var(--accent-blue);
 }
@@ -226,7 +226,7 @@ onMounted(fetchSessions)
 .btn-new {
   padding: 10px 20px;
   background: var(--accent-blue);
-  color: #fff;
+  color: #0d1117;
   border: none;
   border-radius: var(--radius-md);
   font-size: 14px;
@@ -236,7 +236,8 @@ onMounted(fetchSessions)
 }
 
 .btn-new:hover {
-  background: #1d4ed8;
+  background: rgba(0, 212, 255, 0.8);
+  box-shadow: var(--shadow-glow-cyan);
 }
 
 .admin-section {
@@ -336,7 +337,7 @@ onMounted(fetchSessions)
 
 .evidence-link:hover {
   background: var(--accent-blue);
-  color: #fff;
+  color: #0d1117;
 }
 
 .empty-state {

@@ -246,7 +246,7 @@ watch(() => props.sessionId, () => {
 .dim-tab.active {
   background: var(--accent-blue);
   border-color: var(--accent-blue);
-  color: #fff;
+  color: #0d1117;
 }
 
 .state-msg {

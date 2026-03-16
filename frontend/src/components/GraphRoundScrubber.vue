@@ -56,11 +56,11 @@ const sliderIndex = computed(() => {
   align-items: center;
   gap: 8px;
   padding: 6px 12px;
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md, 8px);
+  border-radius: var(--radius-md);
   font-size: 12px;
-  color: var(--text-muted, #9CA3AF);
+  color: var(--text-muted);
 }
 
 .slider {

@@ -86,7 +86,7 @@
   align-items: center;
   justify-content: center;
   font-size: 16px;
-  color: #fff;
+  color: #0d1117;
 }
 
 .ps-label {

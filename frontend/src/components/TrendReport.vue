@@ -355,13 +355,13 @@ const roleSummaryIcon = computed(() => {
 }
 
 .section-tab.active {
-  background: rgba(37, 99, 235, 0.06);
-  color: var(--accent-blue, #2563EB);
-  border-bottom-color: var(--accent-blue, #2563EB);
+  background: rgba(0, 212, 255, 0.08);
+  color: var(--accent-blue);
+  border-bottom-color: var(--accent-blue);
 }
 
 .section-tab:hover:not(.active) {
-  background: var(--bg-secondary, #F9FAFB);
+  background: var(--bg-secondary);
 }
 
 /* Section transitions */
@@ -405,9 +405,9 @@ const roleSummaryIcon = computed(() => {
   border: 1px solid transparent;
 }
 
-.conf-banner.conf-high { background: #D1FAE5; border-color: #6EE7B7; color: #065F46; }
-.conf-banner.conf-medium { background: #FEF9C3; border-color: #FDE68A; color: #78350F; }
-.conf-banner.conf-low { background: #FEE2E2; border-color: #FCA5A5; color: #991B1B; }
+.conf-banner.conf-high { background: rgba(0, 217, 101, 0.1); border-color: rgba(0, 217, 101, 0.3); color: var(--accent-green); }
+.conf-banner.conf-medium { background: rgba(255, 159, 67, 0.1); border-color: rgba(255, 159, 67, 0.3); color: var(--accent-orange); }
+.conf-banner.conf-low { background: rgba(255, 68, 68, 0.1); border-color: rgba(255, 68, 68, 0.3); color: var(--accent-red); }
 
 .conf-icon { font-size: 18px; line-height: 1; }
 .conf-label { flex: 1; }
@@ -506,7 +506,7 @@ const roleSummaryIcon = computed(() => {
   text-align: left;
 }
 
-.trend-header:hover { background: var(--bg-secondary, #F9FAFB); }
+.trend-header:hover { background: var(--bg-secondary); }
 
 .trend-dir-badge {
   width: 32px;
@@ -520,10 +520,10 @@ const roleSummaryIcon = computed(() => {
   flex-shrink: 0;
 }
 
-.dir-up { background: #D1FAE5; color: #065F46; }
-.dir-down { background: #FEE2E2; color: #991B1B; }
-.dir-flat { background: #F3F4F6; color: #6B7280; }
-.dir-volatile { background: #FEF9C3; color: #78350F; }
+.dir-up { background: rgba(0, 217, 101, 0.15); color: var(--accent-green); }
+.dir-down { background: rgba(255, 68, 68, 0.15); color: var(--accent-red); }
+.dir-flat { background: var(--bg-secondary); color: var(--text-muted); }
+.dir-volatile { background: rgba(255, 159, 67, 0.15); color: var(--accent-orange); }
 
 .trend-title {
   flex: 1;
@@ -540,9 +540,9 @@ const roleSummaryIcon = computed(() => {
   white-space: nowrap;
 }
 
-.conf-high { background: #D1FAE5; color: #065F46; }
-.conf-medium { background: #FEF9C3; color: #78350F; }
-.conf-low { background: #FEE2E2; color: #991B1B; }
+.conf-high { background: rgba(0, 217, 101, 0.15); color: var(--accent-green); }
+.conf-medium { background: rgba(255, 159, 67, 0.15); color: var(--accent-orange); }
+.conf-low { background: rgba(255, 68, 68, 0.15); color: var(--accent-red); }
 
 .trend-toggle-icon {
   font-size: 16px;
@@ -577,7 +577,7 @@ const roleSummaryIcon = computed(() => {
   margin-bottom: 6px;
 }
 
-.counter-label { color: #92400E; }
+.counter-label { color: var(--accent-orange); }
 
 .evidence-list,
 .counter-list {
@@ -598,8 +598,8 @@ const roleSummaryIcon = computed(() => {
   color: var(--text-secondary, #374151);
 }
 
-.evidence-bullet { color: #059669; font-size: 14px; flex-shrink: 0; }
-.counter-bullet { color: #D97706; font-size: 14px; flex-shrink: 0; }
+.evidence-bullet { color: var(--accent-green); font-size: 14px; flex-shrink: 0; }
+.counter-bullet { color: var(--accent-orange); font-size: 14px; flex-shrink: 0; }
 
 /* Accordion sections */
 .accordion-section {
@@ -624,7 +624,7 @@ const roleSummaryIcon = computed(() => {
   text-align: left;
 }
 
-.accordion-header:hover { background: var(--bg-secondary, #F9FAFB); }
+.accordion-header:hover { background: var(--bg-secondary); }
 .accordion-icon { font-size: 14px; color: var(--text-muted, #9CA3AF); }
 
 .accordion-body {
@@ -665,8 +665,9 @@ const roleSummaryIcon = computed(() => {
 
 .backtest-table td {
   padding: 8px;
-  border-bottom: 1px solid #F3F4F6;
+  border-bottom: 1px solid var(--border-color);
   font-weight: 500;
+  color: var(--text-secondary);
 }
 
 .backtest-loading,
