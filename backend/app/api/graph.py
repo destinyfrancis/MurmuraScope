@@ -285,6 +285,7 @@ async def build_graph(req: GraphBuildRequest) -> APIResponse:
     base_edge_count = len(_HK_PROPERTY_EDGES)
     seed_nodes = 0
     seed_edges = 0
+    mem_result = None
 
     # --- Step 2: seed injection (best-effort, never blocks the response) ---
     if req.seed_text and req.seed_text.strip():
@@ -309,6 +310,25 @@ async def build_graph(req: GraphBuildRequest) -> APIResponse:
                 graph_id,
             )
 
+        # Memory initialization (best-effort, never blocks graph build response)
+        mem_result = None
+        try:
+            from backend.app.services.memory_initialization import MemoryInitializationService  # noqa: PLC0415
+            mem_svc = MemoryInitializationService()
+            mem_result = await mem_svc.build_from_graph(graph_id, req.seed_text)
+            logger.info(
+                "Memory init for graph %s: %d world ctx, %d persona templates, %d edges",
+                graph_id,
+                mem_result.world_context_count,
+                mem_result.persona_template_count,
+                mem_result.enhanced_edge_count,
+            )
+        except Exception:
+            logger.exception(
+                "Memory initialization failed for graph %s — continuing without seed memories",
+                graph_id,
+            )
+
     total_nodes = base_node_count + seed_nodes
     total_edges = base_edge_count + seed_edges
 
@@ -328,6 +348,8 @@ async def build_graph(req: GraphBuildRequest) -> APIResponse:
             "base_edges": base_edge_count,
             "seed_nodes": seed_nodes,
             "seed_edges": seed_edges,
+            "world_context_count": mem_result.world_context_count if mem_result else 0,
+            "persona_template_count": mem_result.persona_template_count if mem_result else 0,
         },
     )
 
