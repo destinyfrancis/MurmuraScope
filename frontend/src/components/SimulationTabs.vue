@@ -17,6 +17,7 @@ const props = defineProps({
   sessionId:        { type: String,  default: '' },
   simCompleted:     { type: Boolean, default: false },
   worldEvents:      { type: Array,   default: () => [] },
+  factionColours:   { type: Object,  default: () => ({}) },
 })
 
 const emit = defineEmits(['update:activeTab', 'select-agent'])
@@ -46,7 +47,12 @@ const mergedFeedItems = computed(() => {
     <div v-if="activeTab === 'feed'" class="tab-content-feed">
       <template v-for="item in mergedFeedItems" :key="item._key">
         <WorldEventCard v-if="item._type === 'world_event'" :event="item" />
-        <FeedView v-else :post="item" @select-agent="emit('select-agent', $event)" />
+        <FeedView
+          v-else
+          :post="item"
+          :faction-colour="factionColours?.[item.agent_id] ?? '#9CA3AF'"
+          @select-agent="emit('select-agent', $event)"
+        />
       </template>
     </div>
 

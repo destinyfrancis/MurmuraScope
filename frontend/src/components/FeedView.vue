@@ -3,8 +3,10 @@ import { ref, watch, onMounted } from 'vue'
 import { getAgentFeed } from '@/api/simulation'
 
 const props = defineProps({
-  sessionId: { type: String, required: true },
-  agentId: { type: Number, required: true },
+  sessionId: { type: String, default: '' },
+  agentId: { type: Number, default: null },
+  post: { type: Object, default: null },
+  factionColour: { type: String, default: '#9CA3AF' },
 })
 
 const feed = ref([])
@@ -45,13 +47,46 @@ function sentimentClass(sentiment) {
   return 'sent-neutral'
 }
 
-onMounted(fetchFeed)
+onMounted(() => { if (!props.post) fetchFeed() })
 
-watch([() => props.sessionId, () => props.agentId], fetchFeed)
+watch([() => props.sessionId, () => props.agentId], () => { if (!props.post) fetchFeed() })
 </script>
 
 <template>
-  <div class="feed-view">
+  <!-- Single post card mode (used by SimulationTabs feed) -->
+  <div v-if="post" class="feed-item">
+    <div class="feed-rank">#{{ post.rank || '—' }}</div>
+    <div class="feed-body">
+      <div class="feed-meta">
+        <!-- Faction colour dot -->
+        <span class="f-dot" :style="{ background: factionColour }" />
+        <span class="feed-author">{{ post.username || `Agent #${post.agent_id}` }}</span>
+        <!-- T1 badge — show when post has tier=1 or agent_tier=1 -->
+        <span v-if="post.tier === 1 || post.agent_tier === 1" class="f-tier">T1</span>
+        <span class="feed-round">R{{ post.round_number ?? post.round }}</span>
+      </div>
+      <p class="feed-content">{{ (post.content || '').slice(0, 200) }}</p>
+      <div class="feed-scores">
+        <span v-if="post.score != null" class="score-chip" title="排序分數">
+          分數: {{ formatScore(post.score) }}
+        </span>
+        <span
+          v-if="post.sentiment != null"
+          class="score-chip"
+          :class="sentimentClass(post.sentiment)"
+          title="情緒"
+        >
+          {{ post.sentiment > 0 ? '+' : '' }}{{ (post.sentiment * 100).toFixed(0) }}%
+        </span>
+        <span v-if="post.engagement" class="score-chip" title="互動量">
+          {{ post.engagement }} 互動
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Full feed list mode (used standalone with sessionId + agentId) -->
+  <div v-else class="feed-view">
     <div class="feed-header">
       <h4 class="feed-title">推薦信息流</h4>
       <span v-if="algorithm" class="algo-badge">
@@ -76,7 +111,11 @@ watch([() => props.sessionId, () => props.agentId], fetchFeed)
         <div class="feed-rank">#{{ item.rank || idx + 1 }}</div>
         <div class="feed-body">
           <div class="feed-meta">
+            <!-- Faction colour dot -->
+            <span class="f-dot" :style="{ background: factionColour }" />
             <span class="feed-author">{{ item.username || `Agent #${item.agent_id}` }}</span>
+            <!-- T1 badge — show when post has tier=1 or agent_tier=1 -->
+            <span v-if="item.tier === 1 || item.agent_tier === 1" class="f-tier">T1</span>
             <span class="feed-round">R{{ item.round_number }}</span>
           </div>
           <p class="feed-content">{{ (item.content || '').slice(0, 200) }}</p>
@@ -195,7 +234,7 @@ watch([() => props.sessionId, () => props.agentId], fetchFeed)
 .feed-meta {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 5px;
   margin-bottom: 4px;
 }
 
@@ -208,6 +247,7 @@ watch([() => props.sessionId, () => props.agentId], fetchFeed)
 .feed-round {
   font-size: 10px;
   color: var(--text-muted);
+  margin-left: auto;
 }
 
 .feed-content {
@@ -238,4 +278,16 @@ watch([() => props.sessionId, () => props.agentId], fetchFeed)
 .sent-positive { color: var(--accent-green); background: rgba(0, 217, 101, 0.12); }
 .sent-negative { color: var(--accent-red); background: rgba(255, 68, 68, 0.12); }
 .sent-neutral { color: var(--text-muted); }
+
+.f-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
+.f-tier {
+  font-family: var(--font-mono);
+  font-size: 7px;
+  padding: 1px 4px;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 2px;
+  display: inline-block;
+  vertical-align: middle;
+}
 </style>

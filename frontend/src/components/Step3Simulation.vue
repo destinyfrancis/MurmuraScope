@@ -541,6 +541,7 @@ const factionAgentColourMap = computed(() => {
           :tipping-points="tippingPoints"
           :world-events="worldEvents"
           :sim-completed="simCompleted"
+          :faction-colours="factionAgentColourMap"
           @update:active-tab="activeTab = $event"
           @select-agent="selectAgentFromTab"
           @clear-follow="followedAgent = null"
