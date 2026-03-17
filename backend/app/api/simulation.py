@@ -33,6 +33,7 @@ from backend.app.services.simulation_manager import (
     store_activity_profiles,
 )
 from backend.app.services.supply_chain_builder import SupplyChainBuilder
+from backend.app.utils.db import get_db
 from backend.app.utils.logger import get_logger
 
 # Default company count when scenario_type triggers auto-B2B generation
@@ -1565,3 +1566,131 @@ async def get_multi_run_result(simulation_id: str) -> APIResponse:
         logger.exception("get_multi_run_result failed for simulation %s", simulation_id)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
+
+@router.post("/{simulation_id}/multi-run", status_code=202)
+async def trigger_multi_run(simulation_id: str) -> APIResponse:
+    """Trigger Phase B stochastic ensemble for a completed simulation."""
+    async with get_db() as db:
+        cursor = await db.execute(
+            "SELECT id, status, sim_mode FROM simulation_sessions WHERE id = ?",
+            (simulation_id,),
+        )
+        row = await cursor.fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    async def _run_phase_b() -> None:
+        import json as _json  # noqa: PLC0415
+        try:
+            from backend.app.services.multi_run_orchestrator import (  # noqa: PLC0415
+                CanonicalResult,
+                MultiRunOrchestrator,
+            )
+
+            async with get_db() as db:
+                cur = await db.execute(
+                    "SELECT current_round FROM simulation_sessions WHERE id = ?",
+                    (simulation_id,),
+                )
+                sess_row = await cur.fetchone()
+                if not sess_row:
+                    return
+                round_count = int(sess_row["current_round"] or 20)
+
+                cur2 = await db.execute(
+                    "SELECT DISTINCT decision_type FROM agent_decisions "
+                    "WHERE session_id = ? LIMIT 10",
+                    (simulation_id,),
+                )
+                decision_rows = await cur2.fetchall()
+
+                cur3 = await db.execute(
+                    "SELECT agent_id, topic, stance FROM belief_states "
+                    "WHERE session_id = ? ORDER BY round_number DESC",
+                    (simulation_id,),
+                )
+                belief_rows = await cur3.fetchall()
+
+            scenario_outcomes = [r["decision_type"] for r in decision_rows
+                                  if r["decision_type"]]
+            if not scenario_outcomes:
+                scenario_outcomes = ["escalate", "negotiate", "de_escalate"]
+
+            raw: dict[str, dict[str, list[float]]] = {}
+            for r in belief_rows:
+                aid = str(r["agent_id"])
+                topic = r["topic"]
+                raw.setdefault(aid, {}).setdefault(topic, []).append(float(r["stance"]))
+
+            agent_belief_dists = {
+                aid: {
+                    topic: (
+                        sum(vals) / len(vals),
+                        max(0.05, (max(vals) - min(vals)) / 2),
+                    )
+                    for topic, vals in topics.items()
+                }
+                for aid, topics in raw.items()
+            }
+            metrics = tuple({t for topics in agent_belief_dists.values() for t in topics})
+
+            canonical = CanonicalResult(
+                simulation_id=simulation_id,
+                scenario_metrics=metrics,
+                agent_belief_distributions=agent_belief_dists,
+                scenario_outcomes=scenario_outcomes,
+                round_count=round_count,
+            )
+            orchestrator = MultiRunOrchestrator()
+            result = await orchestrator.run(canonical, trial_count=100)
+
+            async with get_db() as db:
+                await db.execute(
+                    """INSERT OR REPLACE INTO multi_run_results
+                       (id, simulation_id, trial_count,
+                        outcome_distribution_json, most_common_path_json,
+                        confidence_intervals_json, avg_tipping_point_round,
+                        faction_stability_score, created_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))""",
+                    (
+                        f"mr_{simulation_id}",
+                        simulation_id,
+                        result.trial_count,
+                        _json.dumps(result.outcome_distribution),
+                        _json.dumps(result.most_common_path),
+                        _json.dumps({k: list(v) for k, v in result.confidence_intervals.items()}),
+                        result.avg_tipping_point_round,
+                        result.faction_stability_score,
+                    ),
+                )
+                await db.commit()
+        except Exception:
+            logger.exception("Phase B failed for session %s", simulation_id)
+
+    asyncio.create_task(_run_phase_b())
+    return APIResponse(
+        success=True,
+        data={"simulation_id": simulation_id, "status": "queued"},
+        meta={"simulation_id": simulation_id},
+    )
+
+
+@router.get("/{simulation_id}/world-events", response_model=APIResponse)
+async def get_world_events(simulation_id: str) -> APIResponse:
+    """Return all world events generated for a kg_driven simulation."""
+    try:
+        async with get_db() as db:
+            cursor = await db.execute(
+                "SELECT * FROM world_events WHERE simulation_id = ? ORDER BY round_number",
+                (simulation_id,),
+            )
+            rows = await cursor.fetchall()
+        return APIResponse(
+            success=True,
+            data={"simulation_id": simulation_id, "events": [dict(r) for r in (rows or [])]},
+            meta={"simulation_id": simulation_id},
+        )
+    except Exception as exc:
+        logger.exception("get_world_events failed for simulation %s", simulation_id)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
