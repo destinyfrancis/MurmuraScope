@@ -818,3 +818,43 @@ CREATE TABLE IF NOT EXISTS multi_run_results (
     faction_stability_score    REAL,
     created_at                 TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- ============================================================
+-- seed_world_context: 群體記憶 / 宏觀背景（Step 1 注入）
+-- ============================================================
+CREATE TABLE IF NOT EXISTS seed_world_context (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    graph_id     TEXT    NOT NULL,
+    session_id   TEXT,
+    context_type TEXT    NOT NULL,
+    title        TEXT    NOT NULL,
+    content      TEXT    NOT NULL,
+    severity     REAL    NOT NULL DEFAULT 0.7,
+    phase        TEXT    NOT NULL DEFAULT 'crisis',
+    lance_row_id TEXT,
+    created_at   TEXT    DEFAULT (datetime('now')),
+    UNIQUE(graph_id, title) ON CONFLICT IGNORE
+);
+CREATE INDEX IF NOT EXISTS idx_swc_graph   ON seed_world_context(graph_id);
+CREATE INDEX IF NOT EXISTS idx_swc_session ON seed_world_context(session_id);
+
+-- ============================================================
+-- seed_persona_templates: 個體人設模板（Step 1 注入，Step 2 消費）
+-- ============================================================
+CREATE TABLE IF NOT EXISTS seed_persona_templates (
+    id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+    graph_id               TEXT    NOT NULL,
+    session_id             TEXT,
+    agent_type_key         TEXT    NOT NULL,
+    display_name           TEXT    NOT NULL,
+    age_min                INTEGER,
+    age_max                INTEGER,
+    region_hint            TEXT    NOT NULL DEFAULT 'any',
+    population_ratio       REAL    NOT NULL DEFAULT 0.25,
+    initial_memories_json  TEXT    NOT NULL,
+    personality_hints_json TEXT    NOT NULL,
+    created_at             TEXT    DEFAULT (datetime('now')),
+    UNIQUE(graph_id, agent_type_key) ON CONFLICT IGNORE
+);
+CREATE INDEX IF NOT EXISTS idx_spt_graph   ON seed_persona_templates(graph_id);
+CREATE INDEX IF NOT EXISTS idx_spt_session ON seed_persona_templates(session_id);
