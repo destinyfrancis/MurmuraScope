@@ -223,7 +223,7 @@ class TestSimulationConfig:
         from backend.app.models.simulation_config import HookConfig
 
         config = HookConfig.scaled(10000)
-        assert config.emergence_enabled is False  # >5000
+        assert config.emergence_enabled is True  # Fixed: emergence now enabled at all scales
         assert config.echo_chamber_interval == 10
 
     def test_sim_preset_custom(self):

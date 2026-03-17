@@ -95,7 +95,11 @@ def test_decision_engine_uses_config_sampling():
 
 
 def test_scaled_hook_config_emergence_always_enabled():
-    """emergence_enabled must be True at any agent count — the O(n²) fix removes this cap."""
+    """emergence_enabled must be True at any agent count (removal of 5000-agent cap).
+
+    This test validates the config change only. The O(n²) performance fixes
+    (profile caching + contagion neighbor indexing) are in Tasks 2-4.
+    """
     cfg_small = HookConfig.scaled(1000)
     cfg_large = HookConfig.scaled(5001)
     cfg_xlarge = HookConfig.scaled(10000)
