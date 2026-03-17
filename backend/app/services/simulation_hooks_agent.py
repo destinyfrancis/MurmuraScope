@@ -9,6 +9,8 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
+from backend.app.services.emotional_engine import EmotionalEngine
+from backend.app.utils.db import get_db
 from backend.app.utils.logger import get_logger
 
 logger = get_logger("simulation_hooks.agent")
@@ -298,13 +300,7 @@ class AgentHooksMixin:
             if self._decision_engine is None:
                 self._decision_engine = DecisionEngine()
 
-            from backend.app.utils.db import get_db  # noqa: PLC0415
-            async with get_db() as db:
-                cursor = await db.execute(
-                    "SELECT * FROM agent_profiles WHERE session_id = ?",
-                    (session_id,),
-                )
-                rows = await cursor.fetchall()
+            rows = list(self._round_profiles.get(session_id, []))
 
             if not rows:
                 return
@@ -383,8 +379,6 @@ class AgentHooksMixin:
     ) -> None:
         """Update VAD emotional states for all agents this round."""
         try:
-            from backend.app.services.emotional_engine import EmotionalEngine  # noqa: PLC0415
-            from backend.app.utils.db import get_db  # noqa: PLC0415
             import aiosqlite as _aiosqlite  # noqa: PLC0415
 
             engine = EmotionalEngine()
@@ -396,12 +390,7 @@ class AgentHooksMixin:
                 prev_round = max(0, round_num - 1)
                 prev_states = await engine.load_states(session_id, prev_round, db)
 
-                # Load agent profiles
-                cursor = await db.execute(
-                    "SELECT * FROM agent_profiles WHERE session_id = ?",
-                    (session_id,),
-                )
-                profile_rows = await cursor.fetchall()
+            profile_rows = list(self._round_profiles.get(session_id, []))
 
             if not profile_rows:
                 return
@@ -508,19 +497,12 @@ class AgentHooksMixin:
         try:
             from backend.app.services.belief_system import BeliefSystem  # noqa: PLC0415
             from backend.app.services.cognitive_dissonance import DissonanceDetector  # noqa: PLC0415
-            from backend.app.utils.db import get_db  # noqa: PLC0415
             import aiosqlite as _aiosqlite  # noqa: PLC0415
 
             belief_sys = BeliefSystem()
             dissonance_det = DissonanceDetector()
 
-            async with get_db() as db:
-                db.row_factory = _aiosqlite.Row
-                cursor = await db.execute(
-                    "SELECT * FROM agent_profiles WHERE session_id = ?",
-                    (session_id,),
-                )
-                profile_rows = await cursor.fetchall()
+            profile_rows = list(self._round_profiles.get(session_id, []))
 
             if not profile_rows:
                 return
@@ -639,13 +621,7 @@ class AgentHooksMixin:
             if self._consumption_tracker is None:
                 self._consumption_tracker = ConsumptionTracker()
 
-            from backend.app.utils.db import get_db  # noqa: PLC0415
-            async with get_db() as db:
-                cursor = await db.execute(
-                    "SELECT * FROM agent_profiles WHERE session_id = ?",
-                    (session_id,),
-                )
-                rows = await cursor.fetchall()
+            rows = list(self._round_profiles.get(session_id, []))
 
             if not rows:
                 return
