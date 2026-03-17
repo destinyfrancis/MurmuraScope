@@ -400,7 +400,7 @@ async def generate_agents(
                 exc_info=True,
             )
 
-        factory = KGAgentFactory(llm_client=llm)
+        factory = await KGAgentFactory.create(graph_id=graph_id, llm_client=llm)
         profiles = await factory.generate_from_kg(kg_nodes, kg_edges, seed_text)
         written_path = await factory.generate_agents_csv(profiles, csv_path)
         logger.info(
@@ -409,6 +409,30 @@ async def generate_agents(
             session_id,
             written_path,
         )
+
+        # Hydrate seed memories (best-effort, never blocks simulation start)
+        try:
+            from backend.app.services.memory_initialization import MemoryInitializationService  # noqa: PLC0415
+            mem_svc = MemoryInitializationService()
+            agents = [(p.id, p.entity_type) for p in profiles]
+            hydration = await mem_svc.hydrate_session_bulk(
+                session_id=session_id,
+                graph_id=graph_id,
+                agents=agents,
+            )
+            logger.info(
+                "Seed memory hydration for session %s: %d injected, %d skipped, %d templates",
+                session_id,
+                hydration.total_injected,
+                hydration.agents_skipped,
+                hydration.templates_found,
+            )
+        except Exception:
+            logger.exception(
+                "Seed memory hydration failed for session %s — continuing without initial memories",
+                session_id,
+            )
+
         return profiles, written_path
 
     # Default path: hk_demographic via AgentFactory.
