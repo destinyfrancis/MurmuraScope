@@ -743,3 +743,78 @@ CREATE TABLE IF NOT EXISTS scale_benchmarks (
 );
 CREATE INDEX IF NOT EXISTS idx_sb_target ON scale_benchmarks(target_name);
 CREATE INDEX IF NOT EXISTS idx_sb_created ON scale_benchmarks(created_at);
+
+-- ============================================================
+-- Universal Cognitive Simulation Engine (kg_driven mode only)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS cognitive_fingerprints (
+    agent_id               TEXT PRIMARY KEY,
+    simulation_id          TEXT NOT NULL,
+    values_json            TEXT NOT NULL,
+    info_diet_json         TEXT NOT NULL,
+    group_memberships_json TEXT NOT NULL,
+    susceptibility_json    TEXT NOT NULL,
+    confirmation_bias      REAL NOT NULL DEFAULT 0.5,
+    conformity             REAL NOT NULL DEFAULT 0.5,
+    created_at             TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS world_events (
+    id                 TEXT PRIMARY KEY,
+    simulation_id      TEXT NOT NULL,
+    round_number       INTEGER NOT NULL,
+    content            TEXT NOT NULL,
+    event_type         TEXT NOT NULL,
+    reach_json         TEXT NOT NULL,
+    impact_vector_json TEXT NOT NULL,
+    credibility        REAL NOT NULL DEFAULT 1.0,
+    created_at         TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS faction_snapshots_v2 (
+    id                      TEXT PRIMARY KEY,
+    simulation_id           TEXT NOT NULL,
+    round_number            INTEGER NOT NULL,
+    factions_json           TEXT NOT NULL,
+    bridge_agents_json      TEXT NOT NULL,
+    modularity_score        REAL NOT NULL,
+    inter_faction_hostility REAL NOT NULL,
+    created_at              TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS tipping_points (
+    id                     TEXT PRIMARY KEY,
+    simulation_id          TEXT NOT NULL,
+    round_number           INTEGER NOT NULL,
+    trigger_event_id       TEXT,
+    kl_divergence          REAL NOT NULL,
+    change_direction       TEXT NOT NULL,
+    affected_factions_json TEXT NOT NULL,
+    created_at             TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS narrative_traces (
+    id                   TEXT PRIMARY KEY,
+    simulation_id        TEXT NOT NULL,
+    agent_id             TEXT NOT NULL,
+    round_number         INTEGER NOT NULL,
+    received_events_json TEXT NOT NULL,
+    belief_delta_json    TEXT NOT NULL,
+    decision             TEXT,
+    llm_reasoning        TEXT,
+    faction_changed      INTEGER NOT NULL DEFAULT 0,
+    created_at           TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS multi_run_results (
+    id                         TEXT PRIMARY KEY,
+    simulation_id              TEXT NOT NULL,
+    trial_count                INTEGER NOT NULL,
+    outcome_distribution_json  TEXT NOT NULL,
+    most_common_path_json      TEXT NOT NULL,
+    confidence_intervals_json  TEXT NOT NULL,
+    avg_tipping_point_round    REAL,
+    faction_stability_score    REAL,
+    created_at                 TEXT NOT NULL DEFAULT (datetime('now'))
+);

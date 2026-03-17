@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.app.config import get_settings
-from backend.app.utils.db import init_db
+from backend.app.utils.db import apply_migrations, init_db
 from backend.app.utils.logger import setup_logging
 
 # Router module names under backend.app.api
@@ -33,6 +33,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("Cleaned up any stale simulation subprocesses")
 
     await init_db()
+    await apply_migrations()
 
     # Runtime migration: add share_token to reports table
     try:

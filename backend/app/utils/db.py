@@ -67,3 +67,24 @@ async def init_db() -> None:
         await db.commit()
 
     logger.info("Database initialised successfully")
+
+
+async def apply_migrations() -> None:
+    """Apply ALTER TABLE migrations for columns added after initial schema.
+
+    Uses try/except to guard against 'duplicate column name' on existing DBs,
+    matching the existing pattern used for political_stance and other late columns.
+    Safe to call multiple times.
+    """
+    migrations = [
+        "ALTER TABLE agent_profiles ADD COLUMN tier INTEGER DEFAULT 2",
+    ]
+    async with get_db() as db:
+        for sql in migrations:
+            try:
+                await db.execute(sql)
+                await db.commit()
+            except Exception:
+                # Column already exists — safe to ignore
+                pass
+    logger.info("DB migrations applied")
