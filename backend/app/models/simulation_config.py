@@ -46,7 +46,7 @@ class HookConfig:
         return cls(
             decision_cap=max(25, agent_count // 20),
             llm_concurrency=min(100, max(10, agent_count // 5)),
-            emergence_enabled=agent_count <= 5000,
+            emergence_enabled=True,
             # Widen periodic intervals for large populations
             echo_chamber_interval=5 if agent_count <= 1000 else 10,
             macro_feedback_interval=5 if agent_count <= 1000 else 10,

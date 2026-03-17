@@ -92,3 +92,20 @@ def test_decision_engine_uses_config_sampling():
     engine = DecisionEngine(hook_config=cfg)
     assert engine._sample_rate == 0.05
     assert engine._sample_cap == 25
+
+
+def test_scaled_hook_config_emergence_always_enabled():
+    """emergence_enabled must be True at any agent count — the O(n²) fix removes this cap."""
+    cfg_small = HookConfig.scaled(1000)
+    cfg_large = HookConfig.scaled(5001)
+    cfg_xlarge = HookConfig.scaled(10000)
+    assert cfg_small.emergence_enabled is True
+    assert cfg_large.emergence_enabled is True   # was False before fix
+    assert cfg_xlarge.emergence_enabled is True  # was False before fix
+
+
+def test_scaled_hook_config_intervals_widen_for_large_populations():
+    """Interval widening (every 10 rounds instead of 5) should still apply for large n."""
+    cfg = HookConfig.scaled(5001)
+    assert cfg.echo_chamber_interval == 10
+    assert cfg.macro_feedback_interval == 10
