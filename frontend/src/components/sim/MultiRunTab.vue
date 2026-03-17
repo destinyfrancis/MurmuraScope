@@ -49,6 +49,10 @@ function stopPolling() {
 
 onUnmounted(stopPolling)
 
+function resetEnsemble() {
+  result.value = null
+}
+
 const outcomes = computed(() => {
   if (!result.value) return []
   try {
@@ -110,7 +114,7 @@ const outcomes = computed(() => {
           Stability: {{ (result.faction_stability_score * 100).toFixed(0) }}%
         </span>
       </div>
-      <button class="mr-btn-sm" @click="result = null">重新執行</button>
+      <button class="mr-btn-sm" @click="resetEnsemble">重新執行</button>
     </div>
   </div>
 </template>
