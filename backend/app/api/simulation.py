@@ -1493,3 +1493,75 @@ async def evidence_search(
         logger.exception("evidence_search failed for session %s q=%s", session_id, q)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
+
+# ---------------------------------------------------------------------------
+# New read-only endpoints: factions, tipping-points, multi-run (Phase B)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{simulation_id}/factions", response_model=APIResponse)
+async def get_faction_snapshots(simulation_id: str) -> APIResponse:
+    """Return all faction snapshots for a kg_driven simulation."""
+    from backend.app.utils.db import get_db  # noqa: PLC0415
+
+    try:
+        async with get_db() as db:
+            cursor = await db.execute(
+                "SELECT * FROM faction_snapshots_v2 WHERE simulation_id = ? ORDER BY round_number",
+                (simulation_id,),
+            )
+            rows = await cursor.fetchall()
+        return APIResponse(
+            success=True,
+            data={"simulation_id": simulation_id, "snapshots": [dict(r) for r in (rows or [])]},
+            meta={"simulation_id": simulation_id},
+        )
+    except Exception as exc:
+        logger.exception("get_faction_snapshots failed for simulation %s", simulation_id)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.get("/{simulation_id}/tipping-points", response_model=APIResponse)
+async def get_tipping_points(simulation_id: str) -> APIResponse:
+    """Return all tipping points detected for a simulation."""
+    from backend.app.utils.db import get_db  # noqa: PLC0415
+
+    try:
+        async with get_db() as db:
+            cursor = await db.execute(
+                "SELECT * FROM tipping_points WHERE simulation_id = ? ORDER BY round_number",
+                (simulation_id,),
+            )
+            rows = await cursor.fetchall()
+        return APIResponse(
+            success=True,
+            data={"simulation_id": simulation_id, "tipping_points": [dict(r) for r in (rows or [])]},
+            meta={"simulation_id": simulation_id},
+        )
+    except Exception as exc:
+        logger.exception("get_tipping_points failed for simulation %s", simulation_id)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.get("/{simulation_id}/multi-run", response_model=APIResponse)
+async def get_multi_run_result(simulation_id: str) -> APIResponse:
+    """Return Phase B ensemble result for a simulation."""
+    from backend.app.utils.db import get_db  # noqa: PLC0415
+
+    try:
+        async with get_db() as db:
+            cursor = await db.execute(
+                "SELECT * FROM multi_run_results WHERE simulation_id = ? ORDER BY created_at DESC LIMIT 1",
+                (simulation_id,),
+            )
+            row = await cursor.fetchone()
+        result = dict(row) if row else None
+        return APIResponse(
+            success=True,
+            data={"simulation_id": simulation_id, "result": result},
+            meta={"simulation_id": simulation_id},
+        )
+    except Exception as exc:
+        logger.exception("get_multi_run_result failed for simulation %s", simulation_id)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
