@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from backend.app.utils.db import get_db
 from backend.app.utils.logger import get_logger
 
 logger = get_logger("simulation_hooks.social")
@@ -144,14 +145,8 @@ class SocialHooksMixin:
         """Process peer wealth transfers from eligible donors to KOLs."""
         try:
             from backend.app.services.wealth_transfer import process_wealth_transfers  # noqa: PLC0415
-            from backend.app.utils.db import get_db  # noqa: PLC0415
 
-            async with get_db() as db:
-                cursor = await db.execute(
-                    "SELECT * FROM agent_profiles WHERE session_id = ?",
-                    (session_id,),
-                )
-                rows = await cursor.fetchall()
+            rows = list(self._round_profiles.get(session_id, []))
 
             if not rows:
                 return
@@ -361,6 +356,11 @@ class SocialHooksMixin:
             for row in trust_rows:
                 trust_map[(int(row[0]), int(row[1]))] = float(row[2])
 
+            # Build neighbour index once: O(E) — then each source looks up only its own edges
+            trust_neighbors: dict[int, list[tuple[int, float]]] = {}
+            for (a_id, b_id), score in trust_map.items():
+                trust_neighbors.setdefault(a_id, []).append((b_id, score))
+
             # Find high-arousal agents (arousal > 0.6)
             high_arousal = {
                 aid: state for aid, state in states.items()
@@ -372,12 +372,10 @@ class SocialHooksMixin:
 
             modified_states: dict[int, _Any] = {}
 
+            # O(H × avg_degree) — each source only iterates its own neighbours
             for source_id, source_state in high_arousal.items():
-                for (a_id, b_id), trust_score in trust_map.items():
-                    if a_id != source_id:
-                        continue
-
-                    target_state = states.get(b_id)
+                for target_id, trust_score in trust_neighbors.get(source_id, []):
+                    target_state = states.get(target_id)
                     if target_state is None:
                         continue
 
@@ -394,11 +392,11 @@ class SocialHooksMixin:
                     valence_delta = contagion_strength * (source_state.valence - target_state.valence) * 0.3
                     arousal_delta = contagion_strength * 0.2
 
-                    base_state = modified_states.get(b_id, target_state)
+                    base_state = modified_states.get(target_id, target_state)
                     new_valence = max(-1.0, min(1.0, base_state.valence + valence_delta))
                     new_arousal = max(0.0, min(1.0, base_state.arousal + arousal_delta))
 
-                    modified_states[b_id] = dc_replace(
+                    modified_states[target_id] = dc_replace(
                         base_state,
                         valence=round(new_valence, 4),
                         arousal=round(new_arousal, 4),

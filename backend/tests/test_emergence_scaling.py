@@ -129,3 +129,43 @@ async def test_process_emotional_state_does_not_query_agent_profiles():
         assert "agent_profiles" not in sql.lower(), (
             f"Unexpected agent_profiles query executed: {sql!r}"
         )
+
+
+@pytest.mark.asyncio
+async def test_process_wealth_transfers_no_db_call_when_cache_empty():
+    """With empty cache, _process_wealth_transfers returns early without touching DB."""
+    from backend.app.services.simulation_runner import SimulationRunner
+    runner = SimulationRunner()
+    runner._round_profiles["sess-5"] = []
+
+    with patch("backend.app.services.simulation_hooks_social.get_db") as mock_gdb:
+        await runner._process_wealth_transfers("sess-5", 5)
+        mock_gdb.assert_not_called()
+
+
+def test_emotional_contagion_neighbour_index_correct():
+    """Neighbour-indexed trust lookup must produce the same results as a naive scan."""
+    trust_map = {
+        (1, 2): 0.8,
+        (1, 3): 0.6,
+        (2, 3): 0.7,
+        (4, 1): 0.5,
+    }
+    trust_neighbors: dict[int, list[tuple[int, float]]] = {}
+    for (a_id, b_id), score in trust_map.items():
+        trust_neighbors.setdefault(a_id, []).append((b_id, score))
+
+    assert set(b for b, _ in trust_neighbors.get(1, [])) == {2, 3}
+    assert set(b for b, _ in trust_neighbors.get(2, [])) == {3}
+    assert set(b for b, _ in trust_neighbors.get(4, [])) == {1}
+    assert trust_neighbors.get(3) is None  # source 3 has no outgoing edges
+
+
+def test_emotional_contagion_neighbour_index_empty_trust():
+    """Neighbour index handles empty trust_map without error."""
+    trust_map: dict[tuple[int, int], float] = {}
+    trust_neighbors: dict[int, list[tuple[int, float]]] = {}
+    for (a_id, b_id), score in trust_map.items():
+        trust_neighbors.setdefault(a_id, []).append((b_id, score))
+
+    assert trust_neighbors.get(99, []) == []
