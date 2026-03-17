@@ -456,18 +456,25 @@ class MemoryInitializationService:
         """Load all persona templates for a graph_id."""
         async with get_db() as db:
             rows = await db.execute_fetchall(
-                "SELECT agent_type_key, initial_memories_json, personality_hints_json "
+                "SELECT graph_id, agent_type_key, initial_memories_json, personality_hints_json "
                 "FROM seed_persona_templates WHERE graph_id = ?",
                 (graph_id,),
             )
-        return [
-            {
-                "agent_type_key": r[0],
-                "initial_memories": json.loads(r[1]),
-                "personality_hints": json.loads(r[2]),
-            }
-            for r in rows
-        ]
+        result = []
+        for r in rows:
+            try:
+                result.append({
+                    "agent_type_key": r["agent_type_key"],
+                    "initial_memories": json.loads(r["initial_memories_json"]),
+                    "personality_hints": json.loads(r["personality_hints_json"]),
+                })
+            except (json.JSONDecodeError, ValueError, KeyError):
+                logger.error(
+                    "Corrupt persona template row for graph %s key %s — skipping",
+                    r["graph_id"] if "graph_id" in r.keys() else "?",
+                    r["agent_type_key"] if "agent_type_key" in r.keys() else "?",
+                )
+        return result
 
     async def _write_seed_memories(
         self,
@@ -477,27 +484,25 @@ class MemoryInitializationService:
         vector_store: VectorStore | None,
     ) -> int:
         """Write round_number=0 seed memories for one agent."""
-        count = 0
+        valid_memories = [m for m in memories if m.strip()]
+        if not valid_memories:
+            return 0
+
         async with get_db() as db:
-            for memory_text in memories:
-                if not memory_text.strip():
-                    continue
+            for memory_text in valid_memories:
                 await db.execute(
                     """INSERT INTO agent_memories
                        (session_id, agent_id, round_number, memory_text, salience_score, memory_type)
                        VALUES (?, ?, 0, ?, ?, ?)""",
                     (session_id, agent_id, memory_text, _SALIENCE_SEED, _MEMORY_TYPE_SEED),
                 )
-                count += 1
             await db.commit()
 
         # Dual-write to LanceDB if vector_store provided (best-effort)
-        if vector_store and count > 0:
+        if vector_store:
             try:
-                for memory_text in memories:
-                    if not memory_text.strip():
-                        continue
-                    from backend.app.services.vector_store import EmbeddingProvider  # noqa: PLC0415
+                from backend.app.services.vector_store import EmbeddingProvider  # noqa: PLC0415
+                for memory_text in valid_memories:
                     vec = EmbeddingProvider.embed_single(memory_text)  # sync — no await
                     vector_store.add_memory(
                         session_id=session_id,
@@ -513,7 +518,7 @@ class MemoryInitializationService:
                     agent_id, session_id, exc_info=True,
                 )
 
-        return count
+        return len(valid_memories)
 
     async def _sql_fetch_world_context(
         self, graph_id: str, context_types: list[str] | None
@@ -526,20 +531,20 @@ class MemoryInitializationService:
                     f"SELECT id, graph_id, context_type, title, content, severity, phase "
                     f"FROM seed_world_context WHERE graph_id = ? "
                     f"AND context_type IN ({placeholders}) "
-                    f"ORDER BY severity DESC LIMIT {_MAX_WORLD_CONTEXT_ROWS}",
+                    "ORDER BY severity DESC LIMIT 8",  # LIMIT cannot use ? placeholder in SQLite
                     [graph_id, *context_types],
                 )
             else:
                 rows = await db.execute_fetchall(
                     "SELECT id, graph_id, context_type, title, content, severity, phase "
                     "FROM seed_world_context WHERE graph_id = ? "
-                    f"ORDER BY severity DESC LIMIT {_MAX_WORLD_CONTEXT_ROWS}",
+                    "ORDER BY severity DESC LIMIT 8",  # LIMIT cannot use ? placeholder in SQLite
                     (graph_id,),
                 )
         return [
             WorldContextEntry(
-                id=r[0], graph_id=r[1], context_type=r[2],
-                title=r[3], content=r[4], severity=r[5], phase=r[6],
+                id=r["id"], graph_id=r["graph_id"], context_type=r["context_type"],
+                title=r["title"], content=r["content"], severity=r["severity"], phase=r["phase"],
             )
             for r in rows
         ]
@@ -580,8 +585,8 @@ class MemoryInitializationService:
                 )
             return [
                 WorldContextEntry(
-                    id=r[0], graph_id=r[1], context_type=r[2],
-                    title=r[3], content=r[4], severity=r[5], phase=r[6],
+                    id=r["id"], graph_id=r["graph_id"], context_type=r["context_type"],
+                    title=r["title"], content=r["content"], severity=r["severity"], phase=r["phase"],
                 )
                 for r in rows
             ]
@@ -659,7 +664,7 @@ class MemoryInitializationService:
             result = await self._llm.chat_json(messages)
             return json.dumps(result, ensure_ascii=False)
         except Exception:
-            logger.warning("chat_json failed, falling back to raw chat")
+            logger.warning("chat_json failed, falling back to raw chat", exc_info=True)
             retry_messages = [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user + "\n\nRespond with a JSON array only, no markdown."},
