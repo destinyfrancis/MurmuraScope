@@ -39,6 +39,9 @@ from backend.app.utils.logger import get_logger
 # Default company count when scenario_type triggers auto-B2B generation
 _DEFAULT_B2B_COMPANY_COUNT = 30
 
+# Default scenario outcomes used when no decision_type data exists in Phase B
+_DEFAULT_SCENARIO_OUTCOMES: list[str] = ["escalate", "negotiate", "de_escalate"]
+
 router = APIRouter(prefix="/simulation", tags=["simulation"])
 logger = get_logger("api.simulation")
 
@@ -1567,6 +1570,61 @@ async def get_multi_run_result(simulation_id: str) -> APIResponse:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
+async def _load_canonical_inputs(
+    simulation_id: str,
+) -> tuple[int, list[str], dict[str, dict[str, list[float]]]]:
+    """Load Phase B inputs from DB: round_count, scenario_outcomes, raw_belief_data."""
+    async with get_db() as db:
+        cur = await db.execute(
+            "SELECT current_round FROM simulation_sessions WHERE id = ?",
+            (simulation_id,),
+        )
+        sess_row = await cur.fetchone()
+        round_count = int(sess_row["current_round"] or 20) if sess_row else 20
+
+        cur2 = await db.execute(
+            "SELECT DISTINCT decision_type FROM agent_decisions "
+            "WHERE session_id = ? LIMIT 10",
+            (simulation_id,),
+        )
+        decision_rows = await cur2.fetchall()
+
+        cur3 = await db.execute(
+            "SELECT agent_id, topic, stance FROM belief_states "
+            "WHERE session_id = ? ORDER BY round_number DESC",
+            (simulation_id,),
+        )
+        belief_rows = await cur3.fetchall()
+
+    scenario_outcomes = [r["decision_type"] for r in decision_rows if r["decision_type"]]
+    if not scenario_outcomes:
+        scenario_outcomes = list(_DEFAULT_SCENARIO_OUTCOMES)
+
+    raw: dict[str, dict[str, list[float]]] = {}
+    for r in belief_rows:
+        raw.setdefault(str(r["agent_id"]), {}).setdefault(r["topic"], []).append(float(r["stance"]))
+
+    return round_count, scenario_outcomes, raw
+
+
+def _build_belief_dists(
+    raw: dict[str, dict[str, list[float]]],
+) -> tuple[tuple[str, ...], dict[str, dict[str, tuple[float, float]]]]:
+    """Build agent belief distributions from raw stance data."""
+    dists = {
+        aid: {
+            topic: (
+                sum(vals) / len(vals),
+                max(0.05, (max(vals) - min(vals)) / 2),
+            )
+            for topic, vals in topics.items()
+        }
+        for aid, topics in raw.items()
+    }
+    metrics = tuple({t for topics in dists.values() for t in topics})
+    return metrics, dists
+
+
 @router.post("/{simulation_id}/multi-run", status_code=202)
 async def trigger_multi_run(simulation_id: str) -> APIResponse:
     """Trigger Phase B stochastic ensemble for a completed simulation."""
@@ -1588,52 +1646,8 @@ async def trigger_multi_run(simulation_id: str) -> APIResponse:
                 MultiRunOrchestrator,
             )
 
-            async with get_db() as db:
-                cur = await db.execute(
-                    "SELECT current_round FROM simulation_sessions WHERE id = ?",
-                    (simulation_id,),
-                )
-                sess_row = await cur.fetchone()
-                if not sess_row:
-                    return
-                round_count = int(sess_row["current_round"] or 20)
-
-                cur2 = await db.execute(
-                    "SELECT DISTINCT decision_type FROM agent_decisions "
-                    "WHERE session_id = ? LIMIT 10",
-                    (simulation_id,),
-                )
-                decision_rows = await cur2.fetchall()
-
-                cur3 = await db.execute(
-                    "SELECT agent_id, topic, stance FROM belief_states "
-                    "WHERE session_id = ? ORDER BY round_number DESC",
-                    (simulation_id,),
-                )
-                belief_rows = await cur3.fetchall()
-
-            scenario_outcomes = [r["decision_type"] for r in decision_rows
-                                  if r["decision_type"]]
-            if not scenario_outcomes:
-                scenario_outcomes = ["escalate", "negotiate", "de_escalate"]
-
-            raw: dict[str, dict[str, list[float]]] = {}
-            for r in belief_rows:
-                aid = str(r["agent_id"])
-                topic = r["topic"]
-                raw.setdefault(aid, {}).setdefault(topic, []).append(float(r["stance"]))
-
-            agent_belief_dists = {
-                aid: {
-                    topic: (
-                        sum(vals) / len(vals),
-                        max(0.05, (max(vals) - min(vals)) / 2),
-                    )
-                    for topic, vals in topics.items()
-                }
-                for aid, topics in raw.items()
-            }
-            metrics = tuple({t for topics in agent_belief_dists.values() for t in topics})
+            round_count, scenario_outcomes, raw = await _load_canonical_inputs(simulation_id)
+            metrics, agent_belief_dists = _build_belief_dists(raw)
 
             canonical = CanonicalResult(
                 simulation_id=simulation_id,
@@ -1681,6 +1695,13 @@ async def get_world_events(simulation_id: str) -> APIResponse:
     """Return all world events generated for a kg_driven simulation."""
     try:
         async with get_db() as db:
+            # Check session exists first
+            cur = await db.execute(
+                "SELECT id FROM simulation_sessions WHERE id = ?",
+                (simulation_id,),
+            )
+            if not await cur.fetchone():
+                raise HTTPException(status_code=404, detail="Session not found")
             cursor = await db.execute(
                 "SELECT * FROM world_events WHERE simulation_id = ? ORDER BY round_number",
                 (simulation_id,),
@@ -1691,6 +1712,8 @@ async def get_world_events(simulation_id: str) -> APIResponse:
             data={"simulation_id": simulation_id, "events": [dict(r) for r in (rows or [])]},
             meta={"simulation_id": simulation_id},
         )
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.exception("get_world_events failed for simulation %s", simulation_id)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
