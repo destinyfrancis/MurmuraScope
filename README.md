@@ -37,7 +37,7 @@ Most simulation tools are domain-locked. **Moirai is not.**
 
 貼入任何文字 — 新聞報道、地緣政治簡報、歷史事件、公司業績 — Moirai 自動推斷出所有角色、決策、指標同衝擊事件。數十秒內，數百個擁有獨特個性、記憶同信念的 AI 代理人開始互動。派系自然湧現。引爆點觸發。知識圖譜持續演化。宏觀預測實時更新。
 
-Paste any text — a news article, geopolitical briefing, historical event, or company filing — and Moirai automatically infers the actors, decisions, metrics, and shocks. Within seconds, hundreds of AI agents with distinct personalities, memories, and beliefs begin interacting. Emergent factions form. Tipping points trigger. The knowledge graph evolves. Macro forecasts update.
+Paste any text — a news article, geopolitical briefing, historical event, or company filing — and Moirai automatically infers the actors, decisions, metrics, and shocks. Within seconds, hundreds to tens of thousands of AI agents with distinct personalities, memories, and beliefs begin interacting. Emergent factions form. Tipping points trigger. The knowledge graph evolves. Macro forecasts update.
 
 **無需配置。無需領域專業知識。只需文字。**
 **No configuration. No domain expertise required. Just text.**
@@ -60,7 +60,7 @@ Paste any text — a news article, geopolitical briefing, historical event, or c
 
 *A multi-agent system consists of many independent AI individuals (agents), each with their own personality, memory, and decision logic — interacting and influencing each other to produce emergent collective behavior. Think of it as simulating a real society where every person is an independent actor, but collective behavior emerges from all their interactions.*
 
-- **100–500 個 AI 代理人**，自動從 seed text 生成，唔係預設 HK profiles（kg_driven 模式）
+- **100 至 50,000 個 AI 代理人**，自動從 seed text 生成，唔係預設 HK profiles（kg_driven 模式）；內建 preset 涵蓋 100 / 300 / 500 / 1,000 / 3,000，亦可完全自定義
 - 每位代理人擁有：
   - **情節記憶（Episodic Memory）**：儲存於 LanceDB 向量資料庫，按語義相關性提取
   - **貝葉斯信念系統（Bayesian Belief System）**：根據新資訊更新對世界嘅看法（見下方解釋）
@@ -506,7 +506,7 @@ POST /simulation/{session_id}/branch
 ┌──────▼──────┐   ┌───────▼──────┐   ┌──────────▼──────────────────┐
 │ SQLite WAL  │   │   LanceDB    │   │   OASIS Subprocess           │
 │ (55 個表)   │   │ 向量資料庫   │   │   Facebook/Instagram 模擬    │
-│             │   │ 384 維嵌入   │   │   100–500 個 LLM 代理人      │
+│             │   │ 384 維嵌入   │   │   100–50,000 個 LLM 代理人   │
 └─────────────┘   └──────────────┘   └─────────────────────────────┘
        │
 ┌──────▼──────────────────────────────────────────────────────────────┐
@@ -664,11 +664,23 @@ cd frontend && npm run dev
 
 ## ⚙️ 模擬預設方案 / Simulation Presets
 
-| 方案 / Preset | 代理人數 / Agents | 輪數 / Rounds | MC 試驗 / MC Trials | 湧現 / Emergence | 費用 / Cost |
+內建 5 個預設方案，亦支持完全自定義（最高 50,000 個代理人）。
+*5 built-in presets, plus fully custom configuration (up to 50,000 agents).*
+
+| 方案 / Preset | 代理人數 / Agents | 輪數 / Rounds | MC 試驗 / MC Trials | 湧現 / Emergence | 費用估算 / Est. Cost |
 |--------|--------|--------|-----------|-----------|----------------------|
 | `PRESET_FAST` | 100 | 15 | 30 | 關閉 Off | ~$0.42 |
-| `PRESET_STANDARD` | 300 | 20 | 100 | 開啟 On | ~$1.12 |
-| `PRESET_DEEP` | 500 | 30 | 500 | 開啟 On | ~$1.89 |
+| `PRESET_STANDARD` | 300 | 20 | 50 | 開啟 On | ~$1.12 |
+| `PRESET_DEEP` | 500 | 30 | 100 | 開啟 On | ~$1.89 |
+| `PRESET_LARGE` | 1,000 | 25 | 200 | 開啟 On | ~$3.50 |
+| `PRESET_MASSIVE` | 3,000 | 20 | 300 | 開啟 On | ~$8.40 |
+| `custom` | **自定義，最高 50,000** | 最高 100 | 自定義 | 自動調整 | 依規模而定 |
+
+> **大規模模擬自動優化 / Auto-scaling for large simulations:**
+> - 代理人數 > 1,000：hook 執行間隔自動加寬（例如回音室偵測從每 5 輪改為每 10 輪），減少計算開銷
+> - 代理人數 > 5,000：湧現行為（Emergence）自動關閉，專注核心決策模擬
+> - *Agents > 1,000: hook intervals auto-widened (e.g. echo chamber detection every 10 rounds instead of 5)*
+> - *Agents > 5,000: emergence behaviors auto-disabled to focus on core decision simulation*
 
 ## 🗂 Domain Packs（7 個內建）/ Domain Packs (7 built-in)
 
