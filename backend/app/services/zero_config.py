@@ -146,6 +146,52 @@ class ZeroConfigService:
 
         return "hk_demographic"
 
+    async def detect_mode_async(self, seed_text: str) -> str:
+        """Detect simulation mode using fast-path keyword check, LLM fallback.
+
+        Fast path: if HK keywords are present → immediately return hk_demographic
+        (no LLM call). This covers the common case cheaply.
+
+        LLM path: for all other inputs, a single LLM classification call handles
+        any language, fiction, geopolitics, or ambiguous scenarios correctly.
+
+        Args:
+            seed_text: Raw scenario text submitted by the user.
+
+        Returns:
+            ``"hk_demographic"`` or ``"kg_driven"``.
+        """
+        text_lower = seed_text.lower()
+        hk_hits = sum(1 for kw in _HK_MODE_KEYWORDS if kw.lower() in text_lower)
+        if hk_hits > 0:
+            return "hk_demographic"
+        # LLM fallback for everything else
+        return await self._llm_detect_mode(seed_text)
+
+    async def _llm_detect_mode(self, seed_text: str) -> str:
+        """Single LLM call to classify seed text as hk_demographic or kg_driven."""
+        from backend.app.utils.llm_client import LLMClient  # noqa: PLC0415
+        llm = LLMClient()
+        prompt = (
+            "Classify the following scenario text into exactly one category:\n"
+            "- hk_demographic: scenario is specifically about Hong Kong society, "
+            "Hong Kong real estate, HK politics, or HK demographics.\n"
+            "- kg_driven: anything else (geopolitics, fiction, corporations, "
+            "elections, crypto, historical events, etc.).\n\n"
+            f"Scenario: {seed_text[:500]}\n\n"
+            "Reply with ONLY the category name, nothing else."
+        )
+        messages = [{"role": "user", "content": prompt}]
+        try:
+            raw = await llm.chat(messages, max_tokens=10, temperature=0.0)
+            result = raw.strip().lower()
+            if "hk_demographic" in result:
+                return "hk_demographic"
+            return "kg_driven"
+        except Exception:
+            logger.warning("LLM mode detection failed — defaulting to kg_driven")
+            return "kg_driven"
+
     def infer_domain(self, seed_text: str) -> str:
         """Keyword-match seed text to a domain pack ID.
 

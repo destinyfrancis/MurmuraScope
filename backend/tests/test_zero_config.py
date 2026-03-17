@@ -341,3 +341,28 @@ class TestEdgeCases:
         with patch.dict(sys.modules, {"backend.app.services.text_processor": mod}):
             result = await self.svc.prepare("some text")
         assert result.detected_entities == []
+
+
+# ---------------------------------------------------------------------------
+# detect_mode_async() tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_detect_mode_harry_potter_returns_kg_driven():
+    """Harry Potter seed → kg_driven even with no geopolitical keywords."""
+    svc = ZeroConfigService()
+    with patch.object(svc, "_llm_detect_mode", new_callable=AsyncMock) as mock_llm:
+        mock_llm.return_value = "kg_driven"
+        result = await svc.detect_mode_async("Dumbledore faces Voldemort at Hogwarts.")
+    assert result == "kg_driven"
+
+
+@pytest.mark.asyncio
+async def test_detect_mode_hk_fast_path_skips_llm():
+    """HK keywords → hk_demographic without LLM call."""
+    svc = ZeroConfigService()
+    with patch.object(svc, "_llm_detect_mode", new_callable=AsyncMock) as mock_llm:
+        result = await svc.detect_mode_async("香港樓市最新數據顯示CCL指數下跌。")
+    mock_llm.assert_not_called()
+    assert result == "hk_demographic"
