@@ -174,3 +174,36 @@ class TestHydrateSessionBulkGuard:
             )
 
         assert result == HydrationResult(total_injected=0, agents_skipped=2, templates_found=0)
+
+
+# ---------------------------------------------------------------------------
+# KGAgentFactory.create() — async factory (appended to existing test file)
+# ---------------------------------------------------------------------------
+
+class TestKGAgentFactoryCreate:
+    @pytest.mark.asyncio
+    async def test_create_with_no_templates_returns_empty_keys(self):
+        from backend.app.services.kg_agent_factory import KGAgentFactory
+        with patch(
+            "backend.app.services.kg_agent_factory._load_persona_keys",
+            new_callable=AsyncMock, return_value=[],
+        ):
+            factory = await KGAgentFactory.create(graph_id="no_templates_graph")
+        assert factory._persona_keys == frozenset()
+
+    @pytest.mark.asyncio
+    async def test_create_loads_persona_keys(self):
+        from backend.app.services.kg_agent_factory import KGAgentFactory
+        with patch(
+            "backend.app.services.kg_agent_factory._load_persona_keys",
+            new_callable=AsyncMock,
+            return_value=["student_rights_advocate", "institutional_defender"],
+        ):
+            factory = await KGAgentFactory.create(graph_id="graph_001")
+        assert "student_rights_advocate" in factory._persona_keys
+
+    def test_direct_init_still_works(self):
+        """Existing KGAgentFactory() constructor must remain backward-compatible."""
+        from backend.app.services.kg_agent_factory import KGAgentFactory
+        factory = KGAgentFactory()
+        assert factory._persona_keys == frozenset()

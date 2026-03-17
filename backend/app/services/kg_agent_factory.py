@@ -53,6 +53,20 @@ _AGENT_ELIGIBLE_TYPES: frozenset[str] = frozenset(
 _MIN_FALLBACK_AGENTS = 1
 
 
+async def _load_persona_keys(graph_id: str) -> list[str]:
+    """Load agent_type_key values from seed_persona_templates for graph_id."""
+    from backend.app.utils.db import get_db  # noqa: PLC0415
+    try:
+        async with get_db() as db:
+            rows = await db.execute_fetchall(
+                "SELECT agent_type_key FROM seed_persona_templates WHERE graph_id = ?",
+                (graph_id,),
+            )
+        return [r[0] for r in rows]
+    except Exception:  # noqa: BLE001
+        return []
+
+
 # ---------------------------------------------------------------------------
 # KGAgentFactory
 # ---------------------------------------------------------------------------
@@ -73,8 +87,27 @@ class KGAgentFactory:
         csv_path = await factory.generate_agents_csv(profiles, "/tmp/agents.csv")
     """
 
-    def __init__(self, llm_client: LLMClient | None = None) -> None:
+    def __init__(
+        self,
+        llm_client: LLMClient | None = None,
+        _persona_keys: frozenset[str] = frozenset(),
+    ) -> None:
         self._llm = llm_client or LLMClient()
+        self._persona_keys = _persona_keys
+
+    @classmethod
+    async def create(
+        cls,
+        graph_id: str,
+        llm_client: LLMClient | None = None,
+    ) -> "KGAgentFactory":
+        """Async factory that pre-loads persona keys for template alignment.
+
+        Existing callers using KGAgentFactory() directly continue to work
+        with _persona_keys=frozenset() (graceful degradation — no alignment).
+        """
+        keys = await _load_persona_keys(graph_id)
+        return cls(llm_client=llm_client, _persona_keys=frozenset(keys))
 
     # ------------------------------------------------------------------
     # Public API
@@ -307,18 +340,29 @@ class KGAgentFactory:
         eligible_json = json.dumps(eligible_nodes, ensure_ascii=False, indent=2)
         edges_json = json.dumps(edges, ensure_ascii=False, indent=2)
 
+        user_message = AGENT_GENERATION_USER.format(
+            seed_text=seed_text,
+            eligible_nodes_json=eligible_json,
+            edges_json=edges_json,
+            target_count=target_count,
+        )
+
+        # If persona keys are available, constrain agent type assignment
+        if self._persona_keys:
+            key_hint = ", ".join(sorted(self._persona_keys))
+            agent_type_instruction = (
+                f"\n\nIMPORTANT: For each agent, assign an `agent_type` from this list: "
+                f"{key_hint}. Use the most semantically fitting key."
+            )
+            user_message = user_message + agent_type_instruction
+
         try:
             result = await self._llm.chat_json(
                 messages=[
                     {"role": "system", "content": AGENT_GENERATION_SYSTEM},
                     {
                         "role": "user",
-                        "content": AGENT_GENERATION_USER.format(
-                            seed_text=seed_text,
-                            eligible_nodes_json=eligible_json,
-                            edges_json=edges_json,
-                            target_count=target_count,
-                        ),
+                        "content": user_message,
                     },
                 ],
                 temperature=0.7,
