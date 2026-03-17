@@ -82,9 +82,10 @@ export function getLinkDash(link, showEchoChambers) {
  * @param {object} opts
  * @param {Set|null} opts.activeTypes - Set of active type strings, or null
  * @param {Set} opts.highlightedSet - Set of highlighted node IDs
+ * @param {string|null} opts.factionColour - Hex colour for the agent's faction ring, or null
  */
 export function drawNode(node, ctx, globalScale, opts) {
-  const { activeTypes, highlightedSet } = opts
+  const { activeTypes, highlightedSet, factionColour = null } = opts
 
   // LOD Level 1: very zoomed out - just dots
   if (globalScale < 0.3) {
@@ -125,6 +126,18 @@ export function drawNode(node, ctx, globalScale, opts) {
     ctx.strokeStyle = '#fbbf24'
     ctx.lineWidth = 2
     ctx.stroke()
+  }
+
+  // Faction colour ring (from factionColours prop)
+  if (factionColour && !skipLabelsAndGlow) {
+    ctx.save()
+    ctx.beginPath()
+    ctx.arc(node.x, node.y, r + 5 / globalScale, 0, 2 * Math.PI)
+    ctx.strokeStyle = factionColour
+    ctx.lineWidth = 2.5 / globalScale
+    ctx.globalAlpha = 0.75
+    ctx.stroke()
+    ctx.restore()
   }
 
   // KOL gold halo (trust_score >= 0.7)

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted, watch, toRefs } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, toRefs } from 'vue'
 import ForceGraph from 'force-graph'
 import { forceManyBody, forceCollide, forceX, forceY } from 'd3-force'
 
@@ -31,6 +31,8 @@ const props = defineProps({
   latestPosts: { type: Array, default: () => [] },
   showEchoChambers: { type: Boolean, default: false },
   activeTypes: { type: Object, default: null }, // Set or null
+  factionColours: { type: Object, default: () => ({}) },
+  // { [agent_id]: '#hexcolour' }
 })
 
 const emit = defineEmits(['node-click', 'hull-click'])
@@ -65,6 +67,33 @@ let frameCounter = 0
 
 // Ripple animation loop (delegates to utility)
 const rippleLoop = createRippleLoop(() => graphInstance)
+
+// Reactive snapshot of node positions for faction hull overlay.
+// Updated on each simulation tick via onRenderFramePre.
+const nodePositions = ref([])
+
+// Faction hull overlay: groups positioned nodes by faction colour and
+// computes a bounding circle for each group.
+const factionHulls = computed(() => {
+  if (!Object.keys(props.factionColours).length) return []
+  const groups = {}
+  for (const node of nodePositions.value) {
+    const colour = props.factionColours[node.id]
+    if (!colour) continue
+    if (!groups[colour]) groups[colour] = []
+    groups[colour].push({ x: node.x ?? 0, y: node.y ?? 0 })
+  }
+  return Object.entries(groups).map(([colour, pts]) => {
+    const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length
+    const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length
+    const r = Math.max(...pts.map(p => Math.hypot(p.x - cx, p.y - cy))) + 20
+    return { colour, cx, cy, r }
+  })
+})
+
+// Canvas dimensions for the hull SVG overlay
+const canvasWidth = ref(600)
+const canvasHeight = ref(400)
 
 // ---------------------------------------------------------------------------
 // Graph data builder
@@ -101,6 +130,14 @@ function drawHulls(ctx, globalScale) {
   // Thought bubbles always render
   thoughtBubbles = drawThoughtBubbles(ctx, globalScale, thoughtBubbles)
   frameCounter++
+
+  // Refresh reactive node positions every 3 frames for the faction hull overlay
+  if (frameCounter % 3 === 0 && Object.keys(props.factionColours).length) {
+    const data = graphInstance?.graphData()
+    if (data?.nodes) {
+      nodePositions.value = data.nodes.map(n => ({ id: n.id, x: n.x, y: n.y }))
+    }
+  }
   if (frameCounter >= 120) {
     frameCounter = 0
     const fdata = graphInstance?.graphData()
@@ -296,6 +333,13 @@ function getLinkWidth(link) { return baseLinkWidth(link, props.showEchoChambers)
 function getLinkDash(link) { return baseLinkDash(link, props.showEchoChambers) }
 
 // ---------------------------------------------------------------------------
+// Faction colour helper
+// ---------------------------------------------------------------------------
+function nodeColour(node) {
+  return props.factionColours[node.id] ?? null
+}
+
+// ---------------------------------------------------------------------------
 // Node draw wrapper (bind props)
 // ---------------------------------------------------------------------------
 function drawNode(node, ctx, globalScale) {
@@ -303,6 +347,7 @@ function drawNode(node, ctx, globalScale) {
   renderNode(node, ctx, globalScale, {
     activeTypes: props.activeTypes,
     highlightedSet: highlightSet,
+    factionColour: nodeColour(node),
   })
 }
 
@@ -322,6 +367,8 @@ function initGraph() {
 
   const width = containerRef.value.clientWidth || 600
   const height = containerRef.value.clientHeight || 400
+  canvasWidth.value = width
+  canvasHeight.value = height
 
   graphInstance = ForceGraph()(containerRef.value)
     .width(width)
@@ -416,6 +463,10 @@ watch([() => props.communitySummaries, () => props.tripleConflicts, () => props.
   if (graphInstance) graphInstance.refresh()
 }, { deep: true })
 
+watch(() => props.factionColours, () => {
+  if (graphInstance) graphInstance.refresh()
+}, { deep: true })
+
 // ---------------------------------------------------------------------------
 // Lifecycle
 // ---------------------------------------------------------------------------
@@ -426,6 +477,8 @@ onMounted(() => {
     if (!containerRef.value || !graphInstance) return
     const w = containerRef.value.clientWidth || 600
     const h = containerRef.value.clientHeight || 400
+    canvasWidth.value = w
+    canvasHeight.value = h
     graphInstance.width(w).height(h)
   })
 
@@ -500,6 +553,25 @@ defineExpose({
       <p>暫無圖譜數據</p>
     </div>
 
+    <!-- Faction echo-hull overlay -->
+    <svg
+      v-if="factionHulls.length"
+      class="hull-overlay"
+      :width="canvasWidth"
+      :height="canvasHeight"
+    >
+      <circle
+        v-for="(hull, idx) in factionHulls"
+        :key="idx"
+        :cx="hull.cx"
+        :cy="hull.cy"
+        :r="hull.r"
+        :fill="hull.colour"
+        fill-opacity="0.08"
+        stroke="none"
+      />
+    </svg>
+
     <!-- Hull hover tooltip -->
     <div
       v-if="tooltipData && showEchoChambers"
@@ -544,6 +616,13 @@ defineExpose({
   justify-content: center;
   color: var(--text-muted);
   font-size: 14px;
+  pointer-events: none;
+}
+
+.hull-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
   pointer-events: none;
 }
 

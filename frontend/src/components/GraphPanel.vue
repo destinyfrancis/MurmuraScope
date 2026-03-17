@@ -3,7 +3,6 @@ import { ref } from 'vue'
 import GraphCanvas from './GraphCanvas.vue'
 import GraphRoundScrubber from './GraphRoundScrubber.vue'
 
-// Props interface is identical to the original GraphPanel so no parent changes needed
 const props = defineProps({
   nodes: { type: Array, default: () => [] },
   edges: { type: Array, default: () => [] },
@@ -16,6 +15,8 @@ const props = defineProps({
   tripleConflicts: { type: Array, default: () => [] },
   polarizationData: { type: Object, default: null },
   latestPosts: { type: Array, default: () => [] },
+  factionColours: { type: Object, default: () => ({}) },
+  // { [agent_id]: '#hexcolour' }
 })
 
 const emit = defineEmits(['node-click', 'round-change', 'hull-click'])
@@ -60,6 +61,7 @@ const typeLabels = {
       :polarization-data="polarizationData"
       :latest-posts="latestPosts"
       :show-echo-chambers="showEchoChambers"
+      :faction-colours="factionColours"
       @node-click="n => emit('node-click', n)"
       @hull-click="h => emit('hull-click', h)"
     />

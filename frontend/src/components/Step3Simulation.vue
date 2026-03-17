@@ -434,6 +434,25 @@ const progressPercent = ref(0)
 watch(currentRound, (r) => {
   progressPercent.value = Math.round((r / totalRounds.value) * 100)
 })
+
+// Build a map of { agent_id: hexColour } from the latest faction snapshot.
+// Used to colour KG graph nodes and render echo-hull overlays.
+const factionAgentColourMap = computed(() => {
+  const COLOURS = ['#059669', '#3B82F6', '#F59E0B', '#7C3AED', '#DC143C', '#EC4899', '#14B8A6']
+  const map = {}
+  const snaps = factionSnapshots.value
+  if (!snaps.length) return map
+  try {
+    const factions = JSON.parse(snaps[snaps.length - 1].factions_json)
+    factions.forEach((f, idx) => {
+      const colour = COLOURS[idx % COLOURS.length]
+      for (const agentId of f.member_agent_ids) {
+        map[agentId] = colour
+      }
+    })
+  } catch { /* malformed JSON — return empty map */ }
+  return map
+})
 </script>
 
 <template>
@@ -476,6 +495,7 @@ watch(currentRound, (r) => {
             :community-summaries="communitySummaries"
             :triple-conflicts="tripleConflicts"
             :polarization-data="polarizationData"
+            :faction-colours="factionAgentColourMap"
             @node-click="handleNodeClick"
             @round-change="handleRoundChange"
             @hull-click="handleHullClick"
