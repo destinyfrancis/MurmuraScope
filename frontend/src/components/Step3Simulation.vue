@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { startSimulation, connectWebSocket, createBranch, injectShock, getSessionAgents, getEchoChambers, getContagionData, getCommunitySummaries, getTripleConflicts, getPolarization } from '../api/simulation.js'
+import { getFactions, getTippingPoints, getWorldEvents } from '../api/simulation.js'
 import { getGraph, getGraphSnapshots, getGraphSnapshot } from '../api/graph.js'
 import GraphPanel from './GraphPanel.vue'
 import SimMonitor from './SimMonitor.vue'
@@ -14,6 +15,8 @@ import NetworkTimeline from './NetworkTimeline.vue'
 import EmotionalHeatmap from './EmotionalHeatmap.vue'
 import ViralityTree from './ViralityTree.vue'
 import FilterBubbleChart from './FilterBubbleChart.vue'
+import StatsRow          from './sim/StatsRow.vue'
+import TippingPointStrip from './sim/TippingPointStrip.vue'
 
 const props = defineProps({
   session: { type: Object, required: true },
@@ -65,6 +68,14 @@ const tripleConflicts = ref([])
 const polarizationData = ref(null)
 const selectedCluster = ref(null)
 
+// Cognitive Theater (kg_driven) data
+const factionSnapshots = ref([])
+const tippingPoints    = ref([])
+const worldEvents      = ref([])
+const factionCount     = ref(0)
+const tippingCount     = ref(0)
+const simCompleted     = ref(false)
+
 let ws = null
 const MAX_RECONNECT = 5
 let reconnectAttempts = 0
@@ -92,6 +103,7 @@ function handleWsMessage(event) {
           if (d.round % 3 === 0) {
             fetchEchoChamberData()
             fetchContagionData()
+            pollCognitiveData(props.session.sessionId)
           }
           if (d.round % 5 === 0) {
             fetchGraphSnapshots()
@@ -126,6 +138,8 @@ function handleWsMessage(event) {
       case 'complete':
         completed.value = true
         running.value = false
+        simCompleted.value = true
+        pollCognitiveData(props.session.sessionId)
         addLog(`模擬完成！共 ${d.rounds_completed || totalRounds.value} 輪，${d.agent_count || 0} 個 agents`, 'success')
         emit('simulation-complete', { sessionId: props.session.sessionId })
         break
@@ -334,6 +348,33 @@ async function fetchCommunityData() {
   if (polRes.status === 'fulfilled') polarizationData.value = polRes.value.data?.data || null
 }
 
+async function pollCognitiveData(sessionId) {
+  try {
+    const [factRes, tippRes, weRes] = await Promise.allSettled([
+      getFactions(sessionId),
+      getTippingPoints(sessionId),
+      getWorldEvents(sessionId),
+    ])
+    if (factRes.status === 'fulfilled') {
+      factionSnapshots.value = factRes.value.data.data.snapshots ?? []
+      factionCount.value = (() => {
+        const snaps = factionSnapshots.value
+        if (!snaps.length) return 0
+        try { return JSON.parse(snaps[snaps.length - 1].factions_json).length } catch { return 0 }
+      })()
+    }
+    if (tippRes.status === 'fulfilled') {
+      tippingPoints.value = tippRes.value.data.data.tipping_points ?? []
+      tippingCount.value  = tippingPoints.value.length
+    }
+    if (weRes.status === 'fulfilled') {
+      worldEvents.value = weRes.value.data.data.events ?? []
+    }
+  } catch (e) {
+    console.warn('pollCognitiveData failed:', e)
+  }
+}
+
 function handleHullClick({ cluster_id, summary }) {
   selectedCluster.value = { cluster_id, summary }
 }
@@ -462,13 +503,24 @@ watch(currentRound, (r) => {
       </div>
 
       <div class="sim-right">
+        <StatsRow
+          :agent-count="sessionAgents.length"
+          :current-round="currentRound"
+          :total-rounds="totalRounds"
+          :faction-count="factionCount"
+          :tipping-count="tippingCount"
+        />
+
         <SimulationTabs
           :active-tab="activeTab"
           :posts="posts"
           :followed-agent="followedAgent"
           :session-agents="sessionAgents"
-          :session-id="session.sessionId"
-          :logs="logs"
+          :session-id="props.session.sessionId"
+          :faction-snapshots="factionSnapshots"
+          :tipping-points="tippingPoints"
+          :world-events="worldEvents"
+          :sim-completed="simCompleted"
           @update:active-tab="activeTab = $event"
           @select-agent="selectAgentFromTab"
           @clear-follow="followedAgent = null"
@@ -480,6 +532,10 @@ watch(currentRound, (r) => {
             <EmotionalHeatmap :session-id="session.sessionId" />
           </template>
         </SimulationTabs>
+
+        <TippingPointStrip
+          :tipping-point="tippingPoints[tippingPoints.length - 1] ?? null"
+        />
 
         <!-- Virality + Filter Bubble below tabs -->
         <div v-if="completed" class="post-sim-panels">
