@@ -349,6 +349,82 @@ class KGAgentFactory:
         return profiles
 
     # ------------------------------------------------------------------
+    # Stage 3: cognitive fingerprint generation
+    # ------------------------------------------------------------------
+
+    async def generate_fingerprints(
+        self,
+        profiles: list,
+        seed_text: str,
+        active_metrics: tuple[str, ...],
+    ) -> list:
+        """Generate CognitiveFingerprint for each agent profile via batched LLM call.
+
+        Args:
+            profiles: Agent profiles to enrich with cognitive fingerprints.
+            seed_text: Original scenario seed (for context).
+            active_metrics: UniversalScenarioConfig metric IDs (for susceptibility keys).
+
+        Returns:
+            List of CognitiveFingerprint, one per profile. Falls back to defaults
+            on partial LLM failure — never raises.
+        """
+        from backend.app.models.cognitive_fingerprint import CognitiveFingerprint  # noqa: PLC0415
+
+        if not profiles:
+            return []
+
+        summaries = [
+            {"agent_id": p.id, "name": p.name, "role": p.role, "entity_type": p.entity_type}
+            for p in profiles
+        ]
+        prompt_user = (
+            f"Scenario: {seed_text[:400]}\n"
+            f"Active metrics: {list(active_metrics)}\n\n"
+            "For each agent below, generate a CognitiveFingerprint JSON with fields:\n"
+            "- agent_id (string, must match input)\n"
+            "- values (dict, 3-8 scenario-relevant moral/political axes, values 0-1)\n"
+            "- info_diet (list of 1-3 info source tags relevant to scenario)\n"
+            "- group_memberships (list of faction/group names, may be empty)\n"
+            "- susceptibility (dict mapping active metric IDs to sensitivity 0-1)\n"
+            "- confirmation_bias (float 0-1)\n"
+            "- conformity (float 0-1)\n\n"
+            f"Agents: {summaries}\n\n"
+            'Return JSON: {"fingerprints": [...]}'
+        )
+        messages = [
+            {"role": "system", "content": "You are a social psychology expert generating agent cognitive profiles."},
+            {"role": "user", "content": prompt_user},
+        ]
+
+        try:
+            raw = await self._llm.chat_json(messages, max_tokens=4096, temperature=0.3)
+            fp_list = raw.get("fingerprints", [])
+        except Exception:  # noqa: BLE001
+            logger.warning("KGAgentFactory: fingerprint LLM call failed — using defaults")
+            fp_list = []
+
+        fp_by_id = {fp.get("agent_id"): fp for fp in fp_list if isinstance(fp, dict)}
+        result = []
+
+        for profile in profiles:
+            fp_data = fp_by_id.get(profile.id, {})
+            try:
+                result.append(CognitiveFingerprint(
+                    agent_id=profile.id,
+                    values=_parse_values(fp_data.get("values", {})),
+                    info_diet=tuple(fp_data.get("info_diet", ["general"])),
+                    group_memberships=tuple(fp_data.get("group_memberships", [])),
+                    susceptibility={str(k): float(v) for k, v in fp_data.get("susceptibility", {}).items()},
+                    confirmation_bias=float(fp_data.get("confirmation_bias", 0.5)),
+                    conformity=float(fp_data.get("conformity", 0.5)),
+                ))
+            except (ValueError, TypeError):
+                result.append(_default_fingerprint(profile.id))
+
+        return result
+
+    # ------------------------------------------------------------------
     # Parsing helpers
     # ------------------------------------------------------------------
 
@@ -430,3 +506,29 @@ class KGAgentFactory:
 def _clamp(value: float, lo: float = 0.0, hi: float = 1.0) -> float:
     """Clamp ``value`` to the range [lo, hi]."""
     return max(lo, min(hi, value))
+
+
+def _parse_values(raw: dict) -> dict[str, float]:
+    """Parse and validate values dict; returns 3-key default if invalid."""
+    if not isinstance(raw, dict) or len(raw) < 3:
+        return {"authority": 0.5, "openness": 0.5, "loyalty": 0.5}
+    result = {}
+    for k, v in list(raw.items())[:12]:
+        try:
+            result[str(k)] = max(0.0, min(1.0, float(v)))
+        except (TypeError, ValueError):
+            result[str(k)] = 0.5
+    return result
+
+
+def _default_fingerprint(agent_id: str):
+    from backend.app.models.cognitive_fingerprint import CognitiveFingerprint  # noqa: PLC0415
+    return CognitiveFingerprint(
+        agent_id=agent_id,
+        values={"authority": 0.5, "openness": 0.5, "loyalty": 0.5},
+        info_diet=("general",),
+        group_memberships=(),
+        susceptibility={},
+        confirmation_bias=0.5,
+        conformity=0.5,
+    )

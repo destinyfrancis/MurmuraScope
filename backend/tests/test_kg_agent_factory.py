@@ -665,3 +665,51 @@ class TestFullPipeline:
 
         assert len(profiles) == 2
         assert {p.id for p in profiles} == {"supreme_leader", "defence_ministry"}
+
+
+# ---------------------------------------------------------------------------
+# KGAgentFactory.generate_fingerprints()
+# ---------------------------------------------------------------------------
+
+
+class TestGenerateFingerprints:
+    @pytest.mark.asyncio
+    async def test_generate_fingerprints_returns_one_per_profile(self):
+        """generate_fingerprints() returns one CognitiveFingerprint per profile."""
+        from backend.app.models.cognitive_fingerprint import CognitiveFingerprint
+        factory = KGAgentFactory()
+        profiles = [_make_profile(id="agent_1"), _make_profile(id="agent_2")]
+
+        mock_response = {
+            "fingerprints": [
+                {
+                    "agent_id": "agent_1",
+                    "values": {"authority": 0.8, "loyalty": 0.7, "fairness": 0.3},
+                    "info_diet": ["state_media"],
+                    "group_memberships": ["hardliner"],
+                    "susceptibility": {"military_escalation": 0.9},
+                    "confirmation_bias": 0.8,
+                    "conformity": 0.3,
+                },
+                {
+                    "agent_id": "agent_2",
+                    "values": {"authority": 0.3, "loyalty": 0.5, "fairness": 0.8},
+                    "info_diet": ["independent_media"],
+                    "group_memberships": ["moderate"],
+                    "susceptibility": {"diplomatic_appeal": 0.7},
+                    "confirmation_bias": 0.4,
+                    "conformity": 0.6,
+                },
+            ]
+        }
+
+        with patch.object(factory._llm, "chat_json", new_callable=AsyncMock) as mock_llm:
+            mock_llm.return_value = mock_response
+            fingerprints = await factory.generate_fingerprints(
+                profiles=profiles, seed_text="Iran nuclear scenario", active_metrics=("escalation_index",)
+            )
+
+        assert len(fingerprints) == 2
+        assert all(isinstance(fp, CognitiveFingerprint) for fp in fingerprints)
+        assert fingerprints[0].agent_id == "agent_1"
+        assert fingerprints[1].confirmation_bias == 0.4
