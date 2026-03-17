@@ -169,3 +169,13 @@ def test_emotional_contagion_neighbour_index_empty_trust():
         trust_neighbors.setdefault(a_id, []).append((b_id, score))
 
     assert trust_neighbors.get(99, []) == []
+
+
+def test_custom_preset_10k_agents_has_emergence_enabled():
+    """Regression guard: 10k-agent custom preset must have emergence enabled."""
+    from backend.app.models.simulation_config import SimPreset
+
+    preset = SimPreset.custom(agents=10000, rounds=20)
+    assert preset.hook_config.emergence_enabled is True
+    assert preset.hook_config.echo_chamber_interval == 10
+    assert preset.hook_config.macro_feedback_interval == 10
