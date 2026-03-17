@@ -169,7 +169,7 @@ watch([() => props.sessionId, () => props.agentId], () => { if (!props.post) fet
   padding: 2px 8px;
   border-radius: 999px;
   background: var(--accent-blue-light, rgba(37, 99, 235, 0.1));
-  color: var(--accent-blue);
+  color: var(--accent);
   font-weight: 600;
 }
 
@@ -186,7 +186,7 @@ watch([() => props.sessionId, () => props.agentId], () => { if (!props.post) fet
   display: inline-block;
   width: 14px;
   height: 14px;
-  border: 2px solid var(--accent-blue);
+  border: 2px solid var(--accent);
   border-top-color: transparent;
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
@@ -208,19 +208,19 @@ watch([() => props.sessionId, () => props.agentId], () => { if (!props.post) fet
   display: flex;
   gap: 10px;
   padding: 10px 12px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
   border-radius: 8px;
   transition: border-color 0.15s;
 }
 
 .feed-item:hover {
-  border-color: var(--accent-blue);
+  border-color: var(--accent);
 }
 
 .feed-rank {
   font-size: 13px;
   font-weight: 700;
-  color: var(--accent-blue);
+  color: var(--accent);
   min-width: 28px;
   text-align: center;
   padding-top: 2px;
@@ -271,11 +271,11 @@ watch([() => props.sessionId, () => props.agentId], () => { if (!props.post) fet
   font-size: 10px;
   padding: 1px 6px;
   border-radius: 4px;
-  background: var(--bg-secondary);
+  background: var(--bg-app);
   color: var(--text-muted);
 }
 
-.sent-positive { color: var(--accent-green); background: rgba(0, 217, 101, 0.12); }
+.sent-positive { color: var(--accent); background: rgba(0, 217, 101, 0.12); }
 .sent-negative { color: var(--accent-red); background: rgba(255, 68, 68, 0.12); }
 .sent-neutral { color: var(--text-muted); }
 

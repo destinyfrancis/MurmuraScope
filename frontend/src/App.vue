@@ -86,7 +86,7 @@ body {
 }
 
 a {
-  color: var(--accent-blue);
+  color: var(--accent);
   text-decoration: none;
 }
 
@@ -104,7 +104,7 @@ textarea {
 .glass-panel {
   background: var(--glass-bg);
   backdrop-filter: blur(var(--glass-blur));
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-card);
 }
@@ -116,7 +116,7 @@ textarea {
 }
 
 .text-accent-blue {
-  color: var(--accent-blue);
+  color: var(--accent);
 }
 
 @keyframes pulse-subtle {
@@ -184,7 +184,7 @@ select:focus-visible,
 textarea:focus-visible,
 button:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px var(--bg-primary), 0 0 0 4px rgba(0, 212, 255, 0.4);
+  box-shadow: 0 0 0 2px var(--bg-app), 0 0 0 4px rgba(0, 212, 255, 0.4);
 }
 
 /* Smooth transitions for interactive elements */
@@ -226,7 +226,7 @@ a, button, input, select, textarea {
   padding: 0 24px;
   height: 56px;
   background: var(--bg-card);
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
   z-index: 100;
@@ -242,7 +242,7 @@ a, button, input, select, textarea {
 
 .logo {
   font-size: 24px;
-  color: var(--accent-blue);
+  color: var(--accent);
 }
 
 .brand {
@@ -268,7 +268,7 @@ a, button, input, select, textarea {
 
 .nav-link:hover,
 .nav-link.router-link-active {
-  color: var(--accent-blue);
+  color: var(--accent);
   background: rgba(0, 212, 255, 0.08);
 }
 

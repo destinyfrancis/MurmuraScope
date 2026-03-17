@@ -105,7 +105,7 @@ const mergedFeedItems = computed(() => {
   display: flex;
   gap: 0;
   background: var(--bg-card);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   overflow: hidden;
   flex-shrink: 0;
@@ -126,7 +126,7 @@ const mergedFeedItems = computed(() => {
 }
 
 .tab-btn:not(:last-child) {
-  border-right: 1px solid var(--border-color);
+  border-right: 1px solid var(--border);
 }
 
 .tab-btn.active {
@@ -138,7 +138,7 @@ const mergedFeedItems = computed(() => {
 .feed-area {
   flex: 1;
   background: var(--bg-card);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   overflow: hidden;
   min-height: 0;
@@ -169,13 +169,13 @@ const mergedFeedItems = computed(() => {
 
 .agent-tab-card {
   padding: 10px 12px;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border);
   cursor: pointer;
   transition: background 0.2s, border-color 0.2s;
 }
 
 .agent-tab-card:hover {
-  background: var(--bg-secondary);
+  background: var(--bg-app);
 }
 
 .agent-tab-name {

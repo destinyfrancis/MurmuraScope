@@ -607,7 +607,7 @@ const factionAgentColourMap = computed(() => {
 .graph-container {
   flex: 1;
   background: var(--bg-card);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   min-height: 0;
   overflow: hidden;
@@ -621,7 +621,7 @@ const factionAgentColourMap = computed(() => {
   right: 0;
   padding: 8px 14px;
   background: rgba(239, 68, 68, 0.9);
-  color: #0d1117;
+  color: var(--bg-app);
   font-size: 13px;
   font-weight: 600;
   text-align: center;
@@ -649,7 +649,7 @@ const factionAgentColourMap = computed(() => {
   height: 180px;
   flex-shrink: 0;
   background: var(--bg-card);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   overflow: hidden;
 }

@@ -634,7 +634,7 @@ defineExpose({
   padding: 10px 14px;
   background: var(--glass-bg);
   backdrop-filter: blur(12px);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
   border-radius: 8px;
   pointer-events: none;
   box-shadow: var(--shadow-md);
