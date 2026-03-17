@@ -21,11 +21,11 @@ const router = useRouter()
 const domainPackId = ref(route.query.domainPackId || 'hk_city')
 
 const steps = [
-  { key: 1, label: '圖譜構建', icon: '⬡' },
-  { key: 2, label: '環境搭建', icon: '⚙' },
-  { key: 3, label: '開始模擬', icon: '▶' },
-  { key: 4, label: '報告生成', icon: '📄' },
-  { key: 5, label: '深度交互', icon: '💬' },
+  { key: 1, label: '圖譜構建', icon: '⬡', navLabel: 'GRAPH' },
+  { key: 2, label: '環境搭建', icon: '⚙',  navLabel: 'ENV' },
+  { key: 3, label: '開始模擬', icon: '▶',  navLabel: 'SIM' },
+  { key: 4, label: '報告生成', icon: '📄', navLabel: 'REPORT' },
+  { key: 5, label: '深度交互', icon: '💬', navLabel: 'INTERACT' },
 ]
 
 const currentStep = ref(1)
@@ -73,6 +73,10 @@ function goToStep(step) {
   }
 }
 
+const roundLabel = computed(() =>
+  currentStep.value === 3 && session.sessionId ? 'RUNNING' : ''
+)
+
 function nextStep() {
   if (currentStep.value < 5) {
     currentStep.value += 1
@@ -112,28 +116,42 @@ watch(
 </script>
 
 <template>
-  <div class="process-page">
-    <div class="stepper">
+  <div class="process-root">
+    <!-- Black 42px nav bar -->
+    <nav class="app-nav">
+      <span class="brand">HKSimEngine</span>
+      <div class="nav-tabs">
+        <button
+          v-for="step in steps"
+          :key="step.key"
+          class="nav-tab"
+          :class="{ active: currentStep === step.key, completed: currentStep > step.key }"
+          :disabled="!canGoToStep(step.key)"
+          @click="goToStep(step.key)"
+        >
+          {{ step.navLabel }}
+        </button>
+      </div>
+      <div class="nav-status" v-if="currentStep === 3 && session.sessionId">
+        <span class="pulse-dot" />
+        <span class="nav-round">{{ roundLabel }}</span>
+      </div>
+    </nav>
+
+    <!-- 3px progress bar -->
+    <div class="step-progress-bar">
       <div
         v-for="step in steps"
         :key="step.key"
-        class="step-item"
+        class="progress-seg"
         :class="{
+          done: currentStep > step.key,
           active: currentStep === step.key,
-          completed: currentStep > step.key,
-          clickable: canGoToStep(step.key),
         }"
-        @click="goToStep(step.key)"
-      >
-        <div class="step-indicator">
-          <span v-if="currentStep > step.key" class="step-check">✓</span>
-          <span v-else class="step-icon">{{ step.icon }}</span>
-        </div>
-        <span class="step-label">{{ step.label }}</span>
-        <div v-if="step.key < 5" class="step-connector" />
-      </div>
+      />
     </div>
 
+    <!-- Step content — preserve existing PresetSelector + component bindings -->
     <div class="step-content">
       <PresetSelector
         v-if="currentStep === 2"
@@ -153,91 +171,71 @@ watch(
 </template>
 
 <style scoped>
-.process-page {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 24px;
-}
+.process-root { display: flex; flex-direction: column; min-height: 100vh; }
 
-.stepper {
+.app-nav {
+  height: 42px;
+  background: var(--bg-nav);
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 20px 0 32px;
-  gap: 0;
+  padding: 0 18px;
+  gap: 14px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 100;
 }
-
-.step-item {
+.brand {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 13px;
+  color: #fff;
+  letter-spacing: .03em;
+  margin-right: 4px;
+}
+.nav-tabs {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  position: relative;
-  user-select: none;
+  gap: 2px;
+  background: rgba(255,255,255,.08);
+  border-radius: 5px;
+  padding: 2px;
 }
-
-.step-item.clickable {
+.nav-tab {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: rgba(255,255,255,.38);
+  padding: 3px 9px;
+  border-radius: 3px;
+  border: none;
+  background: transparent;
   cursor: pointer;
+  letter-spacing: .04em;
 }
-
-.step-indicator {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
+.nav-tab:disabled { cursor: not-allowed; opacity: .25; }
+.nav-tab.active { background: #fff; color: #000; font-weight: 700; }
+.nav-tab.completed { color: rgba(255,255,255,.6); }
+.nav-status {
+  margin-left: auto;
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  background: var(--bg-card);
-  border: 2px solid var(--border-color);
-  transition: var(--transition);
-  flex-shrink: 0;
+  gap: 7px;
 }
+.pulse-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+.nav-round { font-family: var(--font-mono); font-size: 9px; color: rgba(255,255,255,.38); }
 
-.step-item.active .step-indicator {
-  border-color: var(--accent-blue);
-  background: var(--accent-blue-light, #DBEAFE);
-  color: var(--accent-blue);
+.step-progress-bar {
+  height: 3px;
+  display: flex;
+  background: var(--bg-app);
 }
+.progress-seg { flex: 1; background: var(--border); }
+.progress-seg.done { background: var(--accent); }
+.progress-seg.active { background: var(--accent); opacity: .5; }
 
-.step-item.completed .step-indicator {
-  border-color: var(--accent-green);
-  background: var(--accent-green-light, #D1FAE5);
-  color: var(--accent-green);
-}
-
-.step-label {
-  font-size: 14px;
-  color: var(--text-muted);
-  white-space: nowrap;
-  transition: var(--transition);
-}
-
-.step-item.active .step-label {
-  color: var(--text-primary);
-  font-weight: 600;
-}
-
-.step-item.completed .step-label {
-  color: var(--accent-green);
-}
-
-.step-connector {
-  width: 48px;
-  height: 2px;
-  background: var(--border-color);
-  margin: 0 12px;
-  flex-shrink: 0;
-}
-
-.step-item.completed .step-connector {
-  background: var(--accent-green);
-}
-
-.step-check {
-  font-size: 18px;
-}
-
-.step-content {
-  min-height: 500px;
-}
+.step-content { flex: 1; display: flex; flex-direction: column; }
 </style>

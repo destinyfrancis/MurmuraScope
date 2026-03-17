@@ -90,13 +90,13 @@ function stepState(num) {
   right: calc(50% + 18px);
   left: calc(-50% + 18px);
   height: 2px;
-  background: var(--border-color, #E5E7EB);
+  background: var(--border, #E5E7EB);
   transition: background 0.4s ease;
   z-index: 0;
 }
 
 .connector.filled {
-  background: var(--accent-green, #059669);
+  background: var(--accent, #059669);
 }
 
 /* Step circle */
@@ -111,23 +111,23 @@ function stepState(num) {
   justify-content: center;
   font-size: 13px;
   font-weight: 700;
-  border: 2px solid var(--border-color, #E5E7EB);
-  background: var(--bg-secondary, #F3F4F6);
+  border: 2px solid var(--border, #E5E7EB);
+  background: var(--bg-app, #F3F4F6);
   color: var(--text-muted, #9CA3AF);
   transition: border-color 0.3s ease, background 0.3s ease, color 0.3s ease;
   margin-bottom: 8px;
 }
 
 .step-circle.completed {
-  border-color: var(--accent-green, #059669);
-  background: var(--accent-green, #059669);
-  color: #0d1117;
+  border-color: var(--accent, #059669);
+  background: var(--accent, #059669);
+  color: #fff;
 }
 
 .step-circle.active {
-  border-color: var(--accent-blue, #2563EB);
-  background: var(--accent-blue, #2563EB);
-  color: #0d1117;
+  border-color: var(--accent, #059669);
+  background: var(--accent, #059669);
+  color: #fff;
 }
 
 .step-check {
@@ -147,7 +147,7 @@ function stepState(num) {
   position: absolute;
   inset: -5px;
   border-radius: 50%;
-  border: 2px solid var(--accent-blue, #2563EB);
+  border: 2px solid var(--accent, #059669);
   opacity: 0;
   animation: ring-pulse 2s ease-out infinite;
 }
@@ -169,7 +169,7 @@ function stepState(num) {
 }
 
 .step-label.completed {
-  color: var(--accent-green, #059669);
+  color: var(--accent, #059669);
 }
 
 .step-label.active {
