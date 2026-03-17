@@ -508,17 +508,27 @@ class AgentMemoryService:
         agent_id: int,
         query: str,
         top_k: int = 10,
+        with_kg_subgraph: bool = False,
     ) -> list[dict]:
         """Public semantic search across an agent's memories.
+
+        Optionally enriches results with KG sub-graph context (nodes and
+        direct edges) for any entity IDs referenced in the returned memories.
 
         Args:
             session_id: Session UUID.
             agent_id: agent_profiles.id.
             query: Natural-language search query.
             top_k: Max results.
+            with_kg_subgraph: When True, fetches KG nodes/edges for entity
+                IDs found in the memory results and returns a combined dict.
+                Defaults to False (zero change to existing behaviour).
 
         Returns:
-            List of dicts with memory fields + similarity_score.
+            When *with_kg_subgraph* is False: list of dicts with memory
+            fields + similarity_score (original behaviour).
+            When *with_kg_subgraph* is True: list containing a single dict
+            with keys ``"memories"`` and ``"kg_context"``.
 
         Raises:
             RuntimeError: If vector store is not available.
@@ -533,7 +543,7 @@ class AgentMemoryService:
             top_k=top_k,
         )
 
-        return [
+        memories = [
             {
                 "memory_id": r.memory_id,
                 "memory_text": r.memory_text,
@@ -544,6 +554,14 @@ class AgentMemoryService:
             }
             for r in results
         ]
+
+        if with_kg_subgraph:
+            entity_ids = [m.get("entity_id") for m in memories if m.get("entity_id")]
+            if entity_ids:
+                kg_context = await self._fetch_kg_subgraph(entity_ids)
+                return [{"memories": memories, "kg_context": kg_context}]
+
+        return memories
 
     async def build_context_window(
         self,
@@ -723,6 +741,33 @@ class AgentMemoryService:
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
+
+    async def _fetch_kg_subgraph(self, entity_ids: list[str]) -> dict:
+        """Fetch KG nodes and their direct neighbours for the given entity IDs.
+
+        Args:
+            entity_ids: List of ``kg_nodes.id`` values to look up.
+
+        Returns:
+            Dict with keys ``"nodes"`` (list of node row dicts) and
+            ``"edges"`` (list of edge row dicts for all direct connections).
+        """
+        from backend.app.utils.db import get_db  # noqa: PLC0415
+        async with get_db() as db:
+            db.row_factory = aiosqlite.Row
+            placeholders = ",".join("?" * len(entity_ids))
+            cursor = await db.execute(
+                f"SELECT * FROM kg_nodes WHERE id IN ({placeholders})",
+                entity_ids,
+            )
+            nodes = [dict(r) for r in await cursor.fetchall()]
+            cursor = await db.execute(
+                f"SELECT * FROM kg_edges"
+                f" WHERE source IN ({placeholders}) OR target IN ({placeholders})",
+                entity_ids + entity_ids,
+            )
+            edges = [dict(r) for r in await cursor.fetchall()]
+        return {"nodes": nodes, "edges": edges}
 
     async def _get_recent_memories(
         self,

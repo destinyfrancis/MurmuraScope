@@ -236,11 +236,16 @@ class BeliefSystem:
         trust_scores: dict[tuple[int, int], float],
         profiles: dict[int, Any],
         db: Any,
+        simulation_mode: str = "hk_demographic",
     ) -> dict[int, list[Belief]]:
         """Update all agents' beliefs from feed posts this round.
 
         For each agent, scans their feed posts for topic-relevant stances
         using :meth:`extract_stance` and applies Bayesian updates.
+
+        In ``kg_driven`` mode this method is a no-op: beliefs are managed
+        directly by :class:`BeliefPropagationEngine` via WorldEvents, so
+        the HK-specific keyword pipeline should not run.
 
         Args:
             session_id: Simulation session UUID.
@@ -250,10 +255,15 @@ class BeliefSystem:
             trust_scores: Trust edge weights {(reader_id, author_id): score}.
             profiles: AgentProfile objects keyed by agent_id.
             db: Open aiosqlite connection.
+            simulation_mode: ``"hk_demographic"`` (default) or ``"kg_driven"``.
 
         Returns:
             Updated beliefs keyed by agent_id.
         """
+        if simulation_mode == "kg_driven":
+            # kg_driven mode: BeliefPropagationEngine handles belief updates
+            # via WorldEvents. This keyword-matching pipeline is a no-op.
+            return dict(agent_beliefs)
         updated: dict[int, list[Belief]] = {}
 
         for agent_id, beliefs in agent_beliefs.items():
