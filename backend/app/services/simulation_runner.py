@@ -423,17 +423,24 @@ class SimulationRunner(
         fields — access them via r["tier"] directly, never via a reconstructed AgentProfile.
         """
         from backend.app.utils.db import get_db  # noqa: PLC0415
-        async with get_db() as db:
-            cursor = await db.execute(
-                """SELECT id, agent_type, age, sex, district, occupation, income_bracket,
-                   education_level, marital_status, housing_type,
-                   openness, conscientiousness, extraversion,
-                   agreeableness, neuroticism, monthly_income,
-                   savings, political_stance, oasis_username, tier
-                   FROM agent_profiles WHERE session_id = ?""",
-                (session_id,),
+        try:
+            async with get_db() as db:
+                cursor = await db.execute(
+                    """SELECT id, agent_type, age, sex, district, occupation, income_bracket,
+                       education_level, marital_status, housing_type,
+                       openness, conscientiousness, extraversion,
+                       agreeableness, neuroticism, monthly_income,
+                       savings, political_stance, oasis_username, tier
+                       FROM agent_profiles WHERE session_id = ?""",
+                    (session_id,),
+                )
+                rows = await cursor.fetchall()
+        except Exception:
+            logger.debug(
+                "_fetch_and_cache_profiles failed session=%s — using empty cache",
+                session_id,
             )
-            rows = await cursor.fetchall()
+            rows = []
         self._round_profiles[session_id] = rows
         return rows
 
