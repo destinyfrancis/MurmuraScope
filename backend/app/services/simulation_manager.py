@@ -893,6 +893,7 @@ async def _build_runner_config(session: SessionState) -> dict[str, Any]:
         "session_id": session.id,
         "graph_id": session.graph_id,
         "scenario_type": session.scenario_type,
+        "sim_mode": session.sim_mode.value,
         "agent_count": session.agent_count,
         "round_count": session.round_count,
         "platforms": session.platforms,

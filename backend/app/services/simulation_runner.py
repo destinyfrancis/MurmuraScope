@@ -90,6 +90,22 @@ class SimulationRunner(
         self._pending_arousal_deltas: dict[str, dict[int, float]] = defaultdict(dict)
         # Phase 4A: optional scale profiler (None = profiling disabled)
         self._profiler: Any | None = None
+        # kg_driven mode services (initialised lazily per session in run())
+        self._kg_mode: dict[str, bool] = {}  # session_id → True if kg_driven
+        self._world_event_gen: Any | None = None
+        self._cognitive_engine: Any | None = None
+        self._faction_mapper: Any | None = None
+        self._tipping_detector: Any | None = None
+        # kg_driven per-session state
+        self._current_round_events: dict[str, list] = {}  # session_id → events
+        self._event_content_history: dict[str, list[str]] = {}  # session_id → strings
+        self._tier1_agents: dict[str, list] = {}  # session_id → agent profiles
+        self._active_metrics: dict[str, dict[str, float]] = {}  # session_id → metric_id→value
+        self._agent_beliefs: dict[str, dict[str, dict[str, float]]] = {}  # session_id → agent_id→beliefs
+        self._belief_history: dict[str, list] = {}  # session_id → snapshots
+        self._interaction_graph: dict[str, dict[str, list[str]]] = {}  # session_id → adj list
+        self._prev_dominant_stance: dict[str, dict[str, float]] = {}  # session_id → metric→value
+        self._scenario_description: dict[str, str] = {}  # session_id → text
 
     async def run(
         self,
@@ -129,6 +145,9 @@ class SimulationRunner(
             restored = await self._restore_macro_state(session_id)
             if restored is not None:
                 self._macro_state[session_id] = restored
+
+        # Detect kg_driven mode and initialise services
+        await self._init_kg_driven_mode(session_id, config)
 
         # Run BiasProbe before simulation starts (fire-and-forget, tracked)
         self._create_tracked_task(session_id, self._run_bias_probe(session_id))
@@ -346,6 +365,17 @@ class SimulationRunner(
             self._activation_rngs.pop(session_id, None)
             # Phase 3: clean up pending arousal deltas
             self._pending_arousal_deltas.pop(session_id, None)
+            # kg_driven mode: clean up per-session state
+            self._kg_mode.pop(session_id, None)
+            self._current_round_events.pop(session_id, None)
+            self._event_content_history.pop(session_id, None)
+            self._tier1_agents.pop(session_id, None)
+            self._active_metrics.pop(session_id, None)
+            self._agent_beliefs.pop(session_id, None)
+            self._belief_history.pop(session_id, None)
+            self._interaction_graph.pop(session_id, None)
+            self._prev_dominant_stance.pop(session_id, None)
+            self._scenario_description.pop(session_id, None)
             # Close LanceDB connection to free resources
             if self._vector_store is not None:
                 try:
@@ -377,6 +407,10 @@ class SimulationRunner(
         Group 3 (periodic, fire-and-forget): all interval-driven hooks
         """
         hc = self._preset.hook_config
+
+        # Pre-round: kg_driven world event generation
+        if self._kg_mode.get(session_id):
+            await self._kg_generate_world_events(session_id, round_num)
 
         # Phase 2: feed ranking must complete before agent decision hooks read the feed
         if self._profiler:
@@ -418,6 +452,9 @@ class SimulationRunner(
         if hc.emergence_enabled:
             await self._process_belief_update(session_id, round_num)
         await self._process_round_consumption(session_id, round_num)
+        # kg_driven: Tier 1 cognitive deliberation
+        if self._kg_mode.get(session_id):
+            await self._kg_tier1_deliberation(session_id, round_num)
         if self._profiler:
             self._profiler.end_hook("group_2", round_num, _t_g2)
 
@@ -515,6 +552,13 @@ class SimulationRunner(
             self._create_tracked_task(
                 session_id,
                 self._process_emotional_contagion(session_id, round_num),
+            )
+
+        # kg_driven: faction mapping + tipping point detection (every 3 rounds)
+        if self._kg_mode.get(session_id) and round_num > 0 and round_num % 3 == 0:
+            self._create_tracked_task(
+                session_id,
+                self._kg_faction_and_tipping(session_id, round_num),
             )
 
         # Clean up posts buffer for completed round to prevent memory growth
@@ -938,6 +982,294 @@ class SimulationRunner(
                     (session_id, source_id, target_id),
                 )
             await db.commit()
+
+    # ------------------------------------------------------------------
+    # kg_driven mode helpers
+    # ------------------------------------------------------------------
+
+    async def _init_kg_driven_mode(
+        self, session_id: str, config: dict[str, Any]
+    ) -> None:
+        """Detect kg_driven mode from config and initialise services.
+
+        Only activates when ``sim_mode`` in the config is ``"kg_driven"``
+        (or falls back to DB lookup). For hk_demographic this is a no-op.
+        """
+        sim_mode = config.get("sim_mode", "")
+        if not sim_mode:
+            # Fallback: check DB for the session's sim_mode
+            try:
+                from backend.app.utils.db import get_db  # noqa: PLC0415
+                async with get_db() as db:
+                    cursor = await db.execute(
+                        "SELECT sim_mode FROM simulation_sessions WHERE id = ?",
+                        (session_id,),
+                    )
+                    row = await cursor.fetchone()
+                    sim_mode = row["sim_mode"] if row else ""
+            except Exception:
+                logger.debug("Could not load sim_mode from DB for %s", session_id)
+
+        if sim_mode != "kg_driven":
+            return
+
+        self._kg_mode[session_id] = True
+        logger.info("kg_driven mode activated for session %s", session_id)
+
+        # Lazily create shared service instances (singleton across sessions)
+        if self._world_event_gen is None:
+            from backend.app.services.world_event_generator import WorldEventGenerator  # noqa: PLC0415
+            self._world_event_gen = WorldEventGenerator()
+        if self._cognitive_engine is None:
+            from backend.app.services.cognitive_agent_engine import CognitiveAgentEngine  # noqa: PLC0415
+            self._cognitive_engine = CognitiveAgentEngine()
+        if self._faction_mapper is None:
+            from backend.app.services.emergence_tracker import FactionMapper  # noqa: PLC0415
+            self._faction_mapper = FactionMapper()
+        if self._tipping_detector is None:
+            from backend.app.services.emergence_tracker import TippingPointDetector  # noqa: PLC0415
+            self._tipping_detector = TippingPointDetector()
+
+        # Initialise per-session state
+        self._current_round_events[session_id] = []
+        self._event_content_history[session_id] = []
+        self._tier1_agents[session_id] = []
+        self._active_metrics[session_id] = {}
+        self._agent_beliefs[session_id] = {}
+        self._belief_history[session_id] = []
+        self._interaction_graph[session_id] = {}
+        self._prev_dominant_stance[session_id] = {}
+        self._scenario_description[session_id] = ""
+
+        # Load scenario description + active metrics from DB (if available)
+        await self._load_kg_session_context(session_id, config)
+
+    async def _load_kg_session_context(
+        self, session_id: str, config: dict[str, Any]
+    ) -> None:
+        """Load seed text, scenario config, and tier-1 agents for kg_driven."""
+        try:
+            from backend.app.utils.db import get_db  # noqa: PLC0415
+            async with get_db() as db:
+                # Seed text as scenario description
+                cursor = await db.execute(
+                    "SELECT seed_text FROM simulation_sessions WHERE id = ?",
+                    (session_id,),
+                )
+                row = await cursor.fetchone()
+                if row and row["seed_text"]:
+                    self._scenario_description[session_id] = row["seed_text"][:500]
+
+                # Load tier-1 agents (those with importance >= 0.7 or first 30)
+                cursor = await db.execute(
+                    """SELECT id, oasis_username AS name,
+                              json_extract(properties, '$.role') AS role,
+                              json_extract(properties, '$.faction') AS faction
+                       FROM agent_profiles
+                       WHERE session_id = ?
+                       ORDER BY CAST(json_extract(properties, '$.importance') AS REAL) DESC
+                       LIMIT 30""",
+                    (session_id,),
+                )
+                rows = await cursor.fetchall()
+                tier1 = []
+                for r in rows:
+                    tier1.append({
+                        "id": r["id"],
+                        "name": r["name"] or "",
+                        "role": r["role"] or "",
+                        "faction": r["faction"] or "none",
+                    })
+                self._tier1_agents[session_id] = tier1
+
+        except Exception:
+            logger.warning(
+                "Could not load kg_driven context for session %s",
+                session_id,
+                exc_info=True,
+            )
+
+    async def _kg_generate_world_events(
+        self, session_id: str, round_num: int
+    ) -> None:
+        """Pre-round: generate world events for kg_driven mode."""
+        if self._world_event_gen is None:
+            return
+        try:
+            events = await self._world_event_gen.generate(
+                scenario_description=self._scenario_description.get(session_id, ""),
+                round_number=round_num,
+                active_metrics=tuple(self._active_metrics.get(session_id, {}).keys()),
+                prev_dominant_stance=self._prev_dominant_stance.get(session_id, {}),
+                event_history=self._event_content_history.get(session_id, []),
+            )
+            self._current_round_events[session_id] = events
+            hist = self._event_content_history.get(session_id, [])
+            hist.extend(e.content for e in events)
+            self._event_content_history[session_id] = hist
+        except Exception:
+            logger.exception(
+                "kg_driven world event generation failed session=%s round=%d",
+                session_id, round_num,
+            )
+            self._current_round_events[session_id] = []
+
+    async def _kg_tier1_deliberation(
+        self, session_id: str, round_num: int
+    ) -> None:
+        """Group 2: Tier 1 cognitive deliberation for kg_driven mode."""
+        if self._cognitive_engine is None:
+            return
+        tier1 = self._tier1_agents.get(session_id, [])
+        if not tier1:
+            return
+        current_events = self._current_round_events.get(session_id, [])
+        metrics = self._active_metrics.get(session_id, {})
+        scenario = self._scenario_description.get(session_id, "")
+
+        for agent in tier1:
+            try:
+                agent_context = {
+                    "agent_id": agent.get("id", ""),
+                    "name": agent.get("name", ""),
+                    "role": agent.get("role", ""),
+                    "current_beliefs": metrics,
+                    "recent_events": [e.content for e in current_events],
+                    "faction": agent.get("faction", "none"),
+                }
+                result = await self._cognitive_engine.deliberate(
+                    agent_context=agent_context,
+                    scenario_description=scenario,
+                    active_metrics=tuple(metrics.keys()),
+                )
+                # Apply belief updates
+                for metric_id, delta in result.belief_updates.items():
+                    if metric_id in metrics:
+                        metrics[metric_id] = max(0.0, min(1.0, metrics[metric_id] + delta))
+            except Exception:
+                logger.debug(
+                    "Tier 1 deliberation failed for agent %s session=%s",
+                    agent.get("id", "?"), session_id,
+                )
+        self._active_metrics[session_id] = metrics
+
+    async def _kg_faction_and_tipping(
+        self, session_id: str, round_num: int
+    ) -> None:
+        """Group 3 periodic: faction mapping + tipping point detection."""
+        agent_beliefs = self._agent_beliefs.get(session_id, {})
+        if not agent_beliefs:
+            return
+
+        # Faction mapping
+        if self._faction_mapper is not None:
+            try:
+                snapshot = self._faction_mapper.compute(
+                    simulation_id=session_id,
+                    round_number=round_num,
+                    agent_beliefs=agent_beliefs,
+                    interaction_graph=self._interaction_graph.get(session_id, {}),
+                )
+                await self._persist_faction_snapshot(snapshot)
+            except Exception:
+                logger.exception(
+                    "Faction mapping failed session=%s round=%d",
+                    session_id, round_num,
+                )
+
+        # Tipping point detection
+        if self._tipping_detector is not None:
+            try:
+                current_events = self._current_round_events.get(session_id, [])
+                tipping = self._tipping_detector.detect(
+                    simulation_id=session_id,
+                    round_number=round_num,
+                    current_beliefs=agent_beliefs,
+                    belief_history=self._belief_history.get(session_id, [])[-3:],
+                    last_event_id=(
+                        current_events[-1].event_id
+                        if current_events
+                        else None
+                    ),
+                )
+                if tipping is not None:
+                    await self._persist_tipping_point(tipping)
+            except Exception:
+                logger.exception(
+                    "Tipping point detection failed session=%s round=%d",
+                    session_id, round_num,
+                )
+
+        # Snapshot beliefs for history
+        belief_copy = {k: dict(v) for k, v in agent_beliefs.items()}
+        hist = self._belief_history.get(session_id, [])
+        hist.append(belief_copy)
+        self._belief_history[session_id] = hist
+
+    async def _persist_faction_snapshot(self, snapshot: Any) -> None:
+        """Persist FactionSnapshot to faction_snapshots_v2 table."""
+        import uuid as _uuid  # noqa: PLC0415
+        from backend.app.utils.db import get_db  # noqa: PLC0415
+
+        try:
+            async with get_db() as db:
+                await db.execute(
+                    """INSERT OR REPLACE INTO faction_snapshots_v2
+                       (id, simulation_id, round_number, factions_json,
+                        bridge_agents_json, modularity_score, inter_faction_hostility)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        str(_uuid.uuid4()),
+                        snapshot.simulation_id,
+                        snapshot.round_number,
+                        json.dumps([
+                            {
+                                "faction_id": f.faction_id,
+                                "member_agent_ids": list(f.member_agent_ids),
+                                "belief_center": f.belief_center,
+                            }
+                            for f in snapshot.factions
+                        ]),
+                        json.dumps(list(snapshot.bridge_agents)),
+                        snapshot.modularity_score,
+                        snapshot.inter_faction_hostility,
+                    ),
+                )
+                await db.commit()
+        except Exception:
+            logger.exception(
+                "Failed to persist faction snapshot sim=%s round=%d",
+                snapshot.simulation_id, snapshot.round_number,
+            )
+
+    async def _persist_tipping_point(self, tipping: Any) -> None:
+        """Persist TippingPoint to tipping_points table."""
+        import uuid as _uuid  # noqa: PLC0415
+        from backend.app.utils.db import get_db  # noqa: PLC0415
+
+        try:
+            async with get_db() as db:
+                await db.execute(
+                    """INSERT INTO tipping_points
+                       (id, simulation_id, round_number, trigger_event_id,
+                        kl_divergence, change_direction, affected_factions_json)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        str(_uuid.uuid4()),
+                        tipping.simulation_id,
+                        tipping.round_number,
+                        tipping.trigger_event_id,
+                        tipping.kl_divergence,
+                        tipping.change_direction,
+                        json.dumps(list(tipping.affected_faction_ids)),
+                    ),
+                )
+                await db.commit()
+        except Exception:
+            logger.exception(
+                "Failed to persist tipping point sim=%s round=%d",
+                tipping.simulation_id, tipping.round_number,
+            )
 
 
 # ---------------------------------------------------------------------------
