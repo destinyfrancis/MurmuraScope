@@ -546,3 +546,39 @@ def _derive_macro_adjustments(
             float((gba_relocators / 10) * -10)
 
     return adjustments
+
+
+# ---------------------------------------------------------------------------
+# Engine factory
+# ---------------------------------------------------------------------------
+
+
+def get_decision_engine(mode: str = "hk_demographic", **kwargs: object) -> object:
+    """Factory function to get the appropriate decision engine.
+
+    Args:
+        mode: ``"hk_demographic"`` for the HK-specific rule-based engine
+            (default), or ``"kg_driven"`` for the domain-agnostic universal
+            engine.
+        **kwargs: Passed through to the engine constructor.
+            For ``"hk_demographic"``: accepts ``llm_client`` and ``hook_config``.
+            For ``"kg_driven"``: accepts ``llm_client``.
+
+    Returns:
+        A ``DecisionEngine`` instance for HK mode, or a
+        ``UniversalDecisionEngine`` instance for kg_driven mode.
+
+    Raises:
+        ValueError: If ``mode`` is not one of the supported values.
+    """
+    if mode == "kg_driven":
+        from backend.app.services.universal_decision_engine import (  # noqa: PLC0415
+            UniversalDecisionEngine,
+        )
+        return UniversalDecisionEngine(**kwargs)
+    if mode == "hk_demographic":
+        return DecisionEngine(**kwargs)
+    raise ValueError(
+        f"Unknown decision engine mode {mode!r}. "
+        "Choose 'hk_demographic' or 'kg_driven'."
+    )

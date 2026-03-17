@@ -73,6 +73,25 @@ _DOMAIN_KEYWORDS = _build_domain_keywords()
 
 
 # ---------------------------------------------------------------------------
+# HK-specific keywords used for mode detection
+# ---------------------------------------------------------------------------
+
+_HK_MODE_KEYWORDS: list[str] = [
+    "香港", "樓市", "移民", "生育", "hk", "hong kong",
+    "hkd", "legco", "mtv", "tuen mun", "yuen long",
+    "kowloon", "新界", "九龍", "港島", "ccl", "hsi",
+]
+
+# Geopolitical / non-HK scenario keywords that indicate kg_driven mode
+_KG_DRIVEN_KEYWORDS: list[str] = [
+    "war", "military", "geopolitical", "sanctions", "nuclear",
+    "nato", "united nations", "un security council", "alliance",
+    "troops", "invasion", "conflict", "treaty", "tariff",
+    "trade war", "embargo", "coup",
+]
+
+
+# ---------------------------------------------------------------------------
 # Result dataclass
 # ---------------------------------------------------------------------------
 
@@ -87,6 +106,7 @@ class ZeroConfigResult:
     seed_text: str
     detected_entities: list[str]
     estimated_duration_seconds: int
+    mode: str = "hk_demographic"
 
 
 # ---------------------------------------------------------------------------
@@ -95,6 +115,36 @@ class ZeroConfigResult:
 
 class ZeroConfigService:
     """Infer domain and configuration from seed text alone."""
+
+    def detect_mode(self, seed_text: str) -> str:
+        """Detect simulation mode from seed text.
+
+        Returns ``"hk_demographic"`` when the text contains HK-specific
+        keywords (place names, financial indicators, demographics).
+        Returns ``"kg_driven"`` for geopolitical or other non-HK scenarios
+        that are better served by the KG-driven agent generation path.
+
+        The HK check is performed first: if both HK and geopolitical keywords
+        are present, ``"hk_demographic"`` wins to maintain backward
+        compatibility.
+
+        Args:
+            seed_text: Raw scenario text submitted by the user.
+
+        Returns:
+            ``"hk_demographic"`` or ``"kg_driven"``.
+        """
+        text_lower = seed_text.lower()
+
+        hk_hits = sum(1 for kw in _HK_MODE_KEYWORDS if kw.lower() in text_lower)
+        if hk_hits > 0:
+            return "hk_demographic"
+
+        kg_hits = sum(1 for kw in _KG_DRIVEN_KEYWORDS if kw.lower() in text_lower)
+        if kg_hits > 0:
+            return "kg_driven"
+
+        return "hk_demographic"
 
     def infer_domain(self, seed_text: str) -> str:
         """Keyword-match seed text to a domain pack ID.
@@ -127,6 +177,7 @@ class ZeroConfigService:
             raise ValueError("seed_text must not be empty")
 
         domain = self.infer_domain(seed_text)
+        mode = self.detect_mode(seed_text)
 
         # Try entity extraction via existing TextProcessor -----------------
         entities: list[str] = []
@@ -149,8 +200,9 @@ class ZeroConfigService:
         estimated_seconds = agent_count * round_count // 50  # rough heuristic
 
         logger.info(
-            "ZeroConfig: domain=%s agents=%d rounds=%d entities=%d",
+            "ZeroConfig: domain=%s mode=%s agents=%d rounds=%d entities=%d",
             domain,
+            mode,
             agent_count,
             round_count,
             len(entities),
@@ -164,4 +216,5 @@ class ZeroConfigService:
             seed_text=seed_text,
             detected_entities=entities[:10],
             estimated_duration_seconds=estimated_seconds,
+            mode=mode,
         )

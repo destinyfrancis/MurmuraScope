@@ -6,6 +6,37 @@ All templates use Python string formatting with named placeholders.
 from __future__ import annotations
 
 # ---------------------------------------------------------------------------
+# Default generic types (domain-agnostic fallback)
+# ---------------------------------------------------------------------------
+
+DEFAULT_GENERIC_ENTITY_TYPES: list[str] = [
+    "Person",
+    "Organization",
+    "Country",
+    "Event",
+    "Location",
+    "Policy",
+    "Resource",
+    "MediaOutlet",
+    "MilitaryForce",
+    "Institution",
+]
+
+DEFAULT_GENERIC_RELATION_TYPES: list[str] = [
+    "SUPPORTS",
+    "OPPOSES",
+    "ALLIED_WITH",
+    "CONFLICTS_WITH",
+    "INFLUENCES",
+    "CONTROLS",
+    "REGULATES",
+    "COMMENTS_ON",
+    "BELONGS_TO",
+    "DEPENDS_ON",
+]
+
+
+# ---------------------------------------------------------------------------
 # Default HK-specific types
 # ---------------------------------------------------------------------------
 
@@ -38,9 +69,10 @@ DEFAULT_HK_RELATION_TYPES: list[str] = [
 # ---------------------------------------------------------------------------
 
 ONTOLOGY_GENERATION_SYSTEM = (
-    "You are a knowledge graph ontology designer specialising in Hong Kong "
-    "socioeconomic scenarios. Given a scenario description, you produce a set "
-    "of entity types and relation types that best capture the domain."
+    "You are a knowledge graph ontology designer. Analyse the seed text to "
+    "determine the domain and design an appropriate ontology. Given a scenario "
+    "description, you produce a set of entity types and relation types that "
+    "best capture the domain."
 )
 
 ONTOLOGY_GENERATION_USER = """\
@@ -49,14 +81,14 @@ Scenario type: {scenario_type}
 Scenario description:
 {seed_text}
 
-Default HK entity types (you may keep, extend, or replace):
+Default entity types (you may keep, extend, or replace based on the scenario domain):
 {default_entity_types}
 
-Default HK relation types (you may keep, extend, or replace):
+Default relation types (you may keep, extend, or replace based on the scenario domain):
 {default_relation_types}
 
 Generate an ontology suitable for building a knowledge graph about this \
-scenario in Hong Kong. Return ONLY valid JSON with the following structure:
+scenario. Return ONLY valid JSON with the following structure:
 
 {{
   "entity_types": ["Type1", "Type2", ...],
@@ -76,7 +108,7 @@ Guidelines:
 # ---------------------------------------------------------------------------
 
 ENTITY_EXTRACTION_SYSTEM = (
-    "You are a named entity recognition (NER) expert for Hong Kong. "
+    "You are a named entity recognition (NER) expert. "
     "Extract entities and relationships from the provided text and data."
 )
 
@@ -117,7 +149,7 @@ Guidelines:
 - Use the supplied entity and relation types only.
 - Generate a stable, unique ``id`` for each node (lowercase_with_underscores).
 - Weight edges from 0.1 (weak) to 1.0 (strong).
-- Include real Hong Kong entities where the data supports them.
+- Include real-world entities where the data supports them.
 """
 
 
@@ -170,7 +202,7 @@ Return ONLY valid JSON:
 # ---------------------------------------------------------------------------
 
 COMMUNITY_SUMMARY_SYSTEM = (
-    "You are a community analyst for Hong Kong socioeconomic networks. "
+    "You are a community analyst for networks and communities. "
     "Summarise clusters of related entities."
 )
 
@@ -185,6 +217,6 @@ Provide a concise summary of this community. Return ONLY valid JSON:
 
 {{
   "title": "Short descriptive title for this community",
-  "summary": "2-4 sentence summary of what unites these entities and their significance in the Hong Kong context"
+  "summary": "2-4 sentence summary of what unites these entities and their significance in the scenario context"
 }}
 """

@@ -322,6 +322,137 @@ class SimulationManager:
         return [dict(row) for row in rows]
 
 
+async def generate_agents(
+    session_id: str,
+    request: dict[str, Any],
+    mode: str = "hk_demographic",
+    llm_client: Any | None = None,
+) -> tuple[list[Any], str]:
+    """Generate agent profiles and write the OASIS CSV file.
+
+    Dispatches to the appropriate factory based on *mode*:
+
+    - ``"hk_demographic"`` → :class:`AgentFactory` (default, backward compatible).
+    - ``"kg_driven"`` → :class:`KGAgentFactory` which derives agents from the
+      knowledge graph nodes and seed text.
+
+    Args:
+        session_id: UUID of the owning session (used to resolve the session dir).
+        request: The original create-session request dict.  Must contain at
+            minimum ``agent_count`` and, for kg_driven mode, ``graph_id`` and
+            ``seed_text``.
+        mode: Simulation mode string.  Defaults to ``"hk_demographic"``.
+        llm_client: Optional LLMClient override (injected for testing).
+
+    Returns:
+        A ``(profiles, csv_path)`` tuple where *profiles* is the list of
+        generated agent profile objects and *csv_path* is the absolute path
+        to the written CSV file.
+
+    Raises:
+        ValueError: If required request fields are missing for the chosen mode.
+        RuntimeError: If agent generation or CSV writing fails.
+    """
+    session_dir = _PROJECT_ROOT / "data" / "sessions" / session_id
+    session_dir.mkdir(parents=True, exist_ok=True)
+    csv_path = str(session_dir / "agents.csv")
+
+    if mode == "kg_driven":
+        graph_id = request.get("graph_id", "")
+        seed_text = request.get("seed_text", "")
+        if not graph_id:
+            raise ValueError("graph_id is required for kg_driven mode")
+        if not seed_text:
+            raise ValueError("seed_text is required for kg_driven mode")
+
+        try:
+            from backend.app.services.kg_agent_factory import KGAgentFactory  # noqa: PLC0415
+            from backend.app.utils.llm_client import LLMClient  # noqa: PLC0415
+        except ImportError as exc:
+            raise RuntimeError(
+                "KGAgentFactory not available — ensure kg_agent_factory module exists"
+            ) from exc
+
+        llm = llm_client or LLMClient()
+
+        # Load KG nodes/edges from the database.
+        kg_nodes: list[dict[str, Any]] = []
+        kg_edges: list[dict[str, Any]] = []
+        try:
+            from backend.app.utils.db import get_db  # noqa: PLC0415
+            async with get_db() as db:
+                cursor = await db.execute(
+                    "SELECT id, entity_type, title, description, properties "
+                    "FROM kg_nodes WHERE graph_id = ?",
+                    (graph_id,),
+                )
+                kg_nodes = [dict(row) for row in await cursor.fetchall()]
+                cursor = await db.execute(
+                    "SELECT source_id, target_id, relation_type, description, weight "
+                    "FROM kg_edges WHERE graph_id = ?",
+                    (graph_id,),
+                )
+                kg_edges = [dict(row) for row in await cursor.fetchall()]
+        except Exception:
+            logger.warning(
+                "Could not load KG data for graph %s — proceeding with empty graph",
+                graph_id,
+                exc_info=True,
+            )
+
+        factory = KGAgentFactory(llm_client=llm)
+        profiles = await factory.generate_from_kg(kg_nodes, kg_edges, seed_text)
+        written_path = await factory.generate_agents_csv(profiles, csv_path)
+        logger.info(
+            "KGAgentFactory: generated %d profiles for session %s at %s",
+            len(profiles),
+            session_id,
+            written_path,
+        )
+        return profiles, written_path
+
+    # Default path: hk_demographic via AgentFactory.
+    from backend.app.services.agent_factory import AgentFactory  # noqa: PLC0415
+
+    agent_count = request.get("agent_count", 300)
+    distribution = request.get("agent_distribution") or {}
+
+    demographics = None
+    domain_pack_id = request.get("domain_pack_id", "hk_city")
+    try:
+        from backend.app.domain.base import DomainPackRegistry  # noqa: PLC0415
+        pack = DomainPackRegistry.get(domain_pack_id)
+        demographics = pack.demographics
+    except Exception:
+        logger.debug(
+            "Domain pack '%s' unavailable — using AgentFactory defaults",
+            domain_pack_id,
+        )
+
+    factory = AgentFactory(demographics=demographics)
+    profiles = factory.generate_population(agent_count, distribution or None)
+
+    from backend.app.services.profile_generator import ProfileGenerator  # noqa: PLC0415
+    from backend.app.services.macro_controller import MacroController  # noqa: PLC0415
+    import asyncio as _asyncio  # noqa: PLC0415
+    from pathlib import Path as _Path  # noqa: PLC0415
+
+    profile_gen = ProfileGenerator(agent_factory=factory)
+    macro = MacroController()
+    macro_state = await macro.get_baseline_for_scenario(
+        request.get("scenario_type", "property")
+    )
+    csv_content = profile_gen.to_oasis_csv(profiles, macro_state)
+    await _asyncio.to_thread(_Path(csv_path).write_text, csv_content, encoding="utf-8")
+    logger.info(
+        "AgentFactory: wrote %d agents to %s for session %s",
+        len(profiles),
+        csv_path,
+        session_id,
+    )
+    return profiles, csv_path
+
+
 async def store_agent_profiles(
     session_id: str,
     profiles: list[Any],
