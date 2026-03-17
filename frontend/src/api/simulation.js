@@ -192,3 +192,25 @@ export function quickStart(seedText) {
 export function getSessionDecisions(sessionId, params = {}) {
   return api.get(`/simulation/${sessionId}/decisions`, { params })
 }
+
+// ── Cognitive Theater (Factions, Tipping Points, World Events) ────────────────────
+
+export function getFactions(sessionId) {
+  return api.get(`/simulation/${sessionId}/factions`)
+}
+
+export function getTippingPoints(sessionId) {
+  return api.get(`/simulation/${sessionId}/tipping-points`)
+}
+
+export function getWorldEvents(sessionId) {
+  return api.get(`/simulation/${sessionId}/world-events`)
+}
+
+export function getMultiRun(sessionId) {
+  return api.get(`/simulation/${sessionId}/multi-run`)
+}
+
+export function triggerMultiRun(sessionId) {
+  return api.post(`/simulation/${sessionId}/multi-run`)
+}
