@@ -19,21 +19,31 @@ const latestSnapshot = computed(() => {
 const factions = computed(() => {
   if (!latestSnapshot.value) return []
   try {
-    return JSON.parse(latestSnapshot.value.factions_json)
+    return JSON.parse(latestSnapshot.value.factions_json).map(f => ({
+      ...f,
+      dominant: dominantBelief(f.belief_center),
+    }))
   } catch {
     return []
   }
 })
 
-// For sparklines: member count of each faction across rounds
+// For sparklines: member count of each faction across rounds (zero-padded for rounds before a faction appeared)
 const sparkData = computed(() => {
   const byFaction = {}
-  for (const snap of props.snapshots) {
+  const totalRounds = props.snapshots.length
+  for (let i = 0; i < totalRounds; i++) {
+    const snap = props.snapshots[i]
     let parsed = []
-    try { parsed = JSON.parse(snap.factions_json) } catch { continue }
+    try { parsed = JSON.parse(snap.factions_json) } catch { /* skip */ }
+    const seen = new Set()
     for (const f of parsed) {
-      if (!byFaction[f.faction_id]) byFaction[f.faction_id] = []
+      if (!byFaction[f.faction_id]) byFaction[f.faction_id] = new Array(i).fill(0)
       byFaction[f.faction_id].push(f.member_agent_ids.length)
+      seen.add(f.faction_id)
+    }
+    for (const id of Object.keys(byFaction)) {
+      if (!seen.has(id)) byFaction[id].push(0)
     }
   }
   return byFaction
@@ -87,18 +97,18 @@ function sparklinePath(counts) {
             <span class="fc-count">{{ f.member_agent_ids.length }} agents</span>
           </div>
           <div class="fc-belief-row">
-            <span class="fc-belief-label">{{ dominantBelief(f.belief_center).label }}</span>
+            <span class="fc-belief-label">{{ f.dominant.label }}</span>
             <div class="fc-bar-bg">
               <div
                 class="fc-bar-fill"
                 :style="{
-                  width: (dominantBelief(f.belief_center).value * 100).toFixed(0) + '%',
+                  width: (f.dominant.value * 100).toFixed(0) + '%',
                   background: colourFor(idx),
                 }"
               />
             </div>
             <span class="fc-belief-val">
-              {{ (dominantBelief(f.belief_center).value * 100).toFixed(0) }}%
+              {{ (f.dominant.value * 100).toFixed(0) }}%
             </span>
           </div>
           <!-- Sparkline -->
