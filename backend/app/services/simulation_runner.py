@@ -82,6 +82,11 @@ class SimulationRunner(
         self._echo_chamber_result: Any | None = None
         # Track per-session background tasks to cancel them on cleanup
         self._pending_tasks: dict[str, set[asyncio.Task]] = defaultdict(set)  # type: ignore[type-arg]
+        # Round-level profile cache: populated once per round before Group 1, cleared at session end.
+        # Keyed by session_id. Stores raw aiosqlite.Row objects (dict-style access supported).
+        # MUST NOT be cleared per-round — Group 3 fire-and-forget tasks (_process_wealth_transfers)
+        # may read the cache after the round boundary.
+        self._round_profiles: dict[str, list] = {}
         # Phase 1B: per-session activity profiles (username → ActivityProfile)
         self._activity_profiles: dict[str, dict[str, Any]] = {}
         # Per-session RNG for activation sampling (seeded per session for reproducibility)
@@ -360,6 +365,8 @@ class SimulationRunner(
             self._posts_buffer.pop(session_id, None)
             # Clean up macro state cache
             self._macro_state.pop(session_id, None)
+            # Clean up round-level profile cache
+            self._round_profiles.pop(session_id, None)
             # Phase 1B: clean up temporal activation caches
             self._activity_profiles.pop(session_id, None)
             self._activation_rngs.pop(session_id, None)
@@ -399,6 +406,37 @@ class SimulationRunner(
         task.add_done_callback(lambda t: task_set.discard(t))
         return task
 
+    async def _fetch_and_cache_profiles(self, session_id: str) -> list:
+        """Fetch all agent profiles for a session and cache for the current round.
+
+        Called once per round at the start of _execute_round_hooks, before Group 1.
+        All hooks that need profiles read from self._round_profiles[session_id] instead
+        of issuing their own SELECT queries.
+
+        Cache is cleared at session end (not per-round) because Group 3 fire-and-forget
+        tasks may read the cache after the round boundary.
+
+        The cache stores raw aiosqlite.Row objects. Consuming code may:
+        - Access columns via r["column_name"] (dict-style, supported by aiosqlite.Row)
+        - Reconstruct AgentProfile from the row fields
+        NOTE: `tier` and `oasis_username` are in the cache but are NOT AgentProfile
+        fields — access them via r["tier"] directly, never via a reconstructed AgentProfile.
+        """
+        from backend.app.utils.db import get_db  # noqa: PLC0415
+        async with get_db() as db:
+            cursor = await db.execute(
+                """SELECT id, agent_type, age, sex, district, occupation, income_bracket,
+                   education_level, marital_status, housing_type,
+                   openness, conscientiousness, extraversion,
+                   agreeableness, neuroticism, monthly_income,
+                   savings, political_stance, oasis_username, tier
+                   FROM agent_profiles WHERE session_id = ?""",
+                (session_id,),
+            )
+            rows = await cursor.fetchall()
+        self._round_profiles[session_id] = rows
+        return rows
+
     async def _execute_round_hooks(self, session_id: str, round_num: int) -> None:
         """Execute round hooks with dependency-aware grouping.
 
@@ -406,6 +444,9 @@ class SimulationRunner(
         Group 2 (sequential after G1): decisions → side effects (+ belief if emergence) → consumption
         Group 3 (periodic, fire-and-forget): all interval-driven hooks
         """
+        # Populate per-round profile cache (shared by all hooks this round via self._round_profiles)
+        await self._fetch_and_cache_profiles(session_id)
+
         hc = self._preset.hook_config
 
         # Pre-round: kg_driven world event generation
@@ -723,6 +764,7 @@ class SimulationRunner(
         # Clean up buffers (mirrors the finally block in run())
         self._posts_buffer.pop(session_id, None)
         self._macro_state.pop(session_id, None)
+        self._round_profiles.pop(session_id, None)
         logger.info("dry_run complete for session %s (%d rounds)", session_id, mock_rounds)
 
     # ------------------------------------------------------------------
