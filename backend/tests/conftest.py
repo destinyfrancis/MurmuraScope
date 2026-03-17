@@ -12,6 +12,35 @@ import pytest_asyncio
 
 
 # ---------------------------------------------------------------------------
+# Auto-marker: tag tests as "integration" if they use DB fixtures or
+# belong to known integration/slow test modules.
+# ---------------------------------------------------------------------------
+
+_DB_FIXTURES = frozenset({"test_db", "test_db_path", "test_client"})
+
+# Modules that do inline DB setup (not via shared fixtures)
+_INTEGRATION_MODULES = frozenset({
+    "test_simulation_integration",
+    "test_e2e_dry_run",
+    "test_domain_api",
+    "test_report",
+    "test_data_integrity",
+    "test_data_pipeline",
+    "test_universal_engine_integration",
+})
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Auto-apply 'integration' marker to tests that use DB or are in known modules."""
+    integration_marker = pytest.mark.integration
+    for item in items:
+        module_name = item.module.__name__.rsplit(".", 1)[-1] if item.module else ""
+        uses_db = hasattr(item, "fixturenames") and _DB_FIXTURES & set(item.fixturenames)
+        if uses_db or module_name in _INTEGRATION_MODULES:
+            item.add_marker(integration_marker)
+
+
+# ---------------------------------------------------------------------------
 # Database fixtures
 # ---------------------------------------------------------------------------
 
