@@ -501,17 +501,18 @@ class MemoryInitializationService:
         # Dual-write to LanceDB if vector_store provided (best-effort)
         if vector_store:
             try:
-                from backend.app.services.vector_store import EmbeddingProvider  # noqa: PLC0415
-                for memory_text in valid_memories:
-                    vec = EmbeddingProvider.embed_single(memory_text)  # sync — no await
-                    vector_store.add_memory(
-                        session_id=session_id,
-                        agent_id=agent_id,
-                        round_number=0,
-                        memory_text=memory_text,
-                        salience=_SALIENCE_SEED,
-                        vector=vec,
-                    )
+                memories_to_add = [
+                    {
+                        "memory_id": abs(hash(f"seed_{session_id[:8]}_{agent_id}_{i}")) % (2**31),
+                        "agent_id": agent_id,
+                        "round_number": 0,
+                        "memory_text": memory_text,
+                        "memory_type": _MEMORY_TYPE_SEED,
+                        "salience_score": _SALIENCE_SEED,
+                    }
+                    for i, memory_text in enumerate(valid_memories)
+                ]
+                await vector_store.add_memories(session_id=session_id, memories=memories_to_add)
             except Exception:
                 logger.warning(
                     "LanceDB dual-write failed for agent %d session %s",

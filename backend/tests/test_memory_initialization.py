@@ -207,3 +207,100 @@ class TestKGAgentFactoryCreate:
         from backend.app.services.kg_agent_factory import KGAgentFactory
         factory = KGAgentFactory()
         assert factory._persona_keys == frozenset()
+
+
+# ---------------------------------------------------------------------------
+# Integration tests (use real aiosqlite, no LLM)
+# Marked as integration by conftest.py auto-classifier
+# ---------------------------------------------------------------------------
+
+import aiosqlite
+from contextlib import asynccontextmanager
+from unittest.mock import patch as _patch
+
+
+@pytest.mark.asyncio
+async def test_integration_build_and_hydrate(tmp_path):
+    """Full pipeline: build_from_graph writes tables, hydrate reads and injects."""
+
+    # Point DB to a temp file
+    db_path = str(tmp_path / "test.db")
+
+    # Apply schema
+    schema_path = "backend/database/schema.sql"
+    with open(schema_path) as f:
+        schema_sql = f.read()
+    async with aiosqlite.connect(db_path) as db:
+        await db.executescript(schema_sql)
+        await db.commit()
+
+    @asynccontextmanager
+    async def patched_get_db():
+        async with aiosqlite.connect(db_path) as conn:
+            conn.row_factory = aiosqlite.Row
+            yield conn
+
+    with _patch("backend.app.services.memory_initialization.get_db", patched_get_db):
+        # Mock LLM — chat_json returns a parsed dict/list (already deserialized)
+        mock_llm = AsyncMock()
+        mock_llm.chat_json = AsyncMock(side_effect=[
+            # Phase 2: world context — chat_json returns the parsed list
+            [{"context_type": "social_climate", "title": "985濾鏡破碎",
+              "content": "公眾信任崩潰", "severity": 0.9, "phase": "crisis"}],
+            # Phase 3: persona templates
+            [{"agent_type_key": "student_activist", "display_name": "本科維權生",
+              "age_min": 18, "age_max": 22, "region_hint": "any",
+              "population_ratio": 0.35, "initial_memories": ["學校欺騙了我"],
+              "personality_hints": {
+                  "openness": 0.8, "conscientiousness": 0.6, "extraversion": 0.5,
+                  "agreeableness": 0.3, "neuroticism": 0.75,
+                  "key_concerns": ["透明度"], "preferred_platforms": ["weibo"],
+                  "stance_tendency": "rights_advocate",
+                  "verbal_patterns": ["護校蛆"], "trigger_topics": ["甲醛"],
+              }}],
+        ])
+
+        svc = MemoryInitializationService(llm_client=mock_llm, lancedb_path=str(tmp_path / "lance"))
+        result = await svc.build_from_graph("test_graph_001", "武漢大學甲醛宿舍事件")
+
+        assert result.world_context_count == 1
+        assert result.persona_template_count == 1
+
+        # Verify DB rows
+        async with aiosqlite.connect(db_path) as db:
+            rows = await (await db.execute(
+                "SELECT context_type, title FROM seed_world_context WHERE graph_id = ?",
+                ("test_graph_001",)
+            )).fetchall()
+            assert len(rows) == 1
+            assert rows[0][1] == "985濾鏡破碎"
+
+            t_rows = await (await db.execute(
+                "SELECT agent_type_key FROM seed_persona_templates WHERE graph_id = ?",
+                ("test_graph_001",)
+            )).fetchall()
+            assert len(t_rows) == 1
+            assert t_rows[0][0] == "student_activist"
+
+        # Now hydrate
+        result2 = await svc.hydrate_session_bulk(
+            session_id="sess_test_001",
+            graph_id="test_graph_001",
+            agents=[("agent_slug_001", "student_activist")],
+        )
+
+        assert result2.total_injected == 1
+        assert result2.templates_found == 1
+        assert result2.agents_skipped == 0
+
+        # Verify agent_memories row
+        async with aiosqlite.connect(db_path) as db:
+            mem_rows = await (await db.execute(
+                "SELECT round_number, memory_type, salience_score FROM agent_memories "
+                "WHERE session_id = ?",
+                ("sess_test_001",)
+            )).fetchall()
+            assert len(mem_rows) == 1
+            assert mem_rows[0][0] == 0           # round_number=0
+            assert mem_rows[0][1] == "seed"      # memory_type
+            assert mem_rows[0][2] == pytest.approx(0.9)  # salience
