@@ -336,7 +336,7 @@ function getLinkDash(link) { return baseLinkDash(link, props.showEchoChambers) }
 // Faction colour helper
 // ---------------------------------------------------------------------------
 function nodeColour(node) {
-  return props.factionColours[node.id] ?? null
+  return props.factionColours[node.id] ?? '#9CA3AF'
 }
 
 // ---------------------------------------------------------------------------
