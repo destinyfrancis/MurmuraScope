@@ -383,13 +383,13 @@ async def generate_agents(
             async with get_db() as db:
                 cursor = await db.execute(
                     "SELECT id, entity_type, title, description, properties "
-                    "FROM kg_nodes WHERE graph_id = ?",
+                    "FROM kg_nodes WHERE session_id = ?",
                     (graph_id,),
                 )
                 kg_nodes = [dict(row) for row in await cursor.fetchall()]
                 cursor = await db.execute(
                     "SELECT source_id, target_id, relation_type, description, weight "
-                    "FROM kg_edges WHERE graph_id = ?",
+                    "FROM kg_edges WHERE session_id = ?",
                     (graph_id,),
                 )
                 kg_edges = [dict(row) for row in await cursor.fetchall()]
@@ -402,7 +402,7 @@ async def generate_agents(
 
         factory = await KGAgentFactory.create(graph_id=graph_id, llm_client=llm)
         profiles = await factory.generate_from_kg(kg_nodes, kg_edges, seed_text)
-        written_path = await factory.generate_agents_csv(profiles, csv_path)
+        written_path = factory.generate_agents_csv(profiles, csv_path)
         logger.info(
             "KGAgentFactory: generated %d profiles for session %s at %s",
             len(profiles),

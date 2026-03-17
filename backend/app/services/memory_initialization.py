@@ -96,10 +96,12 @@ def _agent_id_from_str(agent_str_id: str) -> int:
     """Convert a string agent ID (UniversalAgentProfile.id slug) to a
     deterministic positive integer for agent_memories.agent_id.
 
-    agent_memories.agent_id has no REFERENCES FK constraint so any
+    Uses MD5 for stable cross-process determinism (PYTHONHASHSEED does not
+    affect MD5). agent_memories.agent_id has no FK constraint so any
     deterministic positive int is safe.
     """
-    return abs(hash(agent_str_id)) % (2**31)
+    import hashlib  # noqa: PLC0415
+    return int(hashlib.md5(agent_str_id.encode()).hexdigest(), 16) % (2**31)
 
 
 # ---------------------------------------------------------------------------
