@@ -14,6 +14,7 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 
 from backend.app.models.request import GraphBuildRequest
 from backend.app.models.response import APIResponse, GraphBuildResponse
+from backend.app.services.implicit_stakeholder_service import ImplicitStakeholderService
 from backend.app.utils.db import get_db
 from backend.app.utils.logger import get_logger
 
@@ -285,6 +286,7 @@ async def build_graph(req: GraphBuildRequest) -> APIResponse:
     base_edge_count = len(_HK_PROPERTY_EDGES)
     seed_nodes = 0
     seed_edges = 0
+    implicit_nodes = 0
     mem_result = None
 
     # --- Step 2: seed injection (best-effort, never blocks the response) ---
@@ -307,6 +309,25 @@ async def build_graph(req: GraphBuildRequest) -> APIResponse:
         except Exception:
             logger.exception(
                 "Seed injection failed for graph %s — continuing with base graph",
+                graph_id,
+            )
+
+        # --- Implicit stakeholder discovery (best-effort, Option A) ---
+        try:
+            implicit_svc = ImplicitStakeholderService()
+            existing_for_dedup = [
+                {"id": str(n.get("id", "")), "label": str(n.get("label") or n.get("title") or ""), "entity_type": str(n.get("type") or n.get("entity_type") or "")}
+                for n in (_HK_PROPERTY_NODES or [])
+            ]
+            discovery = await implicit_svc.discover(graph_id, req.seed_text, existing_for_dedup)
+            implicit_nodes = discovery.nodes_added
+            logger.info(
+                "Implicit stakeholder discovery for graph %s: +%d nodes",
+                graph_id, implicit_nodes,
+            )
+        except Exception:
+            logger.exception(
+                "Implicit stakeholder discovery failed for graph %s — continuing",
                 graph_id,
             )
 
@@ -348,6 +369,7 @@ async def build_graph(req: GraphBuildRequest) -> APIResponse:
             "base_edges": base_edge_count,
             "seed_nodes": seed_nodes,
             "seed_edges": seed_edges,
+            "implicit_nodes": implicit_nodes,
             "world_context_count": mem_result.world_context_count if mem_result else 0,
             "persona_template_count": mem_result.persona_template_count if mem_result else 0,
         },
