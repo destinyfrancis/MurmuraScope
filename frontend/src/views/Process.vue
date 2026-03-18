@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import PresetSelector from '../components/PresetSelector.vue'
 import Step1GraphBuild from '../components/Step1GraphBuild.vue'
@@ -20,6 +20,12 @@ const router = useRouter()
 // Defaults to 'hk_city' for backward compatibility
 const domainPackId = ref(route.query.domainPackId || 'hk_city')
 
+// Express mode — populated by /process/quick?express=1&sessionId=X&graphId=Y&...
+const expressMode = computed(() => route.query.express === '1')
+const expressSessionId = computed(() => route.query.sessionId || null)
+const expressGraphId = computed(() => route.query.graphId || null)
+const expressScenarioQuestion = computed(() => route.query.scenarioQuestion || '')
+
 const steps = [
   { key: 1, label: '圖譜構建', icon: '⬡', navLabel: 'GRAPH' },
   { key: 2, label: '環境搭建', icon: '⚙',  navLabel: 'ENV' },
@@ -37,6 +43,7 @@ const session = reactive({
   graphData: null,
   sessionId: null,
   reportId: null,
+  scenarioQuestion: '',           // passed through to Step 4 report
   preset: { name: 'standard', agents: 300, rounds: 20 },
   config: {
     agentCount: 100,
@@ -116,6 +123,44 @@ function onReportGenerated(data) {
   nextStep()
 }
 
+// currentComponentProps — passes scenarioQuestion to Step4Report, session to all others
+const currentComponentProps = computed(() => {
+  if (currentStep.value === 4) {
+    return { session, scenarioQuestion: session.scenarioQuestion }
+  }
+  return { session }
+})
+
+// Express mode: unmount-safe guard
+let _expressAdvanceCancelled = false
+
+onUnmounted(() => {
+  _expressAdvanceCancelled = true
+})
+
+onMounted(async () => {
+  if (!expressMode.value) return
+  _expressAdvanceCancelled = false
+
+  // Pre-populate session from URL params (reactive() mutation is intentional here —
+  // direct field mutation is Vue's intended pattern for reactive(); accepted exception
+  // to the project's immutability rule)
+  Object.assign(session, {
+    graphId: expressGraphId.value,
+    sessionId: expressSessionId.value,
+    scenarioQuestion: expressScenarioQuestion.value,
+  })
+
+  // Auto-advance: briefly show each step as "auto-completed" before landing on Step 3
+  currentStep.value = 1
+  await new Promise((r) => setTimeout(r, 600))
+  if (_expressAdvanceCancelled) return
+  currentStep.value = 2
+  await new Promise((r) => setTimeout(r, 400))
+  if (_expressAdvanceCancelled) return
+  currentStep.value = 3
+})
+
 // Sync preset agents/rounds into config whenever preset changes
 watch(
   () => session.preset,
@@ -163,6 +208,9 @@ watch(
       />
     </div>
 
+    <!-- Express mode indicator -->
+    <div v-if="expressMode" class="express-badge">⚡ 快速模式 · 已自動配置</div>
+
     <!-- Step content — preserve existing PresetSelector + component bindings -->
     <div class="step-content" :style="stepStyle">
       <PresetSelector
@@ -172,7 +220,7 @@ watch(
       />
       <component
         :is="currentComponent"
-        :session="session"
+        v-bind="currentComponentProps"
         @graph-built="onGraphBuilt"
         @simulation-created="onSimulationCreated"
         @simulation-complete="onSimulationComplete"
@@ -250,4 +298,18 @@ watch(
 .progress-seg.active { background: var(--accent); opacity: .5; }
 
 .step-content { flex: 1; display: flex; flex-direction: column; }
+
+.express-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: rgba(59, 130, 246, 0.12);
+  color: var(--accent-blue);
+  border: 1px solid var(--accent-blue);
+  border-radius: 20px;
+  padding: 0.2rem 0.8rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
 </style>
