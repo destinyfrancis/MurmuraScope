@@ -73,7 +73,7 @@ function goHome() {
   --accent-green:    var(--accent-success);
   --accent-orange:   var(--accent-warn);
   --accent-red:      var(--accent-danger);
-  --accent-cyan:     var(--accent);
+  --accent-cyan:     var(--accent-hover);
   --accent-purple:   #7C3AED;
   --accent-pink:     #EC4899;
   --accent-blue-light: var(--accent-subtle);
@@ -98,6 +98,11 @@ function goHome() {
   --duration-standard: 0.2s;
   --duration-medium: 0.3s;
   --duration-layout: 0.35s;
+
+  /* Legacy glow + glass tokens */
+  --shadow-glow-cyan: 0 4px 20px rgba(255, 107, 53, 0.25);
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-blur: 12px;
 }
 
 body {
@@ -141,8 +146,8 @@ textarea {
 }
 
 @keyframes pulse-subtle {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 212, 255, 0.4); }
-  70% { box-shadow: 0 0 0 8px rgba(0, 212, 255, 0); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(var(--accent-rgb), 0.4); }
+  70% { box-shadow: 0 0 0 8px rgba(var(--accent-rgb), 0); }
 }
 
 .status-pulse { animation: pulse-subtle 2s infinite; }
