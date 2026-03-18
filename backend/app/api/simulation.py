@@ -13,7 +13,7 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile
 
 from backend.app.models.request import (
     SimulationCreateRequest,
@@ -269,102 +269,160 @@ async def estimate_simulation_cost(req: dict) -> APIResponse:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+_QUICK_START_MAX_BYTES = 10 * 1024 * 1024  # 10 MB
+_QUICK_START_ALLOWED_EXTS = {".pdf", ".txt", ".md", ".markdown"}
+
+
+async def _run_quick_start(seed_text: str, scenario_question: str = "", preset: str = "fast") -> APIResponse:
+    """Shared business logic for both JSON and file-upload quick-start endpoints."""
+    from backend.app.services.zero_config import ZeroConfigService  # noqa: PLC0415
+    from backend.app.services.graph_builder import GraphBuilderService  # noqa: PLC0415
+
+    zc = ZeroConfigService()
+    config = await zc.prepare(seed_text)
+
+    graph_builder = GraphBuilderService()
+    graph_result = await graph_builder.build_graph(
+        session_id="quick",
+        scenario_type=config.domain_pack_id,
+        seed_text=seed_text,
+        hk_data={},
+    )
+    graph_id = graph_result.get("graph_id", "")
+
+    manager = SimulationManager()
+    session_data = await manager.create_session(
+        {
+            "name": f"Quick Start: {seed_text[:50]}",
+            "scenario_type": "property",
+            "seed_text": seed_text,
+            "agent_count": config.agent_count,
+            "round_count": config.round_count,
+            "graph_id": graph_id,
+            "domain_pack_id": config.domain_pack_id,
+            "platforms": {"facebook": True, "instagram": True},
+        },
+        csv_path=None,
+    )
+    session_id = session_data["session_id"]
+
+    demographics = None
+    try:
+        from backend.app.domain.base import DomainPackRegistry as _DPR  # noqa: PLC0415
+        pack = _DPR.get(config.domain_pack_id)
+        demographics = pack.demographics
+    except (KeyError, Exception):
+        pass
+
+    factory = AgentFactory(demographics=demographics)
+    profiles = factory.generate_population(config.agent_count, None)
+
+    macro = MacroController()
+    macro_state = await macro.get_baseline_for_scenario("property")
+
+    profile_gen = ProfileGenerator(agent_factory=factory)
+    csv_content = profile_gen.to_oasis_csv(profiles, macro_state)
+    session_dir = _PROJECT_ROOT / "data" / "sessions" / session_id
+    csv_path = str(session_dir / "agents.csv")
+    await asyncio.to_thread(Path(csv_path).write_text, csv_content, encoding="utf-8")
+
+    try:
+        await store_agent_profiles(session_id, profiles, profile_gen, macro_state)
+    except Exception:
+        logger.warning("Could not store agent profiles for quick-start session %s", session_id, exc_info=True)
+
+    try:
+        await store_activity_profiles(session_id, profiles, session_dir, factory)
+    except Exception:
+        logger.warning("Could not store activity profiles for quick-start session %s", session_id, exc_info=True)
+
+    asyncio.create_task(manager.start_session(session_id))
+
+    return APIResponse(
+        success=True,
+        data={
+            "session_id": session_id,
+            "graph_id": graph_id,
+            "status_url": f"/api/simulation/{session_id}/status",
+            "estimated_duration_seconds": config.estimated_duration_seconds,
+            "domain_pack_id": config.domain_pack_id,
+            "agent_count": config.agent_count,
+            "round_count": config.round_count,
+            "scenario_question": scenario_question,
+        },
+    )
+
+
 @router.post("/quick-start", response_model=APIResponse)
 async def quick_start(req: dict) -> APIResponse:
-    """One-click quick start: paste text and run simulation.
-
-    Input: ``{ "seed_text": "..." }``
-    Returns: session_id, status_url, estimated_duration_seconds, and
-    inferred configuration metadata.
-    """
-    from backend.app.services.zero_config import ZeroConfigService  # noqa: PLC0415
-
+    """One-click quick start: paste text and run simulation."""
     try:
         seed_text = (req.get("seed_text") or "").strip()
         if not seed_text:
             raise HTTPException(status_code=400, detail="seed_text is required")
-
-        zc = ZeroConfigService()
-        config = await zc.prepare(seed_text)
-
-        # --- Build graph --------------------------------------------------
-        from backend.app.services.graph_builder import GraphBuilderService  # noqa: PLC0415
-
-        graph_builder = GraphBuilderService()
-        graph_result = await graph_builder.build_graph(
-            session_id="quick",
-            scenario_type=config.domain_pack_id,
-            seed_text=seed_text,
-            hk_data={},
-        )
-        graph_id = graph_result.get("graph_id", "")
-
-        # --- Create session -----------------------------------------------
-        manager = SimulationManager()
-        session_data = await manager.create_session(
-            {
-                "name": f"Quick Start: {seed_text[:50]}",
-                "scenario_type": "property",
-                "seed_text": seed_text,
-                "agent_count": config.agent_count,
-                "round_count": config.round_count,
-                "graph_id": graph_id,
-                "domain_pack_id": config.domain_pack_id,
-                "platforms": {"facebook": True, "instagram": True},
-            },
-            csv_path=None,
-        )
-        session_id = session_data["session_id"]
-
-        # --- Generate + store agents + CSV --------------------------------
-        demographics = None
-        try:
-            from backend.app.domain.base import DomainPackRegistry as _DPR  # noqa: PLC0415
-            pack = _DPR.get(config.domain_pack_id)
-            demographics = pack.demographics
-        except (KeyError, Exception):
-            pass
-
-        factory = AgentFactory(demographics=demographics)
-        profiles = factory.generate_population(config.agent_count, None)
-
-        macro = MacroController()
-        macro_state = await macro.get_baseline_for_scenario("property")
-
-        profile_gen = ProfileGenerator(agent_factory=factory)
-        csv_content = profile_gen.to_oasis_csv(profiles, macro_state)
-        session_dir = _PROJECT_ROOT / "data" / "sessions" / session_id
-        csv_path = str(session_dir / "agents.csv")
-        await asyncio.to_thread(Path(csv_path).write_text, csv_content, encoding="utf-8")
-
-        try:
-            await store_agent_profiles(session_id, profiles, profile_gen, macro_state)
-        except Exception:
-            logger.warning("Could not store agent profiles for quick-start session %s", session_id, exc_info=True)
-
-        try:
-            await store_activity_profiles(session_id, profiles, session_dir, factory)
-        except Exception:
-            logger.warning("Could not store activity profiles for quick-start session %s", session_id, exc_info=True)
-
-        # --- Start simulation in background --------------------------------
-        asyncio.create_task(manager.start_session(session_id))
-
-        return APIResponse(
-            success=True,
-            data={
-                "session_id": session_id,
-                "status_url": f"/api/simulation/{session_id}/status",
-                "estimated_duration_seconds": config.estimated_duration_seconds,
-                "domain_pack_id": config.domain_pack_id,
-                "agent_count": config.agent_count,
-                "round_count": config.round_count,
-            },
-        )
+        scenario_question = (req.get("scenario_question") or "").strip()
+        preset = (req.get("preset") or "fast").strip()
+        return await _run_quick_start(seed_text, scenario_question, preset)
     except HTTPException:
         raise
     except Exception as exc:
         logger.exception("quick_start failed")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.post("/quick-start/upload", response_model=APIResponse)
+async def quick_start_upload(
+    file: UploadFile,
+    scenario_question: str = "",
+    preset: str = "fast",
+) -> APIResponse:
+    """Quick-start via file upload (PDF / TXT / Markdown, max 10 MB).
+
+    Extracts text then delegates to ``_run_quick_start()``.
+    """
+    import io as _io  # noqa: PLC0415
+
+    try:
+        content = await file.read()
+        if len(content) > _QUICK_START_MAX_BYTES:
+            raise HTTPException(status_code=400, detail="File exceeds 10 MB limit")
+
+        ext = Path(file.filename or "").suffix.lower()
+        if ext not in _QUICK_START_ALLOWED_EXTS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported file type '{ext}'. Allowed: PDF, TXT, Markdown",
+            )
+
+        if ext == ".pdf":
+            seed_text = ""
+            try:
+                import pypdf  # noqa: PLC0415
+                reader = pypdf.PdfReader(_io.BytesIO(content))
+                seed_text = "\n\n".join(p.extract_text() or "" for p in reader.pages).strip()
+            except ImportError:
+                try:
+                    import PyPDF2  # noqa: PLC0415, N813
+                    reader = PyPDF2.PdfReader(_io.BytesIO(content))
+                    seed_text = "\n\n".join(p.extract_text() or "" for p in reader.pages).strip()
+                except ImportError:
+                    raise HTTPException(
+                        status_code=422,
+                        detail="PDF library not installed. Please upload TXT or Markdown.",
+                    ) from None
+            except Exception as exc:
+                raise HTTPException(status_code=422, detail=f"PDF extraction failed: {exc}") from exc
+        else:
+            seed_text = content.decode("utf-8", errors="replace").strip()
+
+        if not seed_text:
+            raise HTTPException(status_code=422, detail="Could not extract text from file")
+
+        return await _run_quick_start(seed_text, scenario_question, preset)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("quick_start_upload failed")
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
