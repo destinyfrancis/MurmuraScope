@@ -48,10 +48,10 @@ defineProps({
 }
 
 .skel {
-  background: linear-gradient(90deg, #1a2332 25%, #2a3d52 50%, #1a2332 75%);
+  background: linear-gradient(90deg, #F0F0F0 25%, #E5E5E5 50%, #F0F0F0 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
-  border-radius: var(--radius-sm, 4px);
+  border-radius: var(--radius-sm, 2px);
 }
 
 .skel-title {
