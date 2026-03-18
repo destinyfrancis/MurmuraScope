@@ -44,6 +44,22 @@ const reactSteps = ref([])
 const reasoningOpen = ref(true)
 const collapsedSteps = ref(new Set())
 
+const startTime = ref(null)
+const elapsedLabel = ref('0s')
+let elapsedTimer = null
+
+function startElapsedTimer() {
+  startTime.value = Date.now()
+  elapsedTimer = setInterval(() => {
+    const sec = Math.round((Date.now() - startTime.value) / 1000)
+    elapsedLabel.value = sec < 60 ? `${sec}s` : `${Math.floor(sec/60)}m ${sec%60}s`
+  }, 1000)
+}
+
+const toolCallCount = computed(() =>
+  reactSteps.value.filter(s => s.step_type === 'Action').length
+)
+
 // Typewriter effect state
 const displayedReport = ref('')
 const isTyping = ref(false)
@@ -189,6 +205,7 @@ async function pollReportStatus(reportId) {
 }
 
 async function startGeneration() {
+  startElapsedTimer()
   generating.value = true
   error.value = null
   reactSteps.value = []
@@ -250,6 +267,7 @@ onUnmounted(() => {
     clearInterval(typewriterTimer)
     typewriterTimer = null
   }
+  if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
 })
 </script>
 
@@ -275,38 +293,69 @@ onUnmounted(() => {
           <div class="gen-progress-fill" />
         </div>
 
+        <!-- Stats bar -->
+        <div class="react-stats">
+          <span class="react-stat">
+            <span class="stat-value">{{ reactSteps.length }}</span>
+            <span class="stat-label">STEPS</span>
+          </span>
+          <span class="react-stat">
+            <span class="stat-value">{{ toolCallCount }}</span>
+            <span class="stat-label">TOOLS</span>
+          </span>
+          <span class="react-stat">
+            <span class="stat-value">{{ elapsedLabel }}</span>
+            <span class="stat-label">ELAPSED</span>
+          </span>
+          <span v-if="completed" class="react-stat stat-done">
+            <span class="stat-value">DONE</span>
+          </span>
+        </div>
+
         <div v-if="reasoningOpen" class="react-steps">
           <div
             v-for="(step, idx) in reactSteps"
             :key="idx"
-            class="react-step"
-            :class="stepClass(step.step_type)"
+            class="timeline-item"
+            :class="{ 'is-last': idx === reactSteps.length - 1 }"
           >
-            <div class="react-step-header" @click="toggleStep(idx)">
-              <span class="step-icon">{{ stepIcon(step.step_type) }}</span>
-              <span class="step-type-badge" :class="stepClass(step.step_type)">
-                {{ step.step_type }}
-              </span>
-              <span class="step-preview">
-                {{ collapsedSteps.has(idx) ? (step.content || '').slice(0, 60) + '...' : '' }}
-              </span>
-              <span class="step-time">{{ formatTimestamp(step.timestamp) }}</span>
-              <span class="step-toggle">{{ collapsedSteps.has(idx) ? '▶' : '▼' }}</span>
+            <div class="timeline-connector">
+              <div
+                class="timeline-dot"
+                :class="{
+                  'dot-thought': step.step_type === 'Thought',
+                  'dot-action': step.step_type === 'Action',
+                  'dot-observe': step.step_type === 'Observation',
+                  'dot-active': idx === reactSteps.length - 1 && generating,
+                }"
+              />
+              <div v-if="idx < reactSteps.length - 1" class="timeline-line" />
             </div>
-            <div v-if="!collapsedSteps.has(idx)" class="react-step-body">
-              {{ step.content }}
+            <div class="timeline-content" @click="toggleStep(idx)">
+              <div class="timeline-header">
+                <span class="step-type-badge" :class="stepClass(step.step_type)">
+                  {{ step.step_type }}
+                </span>
+                <span class="step-time">{{ formatTimestamp(step.timestamp) }}</span>
+              </div>
+              <div v-if="!collapsedSteps.has(idx)" class="timeline-body">
+                {{ step.content }}
+              </div>
             </div>
           </div>
 
-          <div v-if="generating" class="thinking-pulse">
-            <span class="dot-pulse" />
-            <span class="dot-pulse" style="animation-delay: 0.2s" />
-            <span class="dot-pulse" style="animation-delay: 0.4s" />
-            <span>思考中...</span>
-          </div>
-
-          <div v-if="!generating && reactSteps.length === 0" class="no-steps">
-            尚無推理步驟
+          <div v-if="generating" class="timeline-item">
+            <div class="timeline-connector">
+              <div class="timeline-dot dot-active dot-pulsing" />
+            </div>
+            <div class="timeline-content">
+              <div class="thinking-dots">
+                <span class="t-dot" />
+                <span class="t-dot" style="animation-delay: 0.2s" />
+                <span class="t-dot" style="animation-delay: 0.4s" />
+                <span>思考中...</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -439,132 +488,141 @@ onUnmounted(() => {
   100% { transform: translateX(350%); }
 }
 
+/* Stats bar */
+.react-stats {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.react-stat {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  background: #F5F5F5;
+  padding: 4px 12px;
+  border-radius: 20px;
+}
+.stat-value {
+  font-weight: 700;
+  color: var(--text-primary, #000);
+}
+.stat-label {
+  color: var(--text-muted, #999);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.stat-done .stat-value {
+  color: var(--accent-success, #10B981);
+}
+
+/* Timeline */
 .react-steps {
   flex: 1;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 8px;
 }
-
-.react-step {
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  border: 1px solid transparent;
+.timeline-item {
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  gap: 12px;
+  min-height: 0;
 }
-
-.react-step.step-thought {
-  border-color: rgba(217, 119, 6, 0.2);
-  background: rgba(217, 119, 6, 0.04);
+.timeline-connector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
-
-.react-step.step-action {
-  border-color: rgba(37, 99, 235, 0.2);
-  background: rgba(37, 99, 235, 0.04);
+.timeline-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #D1D5DB;
+  border: 2px solid var(--bg-card, #FFF);
+  flex-shrink: 0;
+  z-index: 1;
 }
-
-.react-step.step-observe {
-  border-color: rgba(5, 150, 105, 0.2);
-  background: rgba(5, 150, 105, 0.04);
+.dot-thought { background: #F59E0B; }
+.dot-action  { background: var(--text-primary, #000); }
+.dot-observe { background: var(--accent-success, #10B981); }
+.dot-active {
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.1);
 }
-
-.react-step-header {
+.dot-pulsing {
+  animation: dot-pulse 1.5s infinite;
+}
+@keyframes dot-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.1); }
+  50%      { box-shadow: 0 0 0 5px rgba(0, 0, 0, 0.05); }
+}
+.timeline-line {
+  width: 2px;
+  flex: 1;
+  background: #F3F4F6;
+  min-height: 8px;
+}
+.timeline-content {
+  padding: 4px 12px 16px;
+  cursor: pointer;
+  border-radius: var(--radius-md, 4px);
+  transition: background var(--duration-fast, 0.15s);
+}
+.timeline-content:hover {
+  background: #F9FAFB;
+}
+.timeline-header {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 8px 10px;
-  cursor: pointer;
-  user-select: none;
-  font-size: 13px;
+  gap: 8px;
+  margin-bottom: 6px;
 }
-
-.step-icon {
-  font-size: 14px;
-  flex-shrink: 0;
-}
-
 .step-type-badge {
   font-size: 10px;
   font-weight: 700;
-  padding: 2px 6px;
-  border-radius: 4px;
-  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 2px;
+  font-family: var(--font-mono);
   text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
-
-.step-type-badge.step-thought {
-  background: rgba(217, 119, 6, 0.1);
-  color: var(--accent-orange);
-}
-
-.step-type-badge.step-action {
-  background: var(--accent-blue-light);
-  color: var(--accent-blue);
-}
-
-.step-type-badge.step-observe {
-  background: rgba(5, 150, 105, 0.1);
-  color: var(--accent-green);
-}
-
-.step-preview {
-  flex: 1;
-  color: var(--text-muted);
-  font-size: 12px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
+.step-type-badge.step-thought { background: rgba(245,158,11,0.1); color: #D97706; }
+.step-type-badge.step-action  { background: rgba(0,0,0,0.06); color: #000; }
+.step-type-badge.step-observe { background: rgba(16,185,129,0.1); color: #059669; }
 .step-time {
   font-size: 11px;
-  color: var(--text-muted);
-  flex-shrink: 0;
+  font-family: var(--font-mono);
+  color: var(--text-quaternary, #9CA3AF);
 }
-
-.step-toggle {
-  font-size: 10px;
-  color: var(--text-muted);
-  flex-shrink: 0;
-}
-
-.react-step-body {
-  padding: 0 10px 10px 34px;
+.timeline-body {
   font-size: 13px;
-  color: var(--text-secondary);
+  color: var(--text-secondary, #666);
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
 }
-
-.thinking-pulse {
+.thinking-dots {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 10px;
-  color: var(--text-muted);
-  font-size: 13px;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-muted, #999);
+  padding: 4px 0;
 }
-
-.dot-pulse {
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  background: var(--accent-blue);
+.t-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--text-muted, #999);
   border-radius: 50%;
-  animation: pulse 1s ease-in-out infinite;
+  animation: typing-bounce 1.4s infinite ease-in-out;
 }
-
-@keyframes pulse {
-  0%, 100% { opacity: 0.3; transform: scale(0.8); }
-  50% { opacity: 1; transform: scale(1); }
-}
-
-.no-steps {
-  padding: 20px;
-  text-align: center;
-  color: var(--text-muted);
-  font-size: 13px;
+@keyframes typing-bounce {
+  0%, 100% { transform: translateY(0); }
+  30%      { transform: translateY(-8px); }
 }
 
 .report-panel-header {
