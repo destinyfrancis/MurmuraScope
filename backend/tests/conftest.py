@@ -3,12 +3,19 @@
 from __future__ import annotations
 
 import os
+import sys
+from pathlib import Path
 from typing import AsyncIterator
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiosqlite
 import pytest
 import pytest_asyncio
+
+# Ensure project root is in sys.path for imports like 'from backend.app...'
+_PROJECT_ROOT = Path(__file__).parent.parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
 
 
 # ---------------------------------------------------------------------------
