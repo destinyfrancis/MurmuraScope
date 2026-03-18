@@ -47,6 +47,18 @@ const session = reactive({
   },
 })
 
+const stepConfig = {
+  1: { leftWidth: 70 },
+  2: { leftWidth: 50 },
+  3: { leftWidth: 65 },
+  4: { leftWidth: 75 },
+  5: { leftWidth: 45 },
+}
+
+const stepStyle = computed(() => ({
+  '--left-width': `${stepConfig[currentStep.value]?.leftWidth ?? 60}%`,
+}))
+
 const currentComponent = computed(() => {
   const map = {
     1: Step1GraphBuild,
@@ -152,7 +164,7 @@ watch(
     </div>
 
     <!-- Step content — preserve existing PresetSelector + component bindings -->
-    <div class="step-content">
+    <div class="step-content" :style="stepStyle">
       <PresetSelector
         v-if="currentStep === 2"
         v-model="session.preset"
