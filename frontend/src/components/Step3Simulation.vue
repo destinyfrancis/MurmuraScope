@@ -593,10 +593,11 @@ const factionAgentColourMap = computed(() => {
   gap: 16px;
   min-height: 0;
   overflow: hidden;
+  padding-top: 8px;
 }
 
 .sim-left {
-  flex: 0 0 65%;
+  flex: 0 0 var(--left-width, 65%);
   min-width: 320px;
   display: flex;
   flex-direction: column;
