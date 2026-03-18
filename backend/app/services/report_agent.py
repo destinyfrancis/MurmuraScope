@@ -13,6 +13,9 @@ from uuid import uuid4
 
 from backend.app.config import get_settings
 from backend.app.services.report_agent_xai import (
+    get_agent_story_arcs as _get_agent_story_arcs,
+    get_platform_breakdown as _get_platform_breakdown,
+    get_topic_evolution as _get_topic_evolution,
     handle_decision_summary as _handle_decision_summary,
     handle_ensemble_forecast as _handle_ensemble_forecast,
     handle_macro_history as _handle_macro_history,
@@ -69,6 +72,15 @@ TOOLS: dict[str, str] = {
     ),
     "insight_forge": (
         "深度洞察查詢 — LLM拆解為子查詢，並行搜索memories/KG/actions，標記可引用原文"
+    ),
+    "get_topic_evolution": (
+        "追蹤議題在模擬輪次中的遷移（如：個案 → 程序正義 → 制度信任）"
+    ),
+    "get_platform_breakdown": (
+        "比較不同社交平台上Agent行為和情緒的差異"
+    ),
+    "get_agent_story_arcs": (
+        "追蹤代表性Agent的跨輪次立場演化故事（kg_driven only）"
     ),
 }
 
@@ -508,7 +520,12 @@ async def _handle_demographic_breakdown(
 async def _handle_interview_agents(
     session_id: str, params: dict[str, Any], ipc: SimulationIPC
 ) -> str:
-    """Interview sample agents about their decisions."""
+    """Interview sample agents about their decisions.
+
+    Enriches each agent's interview context with the latest deliberation
+    history (reasoning, topic_tags, emotional_reaction) from ``agent_decisions``
+    before delegating to the IPC interview call.
+    """
     question = params.get("question", "Why did you make these decisions?")
     agent_ids = params.get("agent_ids", [])
     sample_size = params.get("sample_size", 3)
@@ -527,8 +544,36 @@ async def _handle_interview_agents(
 
     responses: list[dict[str, Any]] = []
     for agent_id in agent_ids:
+        # Fetch deliberation context for richer interview prompt
+        delib_context = ""
         try:
-            answer = await ipc.interview_agent(session_id, agent_id, question)
+            async with get_db() as db:
+                delib_rows = await (
+                    await db.execute(
+                        """SELECT reasoning, topic_tags, emotional_reaction, round_number
+                           FROM agent_decisions
+                           WHERE session_id=? AND agent_id=?
+                           ORDER BY round_number DESC LIMIT 3""",
+                        (session_id, agent_id),
+                    )
+                ).fetchall()
+            if delib_rows:
+                latest = delib_rows[0]
+                delib_context = (
+                    f"\n[第{latest['round_number']}輪推理過程]："
+                    f"「{(latest['reasoning'] or '')[:200]}」"
+                    f"\n[情緒反應]：{latest['emotional_reaction'] or '未記錄'}"
+                    f"\n[議題標籤]：{latest['topic_tags'] or '[]'}"
+                )
+        except Exception:
+            logger.debug(
+                "Could not fetch deliberation context for agent %s", agent_id, exc_info=True
+            )
+
+        enriched_question = question + delib_context if delib_context else question
+
+        try:
+            answer = await ipc.interview_agent(session_id, agent_id, enriched_question)
             responses.append({"agent_id": agent_id, "response": answer})
         except Exception as exc:
             responses.append({"agent_id": agent_id, "error": str(exc)})
@@ -650,6 +695,45 @@ async def _handle_insight_forge(
     )
 
 
+async def _handle_get_topic_evolution(
+    session_id: str, params: dict[str, Any], _ipc: SimulationIPC
+) -> str:
+    """Trace topic migration across simulation rounds via KG edges."""
+    window_size = int(params.get("window_size", 5))
+    result = await _get_topic_evolution(session_id, window_size=window_size)
+    if not result.windows:
+        return "議題演化：（無 KG 邊緣數據）"
+    windows_desc = ", ".join(w.rounds for w in result.windows)
+    return (
+        f"議題演化：{result.migration_path}\n"
+        f"時間窗口：{windows_desc}"
+    )
+
+
+async def _handle_get_platform_breakdown(
+    session_id: str, params: dict[str, Any], _ipc: SimulationIPC
+) -> str:
+    """Compare agent behaviour and sentiment across social platforms."""
+    result = await _get_platform_breakdown(session_id)
+    if not result:
+        return "無平台行為數據。"
+    return json.dumps(result, indent=2, ensure_ascii=False)
+
+
+async def _handle_get_agent_story_arcs(
+    session_id: str, params: dict[str, Any], _ipc: SimulationIPC
+) -> str:
+    """Generate narrative story arcs for representative kg_driven agents."""
+    sim_mode = params.get("sim_mode", "kg_driven")
+    arcs = await _get_agent_story_arcs(session_id, sim_mode=sim_mode)
+    if not arcs:
+        return "無Agent故事弧數據（僅適用於 kg_driven 模式）。"
+    return "\n".join(
+        f"[{a['agent_type']}] {a['arc_summary']}"
+        for a in arcs
+    )
+
+
 _TOOL_HANDLERS: dict[str, Any] = {
     "query_graph": _handle_query_graph,
     "get_global_narrative": _handle_global_narrative,
@@ -664,6 +748,9 @@ _TOOL_HANDLERS: dict[str, Any] = {
     "get_macro_history": _handle_macro_history,
     "get_validation_summary": _handle_get_validation_summary,
     "insight_forge": _handle_insight_forge,
+    "get_topic_evolution": _handle_get_topic_evolution,
+    "get_platform_breakdown": _handle_get_platform_breakdown,
+    "get_agent_story_arcs": _handle_get_agent_story_arcs,
 }
 
 

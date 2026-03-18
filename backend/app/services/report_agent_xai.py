@@ -371,3 +371,259 @@ async def insight_forge(session_id: str, query: str) -> "InsightForgeResult":
         quotable_excerpts=tuple(quotable[:10]),
         source_agents=tuple(agents),
     )
+
+
+# ---------------------------------------------------------------------------
+# get_topic_evolution — KG-edge topic migration across rounds
+# ---------------------------------------------------------------------------
+
+
+async def get_topic_evolution(
+    session_id: str, window_size: int = 5
+) -> "TopicEvolutionResult":
+    """Analyse how dominant topics in KG edges shift across simulation rounds.
+
+    Divides the simulation into windows of ``window_size`` rounds and uses
+    Haiku to extract 2-4 dominant topic labels from the edge descriptions in
+    each window.  Falls back to empty topics when the LLM returns malformed
+    JSON.
+
+    Args:
+        session_id: UUID of the simulation session.
+        window_size: Number of rounds per topic window (default 5).
+
+    Returns:
+        :class:`~backend.app.models.report_models.TopicEvolutionResult` with
+        per-window ``TopicWindow`` objects and a ``migration_path`` summary.
+    """
+    from backend.app.models.report_models import TopicEvolutionResult, TopicWindow  # noqa: PLC0415
+
+    async with get_db() as db:
+        max_row = await (
+            await db.execute(
+                "SELECT MAX(round_number) as max_rn FROM kg_edges WHERE session_id=?",
+                (session_id,),
+            )
+        ).fetchone()
+    max_rn = (max_row["max_rn"] or 0) if max_row else 0
+
+    if max_rn == 0:
+        return TopicEvolutionResult(windows=(), migration_path="", inflection_round=None)
+
+    windows: list[TopicWindow] = []
+    llm = LLMClient()
+
+    for start in range(1, max_rn + 1, window_size):
+        end = min(start + window_size - 1, max_rn)
+        async with get_db() as db:
+            rows = await (
+                await db.execute(
+                    "SELECT description FROM kg_edges "
+                    "WHERE session_id=? AND round_number BETWEEN ? AND ? LIMIT 30",
+                    (session_id, start, end),
+                )
+            ).fetchall()
+
+        descriptions = [r["description"] for r in rows if r["description"]]
+        if not descriptions:
+            continue
+
+        prompt = (
+            "從以下描述中提取2-4個主要議題標籤（短詞）：\n"
+            + "\n".join(descriptions[:10])
+            + "\n只輸出JSON陣列：[\"議題1\",...]"
+        )
+        llm_response = await llm.chat(
+            [{"role": "user", "content": prompt}],
+            provider="anthropic",
+            model="claude-haiku-4-5-20251001",
+            max_tokens=128,
+        )
+        response_text = llm_response.content
+        match = _re.search(r"\[.*\]", response_text, _re.DOTALL)
+        topics: tuple[str, ...] = ()
+        if match:
+            try:
+                topics = tuple(_json.loads(match.group()))
+            except _json.JSONDecodeError:
+                pass
+
+        windows.append(
+            TopicWindow(
+                rounds=f"{start}-{end}",
+                dominant_topics=topics,
+                emerging=(),
+                fading=(),
+            )
+        )
+
+    topic_sequence = [w.dominant_topics[0] for w in windows if w.dominant_topics]
+    migration_path = " → ".join(dict.fromkeys(topic_sequence))
+
+    return TopicEvolutionResult(
+        windows=tuple(windows),
+        migration_path=migration_path,
+        inflection_round=None,
+    )
+
+
+# ---------------------------------------------------------------------------
+# get_platform_breakdown — per-platform action + sentiment stats
+# ---------------------------------------------------------------------------
+
+
+async def get_platform_breakdown(session_id: str) -> dict:
+    """Compare agent behaviour and sentiment across social platforms.
+
+    Queries all distinct platforms present in ``simulation_actions`` for the
+    session, then computes per-platform action counts and sentiment ratios.
+
+    Args:
+        session_id: UUID of the simulation session.
+
+    Returns:
+        Dict mapping platform name → ``{total_actions, sentiment, top_action_types}``.
+        Returns an empty dict when no actions exist.
+    """
+    from collections import Counter  # noqa: PLC0415
+
+    async with get_db() as db:
+        platform_rows = await (
+            await db.execute(
+                "SELECT DISTINCT platform FROM simulation_actions "
+                "WHERE session_id=? AND platform IS NOT NULL",
+                (session_id,),
+            )
+        ).fetchall()
+        platforms = [r["platform"] for r in platform_rows]
+
+        result: dict = {}
+        for platform in platforms:
+            rows = await (
+                await db.execute(
+                    "SELECT sentiment, action_type FROM simulation_actions "
+                    "WHERE session_id=? AND platform=? LIMIT 200",
+                    (session_id, platform),
+                )
+            ).fetchall()
+            total = len(rows)
+            if total == 0:
+                continue
+            sentiments = [r["sentiment"] for r in rows]
+            action_types = [r["action_type"] for r in rows]
+            sentiment_counts = Counter(sentiments)
+            action_counts = Counter(action_types)
+            result[platform] = {
+                "total_actions": total,
+                "sentiment": {k: round(v / total, 2) for k, v in sentiment_counts.items()},
+                "top_action_types": [t for t, _ in action_counts.most_common(3)],
+            }
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# get_agent_story_arcs — cross-round narrative arcs for kg_driven agents
+# ---------------------------------------------------------------------------
+
+
+async def get_agent_story_arcs(
+    session_id: str,
+    sim_mode: str = "kg_driven",
+    agents_per_type: int = 1,
+) -> list[dict]:
+    """Generate LLM narrative arcs for representative kg_driven agents.
+
+    Only applies to ``kg_driven`` mode — returns ``[]`` immediately for
+    ``hk_demographic`` sessions.  Selects up to one agent per cognitive
+    fingerprint type (capped at 10 agents total) and uses Haiku to summarise
+    each agent's stance evolution from their action timeline.
+
+    Args:
+        session_id: UUID of the simulation session.
+        sim_mode: ``"kg_driven"`` or ``"hk_demographic"``.
+        agents_per_type: Agents to select per type (default 1).
+
+    Returns:
+        List of arc dicts with ``agent_id``, ``agent_type``, ``arc_summary``,
+        ``key_turning_round``, ``stance_shift``, ``sentiment_trajectory``.
+        Empty list when ``sim_mode != "kg_driven"`` or no fingerprints exist.
+    """
+    if sim_mode != "kg_driven":
+        return []
+
+    async with get_db() as db:
+        rows = await (
+            await db.execute(
+                """SELECT cf.agent_id, cf.simulation_id,
+                          COUNT(sa.id) as action_count
+                   FROM cognitive_fingerprints cf
+                   LEFT JOIN simulation_actions sa
+                       ON sa.agent_id = cf.agent_id AND sa.session_id = ?
+                   WHERE cf.simulation_id = ?
+                   GROUP BY cf.agent_id, cf.simulation_id
+                   ORDER BY action_count DESC""",
+                (session_id, session_id),
+            )
+        ).fetchall()
+
+    if not rows:
+        return []
+
+    # Take up to 10 agents
+    selected = [dict(r) for r in rows[:10]]
+
+    llm = LLMClient()
+    arcs: list[dict] = []
+
+    for agent in selected:
+        agent_id = agent["agent_id"]
+        async with get_db() as db:
+            action_rows = await (
+                await db.execute(
+                    """SELECT round_number, content, sentiment
+                       FROM simulation_actions
+                       WHERE session_id=? AND agent_id=?
+                       ORDER BY round_number LIMIT 20""",
+                    (session_id, agent_id),
+                )
+            ).fetchall()
+
+        if not action_rows:
+            continue
+
+        timeline = "\n".join(
+            f"Round {r['round_number']}: {r['sentiment']} — {(r['content'] or '')[:80]}"
+            for r in action_rows
+        )
+        prompt = (
+            f"這個Agent的行為時間線：\n{timeline}\n\n"
+            "用2-3句話描述這個Agent的故事弧（立場如何隨時間演化）："
+        )
+        llm_response = await llm.chat(
+            [{"role": "user", "content": prompt}],
+            provider="anthropic",
+            model="claude-haiku-4-5-20251001",
+            max_tokens=256,
+        )
+        arc_summary = llm_response.content.strip()
+
+        sentiments = [r["sentiment"] for r in action_rows if r["sentiment"]]
+        sentiment_vals = [
+            1.0 if s == "positive" else (-1.0 if s == "negative" else 0.0)
+            for s in sentiments
+        ]
+
+        arcs.append({
+            "agent_id": agent_id,
+            "agent_type": agent.get("simulation_id", "unknown"),
+            "arc_summary": arc_summary,
+            "key_turning_round": action_rows[len(action_rows) // 2]["round_number"],
+            "stance_shift": (
+                f"{sentiments[0] if sentiments else '?'} → "
+                f"{sentiments[-1] if sentiments else '?'}"
+            ),
+            "sentiment_trajectory": sentiment_vals[:5],
+        })
+
+    return arcs

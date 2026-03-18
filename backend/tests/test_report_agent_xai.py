@@ -335,3 +335,281 @@ class TestInsightForgeRegistration:
             )
 
         assert "f1" in result or "e1" in result
+
+
+# ---------------------------------------------------------------------------
+# Task 10: New XAI tools — get_topic_evolution, get_platform_breakdown,
+#           get_agent_story_arcs
+# ---------------------------------------------------------------------------
+
+import os
+import aiosqlite
+import pytest_asyncio
+
+
+@pytest_asyncio.fixture()
+async def tmp_db(tmp_path):
+    """Temporary aiosqlite DB with full project schema, patched into get_db."""
+    db_path = str(tmp_path / "xai_test.db")
+    schema_path = os.path.join(
+        os.path.dirname(__file__), "..", "database", "schema.sql"
+    )
+    async with aiosqlite.connect(db_path) as db:
+        db.row_factory = aiosqlite.Row
+        with open(schema_path, encoding="utf-8") as f:
+            await db.executescript(f.read())
+        await db.commit()
+
+    from contextlib import asynccontextmanager
+
+    @asynccontextmanager
+    async def _patched_get_db():
+        async with aiosqlite.connect(db_path) as conn:
+            conn.row_factory = aiosqlite.Row
+            yield conn
+
+    with patch("backend.app.services.report_agent_xai.get_db", _patched_get_db):
+        yield db_path
+
+
+class TestGetTopicEvolution:
+    @pytest.mark.asyncio
+    async def test_returns_topic_evolution_result(self, tmp_db):
+        """get_topic_evolution returns a TopicEvolutionResult."""
+        from backend.app.models.report_models import TopicEvolutionResult
+        from backend.app.utils.llm_client import LLMResponse
+
+        async with aiosqlite.connect(tmp_db) as db:
+            db.row_factory = aiosqlite.Row
+            await db.execute(
+                "INSERT OR IGNORE INTO kg_nodes(id,session_id,entity_type,title) VALUES(?,?,?,?)",
+                ("n1", "sess1", "Person", "A"),
+            )
+            await db.execute(
+                "INSERT OR IGNORE INTO kg_nodes(id,session_id,entity_type,title) VALUES(?,?,?,?)",
+                ("n2", "sess1", "Organization", "B"),
+            )
+            for rn in range(1, 11):
+                await db.execute(
+                    "INSERT INTO kg_edges(session_id,source_id,target_id,relation_type,description,round_number) "
+                    "VALUES(?,?,?,?,?,?)",
+                    ("sess1", "n1", "n2", "RELATES_TO", f"round {rn} discussion topic", rn),
+                )
+            await db.commit()
+
+
+        mock_response = LLMResponse(
+            content='["議題A", "議題B"]',
+            model="claude-haiku-4-5-20251001",
+            usage={"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+            cost_usd=0.0,
+        )
+        with patch("backend.app.services.report_agent_xai.LLMClient") as MockLLM:
+            instance = MockLLM.return_value
+            instance.chat = AsyncMock(return_value=mock_response)
+            from backend.app.services.report_agent_xai import get_topic_evolution
+            result = await get_topic_evolution("sess1", window_size=5)
+
+        assert isinstance(result, TopicEvolutionResult)
+        assert len(result.windows) >= 1
+
+    @pytest.mark.asyncio
+    async def test_empty_session_returns_empty_windows(self, tmp_db):
+        """get_topic_evolution with no kg_edges returns empty windows."""
+        from backend.app.models.report_models import TopicEvolutionResult
+        from backend.app.services.report_agent_xai import get_topic_evolution
+
+        result = await get_topic_evolution("nonexistent_session")
+        assert isinstance(result, TopicEvolutionResult)
+        assert result.windows == ()
+
+    @pytest.mark.asyncio
+    async def test_migration_path_built_from_topics(self, tmp_db):
+        """migration_path joins dominant topics across windows."""
+        from backend.app.utils.llm_client import LLMResponse
+
+        async with aiosqlite.connect(tmp_db) as db:
+            db.row_factory = aiosqlite.Row
+            await db.execute(
+                "INSERT OR IGNORE INTO kg_nodes(id,session_id,entity_type,title) VALUES(?,?,?,?)",
+                ("n1", "sess2", "Person", "X"),
+            )
+            await db.execute(
+                "INSERT OR IGNORE INTO kg_nodes(id,session_id,entity_type,title) VALUES(?,?,?,?)",
+                ("n2", "sess2", "Organization", "Y"),
+            )
+            for rn in range(1, 6):
+                await db.execute(
+                    "INSERT INTO kg_edges(session_id,source_id,target_id,relation_type,description,round_number) "
+                    "VALUES(?,?,?,?,?,?)",
+                    ("sess2", "n1", "n2", "RELATES_TO", f"content {rn}", rn),
+                )
+            await db.commit()
+
+        mock_response = LLMResponse(
+            content='["程序正義"]',
+            model="claude-haiku-4-5-20251001",
+            usage={"prompt_tokens": 5, "completion_tokens": 3, "total_tokens": 8},
+            cost_usd=0.0,
+        )
+        with patch("backend.app.services.report_agent_xai.LLMClient") as MockLLM:
+            instance = MockLLM.return_value
+            instance.chat = AsyncMock(return_value=mock_response)
+            from backend.app.services.report_agent_xai import get_topic_evolution
+            result = await get_topic_evolution("sess2", window_size=5)
+
+        assert "程序正義" in result.migration_path
+
+
+class TestGetPlatformBreakdown:
+    @pytest.mark.asyncio
+    async def test_returns_dict_with_platforms(self, tmp_db):
+        """get_platform_breakdown returns dict keyed by platform."""
+        async with aiosqlite.connect(tmp_db) as db:
+            db.row_factory = aiosqlite.Row
+            for p in ["facebook", "instagram"]:
+                await db.execute(
+                    "INSERT INTO simulation_actions(session_id,agent_id,round_number,action_type,content,sentiment,oasis_username,platform) "
+                    "VALUES(?,?,?,?,?,?,?,?)",
+                    ("sess3", 1, 1, "post", f"{p} content", "positive", "user1", p),
+                )
+            await db.commit()
+
+        from backend.app.services.report_agent_xai import get_platform_breakdown
+        result = await get_platform_breakdown("sess3")
+        assert isinstance(result, dict)
+        assert "facebook" in result or "instagram" in result
+
+    @pytest.mark.asyncio
+    async def test_empty_session_returns_empty_dict(self, tmp_db):
+        """get_platform_breakdown with no actions returns {}."""
+        from backend.app.services.report_agent_xai import get_platform_breakdown
+        result = await get_platform_breakdown("no_such_session")
+        assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_breakdown_contains_expected_keys(self, tmp_db):
+        """Each platform entry has total_actions, sentiment, top_action_types."""
+        async with aiosqlite.connect(tmp_db) as db:
+            db.row_factory = aiosqlite.Row
+            for i in range(3):
+                await db.execute(
+                    "INSERT INTO simulation_actions(session_id,agent_id,round_number,action_type,content,sentiment,oasis_username,platform) "
+                    "VALUES(?,?,?,?,?,?,?,?)",
+                    ("sess4", i, 1, "post", "hello", "neutral", f"u{i}", "twitter"),
+                )
+            await db.commit()
+
+        from backend.app.services.report_agent_xai import get_platform_breakdown
+        result = await get_platform_breakdown("sess4")
+        assert "twitter" in result
+        entry = result["twitter"]
+        assert "total_actions" in entry
+        assert "sentiment" in entry
+        assert "top_action_types" in entry
+
+
+class TestGetAgentStoryArcs:
+    def test_hk_demographic_returns_empty_list(self):
+        """get_agent_story_arcs returns [] for hk_demographic mode."""
+        import asyncio
+        from backend.app.services.report_agent_xai import get_agent_story_arcs
+        result = asyncio.run(get_agent_story_arcs("any_session", sim_mode="hk_demographic"))
+        assert result == []
+
+    def test_returns_list(self):
+        """get_agent_story_arcs returns a list (may be empty if no fingerprints)."""
+        import asyncio
+        from backend.app.services.report_agent_xai import get_agent_story_arcs
+
+        with patch("backend.app.services.report_agent_xai.get_db") as mock_get_db:
+            from contextlib import asynccontextmanager
+            mock_conn = AsyncMock()
+            mock_conn.row_factory = None
+            mock_cursor = AsyncMock()
+            mock_cursor.fetchall = AsyncMock(return_value=[])
+
+            @asynccontextmanager
+            async def _fake_db():
+                mock_conn.execute = AsyncMock(return_value=mock_cursor)
+                yield mock_conn
+
+            mock_get_db.side_effect = _fake_db
+            result = asyncio.run(get_agent_story_arcs("sess5", sim_mode="kg_driven"))
+
+        assert isinstance(result, list)
+
+
+class TestNewToolsRegistration:
+    def test_get_topic_evolution_in_tools(self):
+        """get_topic_evolution is registered in TOOLS dict."""
+        from backend.app.services.report_agent import TOOLS
+        assert "get_topic_evolution" in TOOLS
+
+    def test_get_platform_breakdown_in_tools(self):
+        """get_platform_breakdown is registered in TOOLS dict."""
+        from backend.app.services.report_agent import TOOLS
+        assert "get_platform_breakdown" in TOOLS
+
+    def test_get_agent_story_arcs_in_tools(self):
+        """get_agent_story_arcs is registered in TOOLS dict."""
+        from backend.app.services.report_agent import TOOLS
+        assert "get_agent_story_arcs" in TOOLS
+
+    def test_get_topic_evolution_handler_registered(self):
+        """get_topic_evolution has a handler in _TOOL_HANDLERS."""
+        from backend.app.services.report_agent import _TOOL_HANDLERS
+        assert "get_topic_evolution" in _TOOL_HANDLERS
+
+    def test_get_platform_breakdown_handler_registered(self):
+        """get_platform_breakdown has a handler in _TOOL_HANDLERS."""
+        from backend.app.services.report_agent import _TOOL_HANDLERS
+        assert "get_platform_breakdown" in _TOOL_HANDLERS
+
+    def test_get_agent_story_arcs_handler_registered(self):
+        """get_agent_story_arcs has a handler in _TOOL_HANDLERS."""
+        from backend.app.services.report_agent import _TOOL_HANDLERS
+        assert "get_agent_story_arcs" in _TOOL_HANDLERS
+
+
+class TestInterviewAgentsDeliberationUpgrade:
+    @pytest.mark.asyncio
+    async def test_interview_agents_queries_agent_decisions(self, tmp_db):
+        """_handle_interview_agents fetches deliberation context from agent_decisions."""
+        async with aiosqlite.connect(tmp_db) as db:
+            db.row_factory = aiosqlite.Row
+            # Only insert agent_decisions — no FK enforcement on session_id/agent_id
+            await db.execute(
+                "INSERT INTO agent_decisions(session_id,agent_id,round_number,decision_type,action,reasoning,confidence,topic_tags,emotional_reaction) "
+                "VALUES(?,?,?,?,?,?,?,?,?)",
+                ("sess_iv", 1, 1, "emigrate", "stay", "I decided to stay because...", 0.8, '["程序正義"]', "感到不安"),
+            )
+            await db.commit()
+
+        from unittest.mock import MagicMock
+        from backend.app.services.simulation_ipc import SimulationIPC
+
+        mock_ipc = MagicMock(spec=SimulationIPC)
+        mock_ipc.interview_agent = AsyncMock(return_value="I am concerned about the future.")
+
+        with patch("backend.app.services.report_agent.get_db") as mock_get_db:
+            from contextlib import asynccontextmanager
+            import aiosqlite as _aiosqlite
+
+            @asynccontextmanager
+            async def _patched():
+                async with _aiosqlite.connect(tmp_db) as conn:
+                    conn.row_factory = _aiosqlite.Row
+                    yield conn
+
+            mock_get_db.side_effect = _patched
+
+            from backend.app.services.report_agent import _handle_interview_agents
+            result = await _handle_interview_agents(
+                "sess_iv", {"agent_ids": [1], "question": "What do you think?"}, mock_ipc
+            )
+
+        import json as _json
+        parsed = _json.loads(result)
+        assert len(parsed) == 1
+        assert parsed[0]["agent_id"] == 1
