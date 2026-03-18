@@ -57,10 +57,6 @@ export function getSessionActions(sessionId, params = {}) {
   return api.get(`/simulation/${sessionId}/actions`, { params })
 }
 
-export function getSimulationActions(sessionId, limit = 500) {
-  return api.get(`/simulation/${sessionId}/actions`, { params: { limit } })
-}
-
 export function getSentimentSummary(sessionId) {
   return api.get(`/simulation/${sessionId}/actions/sentiment`)
 }

@@ -16,7 +16,10 @@ async function loadFactions() {
     const res = await getEchoChambers(props.sessionId)
     const data = res.data?.data || res.data || []
     echoData.value = (Array.isArray(data) ? data : data.communities || []).slice(0, 4)
-  } catch { echoData.value = [] }
+  } catch (err) {
+    console.warn('[FactionColumns] Failed to load echo chamber data:', err)
+    echoData.value = []
+  }
 }
 
 watch(() => props.sessionId, (id) => { if (id) loadFactions() }, { immediate: true })

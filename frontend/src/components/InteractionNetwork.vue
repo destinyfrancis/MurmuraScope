@@ -1,13 +1,12 @@
 <script setup>
 import { ref, watch, onUnmounted, nextTick } from 'vue'
 import * as d3 from 'd3'
+import { getSessionActions } from '../api/simulation.js'
 
 const props = defineProps({
   sessionId: { type: String, default: '' },
   factionColours: { type: Object, default: () => ({}) },
 })
-
-let getSimulationActions = null
 
 const svgRef = ref(null)
 const hasEdges = ref(true)
@@ -27,11 +26,7 @@ async function loadData() {
   teardown()  // Clean up previous render before starting new one
   loading.value = true
   try {
-    if (!getSimulationActions) {
-      const mod = await import('../api/simulation.js')
-      getSimulationActions = mod.getSimulationActions
-    }
-    const res = await getSimulationActions(props.sessionId, 500)
+    const res = await getSessionActions(props.sessionId, { limit: 500 })
     const actions = res.data?.data || []
 
     const agentPostCount = {}
