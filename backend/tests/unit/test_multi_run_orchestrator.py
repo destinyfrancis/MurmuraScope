@@ -50,3 +50,11 @@ class TestWilsonCI:
         lo, hi = ci["a"]
         assert lo == 0.0
         assert hi == 1.0
+
+    def test_wilson_all_outcomes_in_one(self):
+        """At p=1.0, Wilson gives asymmetric interval [~0.88, 1.0], not degenerate [1,1]."""
+        from backend.app.services.multi_run_orchestrator import _compute_confidence_intervals
+        ci = _compute_confidence_intervals({"all": 30}, 30)
+        lo, hi = ci["all"]
+        assert 0.88 < lo < 1.0, f"Wilson lower at p=1, n=30 should be ~0.884, got {lo:.4f}"
+        assert hi == 1.0
