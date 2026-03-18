@@ -89,7 +89,7 @@ class ForecastAccuracy:
     """Forecast accuracy metrics for a single indicator."""
 
     metric: str
-    mape: float
+    mape: float  # MAPE percentage [0-100] for backtest reports (differs from ForecastResult.fit_quality which is [0-1])
     rmse: float
     theils_u: float
     n_observations: int
@@ -382,6 +382,9 @@ def validate_forecast_accuracy(
     a = np.array(actuals[:n], dtype=np.float64)
     p = np.array(predictions[:n], dtype=np.float64)
 
+    # NOTE: ForecastAccuracy.mape is intentionally kept in 0-100 percentage scale
+    # for backtest report display. This differs from ForecastResult.fit_quality["mape"]
+    # which is 0-1 fraction (used internally by TimeSeriesForecaster).
     # MAPE — skip zeros in actuals to avoid division by zero
     nonzero_mask = a != 0.0
     if nonzero_mask.any():

@@ -67,7 +67,7 @@ class ForecastResult:
     horizon: int
     points: list[ForecastPoint]
     model_used: str  # "AutoARIMA" or "naive"
-    fit_quality: float  # MAPE (%) for AutoARIMA, or 0.0 for naive
+    fit_quality: float  # MAPE fraction [0-1] for AutoARIMA, or 0.0 for naive
     data_quality: str = "real_data"  # "real_data" | "partial_real" | "insufficient" | "no_data"
     diagnostics: dict = field(default_factory=dict)
 
