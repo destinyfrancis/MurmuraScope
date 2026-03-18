@@ -93,9 +93,9 @@ async def apply_migrations() -> None:
             try:
                 await db.execute(sql)
                 await db.commit()
-            except Exception:
-                # Column already exists — safe to ignore
-                pass
+            except Exception as exc:
+                if "duplicate column name" not in str(exc).lower():
+                    logger.warning("Migration skipped with unexpected error: %s — sql: %s", exc, sql)
         for sql in index_migrations:
             await db.execute(sql)
             await db.commit()

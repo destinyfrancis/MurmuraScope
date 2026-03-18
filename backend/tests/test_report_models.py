@@ -1,4 +1,5 @@
 # backend/tests/test_report_models.py
+import dataclasses
 import pytest
 from backend.app.models.report_models import (
     InsightForgeResult, AgentArc, TopicWindow, TopicEvolutionResult
@@ -9,7 +10,7 @@ def test_insight_forge_result_is_frozen():
         query="test", sub_queries=("a", "b"),
         facts=("fact1",), quotable_excerpts=("quote1",), source_agents=("agent1",)
     )
-    with pytest.raises(Exception):
+    with pytest.raises(dataclasses.FrozenInstanceError):
         r.query = "changed"  # type: ignore
 
 def test_agent_arc_is_frozen():
@@ -20,7 +21,7 @@ def test_agent_arc_is_frozen():
         sentiment_trajectory=(0.2, 0.4, 0.6),
     )
     assert arc.key_turning_round == 8
-    with pytest.raises(Exception):
+    with pytest.raises(dataclasses.FrozenInstanceError):
         arc.name = "changed"  # type: ignore
 
 def test_topic_window_tuples():
