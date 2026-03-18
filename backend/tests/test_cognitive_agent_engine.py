@@ -71,3 +71,66 @@ async def test_deliberate_filters_unknown_metrics():
             active_metrics=("escalation_index",),
         )
     assert "unknown_metric" not in result.belief_updates
+
+
+# ---------------------------------------------------------------------------
+# NEW FIELD TESTS for DeliberationResult (Task 2)
+# ---------------------------------------------------------------------------
+
+def test_deliberation_result_new_fields_have_defaults():
+    """New fields topic_tags and emotional_reaction default to empty values."""
+    r = DeliberationResult(
+        agent_id="a1",
+        decision="emigrate",
+        reasoning="...",
+        belief_updates={},
+        stance_statement="...",
+    )
+    assert r.topic_tags == ()
+    assert r.emotional_reaction == ""
+
+
+def test_deliberation_result_is_frozen_with_new_fields():
+    """New fields are frozen — mutations raise FrozenInstanceError."""
+    import dataclasses
+    r = DeliberationResult(
+        agent_id="a1",
+        decision="stay",
+        reasoning="...",
+        belief_updates={},
+        stance_statement="...",
+        topic_tags=("程序正義", "信息透明"),
+        emotional_reaction="憤怒，感到不公平",
+    )
+    assert r.topic_tags == ("程序正義", "信息透明")
+    assert r.emotional_reaction == "憤怒，感到不公平"
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        r.emotional_reaction = "changed"  # type: ignore
+
+
+def test_deliberation_result_topic_tags_is_tuple():
+    """topic_tags must be a tuple (not list) for immutability."""
+    r = DeliberationResult(
+        agent_id="a1",
+        decision="negotiate",
+        reasoning="...",
+        belief_updates={},
+        stance_statement="...",
+        topic_tags=("主權", "談判"),
+    )
+    assert isinstance(r.topic_tags, tuple)
+    assert len(r.topic_tags) == 2
+
+
+def test_deliberation_result_new_fields_backward_compat():
+    """Existing callers that omit new fields still get valid objects."""
+    r = DeliberationResult(
+        agent_id="a2",
+        decision="observe",
+        reasoning="Watching events unfold.",
+        belief_updates={"metric_a": 0.1},
+        stance_statement="We wait and see.",
+    )
+    # new fields must not raise — just return defaults
+    assert r.topic_tags == ()
+    assert r.emotional_reaction == ""

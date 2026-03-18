@@ -62,6 +62,23 @@ class UniversalAgentProfile:
     """Back-reference to the originating KG node ID."""
 
     # ------------------------------------------------------------------
+    # Voice / communication style fields (Task 2 — report quality upgrade)
+    # All have defaults for backward compatibility with existing callers.
+    # ------------------------------------------------------------------
+
+    communication_style: str = ""
+    """Voice/style descriptor — e.g. 'casual_gen_z', 'formal_academic', 'strategic_institutional'.
+    Used in OASIS persona and report interview prompts."""
+
+    vocabulary_hints: tuple[str, ...] = ()
+    """Domain-specific vocabulary this agent uses naturally.
+    e.g. ('程序正義', '申訴機制') for legal expert, ('遊戲比喻', 'Z世代語言') for student."""
+
+    platform_persona: str = ""
+    """How this agent behaves differently across platforms.
+    e.g. 'Facebook: 長文理性分析; Instagram: 短句情緒化+標籤'"""
+
+    # ------------------------------------------------------------------
     # Big Five personality traits (OASIS emotional engine compatibility)
     # Default 0.5 = neutral / average population baseline
     # ------------------------------------------------------------------

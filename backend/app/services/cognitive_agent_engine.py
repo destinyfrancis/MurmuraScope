@@ -52,6 +52,10 @@ class DeliberationResult:
     reasoning: str
     belief_updates: dict[str, float]  # keys = subset of active_metrics
     stance_statement: str
+    topic_tags: tuple[str, ...] = ()
+    """Topics this deliberation touches — used for topic evolution analysis."""
+    emotional_reaction: str = ""
+    """Brief emotional state during this deliberation — used for report interviews."""
 
 
 class CognitiveAgentEngine:
