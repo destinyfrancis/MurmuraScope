@@ -311,7 +311,9 @@ class SimulationManager:
                           openness, conscientiousness, extraversion,
                           agreeableness, neuroticism,
                           monthly_income, savings,
-                          oasis_username, oasis_persona
+                          oasis_username, oasis_persona,
+                          COALESCE(political_stance, 0.5) AS political_stance,
+                          COALESCE(tier, 2) AS tier
                    FROM agent_profiles
                    WHERE session_id = ?
                    ORDER BY id""",

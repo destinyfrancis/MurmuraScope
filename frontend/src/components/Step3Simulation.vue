@@ -17,6 +17,7 @@ import ViralityTree from './ViralityTree.vue'
 import FilterBubbleChart from './FilterBubbleChart.vue'
 import StatsRow          from './sim/StatsRow.vue'
 import TippingPointStrip from './sim/TippingPointStrip.vue'
+import MacroPulseBar from './MacroPulseBar.vue'
 
 const props = defineProps({
   session: { type: Object, required: true },
@@ -42,6 +43,7 @@ const graphEdges = ref([])
 const highlightedNodes = ref([])
 const posts = ref([])
 const logs = ref([])
+const latestProgress = ref(null)
 
 // God Mode shock banner
 const shockBanner = ref(null)
@@ -97,6 +99,10 @@ function handleWsMessage(event) {
 
     switch (msg.type) {
       case 'progress':
+        // Throttle MacroPulseBar refresh to every 5 rounds — macro data only updates every 5 rounds
+        if (d.round && d.round % 5 === 0) {
+          latestProgress.value = msg.data
+        }
         if (d.round && d.round > currentRound.value) {
           currentRound.value = d.round
           addLog(`第 ${d.round}/${d.total || totalRounds.value} 回合完成 — ${d.detail || ''}`)
@@ -479,6 +485,52 @@ const factionAgentColourMap = computed(() => {
 
     <div class="sim-body">
       <div class="sim-left">
+        <StatsRow
+          :agent-count="sessionAgents.length"
+          :current-round="currentRound"
+          :total-rounds="totalRounds"
+          :faction-count="factionCount"
+          :tipping-count="tippingCount"
+        />
+
+        <SimulationTabs
+          :active-tab="activeTab"
+          :posts="posts"
+          :followed-agent="followedAgent"
+          :session-agents="sessionAgents"
+          :session-id="props.session.sessionId"
+          :faction-snapshots="factionSnapshots"
+          :tipping-points="tippingPoints"
+          :world-events="worldEvents"
+          :sim-completed="simCompleted"
+          :faction-colours="factionAgentColourMap"
+          @update:active-tab="activeTab = $event"
+          @select-agent="selectAgentFromTab"
+          @clear-follow="followedAgent = null"
+        >
+          <template #network>
+            <NetworkTimeline :session-id="session.sessionId" :current-round="currentRound" />
+          </template>
+          <template #emotion>
+            <EmotionalHeatmap :session-id="session.sessionId" />
+          </template>
+        </SimulationTabs>
+
+        <TippingPointStrip
+          :tipping-point="tippingPoints[tippingPoints.length - 1] ?? null"
+        />
+
+        <div v-if="completed" class="post-sim-panels">
+          <ViralityTree :session-id="session.sessionId" />
+          <FilterBubbleChart :session-id="session.sessionId" />
+        </div>
+
+        <div class="monitor-area">
+          <SimMonitor :logs="logs" />
+        </div>
+      </div>
+
+      <div class="sim-right">
         <div class="graph-container" @drop="handleShockDrop" @dragover.prevent>
           <Transition name="banner-fade">
             <div v-if="shockBanner?.visible" class="shock-banner">
@@ -521,54 +573,12 @@ const factionAgentColourMap = computed(() => {
           @close="showMiniCogmap = false"
         />
       </div>
-
-      <div class="sim-right">
-        <StatsRow
-          :agent-count="sessionAgents.length"
-          :current-round="currentRound"
-          :total-rounds="totalRounds"
-          :faction-count="factionCount"
-          :tipping-count="tippingCount"
-        />
-
-        <SimulationTabs
-          :active-tab="activeTab"
-          :posts="posts"
-          :followed-agent="followedAgent"
-          :session-agents="sessionAgents"
-          :session-id="props.session.sessionId"
-          :faction-snapshots="factionSnapshots"
-          :tipping-points="tippingPoints"
-          :world-events="worldEvents"
-          :sim-completed="simCompleted"
-          :faction-colours="factionAgentColourMap"
-          @update:active-tab="activeTab = $event"
-          @select-agent="selectAgentFromTab"
-          @clear-follow="followedAgent = null"
-        >
-          <template #network>
-            <NetworkTimeline :session-id="session.sessionId" :current-round="currentRound" />
-          </template>
-          <template #emotion>
-            <EmotionalHeatmap :session-id="session.sessionId" />
-          </template>
-        </SimulationTabs>
-
-        <TippingPointStrip
-          :tipping-point="tippingPoints[tippingPoints.length - 1] ?? null"
-        />
-
-        <!-- Virality + Filter Bubble below tabs -->
-        <div v-if="completed" class="post-sim-panels">
-          <ViralityTree :session-id="session.sessionId" />
-          <FilterBubbleChart :session-id="session.sessionId" />
-        </div>
-
-        <div class="monitor-area">
-          <SimMonitor :logs="logs" />
-        </div>
-      </div>
     </div>
+
+    <MacroPulseBar
+      :session-id="session.sessionId"
+      :latest-progress="latestProgress"
+    />
 
     <GodModePanel v-if="running" @inject-shock="handleGodPanelShock" />
 
@@ -583,21 +593,23 @@ const factionAgentColourMap = computed(() => {
 .step3 {
   display: flex;
   flex-direction: column;
-  gap: 12px;
   height: calc(100vh - 120px);
-  overflow: hidden;
+  min-height: 0;
 }
 
 .sim-body {
   flex: 1;
-  display: grid;
-  grid-template-columns: 1.2fr 1fr;
+  display: flex;
+  flex-direction: row;
   gap: 16px;
   min-height: 0;
   overflow: hidden;
+  padding-top: 8px;
 }
 
 .sim-left {
+  flex: 0 0 var(--left-width, 65%);
+  min-width: 320px;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -638,6 +650,8 @@ const factionAgentColourMap = computed(() => {
 }
 
 .sim-right {
+  flex: 1;
+  min-width: 240px;
   display: flex;
   flex-direction: column;
   gap: 10px;
