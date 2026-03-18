@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 from backend.app.utils.db import get_db
 from backend.app.utils.llm_client import LLMClient
 from backend.app.utils.logger import get_logger
+from backend.app.utils.prompt_security import sanitize_scenario_description
 
 if TYPE_CHECKING:
     from backend.app.models.universal_agent_profile import UniversalAgentProfile
@@ -288,9 +289,14 @@ class UniversalDecisionEngine:
         agents_payload = [_agent_to_prompt_dict(a) for a in agents]
         metrics_payload = {k: round(v, 4) for k, v in current_metrics.items()}
 
+        safe_recent_events = (
+            sanitize_scenario_description(recent_events)
+            if recent_events
+            else "No notable recent events."
+        )
         user_content = UNIVERSAL_DELIBERATION_USER.format(
             metrics_json=json.dumps(metrics_payload, ensure_ascii=False, indent=2),
-            recent_events=recent_events or "No notable recent events.",
+            recent_events=safe_recent_events,
             decision_type_json=json.dumps(dt_payload, ensure_ascii=False, indent=2),
             agents_json=json.dumps(agents_payload, ensure_ascii=False, indent=2),
             agent_count=len(agents),

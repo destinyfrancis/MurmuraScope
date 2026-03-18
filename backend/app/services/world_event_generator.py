@@ -8,6 +8,7 @@ from typing import Any
 from backend.app.models.world_event import WorldEvent
 from backend.app.utils.llm_client import LLMClient
 from backend.app.utils.logger import get_logger
+from backend.app.utils.prompt_security import sanitize_scenario_description
 from backend.prompts.world_event_prompts import WORLD_EVENT_SYSTEM, WORLD_EVENT_USER
 
 logger = get_logger(__name__)
@@ -45,8 +46,9 @@ class WorldEventGenerator:
             List of WorldEvent instances. Empty list on LLM failure (never raises).
         """
         history_summary = event_history[-10:] if event_history else []
+        safe_scenario = sanitize_scenario_description(scenario_description)
         user_content = WORLD_EVENT_USER.format(
-            scenario_description=scenario_description[:400],
+            scenario_description=safe_scenario,
             round_number=round_number,
             active_metrics=list(active_metrics),
             prev_dominant_stance=prev_dominant_stance,
