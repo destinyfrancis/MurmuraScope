@@ -12,6 +12,7 @@ Called from:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from dataclasses import dataclass
@@ -567,7 +568,8 @@ class MemoryInitializationService:
                 logger.debug("LanceDB table %s not found, falling back to SQL", table_name)
                 return await self._sql_fetch_world_context(graph_id, context_types)
 
-            query_vec = EmbeddingProvider.embed_single(query)  # sync — no await
+            _provider = EmbeddingProvider()
+            query_vec = await asyncio.to_thread(_provider.embed_single, query)
             tbl = db.open_table(table_name)
             results = tbl.search(query_vec).limit(_MAX_WORLD_CONTEXT_ROWS).to_list()
 
@@ -612,9 +614,12 @@ class MemoryInitializationService:
             db = lancedb.connect(self._lancedb_path)
             table_name = f"{_LANCE_TABLE_PREFIX}{graph_id[:12]}"
 
+            _provider = EmbeddingProvider()
+            texts = [entry["content"] for entry in entries]
+            vectors = await asyncio.to_thread(_provider.embed, texts)
+
             rows = []
-            for entry in entries:
-                vec = EmbeddingProvider.embed_single(entry["content"])  # sync
+            for entry, vec in zip(entries, vectors):
                 rows.append({
                     "id": f"swc_{graph_id[:8]}_{entry['db_id']}",
                     "graph_id": graph_id,
