@@ -140,6 +140,34 @@ class UniversalImpactRule:
 
 
 # ---------------------------------------------------------------------------
+# Implied actors (Option B — ScenarioGenerator discovery)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ImpliedActor:
+    """An actor identified by ScenarioGenerator as relevant but not in the KG.
+
+    Attributes:
+        id: URL-safe slug.
+        name: Human-readable name in seed text's language.
+        entity_type: Actor category (Country, Organization, etc.)
+        role: One sentence describing their role in the scenario.
+        relevance_reason: Why they are critically relevant.
+    """
+
+    id: str
+    name: str
+    entity_type: str
+    role: str
+    relevance_reason: str
+
+    def __post_init__(self) -> None:
+        if not self.id:
+            raise ValueError("ImpliedActor.id must not be empty")
+
+
+# ---------------------------------------------------------------------------
 # Top-level scenario config
 # ---------------------------------------------------------------------------
 
@@ -166,6 +194,8 @@ class UniversalScenarioConfig:
         impact_rules: How decisions map to metric changes.
         time_scale: Semantic label for simulation rounds, e.g. ``"days"``.
         language_hint: Preferred output language code, e.g. ``"zh-HK"``.
+        implied_actors: Actors identified by ScenarioGenerator as critically
+            relevant but absent from the KG. Informational audit trail.
     """
 
     scenario_id: str
@@ -179,6 +209,7 @@ class UniversalScenarioConfig:
 
     time_scale: str = "rounds"
     language_hint: str = "auto"
+    implied_actors: tuple[ImpliedActor, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.decision_types:

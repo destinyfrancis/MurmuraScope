@@ -763,3 +763,54 @@ class TestScenarioPromptsDomainAgnostic:
             "{agent_summaries_json}",
         ):
             assert placeholder in SCENARIO_GENERATION_USER
+
+
+# ===========================================================================
+# Model: ImpliedActor
+# ===========================================================================
+
+
+def test_implied_actor_is_frozen():
+    from backend.app.models.universal_scenario import ImpliedActor
+    actor = ImpliedActor(
+        id="eu", name="歐盟", entity_type="Organization",
+        role="energy policy", relevance_reason="gas supply cut",
+    )
+    with pytest.raises((dataclasses.FrozenInstanceError, AttributeError)):
+        actor.id = "other"  # type: ignore[misc]
+
+
+def test_universal_scenario_config_has_implied_actors_field():
+    from backend.app.models.universal_scenario import (
+        ImpliedActor, UniversalScenarioConfig,
+        UniversalDecisionType, UniversalMetric,
+        UniversalShockType, UniversalImpactRule,
+    )
+    actor = ImpliedActor(
+        id="eu", name="歐盟", entity_type="Organization",
+        role="energy policy", relevance_reason="gas supply cut",
+    )
+    config = UniversalScenarioConfig(
+        scenario_id="test",
+        scenario_name="test",
+        scenario_description="test",
+        decision_types=(UniversalDecisionType(**_MINIMAL_DECISION),),
+        metrics=(UniversalMetric(**_MINIMAL_METRIC),),
+        shock_types=(UniversalShockType(**_MINIMAL_SHOCK),),
+        impact_rules=(UniversalImpactRule(**_MINIMAL_RULE),),
+        implied_actors=(actor,),
+    )
+    assert len(config.implied_actors) == 1
+    assert config.implied_actors[0].id == "eu"
+
+
+def test_universal_scenario_config_implied_actors_defaults_empty():
+    from backend.app.models.universal_scenario import UniversalScenarioConfig, UniversalDecisionType, UniversalMetric, UniversalShockType, UniversalImpactRule
+    config = UniversalScenarioConfig(
+        scenario_id="x", scenario_name="x", scenario_description="x",
+        decision_types=(UniversalDecisionType(**_MINIMAL_DECISION),),
+        metrics=(UniversalMetric(**_MINIMAL_METRIC),),
+        shock_types=(UniversalShockType(**_MINIMAL_SHOCK),),
+        impact_rules=(UniversalImpactRule(**_MINIMAL_RULE),),
+    )
+    assert config.implied_actors == ()
