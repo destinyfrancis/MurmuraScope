@@ -316,7 +316,7 @@ class KGGraphUpdater:
         nodes_added, nodes_updated = await self._persist_nodes(
             session_id, all_new_nodes, existing_nodes
         )
-        edges_added = await self._persist_new_edges(session_id, all_new_edges)
+        edges_added = await self._persist_new_edges(session_id, all_new_edges, round_number=round_number)
         edges_updated = await self._persist_edge_updates(
             session_id, all_updated_edges
         )
@@ -625,8 +625,16 @@ class KGGraphUpdater:
         self,
         session_id: str,
         new_edges: list[dict[str, Any]],
+        round_number: int = 0,
     ) -> int:
-        """Persist new edges with validation."""
+        """Persist new edges with validation.
+
+        Args:
+            session_id: The simulation session owning these edges.
+            new_edges: Raw edge dicts from LLM extraction.
+            round_number: The simulation round that produced these edges.
+                          Stored on each row for temporal topic evolution queries.
+        """
         if not new_edges:
             return 0
 
@@ -642,7 +650,7 @@ class KGGraphUpdater:
             logger.exception("_persist_new_edges: failed to load node IDs")
             return 0
 
-        validated: list[tuple[str, str, str, str, str, float]] = []
+        validated: list[tuple[str, str, str, str, str, float, int]] = []
         for edge in new_edges:
             src = edge.get("source_id", "")
             tgt = edge.get("target_id", "")
@@ -660,7 +668,7 @@ class KGGraphUpdater:
 
             validated.append((
                 session_id, src, tgt, rel,
-                edge.get("description", ""), weight,
+                edge.get("description", ""), weight, round_number,
             ))
 
         if not validated:
@@ -670,8 +678,8 @@ class KGGraphUpdater:
             async with get_db() as db:
                 await db.executemany(
                     """INSERT INTO kg_edges
-                       (session_id, source_id, target_id, relation_type, description, weight)
-                       VALUES (?, ?, ?, ?, ?, ?)""",
+                       (session_id, source_id, target_id, relation_type, description, weight, round_number)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
                     validated,
                 )
                 await db.commit()

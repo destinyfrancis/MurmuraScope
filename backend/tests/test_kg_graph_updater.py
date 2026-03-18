@@ -52,7 +52,8 @@ CREATE TABLE IF NOT EXISTS kg_edges (
     target_id TEXT,
     relation_type TEXT,
     description TEXT,
-    weight REAL
+    weight REAL,
+    round_number INTEGER NOT NULL DEFAULT 0
 )
 """
 
@@ -361,3 +362,48 @@ def test_kg_evolution_stats_frozen():
     )
     with pytest.raises(FrozenInstanceError):
         stats.nodes_added = 99  # type: ignore[misc]
+
+
+# ---------------------------------------------------------------------------
+# round_number propagation — Task 3
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_persist_new_edges_writes_round_number(db_setup):
+    """_persist_new_edges must store the supplied round_number on each inserted edge."""
+    conn = db_setup
+    session_id = "sess_rn"
+
+    await conn.execute(
+        "INSERT INTO kg_nodes (id, session_id, entity_type, title, description, properties) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        ("node_p", session_id, "Person", "Person P", "", "{}"),
+    )
+    await conn.execute(
+        "INSERT INTO kg_nodes (id, session_id, entity_type, title, description, properties) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        ("node_q", session_id, "Person", "Person Q", "", "{}"),
+    )
+    await conn.commit()
+
+    updater = KGGraphUpdater(llm_client=None)
+
+    edges = [
+        {
+            "source_id": "node_p",
+            "target_id": "node_q",
+            "relation_type": "AGREES_WITH",
+            "description": "they agree",
+            "weight": 0.6,
+        }
+    ]
+    edges_added = await updater._persist_new_edges(session_id, edges, round_number=7)
+    assert edges_added == 1
+
+    cursor = await conn.execute(
+        "SELECT round_number FROM kg_edges WHERE session_id = ?", (session_id,)
+    )
+    row = await cursor.fetchone()
+    assert row is not None
+    assert row[0] == 7
