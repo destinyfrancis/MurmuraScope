@@ -525,3 +525,109 @@ def get_report_generation_prompts(locale: str = "zh-HK") -> tuple[str, str]:
     if locale == "zh-HK":
         return REPORT_GENERATION_SYSTEM, REPORT_GENERATION_USER
     return REPORT_GENERATION_SYSTEM_EN, REPORT_GENERATION_USER_EN
+
+
+# ============================================================
+# Report Quality Upgrade v2 — Section-by-Section ReACT
+# "Future Rehearsal" Framing (2026-03-18)
+# ============================================================
+
+PLANNING_SYSTEM_PROMPT = """模擬世界的演化就是對未來的預測。
+你觀察到的不是實驗數據，而是未來的預演。
+
+你擁有神的視角，觀察了完整的模擬過程。
+現在，基於這些觀察，為一份預測報告設計3-5章的結構。
+
+每章要求：
+- 標題是一個結構性預測（「X將向Y轉型」），不是數據描述（「X分析」）
+- 明確指出支撐這章論點的核心模擬觀察
+- 建議3-5個最相關的工具調用
+
+輸出JSON格式：
+{
+  "chapters": [
+    {
+      "title": "結構性預測標題",
+      "thesis": "核心論點（1-2句）",
+      "suggested_tools": ["tool_name1", "tool_name2"]
+    }
+  ]
+}"""
+
+
+def build_planning_user_prompt(
+    session_id: str,
+    agent_count: int,
+    round_count: int,
+    scenario_question: str,
+    sim_mode: str,
+) -> str:
+    """Build the user prompt for report planning.
+
+    Args:
+        session_id: Simulation session identifier.
+        agent_count: Number of agents in the simulation.
+        round_count: Number of simulation rounds completed.
+        scenario_question: The scenario question being investigated.
+        sim_mode: Simulation mode (``"hk_demographic"`` or ``"kg_driven"``).
+
+    Returns:
+        Formatted user prompt string.
+    """
+    return (
+        f"模擬問題：{scenario_question}\n\n"
+        f"模擬規模：{agent_count}個Agent，{round_count}輪互動，模式={sim_mode}\n\n"
+        "請設計3-5章的報告結構，回答上述模擬問題。"
+    )
+
+
+# Mode-specific section system prompts
+
+KG_DRIVEN_SECTION_SYSTEM_PROMPT = """你是觀察過完整模擬世界演化的預測分析師。
+模擬世界的演化就是對未來的預測。
+
+寫作原則（嚴格遵守）：
+1. 使用未來式（將會、預計、可預見、預測）
+2. 每個論點後立即插入Agent原話作佐證：
+   「正如模擬中一名[角色類型]所言：'...'這印證了...」
+3. 每章結尾必須有numbered預測清單（≥3條）：
+   「預測結論：1. [確定性預測]... 2. [條件性預測：若X，則Y]...」
+4. 每章標題是結構性預測，不是數據描述
+5. 工具必須調用至少3次才能輸出Final Answer
+
+你有以下工具可用：
+{tool_descriptions}
+
+格式規則：
+- 每次只做一件事：調用工具 OR 輸出Final Answer（不能同時）
+- 工具調用格式：<tool_call>{{"name": "...", "parameters": {{}}}}</tool_call>
+- 完成後輸出：Final Answer: [章節Markdown內容]"""
+
+
+HK_DEMOGRAPHIC_SECTION_SYSTEM_PROMPT = """你是觀察過完整香港人口模擬世界的預測分析師。
+模擬世界的演化就是對未來的預測。
+
+寫作原則（嚴格遵守）：
+1. 結合宏觀經濟指標（GDP、HSI、失業率、消費信心）與Agent行為
+2. 每個宏觀趨勢用個人Agent故事佐證
+3. 每章結尾有numbered政策建議（≥3條）
+4. 工具必須調用至少3次才能輸出Final Answer
+5. 必須調用get_macro_history或get_ensemble_forecast
+
+你有以下工具可用：
+{tool_descriptions}
+
+格式規則：
+- 工具調用格式：<tool_call>{{"name": "...", "parameters": {{}}}}</tool_call>
+- 完成後輸出：Final Answer: [章節Markdown內容]"""
+
+
+SECTION_INSUFFICIENT_TOOLS_MSG = (
+    "你只調用了{count}次工具，但至少需要3次才能輸出Final Answer。\n"
+    "請繼續調用工具收集更多模擬世界的證據，特別是：\n"
+    "- 尚未使用的工具：{unused_tools}\n"
+    "- 或深入調查已有的線索\n\n"
+    "繼續調用工具。"
+)
+
+SECTION_FORCE_FINAL_MSG = "已達到最大工具調用次數，請立即輸出 Final Answer:"
