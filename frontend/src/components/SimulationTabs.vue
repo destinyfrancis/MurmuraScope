@@ -2,7 +2,7 @@
 import { ref, computed, watch } from 'vue'
 import SocialFeed from './SocialFeed.vue'
 import DissonanceView from './DissonanceView.vue'
-import FeedView from './FeedView.vue'
+import PostCard from './sim/PostCard.vue'
 import FactionTab from './sim/FactionTab.vue'
 import TippingPointTab from './sim/TippingPointTab.vue'
 import MultiRunTab from './sim/MultiRunTab.vue'
@@ -89,20 +89,20 @@ watch(() => props.sessionId, () => {
         <button class="view-btn" :class="{ active: activeView === 'network' }" @click="activeView = 'network'">互動網絡</button>
       </div>
 
-      <!-- View 1: Timeline (existing + interact buttons) -->
-      <div v-if="activeView === 'timeline'" class="view-timeline">
+      <!-- View 1: Timeline -->
+      <div v-if="activeView === 'timeline'" class="feed-timeline">
         <template v-for="item in mergedFeedItems" :key="item._key">
           <WorldEventCard v-if="item._type === 'world_event'" :event="item" />
-          <div v-else class="feed-post-wrapper" :style="{ borderLeftColor: factionColours?.[item.agent_id] ?? '#9CA3AF' }">
-            <FeedView
+          <div v-else class="feed-entry">
+            <PostCard
               :post="item"
-              :faction-colour="factionColours?.[item.agent_id] ?? '#9CA3AF'"
+              :faction-colour="factionColours?.[item.agent_id] || '#999'"
+              :repost-count="getInteractCount(item, 'repost')"
+              :reply-count="getInteractCount(item, 'reply')"
+              @repost="handleInteract(item, 'repost')"
+              @reply="handleInteract(item, 'reply')"
               @select-agent="emit('select-agent', $event)"
             />
-            <div class="post-actions">
-              <button class="post-action-btn" @click="handleInteract(item, 'repost')">↩ 轉發 {{ getInteractCount(item, 'repost') }}</button>
-              <button class="post-action-btn" @click="handleInteract(item, 'reply')">💬 評論 {{ getInteractCount(item, 'reply') }}</button>
-            </div>
           </div>
         </template>
       </div>
@@ -247,12 +247,22 @@ watch(() => props.sessionId, () => {
   color: #fff;
 }
 
-.view-timeline {
+.feed-timeline {
   flex: 1;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+  gap: 2px;
   padding: 8px;
+}
+
+.feed-entry {
+  animation: feed-enter 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+@keyframes feed-enter {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .view-factions,
@@ -262,29 +272,6 @@ watch(() => props.sessionId, () => {
   overflow: hidden;
   padding: 8px;
 }
-
-.feed-post-wrapper {
-  border-left: 4px solid #9CA3AF;
-  padding-left: 0;
-}
-
-.post-actions {
-  display: flex;
-  gap: 8px;
-  padding: 3px 8px 6px;
-}
-
-.post-action-btn {
-  font-size: 10px;
-  color: #64748b;
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 2px 4px;
-  border-radius: 3px;
-  transition: color 0.15s;
-}
-.post-action-btn:hover { color: #6366f1; }
 
 /* AGENT TAB styles */
 .agent-tab-content {
