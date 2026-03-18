@@ -17,6 +17,7 @@ import ViralityTree from './ViralityTree.vue'
 import FilterBubbleChart from './FilterBubbleChart.vue'
 import StatsRow          from './sim/StatsRow.vue'
 import TippingPointStrip from './sim/TippingPointStrip.vue'
+import MacroPulseBar from './MacroPulseBar.vue'
 
 const props = defineProps({
   session: { type: Object, required: true },
@@ -42,6 +43,7 @@ const graphEdges = ref([])
 const highlightedNodes = ref([])
 const posts = ref([])
 const logs = ref([])
+const latestProgress = ref(null)
 
 // God Mode shock banner
 const shockBanner = ref(null)
@@ -97,6 +99,7 @@ function handleWsMessage(event) {
 
     switch (msg.type) {
       case 'progress':
+        latestProgress.value = msg.data  // capture full progress payload for MacroPulseBar
         if (d.round && d.round > currentRound.value) {
           currentRound.value = d.round
           addLog(`第 ${d.round}/${d.total || totalRounds.value} 回合完成 — ${d.detail || ''}`)
@@ -568,6 +571,11 @@ const factionAgentColourMap = computed(() => {
         />
       </div>
     </div>
+
+    <MacroPulseBar
+      :session-id="session.sessionId"
+      :latest-progress="latestProgress"
+    />
 
     <GodModePanel v-if="running" @inject-shock="handleGodPanelShock" />
 
