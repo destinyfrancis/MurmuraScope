@@ -8,6 +8,7 @@ outcomes back into the macro state.
 from __future__ import annotations
 
 import asyncio
+import json
 from dataclasses import replace
 from typing import Any, Awaitable, Callable
 
@@ -330,7 +331,12 @@ class DecisionEngine:
         logger.debug("agent_decisions schema ensured")
 
     async def _store_decisions(self, decisions: list[AgentDecision]) -> None:
-        """Batch insert decisions into agent_decisions table."""
+        """Batch insert decisions into agent_decisions table.
+
+        topic_tags is serialised as a JSON array string (NULL when empty).
+        emotional_reaction is stored as plain text (NULL when empty).
+        Tier 2 agents that omit these fields will have NULL in both columns.
+        """
         rows = [
             (
                 d.session_id,
@@ -340,6 +346,8 @@ class DecisionEngine:
                 d.action,
                 d.reasoning,
                 d.confidence,
+                json.dumps(list(d.topic_tags), ensure_ascii=False) if d.topic_tags else None,
+                d.emotional_reaction if d.emotional_reaction else None,
             )
             for d in decisions
         ]
@@ -348,8 +356,9 @@ class DecisionEngine:
                 """
                 INSERT INTO agent_decisions
                     (session_id, agent_id, round_number,
-                     decision_type, action, reasoning, confidence)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                     decision_type, action, reasoning, confidence,
+                     topic_tags, emotional_reaction)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 rows,
             )

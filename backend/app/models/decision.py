@@ -43,6 +43,10 @@ class AgentDecision:
     action: str          # e.g. buy / emigrate / stay / invest_stocks
     reasoning: str
     confidence: float    # 0.0–1.0
+    topic_tags: tuple[str, ...] = ()
+    """Topics this decision touches — persisted as JSON array in DB."""
+    emotional_reaction: str = ""
+    """Brief emotional state at decision time — persisted as plain string in DB."""
 
     def __post_init__(self) -> None:
         if not (0.0 <= self.confidence <= 1.0):

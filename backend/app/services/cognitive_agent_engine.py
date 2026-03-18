@@ -41,8 +41,10 @@ Decide your action this round. Return JSON with:
 - reasoning: (1-3 sentences) why you chose this, referencing your relationships and past experience if relevant
 - belief_updates: (dict) metric_id → small delta (-0.3 to 0.3) reflecting how events changed your views
 - stance_statement: (1 sentence) public statement or action you take
+- topic_tags: (list of 2-4 strings) topics this decision touches, e.g. ["移民","就業","制度","個人自由","家庭","身份認同"]
+- emotional_reaction: (string, 5-15 chars) brief emotional state, e.g. "憤怒", "焦慮", "希望", "無奈", "決心"
 
-Return JSON: {{"decision": ..., "reasoning": ..., "belief_updates": {{...}}, "stance_statement": ...}}"""
+Return JSON: {{"decision": ..., "reasoning": ..., "belief_updates": {{...}}, "stance_statement": ..., "topic_tags": [...], "emotional_reaction": ...}}"""
 
 
 @dataclass(frozen=True)
@@ -110,12 +112,23 @@ class CognitiveAgentEngine:
             if k in active_set and isinstance(v, (int, float))
         }
 
+        # Extract topic_tags: filter to strings only, cap at 5
+        raw_tags = raw.get("topic_tags", [])
+        topic_tags: tuple[str, ...] = ()
+        if isinstance(raw_tags, list):
+            topic_tags = tuple(str(t) for t in raw_tags if isinstance(t, str))[:5]
+
+        # Extract emotional_reaction: cap at 50 chars
+        emotional_reaction = str(raw.get("emotional_reaction", ""))[:50]
+
         return DeliberationResult(
             agent_id=agent_id,
             decision=str(raw.get("decision", "observe")),
             reasoning=str(raw.get("reasoning", "")),
             belief_updates=belief_updates,
             stance_statement=str(raw.get("stance_statement", "")),
+            topic_tags=topic_tags,
+            emotional_reaction=emotional_reaction,
         )
 
 

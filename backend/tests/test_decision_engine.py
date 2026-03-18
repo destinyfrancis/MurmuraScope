@@ -595,3 +595,147 @@ class TestDecisionEngine:
         updater.assert_awaited_once()
         call_args = updater.call_args[0][0]
         assert isinstance(call_args, dict)
+
+
+# ---------------------------------------------------------------------------
+# Task 4: topic_tags + emotional_reaction persistence
+# ---------------------------------------------------------------------------
+
+
+class TestTopicTagsPersistence:
+    """Tests for persisting topic_tags and emotional_reaction to agent_decisions."""
+
+    @pytest.mark.asyncio
+    async def test_tier1_decision_persists_topic_tags(self, test_db) -> None:
+        """topic_tags and emotional_reaction can be persisted to agent_decisions."""
+        import json
+        from backend.app.services.cognitive_agent_engine import DeliberationResult
+
+        deliberation = DeliberationResult(
+            agent_id="a1",
+            decision="emigrate",
+            reasoning="I fear instability",
+            belief_updates={},
+            stance_statement="Will leave",
+            topic_tags=("移民", "就業"),
+            emotional_reaction="焦慮，對前途感到迷茫",
+        )
+
+        await test_db.execute(
+            """INSERT INTO simulation_sessions
+               (id, name, sim_mode, seed_text, agent_count, round_count,
+                llm_provider, llm_model, oasis_db_path)
+               VALUES ('sess1','test','kg_driven','seed',10,5,'openrouter','deepseek','')"""
+        )
+        await test_db.execute(
+            """INSERT INTO agent_decisions
+               (session_id, agent_id, round_number, decision_type, action, reasoning,
+                topic_tags, emotional_reaction)
+               VALUES (?,?,?,?,?,?,?,?)""",
+            (
+                "sess1", "a1", 1, deliberation.decision, deliberation.decision,
+                deliberation.reasoning,
+                json.dumps(list(deliberation.topic_tags)),
+                deliberation.emotional_reaction,
+            ),
+        )
+        await test_db.commit()
+
+        row = await (await test_db.execute(
+            "SELECT topic_tags, emotional_reaction FROM agent_decisions WHERE agent_id='a1'"
+        )).fetchone()
+
+        import json as _json_check
+        assert _json_check.loads(row["topic_tags"]) == ["移民", "就業"]
+        assert row["emotional_reaction"] == "焦慮，對前途感到迷茫"
+
+    @pytest.mark.asyncio
+    async def test_store_decisions_includes_topic_tags(self, test_db) -> None:
+        """DecisionEngine._store_decisions persists topic_tags and emotional_reaction."""
+        import json
+        import contextlib
+        from unittest.mock import patch as _patch
+        from backend.app.services.decision_engine import DecisionEngine
+        from backend.app.models.decision import AgentDecision
+
+        decision = AgentDecision(
+            session_id="sess2",
+            agent_id=42,
+            round_number=3,
+            decision_type="emigrate",
+            action="emigrate",
+            reasoning="instability",
+            confidence=0.8,
+            topic_tags=("移民", "自由"),
+            emotional_reaction="擔憂",
+        )
+
+        await test_db.execute(
+            """INSERT INTO simulation_sessions
+               (id, name, sim_mode, seed_text, agent_count, round_count,
+                llm_provider, llm_model, oasis_db_path)
+               VALUES ('sess2','test2','hk_demographic','seed',10,5,'openrouter','deepseek','')"""
+        )
+        await test_db.commit()
+
+        engine = DecisionEngine()
+        engine._schema_initialised = True
+
+        @contextlib.asynccontextmanager
+        async def _fake_get_db():
+            yield test_db
+
+        with _patch("backend.app.services.decision_engine.get_db", side_effect=_fake_get_db):
+            await engine._store_decisions([decision])
+
+        row = await (await test_db.execute(
+            "SELECT topic_tags, emotional_reaction FROM agent_decisions WHERE agent_id=42"
+        )).fetchone()
+
+        assert row is not None
+        assert json.loads(row["topic_tags"]) == ["移民", "自由"]
+        assert row["emotional_reaction"] == "擔憂"
+
+    @pytest.mark.asyncio
+    async def test_store_decisions_null_topic_tags_for_tier2(self, test_db) -> None:
+        """Tier 2 agents (no topic_tags) store NULL in agent_decisions."""
+        import contextlib
+        from unittest.mock import patch as _patch
+        from backend.app.services.decision_engine import DecisionEngine
+        from backend.app.models.decision import AgentDecision
+
+        decision = AgentDecision(
+            session_id="sess3",
+            agent_id=99,
+            round_number=1,
+            decision_type="stay",
+            action="stay",
+            reasoning="comfortable here",
+            confidence=0.7,
+        )
+
+        await test_db.execute(
+            """INSERT INTO simulation_sessions
+               (id, name, sim_mode, seed_text, agent_count, round_count,
+                llm_provider, llm_model, oasis_db_path)
+               VALUES ('sess3','test3','hk_demographic','seed',10,5,'openrouter','deepseek','')"""
+        )
+        await test_db.commit()
+
+        engine = DecisionEngine()
+        engine._schema_initialised = True
+
+        @contextlib.asynccontextmanager
+        async def _fake_get_db():
+            yield test_db
+
+        with _patch("backend.app.services.decision_engine.get_db", side_effect=_fake_get_db):
+            await engine._store_decisions([decision])
+
+        row = await (await test_db.execute(
+            "SELECT topic_tags, emotional_reaction FROM agent_decisions WHERE agent_id=99"
+        )).fetchone()
+
+        assert row is not None
+        assert row["topic_tags"] is None
+        assert row["emotional_reaction"] is None
