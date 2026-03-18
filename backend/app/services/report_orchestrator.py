@@ -39,21 +39,32 @@ class ReportOrchestrator:
     def _parse_outline(self, raw: str) -> list[dict[str, Any]]:
         """Extract chapters list from LLM outline response.
 
+        Uses a balanced-brace parser to avoid greedy regex dropping chapters
+        on trailing prose after the JSON block.
+
         Args:
             raw: Raw string from LLM which may contain JSON.
 
         Returns:
             List of chapter dicts, or empty list if parsing fails.
         """
-        match = re.search(r"\{.*\}", raw, re.DOTALL)
-        if not match:
+        start = raw.find("{")
+        if start == -1:
             return []
-        try:
-            data = json.loads(match.group())
-            return data.get("chapters", [])
-        except json.JSONDecodeError:
-            logger.warning("Failed to parse outline JSON")
-            return []
+        depth = 0
+        for i in range(start, len(raw)):
+            if raw[i] == "{":
+                depth += 1
+            elif raw[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    try:
+                        data = json.loads(raw[start:i + 1])
+                        return data.get("chapters", [])
+                    except json.JSONDecodeError:
+                        logger.warning("Failed to parse outline JSON: %.200s", raw)
+                        return []
+        return []
 
     async def _get_session_meta(self, session_id: str) -> dict[str, Any]:
         """Fetch session metadata from DB.
@@ -66,18 +77,30 @@ class ReportOrchestrator:
         """
         try:
             async with get_db() as db:
-                row = await (await db.execute(
+                session_row = await (await db.execute(
                     "SELECT sim_mode, preset FROM simulation_sessions WHERE id=?",
+                    (session_id,)
+                )).fetchone()
+                agent_count_row = await (await db.execute(
+                    "SELECT COUNT(*) as cnt FROM agent_profiles WHERE session_id=?",
+                    (session_id,)
+                )).fetchone()
+                round_count_row = await (await db.execute(
+                    "SELECT MAX(round_number) as max_round FROM simulation_actions WHERE session_id=?",
                     (session_id,)
                 )).fetchone()
         except Exception:
             logger.warning("Failed to fetch session meta for %s", session_id)
             return {"sim_mode": "kg_driven", "agent_count": 0, "round_count": 0}
 
-        if not row:
+        if not session_row:
             return {"sim_mode": "kg_driven", "agent_count": 0, "round_count": 0}
 
-        return {"sim_mode": row["sim_mode"] or "kg_driven", "agent_count": 0, "round_count": 0}
+        return {
+            "sim_mode": session_row["sim_mode"] or "kg_driven",
+            "agent_count": agent_count_row["cnt"] if agent_count_row else 0,
+            "round_count": (round_count_row["max_round"] or 0) if round_count_row else 0,
+        }
 
     async def generate(
         self,
@@ -122,21 +145,27 @@ class ReportOrchestrator:
             chapters = list(_FALLBACK_CHAPTERS)
 
         # Phase 2: Per-section generation
+        all_tools = tool_names or []
+        # Fix 1: substitute {tool_descriptions} placeholder before passing to generate_section
+        tool_desc_text = (
+            "\n".join(f"- {t}" for t in all_tools)
+            if all_tools
+            else "insight_forge, interview_agents, get_sentiment_timeline"
+        )
         section_prompt = (
             KG_DRIVEN_SECTION_SYSTEM_PROMPT if sim_mode == "kg_driven"
             else HK_DEMOGRAPHIC_SECTION_SYSTEM_PROMPT
-        )
-        all_tools = tool_names or []
+        ).format(tool_descriptions=tool_desc_text)
+
         completed_sections: list[str] = []
 
         for chapter in chapters:
-            used: set[str] = set()
-
-            async def _handler(name: str, params: dict, _used: set = used) -> str:
-                _used.add(name)
+            async def _handler(name: str, params: dict) -> str:
                 return await tool_handler(name, params)
 
-            unused = [t for t in all_tools if t not in used]
+            # Fix 2: use chapter's suggested_tools as nudge hints instead of
+            # computing unused before generate_section runs (which always gave empty set)
+            unused = chapter.get("suggested_tools", all_tools)
             section_md = await generate_section(
                 system_prompt=section_prompt,
                 section_outline=chapter,
