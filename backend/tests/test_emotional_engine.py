@@ -383,25 +383,30 @@ class TestNeuroticism:
             f"Expected high_n.valence ({high_n.valence:.4f}) < low_n.valence ({low_n.valence:.4f})"
         )
 
-    def test_neuroticism_does_not_amplify_positive_shift(self) -> None:
-        """Neuroticism must NOT amplify positive valence shifts —
-        high-neuroticism agent should land no lower than low-neuroticism agent."""
+    def test_neuroticism_gate_skips_positive_delta(self) -> None:
+        """The if-delta<0 gate must NOT fire when the total valence change is positive.
+
+        Note: neuroticism also scales macro_coef independently (pre-existing behavior).
+        This test only verifies the amplification gate (if delta < 0) does not activate
+        for positive total deltas (feed only, macro=0 to isolate gate behavior).
+        """
         engine = self._make_engine()
         start = self._start_state(valence=0.3)
+
+        # With feed=+0.8 and macro=0, the delta IS positive, so the gate must not fire.
         low_n = engine.update_state(
             start, self._low_n_profile(),
-            feed_sentiment_avg=0.8,
-            macro_shock_valence=0.0,
-            personal_event_valence=0.0,
-            controversy_exposure=0.0,
+            feed_sentiment_avg=0.8, macro_shock_valence=0.0,
+            personal_event_valence=0.0, controversy_exposure=0.0,
         )
         high_n = engine.update_state(
             start, self._high_n_profile(),
-            feed_sentiment_avg=0.8,
-            macro_shock_valence=0.0,
-            personal_event_valence=0.0,
-            controversy_exposure=0.0,
+            feed_sentiment_avg=0.8, macro_shock_valence=0.0,
+            personal_event_valence=0.0, controversy_exposure=0.0,
         )
+        # When gate doesn't fire, high-N should not land lower than low-N
+        # (high-N may land SLIGHTLY higher due to macro_coef scaling, but not lower)
         assert high_n.valence >= low_n.valence - 1e-6, (
-            f"Expected high_n.valence ({high_n.valence:.4f}) >= low_n.valence ({low_n.valence:.4f})"
+            f"Neuroticism gate must not fire for positive delta: "
+            f"high_n={high_n.valence:.4f}, low_n={low_n.valence:.4f}"
         )

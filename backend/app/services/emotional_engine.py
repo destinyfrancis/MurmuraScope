@@ -140,6 +140,10 @@ class EmotionalEngine:
         # Neuroticism amplifies macro shock sensitivity
         macro_coef = self.MACRO_INFLUENCE * (1.0 + 0.4 * (neuroticism - 0.5))
         # --- Valence update ---
+        # Coefficients (VALENCE_INERTIA + social_coef + macro_coef + PERSONAL_INFLUENCE)
+        # are calibrated for the neutral personality (N=A=0.5), where they sum to ≈1.0.
+        # At extreme personalities the sum slightly exceeds 1.0; the _clamp() call
+        # acts as the natural absorbing boundary and prevents unbounded drift.
         weighted_sum = (
             self.VALENCE_INERTIA * state.valence
             + social_coef * feed_sentiment_avg
