@@ -275,11 +275,22 @@ _QUICK_START_ALLOWED_EXTS = {".pdf", ".txt", ".md", ".markdown"}
 
 async def _run_quick_start(seed_text: str, scenario_question: str = "", preset: str = "fast") -> APIResponse:
     """Shared business logic for both JSON and file-upload quick-start endpoints."""
+    from backend.app.utils.prompt_security import sanitize_seed_text as _sanitize_seed  # noqa: PLC0415
     from backend.app.services.zero_config import ZeroConfigService  # noqa: PLC0415
     from backend.app.services.graph_builder import GraphBuilderService  # noqa: PLC0415
 
+    # Sanitize all user-controlled text before it reaches any LLM service.
+    seed_text = _sanitize_seed(seed_text)
+
     zc = ZeroConfigService()
     config = await zc.prepare(seed_text)
+
+    # Apply preset overrides — the preset param was accepted but never applied before.
+    from backend.app.models.simulation_config import resolve_preset  # noqa: PLC0415
+    resolved = resolve_preset(preset)
+    agent_count_final = resolved.agents
+    round_count_final = resolved.rounds
+    estimated_duration = round_count_final * agent_count_final // 50
 
     graph_builder = GraphBuilderService()
     graph_result = await graph_builder.build_graph(
@@ -296,8 +307,8 @@ async def _run_quick_start(seed_text: str, scenario_question: str = "", preset: 
             "name": f"Quick Start: {seed_text[:50]}",
             "scenario_type": "property",
             "seed_text": seed_text,
-            "agent_count": config.agent_count,
-            "round_count": config.round_count,
+            "agent_count": agent_count_final,
+            "round_count": round_count_final,
             "graph_id": graph_id,
             "domain_pack_id": config.domain_pack_id,
             "platforms": {"facebook": True, "instagram": True},
@@ -315,7 +326,7 @@ async def _run_quick_start(seed_text: str, scenario_question: str = "", preset: 
         pass
 
     factory = AgentFactory(demographics=demographics)
-    profiles = factory.generate_population(config.agent_count, None)
+    profiles = factory.generate_population(agent_count_final, None)
 
     macro = MacroController()
     macro_state = await macro.get_baseline_for_scenario("property")
@@ -344,10 +355,10 @@ async def _run_quick_start(seed_text: str, scenario_question: str = "", preset: 
             "session_id": session_id,
             "graph_id": graph_id,
             "status_url": f"/api/simulation/{session_id}/status",
-            "estimated_duration_seconds": config.estimated_duration_seconds,
+            "estimated_duration_seconds": estimated_duration,
             "domain_pack_id": config.domain_pack_id,
-            "agent_count": config.agent_count,
-            "round_count": config.round_count,
+            "agent_count": agent_count_final,
+            "round_count": round_count_final,
             "scenario_question": scenario_question,
         },
     )
@@ -418,6 +429,7 @@ async def quick_start_upload(
         if not seed_text:
             raise HTTPException(status_code=422, detail="Could not extract text from file")
 
+        scenario_question = (scenario_question or "").strip()
         return await _run_quick_start(seed_text, scenario_question, preset)
     except HTTPException:
         raise
