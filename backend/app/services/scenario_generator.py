@@ -21,6 +21,7 @@ from typing import Any
 
 from backend.app.models.universal_agent_profile import UniversalAgentProfile
 from backend.app.models.universal_scenario import (
+    ImpliedActor,
     UniversalDecisionType,
     UniversalImpactRule,
     UniversalMetric,
@@ -172,6 +173,7 @@ class ScenarioGenerator:
             metrics = _parse_metrics(raw.get("metrics", []))
             shock_types = _parse_shock_types(raw.get("shock_types", []))
             impact_rules = _parse_impact_rules(raw.get("impact_rules", []))
+            implied_actors = _parse_implied_actors(raw.get("implied_actors", []))
 
             config = UniversalScenarioConfig(
                 scenario_id=str(uuid.uuid4()),
@@ -183,6 +185,7 @@ class ScenarioGenerator:
                 impact_rules=tuple(impact_rules),
                 time_scale=raw.get("time_scale", "rounds"),
                 language_hint=raw.get("language_hint", "auto"),
+                implied_actors=tuple(implied_actors),
             )
         except (KeyError, TypeError, ValueError) as exc:
             raise RuntimeError(
@@ -191,11 +194,12 @@ class ScenarioGenerator:
 
         logger.info(
             "ScenarioGenerator: config created (decisions=%d, metrics=%d, "
-            "shocks=%d, rules=%d)",
+            "shocks=%d, rules=%d, implied_actors=%d)",
             len(config.decision_types),
             len(config.metrics),
             len(config.shock_types),
             len(config.impact_rules),
+            len(config.implied_actors),
         )
         return config
 
@@ -420,6 +424,26 @@ def _parse_impact_rules(items: list[Any]) -> list[UniversalImpactRule]:
             )
         )
 
+    return result
+
+
+def _parse_implied_actors(raw_list: list[Any]) -> list[ImpliedActor]:
+    """Parse implied_actors list from LLM response. Returns [] on any error."""
+    result: list[ImpliedActor] = []
+    for item in raw_list[:8]:  # cap at 8
+        try:
+            actor_id = _validate_slug(
+                item.get("id", ""), f"implied_actor[{item.get('name', '?')}]"
+            )
+            result.append(ImpliedActor(
+                id=actor_id,
+                name=str(item.get("name", "")).strip(),
+                entity_type=str(item.get("entity_type", "Organization")).strip(),
+                role=str(item.get("role", "")).strip(),
+                relevance_reason=str(item.get("relevance_reason", "")).strip(),
+            ))
+        except Exception as exc:
+            logger.warning("ScenarioGenerator: skipping malformed implied_actor: %s", exc)
     return result
 
 

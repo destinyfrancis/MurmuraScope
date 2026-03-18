@@ -814,3 +814,65 @@ def test_universal_scenario_config_implied_actors_defaults_empty():
         impact_rules=(UniversalImpactRule(**_MINIMAL_RULE),),
     )
     assert config.implied_actors == ()
+
+
+# ===========================================================================
+# Service: ScenarioGenerator — implied_actors
+# ===========================================================================
+
+_MINIMAL_RESPONSE_WITH_IMPLIED = {
+    "scenario_name": "Iran War",
+    "scenario_description": "US-Israel military strikes on Iran.",
+    "time_scale": "days",
+    "language_hint": "en-US",
+    "decision_types": [_MINIMAL_DECISION],
+    "metrics": [_MINIMAL_METRIC],
+    "shock_types": [_MINIMAL_SHOCK],
+    "impact_rules": [_MINIMAL_RULE],
+    "implied_actors": [
+        {
+            "id": "european_union",
+            "name": "European Union",
+            "entity_type": "Organization",
+            "role": "Coordinates EU energy policy response",
+            "relevance_reason": "Hormuz closure disrupts EU gas supply",
+        }
+    ],
+}
+
+
+@pytest.mark.asyncio
+async def test_generate_parses_implied_actors():
+    from backend.app.services.scenario_generator import ScenarioGenerator
+    from backend.app.models.universal_scenario import ImpliedActor
+
+    llm = MagicMock()
+    llm.chat_json = AsyncMock(return_value=_MINIMAL_RESPONSE_WITH_IMPLIED)
+    gen = ScenarioGenerator(llm_client=llm)
+
+    config = await gen.generate("test seed", [], [], [])
+
+    assert len(config.implied_actors) == 1
+    assert isinstance(config.implied_actors[0], ImpliedActor)
+    assert config.implied_actors[0].id == "european_union"
+
+
+@pytest.mark.asyncio
+async def test_generate_handles_missing_implied_actors_key():
+    """LLM responses without implied_actors key should not fail."""
+    from backend.app.services.scenario_generator import ScenarioGenerator
+
+    response_without_key = {k: v for k, v in _MINIMAL_RESPONSE_WITH_IMPLIED.items()
+                            if k != "implied_actors"}
+    llm = MagicMock()
+    llm.chat_json = AsyncMock(return_value=response_without_key)
+    gen = ScenarioGenerator(llm_client=llm)
+
+    config = await gen.generate("test seed", [], [], [])
+    assert config.implied_actors == ()
+
+
+def test_scenario_generation_system_prompt_includes_implied_actors_schema():
+    from backend.prompts.scenario_generation_prompts import SCENARIO_GENERATION_SYSTEM
+    assert "implied_actors" in SCENARIO_GENERATION_SYSTEM
+    assert "relevance_reason" in SCENARIO_GENERATION_SYSTEM
