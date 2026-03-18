@@ -17,6 +17,7 @@ from backend.app.services.report_agent_xai import (
     handle_ensemble_forecast as _handle_ensemble_forecast,
     handle_macro_history as _handle_macro_history,
     handle_sentiment_timeline as _handle_sentiment_timeline,
+    insight_forge as _insight_forge,
 )
 from backend.app.services.simulation_ipc import SimulationIPC
 from backend.app.utils.db import get_db
@@ -65,6 +66,9 @@ TOOLS: dict[str, str] = {
     ),
     "get_validation_summary": (
         "Get prediction confidence score, backtest results, and historical accuracy rate"
+    ),
+    "insight_forge": (
+        "深度洞察查詢 — LLM拆解為子查詢，並行搜索memories/KG/actions，標記可引用原文"
     ),
 }
 
@@ -627,6 +631,25 @@ async def _handle_get_validation_summary(
     )
 
 
+async def _handle_insight_forge(
+    session_id: str, params: dict[str, Any], _ipc: SimulationIPC
+) -> str:
+    """Deep query tool: LLM sub-query decomposition + parallel DB search."""
+    query = params.get("query", "")
+    if not query:
+        return "Error: 'query' parameter is required."
+
+    result = await _insight_forge(session_id, query)
+    excerpts_text = "\n".join(result.quotable_excerpts) if result.quotable_excerpts else "(無可引用原文)"
+    facts_text = "\n".join(result.facts[:5]) if result.facts else "(無相關事實)"
+    return (
+        "InsightForge結果:\n"
+        f"子查詢：{', '.join(result.sub_queries)}\n\n"
+        "引用原文:\n" + excerpts_text +
+        "\n\n事實:\n" + facts_text
+    )
+
+
 _TOOL_HANDLERS: dict[str, Any] = {
     "query_graph": _handle_query_graph,
     "get_global_narrative": _handle_global_narrative,
@@ -640,6 +663,7 @@ _TOOL_HANDLERS: dict[str, Any] = {
     "get_ensemble_forecast": _handle_ensemble_forecast,
     "get_macro_history": _handle_macro_history,
     "get_validation_summary": _handle_get_validation_summary,
+    "insight_forge": _handle_insight_forge,
 }
 
 
