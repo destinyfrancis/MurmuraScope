@@ -12,6 +12,12 @@ const routes = [
     component: Home,
   },
   {
+    path: '/process/quick',
+    name: 'ProcessQuick',
+    component: Process,
+    props: () => ({ scenarioType: 'quick' }),
+  },
+  {
     path: '/process/:scenarioType',
     name: 'Process',
     component: Process,
