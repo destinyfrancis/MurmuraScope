@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS kg_edges (
     relation_type TEXT NOT NULL,
     description TEXT,
     weight REAL DEFAULT 1.0,
+    round_number INTEGER NOT NULL DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_edge_session ON kg_edges(session_id);
@@ -340,6 +341,8 @@ CREATE TABLE IF NOT EXISTS agent_decisions (
     decision_type TEXT NOT NULL,
     action TEXT NOT NULL,
     reasoning TEXT,
+    topic_tags TEXT,           -- JSON array e.g. '["程序正義","信息透明"]'
+    emotional_reaction TEXT,   -- brief emotional state e.g. "憤怒，感到不公平"
     confidence REAL NOT NULL DEFAULT 0.5,
     created_at TEXT DEFAULT (datetime('now'))
 );
