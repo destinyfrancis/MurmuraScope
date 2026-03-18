@@ -139,33 +139,18 @@ class EmotionalEngine:
         social_coef = self.SOCIAL_INFLUENCE * (1.0 + 0.3 * (agreeableness - 0.5))
         # Neuroticism amplifies macro shock sensitivity
         macro_coef = self.MACRO_INFLUENCE * (1.0 + 0.4 * (neuroticism - 0.5))
-        # Residual inertia: alpha adjusted so total weights ≈ 1
-        inertia = 1.0 - social_coef - macro_coef - self.PERSONAL_INFLUENCE
-
         # --- Valence update ---
-        delta_v_raw = (
-            social_coef * (feed_sentiment_avg - state.valence)
-            + macro_coef * (macro_shock_valence - state.valence)
-            + self.PERSONAL_INFLUENCE * (personal_event_valence - state.valence)
-        )
-        # Neurotic agents experience negative valence changes more strongly
-        if delta_v_raw < 0:
-            delta_v_raw *= 1.0 + 0.3 * neuroticism
-
-        new_valence = _clamp(
-            inertia * state.valence + (1.0 - inertia) * (state.valence + delta_v_raw),
-            -1.0,
-            1.0,
-        )
-        # Simpler form: weighted blend
-        new_valence = _clamp(
+        weighted_sum = (
             self.VALENCE_INERTIA * state.valence
             + social_coef * feed_sentiment_avg
             + macro_coef * macro_shock_valence
-            + self.PERSONAL_INFLUENCE * personal_event_valence,
-            -1.0,
-            1.0,
+            + self.PERSONAL_INFLUENCE * personal_event_valence
         )
+        # Neurotic agents experience negative valence changes more strongly.
+        delta = weighted_sum - state.valence
+        if delta < 0:
+            delta *= 1.0 + 0.3 * neuroticism
+        new_valence = _clamp(state.valence + delta, -1.0, 1.0)
 
         # --- Arousal update ---
         valence_change = abs(new_valence - state.valence)

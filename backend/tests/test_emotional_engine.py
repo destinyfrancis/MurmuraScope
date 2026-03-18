@@ -339,3 +339,69 @@ async def test_load_states():
     assert states[1].valence == 0.2
     assert states[2].valence == -0.1
     assert all(isinstance(s, EmotionalState) for s in states.values())
+
+
+# ---------------------------------------------------------------------------
+# TestNeuroticism — verifies neuroticism amplifies negative (not positive) shifts
+# ---------------------------------------------------------------------------
+
+class TestNeuroticism:
+    """Neuroticism must amplify negative valence shifts and leave positive ones unchanged."""
+
+    def _make_engine(self) -> EmotionalEngine:
+        return EmotionalEngine()
+
+    def _low_n_profile(self) -> MagicMock:
+        return _make_profile(neuroticism=0.1, agreeableness=0.5)
+
+    def _high_n_profile(self) -> MagicMock:
+        return _make_profile(neuroticism=0.9, agreeableness=0.5)
+
+    def _start_state(self, valence: float = 0.3) -> EmotionalState:
+        return _state(valence=valence)
+
+    def test_high_neuroticism_amplifies_negative_shift(self) -> None:
+        """High-neuroticism agent must land at lower valence than low-neuroticism
+        agent when exposed to a strongly negative feed sentiment."""
+        engine = self._make_engine()
+        start = self._start_state(valence=0.3)
+        low_n = engine.update_state(
+            start, self._low_n_profile(),
+            feed_sentiment_avg=-0.8,
+            macro_shock_valence=0.0,
+            personal_event_valence=0.0,
+            controversy_exposure=0.0,
+        )
+        high_n = engine.update_state(
+            start, self._high_n_profile(),
+            feed_sentiment_avg=-0.8,
+            macro_shock_valence=0.0,
+            personal_event_valence=0.0,
+            controversy_exposure=0.0,
+        )
+        assert high_n.valence < low_n.valence, (
+            f"Expected high_n.valence ({high_n.valence:.4f}) < low_n.valence ({low_n.valence:.4f})"
+        )
+
+    def test_neuroticism_does_not_amplify_positive_shift(self) -> None:
+        """Neuroticism must NOT amplify positive valence shifts —
+        high-neuroticism agent should land no lower than low-neuroticism agent."""
+        engine = self._make_engine()
+        start = self._start_state(valence=0.3)
+        low_n = engine.update_state(
+            start, self._low_n_profile(),
+            feed_sentiment_avg=0.8,
+            macro_shock_valence=0.0,
+            personal_event_valence=0.0,
+            controversy_exposure=0.0,
+        )
+        high_n = engine.update_state(
+            start, self._high_n_profile(),
+            feed_sentiment_avg=0.8,
+            macro_shock_valence=0.0,
+            personal_event_valence=0.0,
+            controversy_exposure=0.0,
+        )
+        assert high_n.valence >= low_n.valence - 1e-6, (
+            f"Expected high_n.valence ({high_n.valence:.4f}) >= low_n.valence ({low_n.valence:.4f})"
+        )
