@@ -16,6 +16,7 @@ from typing import Any
 
 from backend.app.utils.llm_client import LLMClient
 from backend.app.utils.logger import get_logger
+from backend.app.utils.prompt_security import sanitize_agent_field, sanitize_scenario_description
 
 logger = get_logger(__name__)
 
@@ -132,11 +133,16 @@ def _build_deliberation_prompt(
 
     # Persona block (optional)
     persona = agent_context.get("persona", "")
-    persona_block = f"\nPersona: {persona[:200]}" if persona else ""
+    safe_persona = sanitize_agent_field(persona) if persona else ""
+    persona_block = f"\nPersona: {safe_persona}" if safe_persona else ""
 
     # Goals
     goals = agent_context.get("goals", [])
-    goals_str = ", ".join(str(g) for g in goals[:5]) if goals else "none specified"
+    goals_str = (
+        ", ".join(sanitize_agent_field(str(g)) for g in goals[:5])
+        if goals
+        else "none specified"
+    )
 
     # Emotional state block (optional)
     emotional_state = agent_context.get("emotional_state") or {}
@@ -152,11 +158,15 @@ def _build_deliberation_prompt(
     attachment = agent_context.get("attachment_style") or {}
     relationship_block = _build_relationship_block(key_relationships, attachment)
 
+    safe_scenario = sanitize_scenario_description(scenario_description)
+    safe_name = sanitize_agent_field(str(agent_context.get("name", agent_id)))
+    safe_role = sanitize_agent_field(str(agent_context.get("role", "actor")))
+
     return _DELIBERATION_USER.format(
-        scenario_description=scenario_description[:300],
+        scenario_description=safe_scenario,
         active_metrics=list(active_metrics),
-        name=agent_context.get("name", agent_id),
-        role=agent_context.get("role", "actor"),
+        name=safe_name,
+        role=safe_role,
         persona_block=persona_block,
         goals=goals_str,
         current_beliefs=agent_context.get("current_beliefs", {}),
