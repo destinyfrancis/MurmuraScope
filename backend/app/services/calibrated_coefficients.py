@@ -172,6 +172,29 @@ class CalibratedCoefficients:
         loaded = self._coefficients.get(indicator, {})
         return {**defaults, **loaded}
 
+    def get_all_by_sentiment(self, sentiment_metric: str) -> dict[str, float]:
+        """Return all indicator → coefficient mappings for one sentiment metric.
+
+        Inverts the normal (indicator → sentiment → coeff) lookup direction.
+        Useful for sensitivity analysis that sweeps a single sentiment parameter.
+
+        Args:
+            sentiment_metric: Sentiment variable name (e.g. ``"negative_ratio"``).
+
+        Returns:
+            Dict of {indicator → coefficient}. Empty dict if not found.
+        """
+        if not self._loaded:
+            self.load_sync()
+
+        result: dict[str, float] = {}
+        all_indicators = set(self._coefficients) | set(_DEFAULTS)
+        for indicator in all_indicators:
+            coef = self.get(indicator, sentiment_metric)
+            if coef != 0.0:
+                result[indicator] = coef
+        return result
+
     def list_indicators(self) -> list[str]:
         """Return all known indicator names."""
         if not self._loaded:

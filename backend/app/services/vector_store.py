@@ -225,6 +225,17 @@ class VectorStore:
             except Exception:
                 return 0
 
+            # Try native LanceDB SQL-expression update (avoids full table rebuild).
+            # Supported in lancedb >= 0.4.0 via values_sql parameter.
+            try:
+                tbl.update(
+                    values_sql={"salience_score": f"salience_score * {decay_factor}"},
+                )
+                return tbl.count_rows()
+            except Exception:
+                pass
+
+            # Fallback: chunked pandas update for older LanceDB versions.
             try:
                 df = tbl.to_pandas()
             except Exception:
@@ -234,7 +245,6 @@ class VectorStore:
                 return 0
 
             df = df.assign(salience_score=df["salience_score"] * decay_factor)
-            # Overwrite table with updated data
             db.drop_table(table_name)
             db.create_table(table_name, df.to_dict("records"))
             return len(df)

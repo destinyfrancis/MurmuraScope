@@ -32,12 +32,13 @@ Active metrics: {active_metrics}
 You are: {name} ({role}){persona_block}
 Your core goals: {goals}
 Your current beliefs: {current_beliefs}
-Recent events you are aware of: {recent_events}
-Your current faction: {faction}{emotional_block}{relationship_block}
+Recent events you are aware of: {recent_events}{memory_block}
+Your current faction: {faction}
+Risk appetite: {risk_appetite_block}{emotional_block}{relationship_block}{strategy_block}
 
 Decide your action this round. Return JSON with:
 - decision: (string slug) your chosen action
-- reasoning: (1-3 sentences) why you chose this, referencing your relationships if relevant
+- reasoning: (1-3 sentences) why you chose this, referencing your relationships and past experience if relevant
 - belief_updates: (dict) metric_id → small delta (-0.3 to 0.3) reflecting how events changed your views
 - stance_statement: (1 sentence) public statement or action you take
 
@@ -153,10 +154,27 @@ def _build_deliberation_prompt(
     else:
         emotional_block = ""
 
-    # Relationship block (optional)
+    # Risk appetite — derived from emotional state (Task 2.5)
+    risk_appetite = _compute_risk_appetite(emotional_state)
+    if risk_appetite < 0.35:
+        risk_appetite_block = f"{risk_appetite:.2f} (cautious — prefer low-risk, defensive choices)"
+    elif risk_appetite > 0.65:
+        risk_appetite_block = f"{risk_appetite:.2f} (bold — willing to take aggressive or high-stakes actions)"
+    else:
+        risk_appetite_block = f"{risk_appetite:.2f} (neutral — weigh upside and downside evenly)"
+
+    # Relationship block (optional) — with directive disposition (Task 2.4)
     key_relationships = agent_context.get("key_relationships") or []
     attachment = agent_context.get("attachment_style") or {}
     relationship_block = _build_relationship_block(key_relationships, attachment)
+
+    # Memory block — top salient memories retrieved by caller (Task 2.6)
+    recent_memories = agent_context.get("recent_memories", "")
+    memory_block = f"\nYour relevant past memories:\n{recent_memories}" if recent_memories else ""
+
+    # Strategy block — multi-round plan injected by StrategicPlanner (Phase 4)
+    strategic_context = agent_context.get("strategic_context", "")
+    strategy_block = strategic_context if strategic_context else ""
 
     safe_scenario = sanitize_scenario_description(scenario_description)
     safe_name = sanitize_agent_field(str(agent_context.get("name", agent_id)))
@@ -171,17 +189,42 @@ def _build_deliberation_prompt(
         goals=goals_str,
         current_beliefs=agent_context.get("current_beliefs", {}),
         recent_events=agent_context.get("recent_events", [])[-3:],
+        memory_block=memory_block,
         faction=agent_context.get("faction", "none"),
+        risk_appetite_block=risk_appetite_block,
         emotional_block=emotional_block,
         relationship_block=relationship_block,
+        strategy_block=strategy_block,
     )
+
+
+def _compute_risk_appetite(emotional_state: dict[str, Any]) -> float:
+    """Derive a risk appetite scalar [0, 1] from VAD emotional state.
+
+    High arousal + negative valence → risk averse (0.2).
+    High arousal + positive valence → risk seeking (0.8).
+    Low arousal or neutral → risk neutral (0.5).
+    """
+    valence = float(emotional_state.get("valence", 0.0))  # -1 to 1
+    arousal = float(emotional_state.get("arousal", 0.3))  # 0 to 1
+
+    if arousal > 0.6:
+        if valence < -0.2:
+            return 0.2   # anxious / fearful → very cautious
+        if valence > 0.2:
+            return 0.8   # excited / enthusiastic → bold
+    return 0.5
 
 
 def _build_relationship_block(
     key_relationships: list[dict[str, Any]],
     attachment: dict[str, Any],
 ) -> str:
-    """Build the relationship context string for the prompt."""
+    """Build the relationship context string for the prompt.
+
+    Appends a directive disposition line so the LLM receives explicit
+    behavioural guidance from relationship state (Task 2.4).
+    """
     if not key_relationships and not attachment:
         return ""
 
@@ -195,6 +238,8 @@ def _build_relationship_block(
             f"  Attachment style: {style} (anxiety={anxiety:.2f}, avoidance={avoidance:.2f})"
         )
 
+    high_trust = 0
+    crisis = 0
     for rel in key_relationships[:5]:
         other = rel.get("other_id", "?")
         rel_type = rel.get("rel_type", "associate")
@@ -205,6 +250,24 @@ def _build_relationship_block(
             f"  - {other} [{rel_type}]: intimacy={intimacy:.2f}, "
             f"trust={trust:.2f}, commitment={commitment:.2f}"
         )
+        if trust > 0.3:
+            high_trust += 1
+        if trust < -0.3:
+            crisis += 1
+
+    # Directive disposition line
+    if crisis > 0:
+        disposition = "defensive"
+        directive = "protect your interests and maintain boundaries"
+    elif high_trust >= 2:
+        disposition = "cooperative"
+        directive = "seek alliance and support trusted allies"
+    else:
+        disposition = "neutral"
+        directive = "weigh options independently before committing"
+    lines.append(
+        f"  Relationship disposition: {disposition} — {directive}."
+    )
 
     return "\n".join(lines)
 

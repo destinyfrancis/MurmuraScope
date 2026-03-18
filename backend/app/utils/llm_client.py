@@ -116,12 +116,54 @@ class LLMClient:
 
     Uses httpx for OpenAI-compatible endpoints (DeepSeek, Qwen) and the
     ``anthropic`` SDK for Claude.
+
+    Connection pools are reused across calls to avoid per-call TCP/TLS overhead.
+    Call ``await client.close()`` when done (e.g. on app shutdown).
     """
 
     PROVIDERS: dict[str, dict[str, Any]] = _PROVIDERS
 
     def __init__(self, timeout: float = 120.0) -> None:
         self._timeout = timeout
+        # Persistent HTTP client — reused across all OpenAI-compat calls
+        self._http_client: httpx.AsyncClient | None = None
+        # Cached Anthropic client — recreated only when api_key changes
+        self._anthropic_client: Any | None = None
+        self._anthropic_api_key: str | None = None
+
+    def _get_http_client(self) -> httpx.AsyncClient:
+        """Return the shared httpx client, creating it lazily if needed."""
+        if self._http_client is None or self._http_client.is_closed:
+            self._http_client = httpx.AsyncClient(
+                timeout=self._timeout,
+                limits=httpx.Limits(
+                    max_connections=50,
+                    max_keepalive_connections=20,
+                    keepalive_expiry=30.0,
+                ),
+            )
+        return self._http_client
+
+    def _get_anthropic_client(self, api_key: str) -> Any:
+        """Return a cached Anthropic client, recreating if the key changed."""
+        import anthropic  # noqa: WPS433
+        if self._anthropic_client is None or self._anthropic_api_key != api_key:
+            self._anthropic_client = anthropic.AsyncAnthropic(api_key=api_key)
+            self._anthropic_api_key = api_key
+        return self._anthropic_client
+
+    async def close(self) -> None:
+        """Release pooled connections. Call on application shutdown."""
+        if self._http_client is not None and not self._http_client.is_closed:
+            await self._http_client.aclose()
+            self._http_client = None
+        if self._anthropic_client is not None:
+            try:
+                await self._anthropic_client.close()
+            except Exception:
+                pass
+            self._anthropic_client = None
+            self._anthropic_api_key = None
 
     # ------------------------------------------------------------------
     # Public API
@@ -307,10 +349,10 @@ class LLMClient:
             "max_tokens": max_tokens,
         }
 
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            resp = await client.post(url, json=payload, headers=headers)
-            resp.raise_for_status()
-            data = resp.json()
+        client = self._get_http_client()
+        resp = await client.post(url, json=payload, headers=headers)
+        resp.raise_for_status()
+        data = resp.json()
 
         choice = data["choices"][0]
         usage_raw = data.get("usage", {})
@@ -339,9 +381,7 @@ class LLMClient:
         cfg: dict[str, Any],
     ) -> LLMResponse:
         """Call Anthropic's Claude API via the ``anthropic`` SDK."""
-        import anthropic  # noqa: WPS433 — lazy import to avoid hard dep
-
-        client = anthropic.AsyncAnthropic(api_key=cfg["api_key"])
+        client = self._get_anthropic_client(cfg["api_key"])
 
         # Separate system message from conversation
         system_text = ""
@@ -361,10 +401,7 @@ class LLMClient:
         if system_text:
             kwargs["system"] = system_text
 
-        try:
-            response = await client.messages.create(**kwargs)
-        finally:
-            await client.close()
+        response = await client.messages.create(**kwargs)
 
         content_text = ""
         for block in response.content:

@@ -240,6 +240,8 @@ CREATE TABLE IF NOT EXISTS memory_triples (
 CREATE INDEX IF NOT EXISTS idx_triple_session_agent ON memory_triples(session_id, agent_id);
 CREATE INDEX IF NOT EXISTS idx_triple_subject ON memory_triples(session_id, subject);
 CREATE INDEX IF NOT EXISTS idx_triple_object ON memory_triples(session_id, object);
+-- Composite index for recursive CTE joins in get_relational_context()
+CREATE INDEX IF NOT EXISTS idx_triple_search ON memory_triples(session_id, agent_id, subject, object);
 
 -- ============================================================
 -- kg_snapshots: 知識圖譜時序快照（#4）

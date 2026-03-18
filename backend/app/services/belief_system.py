@@ -6,6 +6,7 @@ the ``belief_states`` table.
 """
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import replace
 from typing import Any
@@ -201,15 +202,23 @@ class BeliefSystem:
         Returns:
             Updated :class:`Belief` (frozen — new object).
         """
-        # Confirmation bias: same-direction → amplified; opposing → resisted
-        # Openness reduces the bias factor toward 1.0
-        openness_dampener = openness  # 0 = full bias, 1 = no bias
-        base_bias = self.CONFIRMATION_BIAS_BOOST if (
-            (evidence_stance >= 0) == (belief.stance >= 0)
-        ) else self.CONFIRMATION_BIAS_RESIST
+        # Sigmoid confirmation bias: extreme beliefs resist/boost more strongly.
+        # The sigmoid steepness k grows with confirmation_bias (default 0.5) and
+        # is dampened by openness, so open-minded agents converge toward 1.0.
+        # distance_from_center measures how extreme the current stance is (0..1).
+        distance_from_center = abs(belief.stance)  # stance in [-1, 1]
+        k = 4.0 * 0.5 * (1.0 - openness * 0.5)  # steepness; openness dampens
+        # sigmoid ∈ (0.5, 1.0) — higher at extremes, lower near center
+        sigmoid_val = 1.0 / (1.0 + math.exp(-k * distance_from_center))
+        # Map to bias multiplier: same direction → boost (>1), opposing → resist (<1)
+        same_direction = (evidence_stance >= 0) == (belief.stance >= 0)
+        if same_direction:
+            # Scale sigmoid [0.5, 1.0] → boost [1.0, BOOST]
+            effective_bias = 1.0 + (self.CONFIRMATION_BIAS_BOOST - 1.0) * (sigmoid_val - 0.5) * 2.0
+        else:
+            # Scale sigmoid [0.5, 1.0] → resist [1.0, RESIST] (inverted: more extreme = more resist)
+            effective_bias = 1.0 - (1.0 - self.CONFIRMATION_BIAS_RESIST) * (sigmoid_val - 0.5) * 2.0
 
-        # Interpolate between biased and unbiased based on openness
-        effective_bias = base_bias + openness_dampener * (1.0 - base_bias)
         effective_weight = evidence_weight * effective_bias
 
         # Bayesian posterior

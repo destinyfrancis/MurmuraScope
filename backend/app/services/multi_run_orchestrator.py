@@ -8,6 +8,7 @@ No DB writes during trials; only final MultiRunResult is persisted.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import math
 import random
 from dataclasses import dataclass
@@ -17,7 +18,7 @@ from backend.app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-_HARD_CAP = 10_000
+_HARD_CAP = 50_000
 
 
 def _clamp_trial_count(n: int) -> int:
@@ -38,6 +39,13 @@ class CanonicalResult:
     # Possible named outcomes for this scenario (LLM-defined in ScenarioConfig)
     scenario_outcomes: list[str]
     round_count: int
+    # Optional: agent interaction graph for Phase B belief propagation.
+    # agent_id → tuple of neighbour agent_ids (from Phase A interaction_graph).
+    # When present, each trial runs one round of DeGroot-style neighbour
+    # averaging before outcome scoring, improving ensemble realism.
+    interaction_graph: dict[str, tuple[str, ...]] = dataclasses.field(
+        default_factory=dict
+    )
 
 
 @dataclass(frozen=True)
@@ -67,20 +75,23 @@ class MultiRunOrchestrator:
         canonical: CanonicalResult,
         trial_count: int = 500,
         concurrency: int = 20,
+        df: int = 5,
     ) -> MultiRunResult:
         """Execute Phase B ensemble.
 
         Args:
             canonical: Phase A output with belief distributions.
-            trial_count: Number of trials (capped at 10,000).
+            trial_count: Number of trials (capped at 50,000).
             concurrency: Concurrent asyncio tasks (all in-memory, no I/O).
+            df: Degrees of freedom for t-distribution sampling (default 5).
 
         Returns:
             MultiRunResult with probability distribution and confidence intervals.
         """
         n = _clamp_trial_count(trial_count)
         logger.info(
-            "MultiRunOrchestrator: starting %d trials (concurrency=%d)", n, concurrency
+            "MultiRunOrchestrator: starting %d trials (concurrency=%d, df=%d)",
+            n, concurrency, df,
         )
 
         # Run trials in batches for asyncio concurrency
@@ -91,7 +102,7 @@ class MultiRunOrchestrator:
 
         async def run_trial(_: int) -> str:
             async with sem:
-                return _simulate_trial(canonical)
+                return _simulate_trial(canonical, df=df)
 
         tasks = [run_trial(i) for i in range(n)]
         results = await asyncio.gather(*tasks)
@@ -132,8 +143,18 @@ def _sample_t(mean: float, std: float, df: int = 5) -> float:
     return max(0.0, min(1.0, mean + std * t))
 
 
-def _simulate_trial(canonical: CanonicalResult) -> str:
-    """Run one in-memory trial. Returns the realised outcome name."""
+def _simulate_trial(canonical: CanonicalResult, df: int = 5) -> str:
+    """Run one in-memory trial. Returns the realised outcome name.
+
+    If ``canonical.interaction_graph`` is provided, runs one round of
+    DeGroot-style neighbour averaging (10% pull) after the initial t-sampled
+    belief draw.  This captures first-order social influence effects — herding,
+    echo chambers, cascade starts — without any LLM cost.
+
+    Args:
+        canonical: Phase A canonical result with belief distributions.
+        df: Degrees of freedom for t-distribution sampling.
+    """
     if not canonical.scenario_outcomes:
         return "unknown"
 
@@ -141,9 +162,13 @@ def _simulate_trial(canonical: CanonicalResult) -> str:
     sampled_beliefs: dict[str, dict[str, float]] = {}
     for agent_id, metric_dists in canonical.agent_belief_distributions.items():
         sampled_beliefs[agent_id] = {
-            m: _sample_t(mean, std)
+            m: _sample_t(mean, std, df=df)
             for m, (mean, std) in metric_dists.items()
         }
+
+    # Optional: 1-hop DeGroot belief propagation
+    if canonical.interaction_graph:
+        sampled_beliefs = _propagate_beliefs(sampled_beliefs, canonical.interaction_graph)
 
     # Aggregate to population-level metric averages
     all_metrics = canonical.scenario_metrics
@@ -164,6 +189,45 @@ def _simulate_trial(canonical: CanonicalResult) -> str:
         scores[outcome] = score + random.gauss(0, 0.1)  # add noise
 
     return max(scores, key=scores.get)
+
+
+def _propagate_beliefs(
+    sampled: dict[str, dict[str, float]],
+    graph: dict[str, tuple[str, ...]],
+) -> dict[str, dict[str, float]]:
+    """One round of DeGroot-style belief averaging.
+
+    Each agent's belief shifts 10% toward the mean of its direct neighbours.
+    Pure dict arithmetic — zero LLM cost.  Captures first-order social
+    influence (herding, echo chamber reinforcement) in Phase B trials.
+
+    Args:
+        sampled: agent_id → {metric_id: belief_value} from t-distribution draw.
+        graph: agent_id → tuple of neighbour agent_ids.
+
+    Returns:
+        New belief dict with neighbour-averaged values; input is not mutated.
+    """
+    _NEIGHBOUR_WEIGHT = 0.10
+    updated: dict[str, dict[str, float]] = {}
+
+    for agent_id, beliefs in sampled.items():
+        neighbours = graph.get(agent_id, ())
+        neighbour_beliefs = [sampled[n] for n in neighbours if n in sampled]
+
+        if not neighbour_beliefs:
+            updated[agent_id] = beliefs
+            continue
+
+        new_beliefs: dict[str, float] = {}
+        for metric, val in beliefs.items():
+            neighbour_vals = [nb.get(metric, val) for nb in neighbour_beliefs]
+            neighbour_mean = sum(neighbour_vals) / len(neighbour_vals)
+            new_val = val + _NEIGHBOUR_WEIGHT * (neighbour_mean - val)
+            new_beliefs[metric] = round(max(0.0, min(1.0, new_val)), 4)
+        updated[agent_id] = new_beliefs
+
+    return updated
 
 
 def _compute_confidence_intervals(

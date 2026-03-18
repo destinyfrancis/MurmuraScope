@@ -25,11 +25,38 @@ logger = get_logger("relationship_engine")
 # Constants
 # ---------------------------------------------------------------------------
 
-# Decay rates per round (neutral interaction)
-_INTIMACY_DECAY = 0.97
-_PASSION_DECAY = 0.93
-_COMMITMENT_DECAY = 0.99
-_TRUST_DECAY = 0.95
+# Round duration in days — calibration anchor for decay rate scaling.
+# Set ROUND_DURATION_DAYS to match your scenario's time granularity:
+#   7  → 1 round = 1 week  (default, matches base rates below)
+#  30  → 1 round = 1 month
+#   1  → 1 round = 1 day
+ROUND_DURATION_DAYS: int = 7
+
+# Base decay rates calibrated per week (ROUND_DURATION_DAYS = 7)
+_BASE_INTIMACY_DECAY_PER_WEEK: float = 0.97
+_BASE_PASSION_DECAY_PER_WEEK: float = 0.93
+_BASE_COMMITMENT_DECAY_PER_WEEK: float = 0.99
+_BASE_TRUST_DECAY_PER_WEEK: float = 0.95
+
+# Legacy aliases — kept for backward compatibility (tests / external imports)
+_INTIMACY_DECAY = _BASE_INTIMACY_DECAY_PER_WEEK
+_PASSION_DECAY = _BASE_PASSION_DECAY_PER_WEEK
+_COMMITMENT_DECAY = _BASE_COMMITMENT_DECAY_PER_WEEK
+_TRUST_DECAY = _BASE_TRUST_DECAY_PER_WEEK
+
+
+def _decay_rate(base_weekly: float, round_days: int) -> float:
+    """Scale a weekly decay rate to the actual round duration.
+
+    Args:
+        base_weekly: Decay multiplier calibrated per 7-day week (e.g. 0.97).
+        round_days: Duration of one simulation round in days.
+
+    Returns:
+        Decay multiplier appropriate for one round of ``round_days`` length.
+    """
+    weeks = round_days / 7.0
+    return base_weekly ** weeks
 
 # Sensitivity coefficients for interaction updates
 _INTIMACY_SENSITIVITY = 0.04
@@ -279,10 +306,10 @@ class RelationshipEngine:
 
         effective_valence = _clamp(effective_valence * att_multiplier, -1.0, 1.0)
 
-        # 1. Decay
-        new_intimacy = state.intimacy * _INTIMACY_DECAY
-        new_passion = state.passion * _PASSION_DECAY
-        new_trust = state.trust * _TRUST_DECAY
+        # 1. Decay — rates scale with ROUND_DURATION_DAYS
+        new_intimacy = state.intimacy * _decay_rate(_BASE_INTIMACY_DECAY_PER_WEEK, ROUND_DURATION_DAYS)
+        new_passion = state.passion * _decay_rate(_BASE_PASSION_DECAY_PER_WEEK, ROUND_DURATION_DAYS)
+        new_trust = state.trust * _decay_rate(_BASE_TRUST_DECAY_PER_WEEK, ROUND_DURATION_DAYS)
 
         # 2. Interaction effect
         new_intimacy = _clamp(new_intimacy + _INTIMACY_SENSITIVITY * effective_valence)
@@ -298,10 +325,11 @@ class RelationshipEngine:
             new_investment = _clamp(state.investment + _INVESTMENT_INCREMENT * effective_valence)
 
         # 4. Commitment: decay slightly unless satisfaction is high
+        commitment_decay = _decay_rate(_BASE_COMMITMENT_DECAY_PER_WEEK, ROUND_DURATION_DAYS)
         if new_satisfaction > 0.6:
-            new_commitment = _clamp(state.commitment * _COMMITMENT_DECAY + 0.005)
+            new_commitment = _clamp(state.commitment * commitment_decay + 0.005)
         else:
-            new_commitment = _clamp(state.commitment * _COMMITMENT_DECAY)
+            new_commitment = _clamp(state.commitment * commitment_decay)
 
         # 5. Stagnation detection
         total_change = abs(new_intimacy - state.intimacy) + abs(new_trust - state.trust)

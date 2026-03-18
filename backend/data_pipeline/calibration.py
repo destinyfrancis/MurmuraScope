@@ -62,7 +62,7 @@ _MIN_REGRESSION_POINTS = 6
 
 # FDR-corrected p-value threshold (Benjamini-Hochberg).
 _P_THRESHOLD_RAW = 0.05
-_R_SQUARED_THRESHOLD = 0.10
+_R_SQUARED_THRESHOLD = 0.30
 
 # Sentiment metrics extracted from social_sentiment table.
 # Actual schema columns: positive_ratio, negative_ratio, neutral_ratio,

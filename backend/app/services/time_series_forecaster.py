@@ -60,6 +60,7 @@ METRIC_DB_MAP: dict[str, tuple[str, str]] = {
 SUPPORTED_METRICS: frozenset[str] = frozenset(METRIC_DB_MAP)
 
 _MIN_ARIMA_POINTS = 16       # min points for AutoARIMA
+_MIN_VAR_POINTS: int = 32    # min points per series for VAR multivariate forecast
 _MIN_AUTO_SELECT_POINTS = 24  # trigger auto-model selection
 _HOLDOUT_WINDOW = 4           # holdout MAPE evaluation window
 _DEFAULT_SEASON = 4           # default quarterly seasonal period
@@ -179,11 +180,12 @@ class TimeSeriesForecaster:
             metric, horizon, n,
         )
 
-        # Minimum data threshold — refuse forecast with <8 real data points
-        if n < 8:
+        # Minimum data threshold — refuse forecast with <_MIN_ARIMA_POINTS real data points
+        if n < _MIN_ARIMA_POINTS:
             dq = "no_data" if n == 0 else "insufficient"
             logger.warning(
-                "Refusing forecast for metric=%s — only %d data points (minimum 8 required)", metric, n
+                "Refusing forecast for metric=%s — only %d data points (minimum %d required)",
+                metric, n, _MIN_ARIMA_POINTS,
             )
             return ForecastResult(
                 metric=metric,
@@ -267,7 +269,7 @@ class TimeSeriesForecaster:
             Dict metric → ForecastResult, or None on failure.
         """
         from backend.app.services.var_forecaster import (  # noqa: PLC0415
-            VAR_GROUPS, VARForecaster, _MIN_VAR_POINTS,
+            VAR_GROUPS, VARForecaster,
         )
 
         if group_name not in VAR_GROUPS:

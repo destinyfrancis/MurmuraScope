@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 from typing import Any
 
 from backend.app.services.calibration_config import (
@@ -44,6 +45,20 @@ from backend.app.services.macro_shocks import SHOCK_HANDLERS
 from backend.app.services.macro_posts import SHOCK_POST_GENERATORS
 
 logger = logging.getLogger(__name__)
+
+# EMA smoothing factor for micro-macro feedback loop (Tasks 1 & 2)
+_EMA_ALPHA: float = 0.30
+
+
+def _logistic_delta(net_ratio: float, k: float, cap: float) -> float:
+    """Logistic S-curve for micro-macro feedback. net_ratio ∈ [-1, 1].
+
+    When net_ratio = 0 → delta = 0.
+    When net_ratio → +1 → delta → +cap.
+    When net_ratio → -1 → delta → -cap.
+    """
+    return cap * (2.0 / (1.0 + math.exp(-k * net_ratio)) - 1.0)
+
 
 # ---------------------------------------------------------------------------
 # DB → MacroState field mapping
@@ -635,9 +650,220 @@ class MacroController:
         )
         return result
 
+    async def apply_agent_actions_feedback(
+        self,
+        current_state: MacroState,
+        session_id: str,
+        round_number: int,
+        lookback_rounds: int = 3,
+    ) -> MacroState:
+        """Micro-macro feedback loop: agent decisions → aggregate macro shift.
+
+        Phase 4 addition.  Counts labour-market and wealth-related action types
+        from ``simulation_actions`` over the past N rounds and applies small
+        aggregate feedback to unemployment_rate, consumer_confidence, and
+        gdp_growth.
+
+        Labour market signals:
+          - "seek_employment" / "apply_job" → mild unemployment downward pressure
+          - "resign" / "quit" / "layoff" / "fire" / "retrench" → upward pressure
+
+        Wealth signals:
+          - "invest" / "buy_asset" / "buy_stock" → consumer_confidence up
+          - "sell_asset" / "sell_stock" / "divest" → consumer_confidence down
+
+        Each percentage-point of relevant decisions contributes at most ±0.0003
+        to unemployment_rate and ±0.3 to consumer_confidence.
+
+        Args:
+            current_state: Most recent MacroState.
+            session_id: Simulation session UUID.
+            round_number: Current round.
+            lookback_rounds: How many rounds of actions to aggregate.
+
+        Returns:
+            New MacroState with micro-driven adjustments applied on top.
+        """
+        from backend.app.utils.db import get_db  # noqa: PLC0415
+
+        min_round = max(0, round_number - lookback_rounds + 1)
+        try:
+            async with get_db() as db:
+                cursor = await db.execute(
+                    """
+                    SELECT action_type FROM simulation_actions
+                    WHERE session_id = ?
+                      AND round_number BETWEEN ? AND ?
+                    """,
+                    (session_id, min_round, round_number),
+                )
+                rows = await cursor.fetchall()
+        except Exception:
+            logger.debug("apply_agent_actions_feedback: DB read skipped")
+            return current_state
+
+        if not rows:
+            return current_state
+
+        total = len(rows)
+        seek_count = 0
+        resign_count = 0
+        invest_count = 0
+        divest_count = 0
+
+        _SEEK_KEYWORDS = frozenset({"seek_employment", "apply_job", "job_search", "find_work"})
+        _RESIGN_KEYWORDS = frozenset({"resign", "quit", "layoff", "fire", "retrench", "dismiss"})
+        _INVEST_KEYWORDS = frozenset({"invest", "buy_asset", "buy_stock", "purchase_property"})
+        _DIVEST_KEYWORDS = frozenset({"sell_asset", "sell_stock", "divest", "liquidate"})
+
+        for row in rows:
+            action = (row[0] if isinstance(row, (list, tuple)) else row["action_type"]) or ""
+            action_lower = action.lower().replace(" ", "_")
+            if action_lower in _SEEK_KEYWORDS:
+                seek_count += 1
+            elif action_lower in _RESIGN_KEYWORDS:
+                resign_count += 1
+            if action_lower in _INVEST_KEYWORDS:
+                invest_count += 1
+            elif action_lower in _DIVEST_KEYWORDS:
+                divest_count += 1
+
+        seek_ratio = seek_count / total
+        resign_ratio = resign_count / total
+        invest_ratio = invest_count / total
+        divest_ratio = divest_count / total
+
+        # Labour market micro-feedback — logistic S-curve saturates at ±0.003
+        # EMA smoothing: 30% weight on new signal, 70% on current state
+        raw_labour_signal = _logistic_delta(resign_ratio - seek_ratio, k=8.0, cap=0.003)
+        labour_delta = _EMA_ALPHA * raw_labour_signal
+        new_unemployment = round(
+            max(0.01, min(0.30, current_state.unemployment_rate + labour_delta)), 4
+        )
+
+        # Wealth/confidence micro-feedback — logistic S-curve saturates at ±1.5
+        raw_wealth_signal = _logistic_delta(invest_ratio - divest_ratio, k=6.0, cap=1.5)
+        wealth_delta = _EMA_ALPHA * raw_wealth_signal
+        new_confidence = round(
+            max(10.0, min(100.0, current_state.consumer_confidence + wealth_delta)), 2
+        )
+
+        if new_unemployment == current_state.unemployment_rate and new_confidence == current_state.consumer_confidence:
+            return current_state
+
+        logger.debug(
+            "apply_agent_actions_feedback session=%s round=%d "
+            "seek=%.1f%% resign=%.1f%% invest=%.1f%% divest=%.1f%% "
+            "→ Δunemployment=%.4f Δconfidence=%.2f",
+            session_id, round_number,
+            seek_ratio * 100, resign_ratio * 100,
+            invest_ratio * 100, divest_ratio * 100,
+            labour_delta, wealth_delta,
+        )
+
+        from dataclasses import replace as _replace  # noqa: PLC0415
+        micro_adjusted = _replace(
+            current_state,
+            unemployment_rate=new_unemployment,
+            consumer_confidence=new_confidence,
+        )
+        # Apply structural cross-macro linkages after micro feedback
+        return apply_cross_macro_linkages(micro_adjusted)
+
     @staticmethod
     def _apply_overrides(
         state: MacroState, overrides: dict[str, Any]
     ) -> MacroState:
         """Backward-compatible static method — delegates to module-level function."""
         return apply_overrides(state, overrides)
+
+
+def apply_cross_macro_linkages(state: MacroState) -> MacroState:
+    """Apply structural cross-macro feedback channels.
+
+    Implements four empirically-grounded inter-indicator linkages that are
+    missing from the pure agent-driven feedback loop:
+
+        1. HSI → consumer_confidence (wealth effect: ±3 pt per ±100% HSI deviation)
+        2. unemployment_rate → consumer_confidence (job insecurity: −2 pt per 1pp excess)
+        3. net_migration → unemployment_rate (labour supply: ≤ ±0.003pp per round)
+        4. gdp_growth → hsi_level (earnings → equity: 0.5% HSI per 1pp GDP)
+
+    All deltas are scaled by a 0.20 damping factor so structural linkages do
+    not overwhelm the agent-driven dynamics.  No LLM calls; pure arithmetic.
+
+    Args:
+        state: Current MacroState snapshot.
+
+    Returns:
+        New MacroState with structural adjustments applied, or the same
+        object if all adjustments are negligible.
+    """
+    from dataclasses import replace as _replace  # noqa: PLC0415
+
+    # 1. HSI → consumer confidence (wealth effect)
+    # Baseline HSI ~20,000; each ±100% deviation → ±3 pt confidence
+    hsi_norm = (state.hsi_level - 20_000.0) / 20_000.0
+    hsi_to_confidence = hsi_norm * 3.0
+
+    # 2. Unemployment → consumer confidence
+    # Each 1pp above structural rate (3.5%) → −2 pt confidence; cap ±10 pt
+    u_excess = state.unemployment_rate - 0.035
+    u_to_confidence = max(-10.0, min(10.0, -u_excess * 200.0))
+
+    # 3. Net migration → unemployment pressure
+    # Net emigration reduces labour supply; small dampened effect ≤ ±0.003
+    mig_to_u = max(-0.003, min(0.003, -state.net_migration * 0.000005))
+
+    # 4. GDP growth → HSI (earnings → equity valuation)
+    # 1pp GDP growth → 0.5% HSI appreciation; cap ±500 points
+    gdp_to_hsi = max(-500.0, min(500.0, state.hsi_level * state.gdp_growth * 0.5))
+
+    # 5. Phillips Curve: unemployment → gdp_growth (inverse relationship)
+    # 1pp excess unemployment above structural rate (3.5%) → -0.2pp GDP growth; cap ±1pp
+    gdp_phillips_delta = -u_excess * 0.2
+    gdp_phillips_delta = max(-0.01, min(0.01, gdp_phillips_delta))
+
+    # 6. HIBOR → CCL (interest rate transmission)
+    # Each 1pp above neutral rate (3.0%) → -2% CCL appreciation; cap ±100
+    hibor_excess = state.hibor_1m - 0.03  # deviation from neutral HIBOR
+    ccl_from_rate = -hibor_excess * 0.02 * state.ccl_index  # % of current CCL
+    ccl_from_rate = max(-100.0, min(100.0, ccl_from_rate))
+
+    # Apply damping factor so linkages complement rather than dominate
+    dampen = 0.20
+    confidence_delta = (hsi_to_confidence + u_to_confidence) * dampen
+    new_confidence = round(max(10.0, min(100.0, state.consumer_confidence + confidence_delta)), 2)
+    new_unemployment = round(max(0.01, min(0.30, state.unemployment_rate + mig_to_u * dampen)), 4)
+    new_hsi = round(max(1_000.0, state.hsi_level + gdp_to_hsi * dampen), 2)
+    new_gdp_growth = round(
+        max(-0.15, min(0.15, state.gdp_growth + gdp_phillips_delta * dampen)), 4
+    )
+    new_ccl_index = round(max(50.0, state.ccl_index + ccl_from_rate * dampen), 2)
+
+    if (
+        new_confidence == state.consumer_confidence
+        and new_unemployment == state.unemployment_rate
+        and new_hsi == state.hsi_level
+        and new_gdp_growth == state.gdp_growth
+        and new_ccl_index == state.ccl_index
+    ):
+        return state
+
+    logger.debug(
+        "apply_cross_macro_linkages: Δconfidence=%.2f Δunemployment=%.4f Δhsi=%.1f "
+        "Δgdp_growth=%.4f Δccl_index=%.2f",
+        new_confidence - state.consumer_confidence,
+        new_unemployment - state.unemployment_rate,
+        new_hsi - state.hsi_level,
+        new_gdp_growth - state.gdp_growth,
+        new_ccl_index - state.ccl_index,
+    )
+    return _replace(
+        state,
+        consumer_confidence=new_confidence,
+        unemployment_rate=new_unemployment,
+        hsi_level=new_hsi,
+        gdp_growth=new_gdp_growth,
+        ccl_index=new_ccl_index,
+    )

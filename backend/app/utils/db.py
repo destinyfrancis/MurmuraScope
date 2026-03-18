@@ -79,6 +79,12 @@ async def apply_migrations() -> None:
     migrations = [
         "ALTER TABLE agent_profiles ADD COLUMN tier INTEGER DEFAULT 2",
     ]
+    # Idempotent index creation — CREATE INDEX IF NOT EXISTS is always safe
+    index_migrations = [
+        # Composite index for recursive CTE in get_relational_context()
+        "CREATE INDEX IF NOT EXISTS idx_triple_search "
+        "ON memory_triples(session_id, agent_id, subject, object)",
+    ]
     async with get_db() as db:
         for sql in migrations:
             try:
@@ -87,4 +93,7 @@ async def apply_migrations() -> None:
             except Exception:
                 # Column already exists — safe to ignore
                 pass
+        for sql in index_migrations:
+            await db.execute(sql)
+            await db.commit()
     logger.info("DB migrations applied")

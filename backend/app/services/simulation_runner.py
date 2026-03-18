@@ -30,6 +30,16 @@ from backend.app.services.simulation_hooks_social import SocialHooksMixin
 from backend.app.services.simulation_subprocess_manager import SimulationSubprocessManager
 from backend.app.utils.logger import get_logger
 
+# Imported lazily-by-name to avoid circular import at module load time;
+# resolved once at first call via _clear_ws_progress().
+def _clear_ws_progress(session_id: str) -> None:
+    """Clear WebSocket progress buffer for a completed/failed session."""
+    try:
+        from backend.app.api.ws import clear_progress  # noqa: PLC0415
+        clear_progress(session_id)
+    except Exception:
+        pass  # WS module not loaded — no buffer to clear
+
 logger = get_logger("simulation_runner")
 
 # Paths computed relative to this file's location — portable across deployments.
@@ -101,12 +111,15 @@ class SimulationRunner(
         self._kg_mode: dict[str, bool] = {}  # session_id → True if kg_driven
         self._world_event_gen: Any | None = None
         self._cognitive_engine: Any | None = None
+        self._belief_propagation: Any | None = None
         self._faction_mapper: Any | None = None
         self._tipping_detector: Any | None = None
         # kg_driven per-session state — all 12 fields consolidated into KGSessionState
         self._kg_sessions: dict[str, KGSessionState] = {}
         # Phase 4: relationship lifecycle service (kg_driven + emergence)
         self._relationship_lifecycle: Any | None = None
+        # Phase 4: strategic planner for Tier 1 multi-round planning
+        self._strategic_planner: Any | None = None
 
     async def run(
         self,
@@ -381,15 +394,47 @@ class SimulationRunner(
             # Close log file — guarded so it's safe if open() itself failed
             if log_file is not None:
                 log_file.close()
+            # Release WebSocket progress buffer (avoids unbounded memory growth
+            # when many simulations run without active WS clients)
+            _clear_ws_progress(session_id)
 
-    def _create_tracked_task(self, session_id: str, coro: Any) -> "asyncio.Task[Any]":
+    def _create_tracked_task(
+        self,
+        session_id: str,
+        coro: Any,
+        timeout_s: float = 60.0,
+    ) -> "asyncio.Task[Any]":
         """Create an asyncio task and register it for cleanup on session end.
 
         All fire-and-forget tasks must go through this method so that the
         finally block in run() can cancel them if the simulation ends before
         the task completes, preventing async task leaks.
+
+        Args:
+            timeout_s: Per-task timeout in seconds. Exceeded tasks are cancelled
+                and logged as warnings rather than crashing the simulation.
         """
-        task: asyncio.Task[Any] = asyncio.create_task(coro)
+        coro_name = getattr(coro, "__qualname__", type(coro).__name__)
+
+        async def _wrapped() -> None:
+            try:
+                await asyncio.wait_for(coro, timeout=timeout_s)
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "Task timeout after %.0fs session=%s task=%s",
+                    timeout_s,
+                    session_id,
+                    coro_name,
+                )
+            except Exception:
+                logger.debug(
+                    "Tracked task error session=%s task=%s",
+                    session_id,
+                    coro_name,
+                    exc_info=True,
+                )
+
+        task: asyncio.Task[Any] = asyncio.create_task(_wrapped())
         task_set = self._pending_tasks[session_id]
         task_set.add(task)
         task.add_done_callback(lambda t: task_set.discard(t))
@@ -492,9 +537,11 @@ class SimulationRunner(
         if hc.emergence_enabled:
             await self._process_belief_update(session_id, round_num)
         await self._process_round_consumption(session_id, round_num)
-        # kg_driven: Tier 1 cognitive deliberation
+        # kg_driven: strategic planning + Tier 1 cognitive deliberation + belief propagation
         if self._kg_mode.get(session_id):
+            await self._kg_strategic_planning(session_id, round_num)
             await self._kg_tier1_deliberation(session_id, round_num)
+            await self._kg_belief_propagation(session_id, round_num)
         if self._profiler:
             self._profiler.end_hook("group_2", round_num, _t_g2)
 
@@ -512,11 +559,13 @@ class SimulationRunner(
             self._create_tracked_task(
                 session_id,
                 self._process_media_influence(session_id, round_num),
+                timeout_s=90.0,
             )
             if hc.emergence_enabled:
                 self._create_tracked_task(
                     session_id,
                     self._process_info_warfare(session_id, round_num),
+                    timeout_s=90.0,
                 )
         if round_num > 0 and round_num % hc.echo_chamber_interval == 0:
             self._create_tracked_task(
@@ -537,11 +586,13 @@ class SimulationRunner(
             self._create_tracked_task(
                 session_id,
                 self._process_news_shock(session_id, round_num),
+                timeout_s=90.0,
             )
         if round_num > 0 and round_num % hc.kg_evolution_interval == 0:
             self._create_tracked_task(
                 session_id,
                 self._process_kg_evolution(session_id, round_num),
+                timeout_s=90.0,
             )
         if round_num > 0 and round_num % hc.kg_snapshot_interval == 0:
             self._create_tracked_task(
@@ -599,6 +650,7 @@ class SimulationRunner(
             self._create_tracked_task(
                 session_id,
                 self._kg_faction_and_tipping(session_id, round_num),
+                timeout_s=90.0,
             )
 
         # kg_driven + emergence: relationship lifecycle detection (every 3 rounds)
@@ -1064,6 +1116,9 @@ class SimulationRunner(
         if self._cognitive_engine is None:
             from backend.app.services.cognitive_agent_engine import CognitiveAgentEngine  # noqa: PLC0415
             self._cognitive_engine = CognitiveAgentEngine()
+        if self._belief_propagation is None:
+            from backend.app.services.belief_propagation import BeliefPropagationEngine  # noqa: PLC0415
+            self._belief_propagation = BeliefPropagationEngine()
         if self._faction_mapper is None:
             from backend.app.services.emergence_tracker import FactionMapper  # noqa: PLC0415
             self._faction_mapper = FactionMapper()
@@ -1073,6 +1128,9 @@ class SimulationRunner(
         if self._relationship_lifecycle is None:
             from backend.app.services.relationship_lifecycle import RelationshipLifecycleService  # noqa: PLC0415
             self._relationship_lifecycle = RelationshipLifecycleService()
+        if self._strategic_planner is None:
+            from backend.app.services.strategic_planner import StrategicPlanner  # noqa: PLC0415
+            self._strategic_planner = StrategicPlanner()
 
         # Initialise per-session state via KGSessionState
         self._kg_sessions[session_id] = KGSessionState()
@@ -1281,6 +1339,38 @@ class SimulationRunner(
                     agent_id=agent_id,
                     rel_states=rel_states,
                 )
+
+                # Task 2.6: retrieve salient memories to ground deliberation.
+                recent_memories = ""
+                if self._memory_service is not None:
+                    try:
+                        import hashlib as _hashlib  # noqa: PLC0415
+                        numeric_id = int(
+                            _hashlib.md5(agent_id.encode()).hexdigest(), 16
+                        ) % (2**31)
+                        recent_memories = await self._memory_service.get_agent_context(
+                            session_id=session_id,
+                            agent_id=numeric_id,
+                            current_round=round_num,
+                            context_query=scenario,
+                        )
+                    except Exception:
+                        pass  # memory unavailable — degrade gracefully
+
+                # Task 2.3: use dynamically detected faction (set every 3 rounds);
+                # fall back to static value from agent profile.
+                dynamic_faction = kg_state.agent_factions.get(agent_id)
+                faction_str = dynamic_faction if dynamic_faction else agent.get("faction", "none")
+
+                # Phase 4: inject strategic plan context if available
+                strategy_context = ""
+                if self._strategic_planner is not None:
+                    strategy_context = self._strategic_planner.get_strategy_context(
+                        kg_state=kg_state,
+                        agent_id=agent_id,
+                        current_round=round_num,
+                    )
+
                 agent_context = {
                     "agent_id": agent_id,
                     "name": agent.get("name", ""),
@@ -1289,7 +1379,9 @@ class SimulationRunner(
                     "goals": list(agent.get("goals", [])),
                     "current_beliefs": metrics,
                     "recent_events": [e.content for e in current_events],
-                    "faction": agent.get("faction", "none"),
+                    "faction": faction_str,
+                    "recent_memories": recent_memories,
+                    "strategic_context": strategy_context,
                     "emotional_state": (
                         {
                             "valence": getattr(emotional_state, "valence", 0.0),
@@ -1322,6 +1414,111 @@ class SimulationRunner(
                     agent.get("id", "?"), session_id,
                 )
         kg_state.active_metrics = metrics
+
+    async def _kg_strategic_planning(
+        self, session_id: str, round_num: int
+    ) -> None:
+        """Group 2: refresh Tier 1 strategic plans every _PLAN_HORIZON rounds.
+
+        Phase 4 — multi-round planning.  On plan rounds, each Tier 1 agent
+        produces a 3-round intent plan via LLM.  The plan is stored in
+        kg_state.agent_strategies and injected into the deliberation prompt
+        for subsequent rounds so agents act with strategic consistency.
+        """
+        if self._strategic_planner is None:
+            return
+        kg_state = self._kg_sessions.get(session_id)
+        if kg_state is None or not kg_state.tier1_agents:
+            return
+        try:
+            await self._strategic_planner.update_plans(
+                kg_state=kg_state,
+                tier1_agents=kg_state.tier1_agents,
+                round_num=round_num,
+                scenario_description=kg_state.scenario_description,
+            )
+        except Exception:
+            logger.debug("_kg_strategic_planning: planner failed session=%s round=%d", session_id, round_num)
+
+    async def _kg_belief_propagation(
+        self, session_id: str, round_num: int
+    ) -> None:
+        """Group 2: propagate world events into agent beliefs, then 1-hop cascade.
+
+        Tasks 2.1 + 2.2: wires BeliefPropagationEngine (previously never called)
+        and adds neighbour cascade so one agent's significant belief shift
+        pulls its interaction partners in the same direction.
+        """
+        if self._belief_propagation is None:
+            return
+        kg_state = self._kg_sessions.get(session_id)
+        if kg_state is None or not kg_state.agent_beliefs:
+            return
+
+        events = kg_state.current_round_events
+        active_metrics = tuple(kg_state.active_metrics.keys())
+        if not active_metrics:
+            return
+
+        from backend.app.models.cognitive_fingerprint import CognitiveFingerprint  # noqa: PLC0415
+
+        # --- Propagation: world events → per-agent belief deltas ---
+        all_deltas: dict[str, dict[str, float]] = {}
+        for agent_id, beliefs in kg_state.agent_beliefs.items():
+            # Build a default fingerprint from session state.
+            # CognitiveFingerprints are not yet persisted in SimulationRunner;
+            # defaults give reasonable confirmation_bias / conformity values.
+            fingerprint = CognitiveFingerprint(
+                agent_id=agent_id,
+                values={"authority": 0.5, "openness": 0.5, "loyalty": 0.5},
+                info_diet=("news", "social_media", "state_media"),
+                group_memberships=(),
+                susceptibility={m: 0.5 for m in active_metrics},
+                confirmation_bias=0.4,
+                conformity=0.3,
+            )
+            faction_id = kg_state.agent_factions.get(agent_id, "")
+            faction_peer_stance = _compute_faction_peer_stance(
+                faction_id=faction_id,
+                agent_id=agent_id,
+                agent_beliefs=kg_state.agent_beliefs,
+                agent_factions=kg_state.agent_factions,
+            )
+            delta = await self._belief_propagation.propagate(
+                fingerprint=fingerprint,
+                events=list(events),
+                faction_peer_stance=faction_peer_stance,
+                active_metrics=active_metrics,
+                current_beliefs=beliefs,
+            )
+            if delta:
+                all_deltas[agent_id] = delta
+
+        # Apply propagation deltas (immutable update)
+        updated: dict[str, dict[str, float]] = {
+            aid: dict(b) for aid, b in kg_state.agent_beliefs.items()
+        }
+        for agent_id, deltas in all_deltas.items():
+            for m, d in deltas.items():
+                if m in updated.get(agent_id, {}):
+                    updated[agent_id][m] = max(0.0, min(1.0, updated[agent_id][m] + d))
+
+        # --- Cascade: 1-hop neighbour pull for large shifts (Task 2.2) ---
+        cascade_deltas = self._belief_propagation.cascade(
+            all_deltas=all_deltas,
+            interaction_graph=kg_state.interaction_graph,
+        )
+        for agent_id, c_deltas in cascade_deltas.items():
+            if agent_id in updated:
+                for m, d in c_deltas.items():
+                    if m in updated[agent_id]:
+                        updated[agent_id][m] = max(0.0, min(1.0, updated[agent_id][m] + d))
+
+        kg_state.agent_beliefs = updated
+        logger.debug(
+            "_kg_belief_propagation session=%s round=%d agents=%d cascades=%d",
+            session_id, round_num, len(all_deltas), len(cascade_deltas),
+        )
 
     async def _process_relationship_states(
         self, session_id: str, round_num: int
@@ -1479,6 +1676,14 @@ class SimulationRunner(
                     interaction_graph=kg_state.interaction_graph,
                 )
                 await self._persist_faction_snapshot(snapshot)
+                # Task 2.3: feed detected factions back into KGSessionState so
+                # _kg_tier1_deliberation and _kg_belief_propagation can use them
+                # in subsequent rounds (data is 3 rounds old — intentional lag).
+                new_factions: dict[str, str] = {}
+                for record in snapshot.factions:
+                    for member_id in record.member_agent_ids:
+                        new_factions[member_id] = record.faction_id
+                kg_state.agent_factions = new_factions
             except Exception:
                 logger.exception(
                     "Faction mapping failed session=%s round=%d",
@@ -1645,6 +1850,32 @@ def _try_parse_jsonl(line: str) -> dict[str, Any] | None:
         return json.loads(line)
     except (json.JSONDecodeError, ValueError):
         return None
+
+
+def _compute_faction_peer_stance(
+    faction_id: str,
+    agent_id: str,
+    agent_beliefs: dict[str, dict[str, float]],
+    agent_factions: dict[str, str],
+) -> dict[str, float]:
+    """Return average belief values of other agents in the same faction.
+
+    Used by BeliefPropagationEngine to compute conformity peer pressure.
+    Returns an empty dict if the faction has no other members.
+    """
+    if not faction_id:
+        return {}
+    peer_beliefs = [
+        b for aid, b in agent_beliefs.items()
+        if aid != agent_id and agent_factions.get(aid) == faction_id
+    ]
+    if not peer_beliefs:
+        return {}
+    all_metrics = {m for b in peer_beliefs for m in b}
+    return {
+        m: sum(b.get(m, 0.5) for b in peer_beliefs) / len(peer_beliefs)
+        for m in all_metrics
+    }
 
 
 def _build_key_relationships(

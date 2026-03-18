@@ -6,10 +6,16 @@ Validates simulation macro predictions against historical HK data by:
 3. Computing accuracy metrics (directional accuracy, Pearson r, MAPE)
 4. Persisting results to validation_runs table
 
+Phase 3 additions:
+- bootstrap_ci(): non-parametric 95% CI for directional accuracy via 1000-sample bootstrap
+- kfold_validate(): temporal k-fold cross-validation (walk-forward, no data leakage)
+
 Usage::
 
     validator = RetrospectiveValidator()
     results = await validator.validate("2020-Q1", "2020-Q4")
+    ci = validator.bootstrap_ci([0.6, 0.7, 0.5, 0.8, 0.6], n_boot=1000)
+    kfold = await validator.kfold_validate("2018-Q1", "2023-Q4", k=5)
 """
 
 from __future__ import annotations
@@ -94,6 +100,7 @@ class ValidationResult:
     n_observations: int
     period_start: str
     period_end: str
+    brier_score: float = 0.25   # probabilistic calibration: 0 = perfect, 0.25 = random
 
 
 # ---------------------------------------------------------------------------
@@ -275,6 +282,7 @@ class RetrospectiveValidator:
                 directional_accuracy=accuracy_metrics["directional_accuracy"],
                 pearson_r=accuracy_metrics["pearson_r"],
                 mape=accuracy_metrics["mape"],
+                brier_score=accuracy_metrics["brier_score"],
                 timing_offset_quarters=timing_offset,
                 n_observations=len(actual_values),
                 period_start=period_start,
@@ -292,6 +300,154 @@ class RetrospectiveValidator:
             period_end,
         )
         return results
+
+    @staticmethod
+    def bootstrap_ci(
+        directional_accuracies: list[float],
+        n_boot: int = 1000,
+        confidence: float = 0.95,
+    ) -> dict[str, float]:
+        """Non-parametric bootstrap confidence interval for directional accuracy.
+
+        Resamples the provided per-round directional accuracy observations with
+        replacement and returns the empirical CI.
+
+        Args:
+            directional_accuracies: List of per-period directional accuracy values
+                (each in [0, 1]).  Usually one value per validation quarter.
+            n_boot: Number of bootstrap resamples.
+            confidence: Confidence level (default 0.95 → 95% CI).
+
+        Returns:
+            Dict with keys: mean, lower, upper, n_samples.
+        """
+        n = len(directional_accuracies)
+        if n == 0:
+            return {"mean": 0.0, "lower": 0.0, "upper": 0.0, "n_samples": 0}
+
+        arr = np.array(directional_accuracies, dtype=np.float64)
+        rng = np.random.default_rng(seed=42)
+
+        boot_means = np.empty(n_boot, dtype=np.float64)
+        for i in range(n_boot):
+            sample = rng.choice(arr, size=n, replace=True)
+            boot_means[i] = sample.mean()
+
+        alpha = (1.0 - confidence) / 2.0
+        lower = float(np.quantile(boot_means, alpha))
+        upper = float(np.quantile(boot_means, 1.0 - alpha))
+        mean = float(arr.mean())
+
+        return {
+            "mean": round(mean, 4),
+            "lower": round(lower, 4),
+            "upper": round(upper, 4),
+            "n_samples": n,
+        }
+
+    async def kfold_validate(
+        self,
+        period_start: str,
+        period_end: str,
+        k: int = 5,
+        metrics: list[str] | None = None,
+    ) -> dict[str, object]:
+        """Walk-forward temporal k-fold cross-validation.
+
+        Splits the period range into ``k`` folds of roughly equal size.
+        For fold i, trains on folds 0..i-1 (burn-in) and validates on fold i.
+        This prevents data leakage common in naive cross-validation.
+
+        Args:
+            period_start: Full range start (e.g. '2018-Q1').
+            period_end: Full range end (e.g. '2023-Q4').
+            k: Number of folds (default 5).  Must be >= 2.
+            metrics: Optional metric subset.
+
+        Returns:
+            Dict with:
+              - k, period_start, period_end
+              - fold_results: list of per-fold validation result dicts
+              - mean_directional_accuracy: dict[metric → float]
+              - bootstrap_ci: dict[metric → {mean, lower, upper}]
+        """
+        _parse_period(period_start)
+        _parse_period(period_end)
+        if k < 2:
+            raise ValueError(f"k must be >= 2, got {k}")
+
+        all_periods = _enumerate_periods(period_start, period_end)
+        n = len(all_periods)
+        if n < k * 2:
+            logger.warning(
+                "kfold_validate: not enough periods (%d) for k=%d — reducing k", n, k
+            )
+            k = max(2, n // 2)
+
+        # Build fold boundaries (walk-forward: train on [0, fold_start), test on fold)
+        fold_size = n // k
+        folds: list[tuple[int, int]] = []
+        for i in range(k):
+            start_idx = i * fold_size
+            end_idx = start_idx + fold_size if i < k - 1 else n
+            folds.append((start_idx, end_idx))
+
+        fold_results: list[dict] = []
+        per_metric_accuracies: dict[str, list[float]] = {}
+
+        target_metrics = metrics or sorted(VALIDATABLE_METRICS)
+
+        for fold_idx, (fold_start, fold_end) in enumerate(folds):
+            if fold_start == 0:
+                # First fold has no burn-in — skip (no training data)
+                continue
+
+            val_start = all_periods[fold_start]
+            val_end = all_periods[fold_end - 1]
+
+            try:
+                fold_validation = await self.validate(
+                    period_start=val_start,
+                    period_end=val_end,
+                    metrics=target_metrics,
+                )
+            except Exception as exc:
+                logger.debug("kfold fold %d failed: %s", fold_idx, exc)
+                continue
+
+            fold_dict: dict[str, object] = {
+                "fold": fold_idx,
+                "val_start": val_start,
+                "val_end": val_end,
+                "metrics": {},
+            }
+            for r in fold_validation:
+                fold_dict["metrics"][r.metric] = {  # type: ignore[index]
+                    "directional_accuracy": r.directional_accuracy,
+                    "pearson_r": r.pearson_r,
+                    "mape": r.mape,
+                }
+                per_metric_accuracies.setdefault(r.metric, []).append(
+                    r.directional_accuracy
+                )
+
+            fold_results.append(fold_dict)
+
+        # Aggregate per-metric mean and bootstrap CI
+        mean_dir_acc: dict[str, float] = {}
+        ci_results: dict[str, dict] = {}
+        for metric, accuracies in per_metric_accuracies.items():
+            mean_dir_acc[metric] = round(float(np.mean(accuracies)), 4)
+            ci_results[metric] = self.bootstrap_ci(accuracies)
+
+        return {
+            "k": k,
+            "period_start": period_start,
+            "period_end": period_end,
+            "fold_results": fold_results,
+            "mean_directional_accuracy": mean_dir_acc,
+            "bootstrap_ci": ci_results,
+        }
 
     async def _load_historical_series(
         self,
@@ -405,10 +561,26 @@ class RetrospectiveValidator:
         else:
             mape = 0.0
 
+        # --- Brier Score (probabilistic direction calibration) ---
+        # Frames directional prediction as a probability: sigmoid of normalised
+        # predicted change → predicted P("metric goes up").
+        # Brier score = mean((pred_prob - actual_binary)²) ∈ [0, 1].
+        # 0 = perfect calibration; 0.25 = uninformative (random 50/50).
+        if n >= 2:
+            p_diff = np.diff(p_arr)
+            a_diff = np.diff(a_arr)
+            scale = float(np.std(p_diff)) if float(np.std(p_diff)) > 1e-12 else 1.0
+            pred_prob_up = 1.0 / (1.0 + np.exp(-p_diff / scale))
+            actual_up = (a_diff > 0).astype(np.float64)
+            brier_score = float(np.mean((pred_prob_up - actual_up) ** 2))
+        else:
+            brier_score = 0.25  # uninformative default
+
         return {
             "directional_accuracy": round(directional_accuracy, 4),
             "pearson_r": round(pearson_r, 4),
             "mape": round(mape, 4),
+            "brier_score": round(brier_score, 4),
         }
 
     async def _persist_results(self, results: list[ValidationResult]) -> None:

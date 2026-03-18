@@ -63,7 +63,7 @@ class NarrativeEntry:
 # ---------------------------------------------------------------------------
 
 class FactionMapper:
-    """Run Louvain community detection on agent interaction graph."""
+    """Run Leiden (with Louvain fallback) community detection on agent interaction graph."""
 
     def compute(
         self,
@@ -75,9 +75,8 @@ class FactionMapper:
         """Compute faction snapshot from current agent state."""
         try:
             import networkx as nx
-            from community import best_partition  # python-louvain
         except ImportError:
-            logger.warning("FactionMapper: networkx/community not installed — returning single faction")
+            logger.warning("FactionMapper: networkx not installed — returning single faction")
             return self._single_faction(simulation_id, round_number, agent_beliefs)
 
         G = nx.Graph()
@@ -89,7 +88,7 @@ class FactionMapper:
         if G.number_of_edges() == 0:
             return self._single_faction(simulation_id, round_number, agent_beliefs)
 
-        partition = best_partition(G)
+        partition = self._detect_communities(G)
         modularity = self._compute_modularity(G, partition)
 
         # Group agents by community
@@ -137,9 +136,32 @@ class FactionMapper:
             inter_faction_hostility=0.0,
         )
 
+    def _detect_communities(self, G: Any) -> dict[str, int]:
+        """Try Leiden (better resolution), fall back to Louvain, then single community."""
+        # Try igraph Leiden first
+        try:
+            import igraph as ig  # noqa: PLC0415
+            ig_graph = ig.Graph.from_networkx(G)
+            leiden = ig_graph.community_leiden(objective_function="modularity", n_iterations=10)
+            return {
+                node: membership
+                for node, membership in zip(G.nodes(), leiden.membership)
+            }
+        except Exception:
+            pass
+        # Fall back to python-louvain
+        try:
+            from community import best_partition  # noqa: PLC0415
+            return best_partition(G)
+        except Exception:
+            logger.warning(
+                "FactionMapper: neither igraph nor community available — single faction"
+            )
+            return {n: 0 for n in G.nodes()}
+
     def _compute_modularity(self, G: Any, partition: dict[str, int]) -> float:
         try:
-            from community import modularity
+            from community import modularity  # noqa: PLC0415
             return modularity(partition, G)
         except Exception:
             return 0.0
@@ -150,9 +172,16 @@ class FactionMapper:
 # ---------------------------------------------------------------------------
 
 class TippingPointDetector:
-    """Detect sudden shifts in population-wide belief distribution."""
+    """Detect sudden shifts in population-wide belief distribution.
+
+    Uses Jensen-Shannon Divergence (JSD) rather than RMSD of means so that
+    bimodal splits — where means are unchanged but the distribution polarises
+    — are correctly detected.  JSD is symmetric and bounded [0, 1] (log₂
+    scale), making the threshold directly interpretable.
+    """
 
     def __init__(self, kl_threshold: float = 0.15) -> None:
+        # Parameter kept as kl_threshold for API compatibility; internally uses JSD
         self._threshold = kl_threshold
 
     def detect(
@@ -163,37 +192,77 @@ class TippingPointDetector:
         belief_history: list[dict[str, dict[str, float]]],
         last_event_id: str | None,
     ) -> TippingPoint | None:
-        """Return TippingPoint if KL divergence exceeds threshold, else None."""
+        """Return TippingPoint if combined JSD exceeds threshold, else None.
+
+        Uses dual-timescale detection:
+        - Fast indicator: JSD vs 3 rounds ago (catches rapid shifts)
+        - Slow indicator: EMA of JSD over up to 10 past rounds × 0.7 dampening
+                         (catches slow build-ups missed by the 3-round window)
+        Combined score = max(fast, slow × 0.7).
+        """
         if len(belief_history) < 1:
             return None
 
-        # Compare to 3 rounds prior if available; else use earliest available
+        # Fast indicator: compare to 3 rounds prior if available
         prev = belief_history[-3] if len(belief_history) >= 3 else belief_history[0]
-        kl = self._kl_divergence(current_beliefs, prev)
+        jsd = self._jsd(current_beliefs, prev)
 
-        if kl < self._threshold:
+        # Slow indicator: EMA over up to 10 past rounds
+        slow_jsd = self._slow_ema_jsd(current_beliefs, belief_history)
+
+        # Combined: take max of fast and dampened slow
+        combined_score = max(jsd, slow_jsd * 0.7)
+
+        if combined_score < self._threshold:
             return None
 
         direction = self._classify_direction(current_beliefs, prev)
         logger.info(
-            "TippingPoint detected: round=%d kl=%.3f direction=%s",
-            round_number, kl, direction,
+            "TippingPoint detected: round=%d fast_jsd=%.3f slow_jsd=%.3f "
+            "combined=%.3f direction=%s",
+            round_number, jsd, slow_jsd, combined_score, direction,
         )
         return TippingPoint(
             simulation_id=simulation_id,
             round_number=round_number,
             trigger_event_id=last_event_id,
-            kl_divergence=kl,
+            kl_divergence=combined_score,  # field name kept for DB/API compat
             change_direction=direction,
             affected_faction_ids=(),
         )
 
-    def _kl_divergence(
+    def _slow_ema_jsd(
+        self,
+        current_beliefs: dict[str, dict[str, float]],
+        belief_history: list[dict[str, dict[str, float]]],
+        lookback: int = 10,
+        alpha: float = 0.3,
+    ) -> float:
+        """EMA of JSD over past `lookback` rounds. Detects slow build-ups."""
+        if not belief_history:
+            return 0.0
+        window = belief_history[-lookback:] if len(belief_history) >= lookback else belief_history
+        ema = 0.0
+        for past in window:
+            jsd_step = self._jsd(current_beliefs, past)
+            ema = alpha * jsd_step + (1.0 - alpha) * ema
+        return ema
+
+    def _jsd(
         self,
         current: dict[str, dict[str, float]],
         prev: dict[str, dict[str, float]],
+        n_bins: int = 10,
     ) -> float:
-        """Compute average KL divergence across all metrics and agents."""
+        """Jensen-Shannon Divergence averaged across all metrics.
+
+        Discretises each metric's agent belief values into a normalised
+        histogram, then computes JSD(current_hist, prev_hist).  Unlike RMSD
+        of means, JSD captures shape changes (e.g. bimodal polarisation where
+        population splits into two camps without shifting the overall mean).
+
+        Result is in [0, 1] (log₂ scale).
+        """
         all_metrics: set[str] = set()
         for beliefs in current.values():
             all_metrics.update(beliefs.keys())
@@ -201,20 +270,19 @@ class TippingPointDetector:
         if not all_metrics:
             return 0.0
 
-        total_kl = 0.0
+        total_jsd = 0.0
         count = 0
         for metric in all_metrics:
             curr_vals = [b.get(metric, 0.5) for b in current.values()]
             prev_vals = [b.get(metric, 0.5) for b in prev.values() if metric in b]
             if not prev_vals:
                 continue
-            curr_mean = sum(curr_vals) / len(curr_vals)
-            prev_mean = sum(prev_vals) / len(prev_vals)
-            # Simple approximation: KL ~ squared difference of means
-            total_kl += (curr_mean - prev_mean) ** 2
+            p_hist = _to_histogram(curr_vals, n_bins)
+            q_hist = _to_histogram(prev_vals, n_bins)
+            total_jsd += _jensen_shannon_divergence(p_hist, q_hist)
             count += 1
 
-        return math.sqrt(total_kl / count) if count > 0 else 0.0
+        return total_jsd / count if count > 0 else 0.0
 
     def _classify_direction(
         self,
@@ -279,6 +347,38 @@ def _compute_hostility(
                 d = sum(abs(centers[i][m] - centers[j][m]) for m in metrics) / len(metrics)
                 diffs.append(d)
     return sum(diffs) / len(diffs) if diffs else 0.0
+
+
+def _to_histogram(vals: list[float], n_bins: int) -> list[float]:
+    """Discretise [0, 1] values into a normalised probability histogram."""
+    counts = [0] * n_bins
+    for v in vals:
+        idx = min(int(v * n_bins), n_bins - 1)
+        counts[idx] += 1
+    total = sum(counts)
+    if total == 0:
+        return [1.0 / n_bins] * n_bins
+    return [c / total for c in counts]
+
+
+def _jensen_shannon_divergence(p: list[float], q: list[float]) -> float:
+    """Jensen-Shannon Divergence of two normalised histograms, bounded [0, 1].
+
+    JSD(P, Q) = (KL(P‖M) + KL(Q‖M)) / 2  where M = (P + Q) / 2.
+    Uses log base 2 so result ∈ [0, 1].
+    """
+    m = [(pi + qi) / 2.0 for pi, qi in zip(p, q)]
+    kl_pm = sum(
+        pi * math.log2(pi / mi)
+        for pi, mi in zip(p, m)
+        if pi > 1e-12 and mi > 1e-12
+    )
+    kl_qm = sum(
+        qi * math.log2(qi / mi)
+        for qi, mi in zip(q, m)
+        if qi > 1e-12 and mi > 1e-12
+    )
+    return min(1.0, max(0.0, (kl_pm + kl_qm) / 2.0))
 
 
 def _std_dev(vals: list[float]) -> float:

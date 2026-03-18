@@ -96,19 +96,82 @@ class BeliefPropagationEngine:
 
                 accumulated[metric_id] = accumulated.get(metric_id, 0.0) + raw_delta
 
-        # Blend with faction peer pressure via conformity
+        # Blend with faction peer pressure via conformity.
+        # Hegselmann-Krause bounded confidence: agents only update from peers
+        # whose belief is within epsilon of their own current belief.
+        # Effective epsilon scales with openness: open agents accept wider range.
+        _BC_EPSILON = 0.4  # base bounded-confidence radius
+
         final: dict[str, float] = {}
         for metric_id in active_metrics:
             event_delta = accumulated.get(metric_id, 0.0)
             peer_current = faction_peer_stance.get(metric_id, current_beliefs.get(metric_id, 0.5))
             current = current_beliefs.get(metric_id, 0.5)
-            peer_delta = peer_current - current  # direction peer is pulling
 
-            blended = (
-                event_delta * (1.0 - fingerprint.conformity)
-                + peer_delta * fingerprint.conformity * 0.1  # conformity has gentle pull
-            )
+            # Hegselmann-Krause: ignore faction peers too far from current belief
+            openness = getattr(fingerprint, "openness", 0.5)
+            effective_epsilon = _BC_EPSILON * (0.5 + 0.5 * openness)
+            if abs(peer_current - current) <= effective_epsilon:
+                peer_delta = fingerprint.conformity * (peer_current - current) * 0.1
+            else:
+                peer_delta = 0.0  # ignore distant peers
+
+            blended = event_delta * (1.0 - fingerprint.conformity) + peer_delta
             if abs(blended) > 0.001:  # skip negligible deltas
                 final[metric_id] = blended
 
         return final
+
+    def cascade(
+        self,
+        all_deltas: dict[str, dict[str, float]],
+        interaction_graph: dict[str, list[str]],
+    ) -> dict[str, dict[str, float]]:
+        """1-hop belief cascade: agents with large shifts pull neighbours slightly.
+
+        When an agent's belief shifts by more than ``_SHIFT_THRESHOLD`` in a
+        round, each of its direct interaction partners receives a dampened
+        pull in the same direction.  Capped at 1 hop to prevent runaway
+        oscillation or artificial consensus formation.
+
+        Args:
+            all_deltas: Per-agent belief deltas from this round's propagation.
+            interaction_graph: Adjacency list (agent_id → list of agent_ids).
+
+        Returns:
+            Additional deltas for each affected neighbour agent.
+        """
+        _SHIFT_THRESHOLD = 0.1   # minimum shift magnitude to trigger cascade
+        _CASCADE_FACTOR = 0.3    # base: neighbour receives 30% of the original shift
+        _LEADERSHIP_BOOST = 0.5  # max additional factor for high-influence agents
+
+        # Pre-compute out-degree for opinion leadership: agents with more
+        # connections exert proportionally stronger cascade influence.
+        # Degree is normalised to [0, 1] relative to the maximum in the graph.
+        all_degrees = {
+            agent_id: len(neighbours)
+            for agent_id, neighbours in interaction_graph.items()
+        }
+        max_degree = max(all_degrees.values()) if all_degrees else 1
+        max_degree = max(max_degree, 1)  # guard against empty graph
+
+        cascade_out: dict[str, dict[str, float]] = {}
+
+        for agent_id, deltas in all_deltas.items():
+            # Leadership score: normalised out-degree as a proxy for influence
+            degree = all_degrees.get(agent_id, 0)
+            leadership_score = degree / max_degree  # [0, 1]
+            effective_factor = _CASCADE_FACTOR * (1.0 + _LEADERSHIP_BOOST * leadership_score)
+
+            for metric_id, delta in deltas.items():
+                if abs(delta) < _SHIFT_THRESHOLD:
+                    continue
+                for neighbor_id in interaction_graph.get(agent_id, []):
+                    if neighbor_id == agent_id:
+                        continue
+                    if neighbor_id not in cascade_out:
+                        cascade_out[neighbor_id] = {}
+                    existing = cascade_out[neighbor_id].get(metric_id, 0.0)
+                    cascade_out[neighbor_id][metric_id] = existing + delta * effective_factor
+
+        return cascade_out

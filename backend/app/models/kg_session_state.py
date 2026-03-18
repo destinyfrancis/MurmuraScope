@@ -60,3 +60,10 @@ class KGSessionState:
 
     # agent_id → EmotionalState (updated per-round by EmotionalEngine)
     emotional_states: dict[str, Any] = field(default_factory=dict)
+
+    # agent_id → faction_id (updated every 3 rounds by FactionMapper; empty until first compute)
+    agent_factions: dict[str, str] = field(default_factory=dict)
+
+    # agent_id → {"plan": str, "horizon": int, "created_round": int}
+    # Multi-round strategic plans for Tier 1 agents (Phase 4)
+    agent_strategies: dict[str, dict] = field(default_factory=dict)
