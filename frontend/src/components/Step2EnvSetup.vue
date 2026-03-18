@@ -28,6 +28,13 @@ async function loadPackDetails(packId) {
 onMounted(() => loadPackDetails(props.session.domainPackId))
 watch(() => props.session.domainPackId, (id) => loadPackDetails(id))
 
+// Express mode: session already created — skip config and auto-emit
+onMounted(() => {
+  if (props.session.sessionId) {
+    emit('simulation-created', { sessionId: props.session.sessionId })
+  }
+})
+
 // Pack-specific shock type labels (for the shock form placeholder / hints)
 const packShockTypes = computed(() => {
   if (!packDetails.value?.shock_types?.length) return null

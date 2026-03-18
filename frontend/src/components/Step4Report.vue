@@ -27,9 +27,12 @@ async function exportPDF() {
 
 const props = defineProps({
   session: { type: Object, required: true },
+  scenarioQuestion: { type: String, default: '' },
 })
 
 const emit = defineEmits(['report-generated'])
+
+const questionInput = ref(props.scenarioQuestion)
 
 const generating = ref(false)
 const completed = ref(false)
@@ -202,6 +205,7 @@ async function startGeneration() {
     const res = await generateReport({
       session_id: props.session.sessionId,
       scenario_type: props.session.scenarioType,
+      scenario_question: questionInput.value || undefined,
     })
 
     const resData = res.data?.data || res.data
@@ -336,6 +340,15 @@ onUnmounted(() => {
         <div v-else class="report-body">
           <span v-html="renderedDisplayReport" />
           <span v-if="isTyping" class="typing-cursor">_</span>
+        </div>
+
+        <div v-if="completed" class="report-regen-row">
+          <input
+            v-model="questionInput"
+            class="report-question-input"
+            placeholder="更改問題後重新生成，例如：GDP 增長率會轉負嗎？"
+          />
+          <button class="report-regen-btn" @click="startGeneration">重新生成</button>
         </div>
       </div>
     </div>
@@ -715,5 +728,32 @@ onUnmounted(() => {
 @keyframes cursor-blink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0; }
+}
+
+.report-regen-row {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-color);
+}
+.report-question-input {
+  flex: 1;
+  background: var(--bg-input, var(--bg-secondary));
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-primary);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+}
+.report-regen-btn {
+  white-space: nowrap;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  background: var(--accent-blue);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  font-size: 0.9rem;
 }
 </style>
