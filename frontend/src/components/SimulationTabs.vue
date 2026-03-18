@@ -9,6 +9,7 @@ import MultiRunTab from './sim/MultiRunTab.vue'
 import WorldEventCard from './sim/WorldEventCard.vue'
 import FactionColumns from './FactionColumns.vue'
 import InteractionNetwork from './InteractionNetwork.vue'
+import AgentCard from './sim/AgentCard.vue'
 
 const props = defineProps({
   activeTab:        { type: String,  required: true },
@@ -128,19 +129,15 @@ watch(() => props.sessionId, () => {
     <!-- Tab 2: Agents -->
     <div v-else-if="activeTab === 'agents'" class="agent-tab-content">
       <div v-if="agents.length === 0" class="topic-empty">載入代理人...</div>
-      <div
-        v-for="agent in agents"
-        :key="agent.id"
-        class="agent-tab-card"
-        @click="emit('select-agent', agent)"
-      >
-        <div class="agent-tab-name">{{ agent.oasis_username || `代理人 #${agent.id}` }}</div>
-        <div class="agent-tab-meta">
-          <span v-if="agent.district">{{ agent.district }}</span>
-          <span v-if="agent.occupation">{{ agent.occupation }}</span>
-        </div>
+      <div v-else class="agents-grid">
+        <AgentCard
+          v-for="agent in agents"
+          :key="agent.id"
+          :agent="agent"
+          :faction-colour="factionColours?.[agent.id] || '#999'"
+          @click="emit('select-agent', agent)"
+        />
       </div>
-      <!-- Dissonance section within agents tab -->
       <DissonanceView
         v-if="sessionId && agents.length > 0"
         :session-id="sessionId"
@@ -289,28 +286,11 @@ watch(() => props.sessionId, () => {
   font-size: 13px;
 }
 
-.agent-tab-card {
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border);
-  cursor: pointer;
-  transition: background 0.2s, border-color 0.2s;
-}
-
-.agent-tab-card:hover {
-  background: var(--bg-app);
-}
-
-.agent-tab-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: 3px;
-}
-
-.agent-tab-meta {
-  display: flex;
-  gap: 8px;
-  font-size: 11px;
-  color: var(--text-muted);
+.agents-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  overflow-y: auto;
+  padding: 4px;
 }
 </style>

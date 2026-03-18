@@ -78,6 +78,8 @@ const factionCount     = ref(0)
 const tippingCount     = ref(0)
 const simCompleted     = ref(false)
 
+const awaitingData = computed(() => !completed.value && currentRound.value === 0 && posts.value.length === 0)
+
 let ws = null
 const MAX_RECONNECT = 5
 let reconnectAttempts = 0
@@ -493,11 +495,18 @@ const factionAgentColourMap = computed(() => {
           :tipping-count="tippingCount"
         />
 
+        <div v-if="awaitingData" class="ripple-container">
+          <div class="ripple-ring" />
+          <div class="ripple-ring" style="animation-delay: 0.5s" />
+          <div class="ripple-ring" style="animation-delay: 1.0s" />
+          <p class="ripple-label">等待模擬數據...</p>
+        </div>
+
         <SimulationTabs
           :active-tab="activeTab"
           :posts="posts"
           :followed-agent="followedAgent"
-          :session-agents="sessionAgents"
+          :agents="sessionAgents"
           :session-id="props.session.sessionId"
           :faction-snapshots="factionSnapshots"
           :tipping-points="tippingPoints"
