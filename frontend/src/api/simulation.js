@@ -185,8 +185,20 @@ export function getRetrospectiveValidation(periodStart = '2020-Q1', periodEnd = 
   return api.get('/simulation/validation/retrospective', { params: { period_start: periodStart, period_end: periodEnd } })
 }
 
-export function quickStart(seedText) {
-  return api.post('/simulation/quick-start', { seed_text: seedText })
+export function quickStart(seedText, scenarioQuestion = '', preset = 'fast') {
+  return api.post('/simulation/quick-start', {
+    seed_text: seedText,
+    scenario_question: scenarioQuestion,
+    preset,
+  })
+}
+
+export function quickStartWithFile(file, scenarioQuestion = '', preset = 'fast') {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('scenario_question', scenarioQuestion)
+  form.append('preset', preset)
+  return api.post('/simulation/quick-start/upload', form)
 }
 
 export function getSessionDecisions(sessionId, params = {}) {
