@@ -84,6 +84,7 @@ class ReportGenerateRequest(BaseModel):
     session_id: str
     report_type: str = "full"
     focus_areas: list[str] = []
+    scenario_question: str | None = None  # "如果X發生，Y會怎樣？"
 
 
 class ReportChatRequest(BaseModel):

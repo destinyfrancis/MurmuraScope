@@ -64,6 +64,7 @@ async def generate_report(req: ReportGenerateRequest) -> APIResponse:
             session_id=req.session_id,
             report_type=req.report_type,
             focus_areas=req.focus_areas or [],
+            scenario_question=req.scenario_question,
         )
         return APIResponse(
             success=True,

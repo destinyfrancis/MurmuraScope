@@ -110,22 +110,50 @@ class ReportAgent:
         session_id: str,
         report_type: str = "full",
         focus_areas: list[str] | None = None,
+        scenario_question: str | None = None,
     ) -> dict[str, Any]:
-        """Generate report using ReACT loop.
+        """Generate report using 3-phase orchestrator (with ReACT fallback).
 
-        1. Plan: Determine what analysis is needed based on report_type.
-        2. Loop: Think -> Act (call tool) -> Observe.
-        3. Generate: Compile findings into Markdown report.
+        When ``scenario_question`` is provided or ``report_type == "full"``,
+        delegates to :class:`ReportOrchestrator` for structured 3-phase
+        generation (outline → per-section ReACT → assembly).  Otherwise falls
+        back to the classic flat ReACT loop.
 
         Args:
             session_id: UUID of the simulation session.
             report_type: Type of report (full, summary, demographic, sentiment).
             focus_areas: Optional list of areas to focus on.
+            scenario_question: Optional framing question ("如果X發生，Y會怎樣？").
 
         Returns:
             Dict with report_id, title, content_markdown, summary,
             key_findings, charts_data, agent_log.
         """
+        # --- 3-phase orchestrated path ---
+        # Only engage when caller explicitly provides a scenario_question.
+        # report_type=="full" without a question still uses the legacy ReACT loop
+        # to preserve backward compatibility with existing callers.
+        if scenario_question is not None:
+            from backend.app.services.report_orchestrator import ReportOrchestrator  # noqa: PLC0415
+
+            orchestrator = ReportOrchestrator(llm_client=LLMClient())
+
+            async def _tool_handler(name: str, params: dict[str, Any]) -> str:
+                return await self._execute_tool(name, params, session_id)
+
+            content_md = await orchestrator.generate(
+                session_id=session_id,
+                scenario_question=scenario_question,
+                report_type=report_type,
+                tool_handler=_tool_handler,
+                tool_names=list(TOOLS.keys()),
+            )
+            report = _parse_report(session_id, content_md)
+            report["agent_log"] = []
+            await _persist_report(session_id, report, report_type, [])
+            return report
+
+        # --- Legacy flat ReACT path (non-full report types without a question) ---
         focus = focus_areas or []
         initial_prompt = _build_initial_prompt(
             session_id, report_type, focus
