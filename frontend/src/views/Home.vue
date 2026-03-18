@@ -3,10 +3,17 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import DomainBuilder from '../components/DomainBuilder.vue'
 import DataConnectorPanel from '../components/DataConnectorPanel.vue'
+import { quickStart, quickStartWithFile } from '../api/simulation.js'
 
 const router = useRouter()
 const quickStartText = ref('')
 const quickStartLoading = ref(false)
+const quickStartQuestion = ref('')
+const quickStartPreset = ref('fast')
+const quickStartFile = ref(null)
+const quickStartDragging = ref(false)
+const quickStartError = ref(null)
+
 const domainPacks = ref([])
 const selectedDomain = ref('hk_city')
 const packDetails = ref(null)
@@ -14,6 +21,52 @@ const loadingDetails = ref(false)
 const showDomainBuilder = ref(false)
 const showDataConnector = ref(false)
 const customDomainPack = ref(null)
+
+const PRESETS = [
+  { key: 'fast',     label: '快速',    hint: '100 agents · 15 rounds (~2 min)' },
+  { key: 'standard', label: '標準',    hint: '300 agents · 20 rounds (~8 min)' },
+  { key: 'deep',     label: '深度',    hint: '500 agents · 30 rounds (~20 min)' },
+]
+
+const QS_MAX_BYTES = 10 * 1024 * 1024
+const QS_ALLOWED_EXTS = ['.pdf', '.txt', '.md', '.markdown']
+
+function qsFileExt(name) {
+  const i = name.lastIndexOf('.')
+  return i >= 0 ? name.slice(i).toLowerCase() : ''
+}
+
+function onQSDragOver(e) { e.preventDefault(); quickStartDragging.value = true }
+function onQSDragLeave() { quickStartDragging.value = false }
+function onQSDrop(e) {
+  e.preventDefault()
+  quickStartDragging.value = false
+  const f = e.dataTransfer?.files?.[0]
+  if (f) setQSFile(f)
+}
+function onQSFileInput(e) {
+  const f = e.target.files?.[0]
+  if (f) setQSFile(f)
+}
+function setQSFile(f) {
+  quickStartError.value = null
+  const ext = qsFileExt(f.name)
+  if (!QS_ALLOWED_EXTS.includes(ext)) {
+    quickStartError.value = `不支援 ${ext} 格式，請上傳 PDF、TXT 或 Markdown`
+    return
+  }
+  if (f.size > QS_MAX_BYTES) {
+    quickStartError.value = `檔案超過 10 MB 上限`
+    return
+  }
+  quickStartFile.value = f
+  quickStartText.value = ''   // clear textarea when file selected
+}
+function clearQSFile() { quickStartFile.value = null }
+
+const canQuickStart = computed(() =>
+  !quickStartLoading.value && (quickStartFile.value || quickStartText.value.trim())
+)
 
 const HK_SCENARIOS = [
   {
@@ -122,17 +175,39 @@ onMounted(async () => {
 })
 
 async function handleQuickStart() {
-  if (!quickStartText.value.trim()) return
+  if (!canQuickStart.value) return
   quickStartLoading.value = true
+  quickStartError.value = null
   try {
-    const { quickStart } = await import('../api/simulation.js')
-    const res = await quickStart(quickStartText.value)
-    const sessionId = res?.data?.data?.session_id
+    let res
+    if (quickStartFile.value) {
+      res = await quickStartWithFile(
+        quickStartFile.value,
+        quickStartQuestion.value,
+        quickStartPreset.value,
+      )
+    } else {
+      res = await quickStart(
+        quickStartText.value,
+        quickStartQuestion.value,
+        quickStartPreset.value,
+      )
+    }
+    const d = res?.data?.data || res?.data
+    const sessionId = d?.session_id
+    const graphId = d?.graph_id || ''
     if (sessionId) {
-      router.push(`/simulation/${sessionId}`)
+      const q = new URLSearchParams({
+        express: '1',
+        sessionId,
+        graphId,
+        scenarioQuestion: quickStartQuestion.value,
+        preset: quickStartPreset.value,
+      })
+      router.push(`/process/quick?${q.toString()}`)
     }
   } catch (e) {
-    console.error('Quick start failed:', e)
+    quickStartError.value = e.response?.data?.detail || e.message || '啟動失敗，請重試'
   } finally {
     quickStartLoading.value = false
   }
@@ -160,22 +235,79 @@ function startScenario(key) {
 
     <!-- Quick Start -->
     <div class="quick-start-section" v-if="!showDomainBuilder && !showDataConnector">
-      <h2>快速開始</h2>
-      <p>輸入任何新聞標題或場景描述，即刻開始模擬</p>
-      <div class="quick-start-input">
-        <textarea
-          v-model="quickStartText"
-          placeholder="例如：恒指跌破15000點，樓市成交量大跌..."
-          rows="3"
+      <h2>即刻開始預測</h2>
+      <p class="qs-subtitle">上傳文件或輸入種子文字，AI 自動構建世界，開始模擬</p>
+
+      <!-- File drop zone (primary input) -->
+      <div
+        class="qs-drop-zone"
+        :class="{ dragging: quickStartDragging, 'has-file': quickStartFile }"
+        @dragover="onQSDragOver"
+        @dragleave="onQSDragLeave"
+        @drop="onQSDrop"
+        @click="!quickStartFile && $refs.qsFileInput.click()"
+      >
+        <input
+          ref="qsFileInput"
+          type="file"
+          accept=".pdf,.txt,.md,.markdown"
+          class="qs-file-hidden"
+          @change="onQSFileInput"
         />
+        <template v-if="quickStartFile">
+          <span class="qs-file-icon">📄</span>
+          <span class="qs-file-name">{{ quickStartFile.name }}</span>
+          <button class="qs-file-clear" @click.stop="clearQSFile">✕</button>
+        </template>
+        <template v-else>
+          <span class="qs-drop-icon">⬆</span>
+          <span class="qs-drop-label">拖放文件至此，或按此選擇</span>
+          <span class="qs-drop-hint">支援 PDF、TXT、Markdown · 最大 10 MB</span>
+        </template>
+      </div>
+
+      <!-- OR divider + text fallback -->
+      <div class="qs-or-row">
+        <span class="qs-or-line" /><span class="qs-or-text">或</span><span class="qs-or-line" />
+      </div>
+      <textarea
+        v-model="quickStartText"
+        :disabled="!!quickStartFile"
+        class="qs-textarea"
+        placeholder="輸入新聞標題或場景描述，例如：恒指跌破 15000 點，樓市成交量大跌..."
+        rows="3"
+      />
+
+      <!-- Prediction question (optional) -->
+      <input
+        v-model="quickStartQuestion"
+        class="qs-question"
+        placeholder="（選填）你想預測什麼？例如：失業率會否升破 4%？"
+      />
+
+      <!-- Preset pills -->
+      <div class="qs-presets">
         <button
-          class="quick-start-btn"
-          :disabled="!quickStartText.trim() || quickStartLoading"
-          @click="handleQuickStart"
+          v-for="p in PRESETS"
+          :key="p.key"
+          class="qs-preset-pill"
+          :class="{ active: quickStartPreset === p.key }"
+          :title="p.hint"
+          @click="quickStartPreset = p.key"
         >
-          {{ quickStartLoading ? '啟動中...' : '一鍵模擬' }}
+          {{ p.label }}
         </button>
       </div>
+
+      <p v-if="quickStartError" class="qs-error">{{ quickStartError }}</p>
+
+      <button
+        class="quick-start-btn"
+        :disabled="!canQuickStart"
+        @click="handleQuickStart"
+      >
+        {{ quickStartLoading ? '啟動中...' : '一鍵預測' }}
+      </button>
     </div>
 
     <!-- Domain tab bar -->
@@ -287,41 +419,78 @@ function startScenario(key) {
   margin-bottom: 8px;
 }
 
-.quick-start-section p {
-  font-size: 14px;
-  color: var(--text-muted);
-  margin-bottom: 20px;
-}
+.qs-subtitle { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.2rem; }
 
-.quick-start-input {
-  max-width: 600px;
-  margin: 0 auto;
+.qs-drop-zone {
+  border: 2px dashed var(--border-color);
+  border-radius: 12px;
+  padding: 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.8rem;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
 }
-
-.quick-start-input textarea {
-  width: 100%;
-  padding: 12px 16px;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  font-size: 14px;
-  font-family: inherit;
-  resize: vertical;
-  background: var(--bg-input);
-  color: var(--text-primary);
-  transition: border-color 0.2s;
-}
-
-.quick-start-input textarea:focus {
-  outline: none;
+.qs-drop-zone:hover,
+.qs-drop-zone.dragging {
   border-color: var(--accent-blue);
-  box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.15);
+  background: rgba(59, 130, 246, 0.05);
 }
+.qs-drop-zone.has-file {
+  border-style: solid;
+  border-color: var(--accent-green);
+  cursor: default;
+  flex-direction: row;
+  justify-content: center;
+  padding: 1rem 2rem;
+}
+.qs-file-hidden { display: none; }
+.qs-drop-icon { font-size: 2rem; opacity: 0.5; }
+.qs-drop-label { font-weight: 600; }
+.qs-drop-hint { font-size: 0.8rem; color: var(--text-muted); }
+.qs-file-icon { font-size: 1.5rem; }
+.qs-file-name { font-weight: 600; flex: 1; text-align: left; margin-left: 0.5rem; }
+.qs-file-clear {
+  background: none; border: none; cursor: pointer;
+  color: var(--text-muted); font-size: 1rem; padding: 0 0.25rem;
+}
+.qs-or-row { display: flex; align-items: center; gap: 0.75rem; margin: 0.5rem auto; max-width: 600px; }
+.qs-or-line { flex: 1; height: 1px; background: var(--border-color); }
+.qs-or-text { color: var(--text-muted); font-size: 0.85rem; white-space: nowrap; }
+.qs-textarea {
+  width: 100%; max-width: 600px; background: var(--bg-input, var(--bg-secondary));
+  border: 1px solid var(--border-color); border-radius: 8px;
+  color: var(--text-primary); padding: 0.75rem; font-size: 0.95rem;
+  resize: vertical; box-sizing: border-box; margin-bottom: 0.75rem;
+  font-family: inherit;
+}
+.qs-textarea:disabled { opacity: 0.4; cursor: not-allowed; }
+.qs-question {
+  width: 100%; max-width: 600px; background: var(--bg-input, var(--bg-secondary));
+  border: 1px solid var(--border-color); border-radius: 8px;
+  color: var(--text-primary); padding: 0.65rem 0.75rem;
+  font-size: 0.9rem; box-sizing: border-box; margin-bottom: 0.75rem;
+  font-family: inherit;
+}
+.qs-presets { display: flex; gap: 0.5rem; margin-bottom: 1rem; justify-content: center; }
+.qs-preset-pill {
+  border: 1px solid var(--border-color); border-radius: 20px;
+  padding: 0.3rem 0.9rem; font-size: 0.85rem; cursor: pointer;
+  background: transparent; color: var(--text-secondary); transition: all 0.15s;
+}
+.qs-preset-pill.active {
+  border-color: var(--accent-blue); color: var(--accent-blue);
+  background: rgba(59, 130, 246, 0.1);
+}
+.qs-error { color: var(--accent-red); font-size: 0.85rem; margin-bottom: 0.5rem; }
 
 .quick-start-btn {
-  align-self: flex-end;
   padding: 10px 28px;
   background: var(--accent-blue);
   color: #0d1117;
