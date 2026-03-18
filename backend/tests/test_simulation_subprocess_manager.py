@@ -206,14 +206,15 @@ async def test_cleanup_removes_session():
     ):
         await mgr.launch("sess-clean", ["python", "s.py"], {}, MagicMock(), "/tmp")
 
-    mgr.cleanup("sess-clean")
+    await mgr.cleanup("sess-clean")
     assert mgr.get_process("sess-clean") is None
 
 
-def test_cleanup_is_safe_for_unknown_session():
+@pytest.mark.asyncio
+async def test_cleanup_is_safe_for_unknown_session():
     """cleanup() should not raise for sessions that were never started."""
     mgr = SimulationSubprocessManager()
-    mgr.cleanup("never-existed")  # must not raise
+    await mgr.cleanup("never-existed")  # must not raise
 
 
 # ---------------------------------------------------------------------------
@@ -257,3 +258,38 @@ def test_check_exit_code_silent_for_unknown_session():
     """check_exit_code() should not raise when session is not tracked."""
     mgr = SimulationSubprocessManager()
     mgr.check_exit_code("not-tracked")  # must not raise
+
+
+# ---------------------------------------------------------------------------
+# keep_alive_for_report() / release_after_report() / cleanup guard
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_keep_alive_sets_pending_flag():
+    """keep_alive_for_report() should set _report_pending[session_id] = True."""
+    mgr = SimulationSubprocessManager()
+    await mgr.keep_alive_for_report("sess1")
+    assert mgr._report_pending.get("sess1") is True
+
+
+@pytest.mark.asyncio
+async def test_release_after_report_clears_flag():
+    """release_after_report() should remove session from _report_pending."""
+    mgr = SimulationSubprocessManager()
+    mgr._report_pending["sess1"] = True
+    with patch.object(mgr, "stop", new_callable=AsyncMock), \
+         patch.object(mgr, "cleanup", new_callable=AsyncMock):
+        await mgr.release_after_report("sess1")
+    assert "sess1" not in mgr._report_pending
+
+
+@pytest.mark.asyncio
+async def test_cleanup_skipped_when_report_pending():
+    """cleanup() should return early (no-op) when report is pending for session."""
+    mgr = SimulationSubprocessManager()
+    mgr._report_pending["sess1"] = True
+    # cleanup should return early, not touch _processes
+    await mgr.cleanup("sess1")
+    # sess1 still in _report_pending (not cleared by cleanup)
+    assert mgr._report_pending.get("sess1") is True

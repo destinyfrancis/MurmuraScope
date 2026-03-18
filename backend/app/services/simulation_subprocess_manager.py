@@ -28,6 +28,7 @@ class SimulationSubprocessManager:
 
     def __init__(self) -> None:
         self._processes: dict[str, asyncio.subprocess.Process] = {}
+        self._report_pending: dict[str, bool] = {}
 
     # ------------------------------------------------------------------
     # Launch
@@ -123,15 +124,64 @@ class SimulationSubprocessManager:
     # Cleanup
     # ------------------------------------------------------------------
 
-    def cleanup(self, session_id: str) -> None:
+    async def cleanup(self, session_id: str) -> None:
         """Remove a session from the tracked processes dict.
 
-        Safe to call even if the session is not present.
+        Safe to call even if the session is not present.  If a report
+        generation is pending for *session_id*, cleanup is deferred until
+        :meth:`release_after_report` is called.
 
         Args:
             session_id: UUID of the session to remove.
         """
+        if self._report_pending.get(session_id):
+            logger.debug("cleanup deferred: report pending for %s", session_id)
+            return
         self._processes.pop(session_id, None)
+
+    # ------------------------------------------------------------------
+    # Report keep-alive
+    # ------------------------------------------------------------------
+
+    async def keep_alive_for_report(self, session_id: str) -> None:
+        """Mark subprocess as awaiting report generation. Prevents cleanup.
+
+        Schedules a 30-minute auto-release to prevent subprocess leaks if
+        :meth:`release_after_report` is never called.
+
+        Args:
+            session_id: UUID of the session to keep alive.
+        """
+        self._report_pending[session_id] = True
+        logger.info("keep_alive_for_report: %s", session_id)
+        asyncio.create_task(self._auto_release(session_id, timeout_s=1800))
+
+    async def _auto_release(self, session_id: str, timeout_s: int) -> None:
+        """Auto-release a session after *timeout_s* seconds if still pending.
+
+        Args:
+            session_id: UUID of the session to auto-release.
+            timeout_s:  Seconds to wait before forcing cleanup.
+        """
+        await asyncio.sleep(timeout_s)
+        if self._report_pending.get(session_id):
+            logger.warning(
+                "auto_release: timeout expired for %s, cleaning up", session_id
+            )
+            await self.release_after_report(session_id)
+
+    async def release_after_report(self, session_id: str) -> None:
+        """Called when report generation is complete. Clears the pending flag
+        and shuts down the subprocess if it is still running.
+
+        Args:
+            session_id: UUID of the session to release.
+        """
+        self._report_pending.pop(session_id, None)
+        if self.is_running(session_id):
+            await self.stop(session_id)
+            await self.cleanup(session_id)
+        logger.info("release_after_report: %s cleaned up", session_id)
 
     # ------------------------------------------------------------------
     # Query

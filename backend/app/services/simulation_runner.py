@@ -340,6 +340,9 @@ class SimulationRunner(
                 except Exception:
                     logger.exception("Benchmark persist failed session=%s", session_id)
 
+            # Keep subprocess alive so the report agent can interview agents.
+            await self._subprocess_mgr.keep_alive_for_report(session_id)
+
         finally:
             # --- 1. Cancel all tracked background tasks for this session ---
             pending = list(self._pending_tasks.pop(session_id, set()))
@@ -368,7 +371,7 @@ class SimulationRunner(
                 except OSError:
                     pass  # Process already exited between check and kill
 
-            self._subprocess_mgr.cleanup(session_id)
+            await self._subprocess_mgr.cleanup(session_id)
             # Clean up posts buffer to prevent memory leak
             self._posts_buffer.pop(session_id, None)
             # Clean up macro state cache

@@ -496,6 +496,110 @@ class KGAgentFactory:
         return result
 
     # ------------------------------------------------------------------
+    # Stage 3b: voice profile enrichment
+    # ------------------------------------------------------------------
+
+    async def enrich_voice_profiles(
+        self,
+        profiles: list[UniversalAgentProfile],
+        seed_text: str,
+    ) -> list[UniversalAgentProfile]:
+        """Enrich each profile with voice/style fields via an LLM call.
+
+        Adds ``communication_style``, ``vocabulary_hints``, and
+        ``platform_persona`` to each profile using :func:`dataclasses.replace`.
+        Never raises — profiles missing voice data retain their default empty
+        values.
+
+        Args:
+            profiles:  Profiles to enrich (frozen; returns new instances).
+            seed_text: Scenario context for the LLM prompt.
+
+        Returns:
+            New list of ``UniversalAgentProfile`` with voice fields populated.
+        """
+        from dataclasses import replace as dc_replace  # noqa: PLC0415
+
+        _VALID_STYLES = frozenset({
+            "formal_academic",
+            "casual_gen_z",
+            "strategic_institutional",
+            "emotional_personal",
+            "analytical_professional",
+            "activist_ideological",
+        })
+
+        if not profiles:
+            return []
+
+        summaries = [
+            {"agent_id": p.id, "name": p.name, "role": p.role, "entity_type": p.entity_type}
+            for p in profiles
+        ]
+        prompt_user = (
+            f"Scenario: {seed_text[:400]}\n\n"
+            "For each agent below, generate a voice profile JSON with fields:\n"
+            "- agent_id (string, must match input)\n"
+            "- communication_style: one of \"formal_academic\", \"casual_gen_z\","
+            " \"strategic_institutional\", \"emotional_personal\","
+            " \"analytical_professional\", \"activist_ideological\"\n"
+            "- vocabulary_hints: list of 3-5 characteristic vocabulary or metaphor"
+            " types (short phrases), e.g. [\"法律術語\", \"程序正義\"] or"
+            " [\"遊戲比喻\", \"Z世代流行語\"]\n"
+            "- platform_persona: 1-2 sentences describing how they post differently"
+            " on different platforms, e.g. \"Facebook: 長篇分析，引用數據；"
+            "Instagram: 短句+話題標籤，情緒化表達\"\n\n"
+            f"Agents: {summaries}\n\n"
+            'Return JSON: {"voice_profiles": [...]}'
+        )
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are a communications expert generating distinct voice"
+                    " profiles for simulation agents."
+                ),
+            },
+            {"role": "user", "content": prompt_user},
+        ]
+
+        voice_by_id: dict[str, dict] = {}
+        try:
+            raw = await self._llm.chat_json(messages, max_tokens=2048, temperature=0.4)
+            vp_list = raw.get("voice_profiles", [])
+            for vp in vp_list:
+                if isinstance(vp, dict) and vp.get("agent_id"):
+                    voice_by_id[str(vp["agent_id"])] = vp
+        except Exception:  # noqa: BLE001
+            logger.warning("KGAgentFactory: voice profile LLM call failed — keeping defaults")
+
+        enriched: list[UniversalAgentProfile] = []
+        for profile in profiles:
+            vd = voice_by_id.get(profile.id, {})
+            try:
+                raw_style = str(vd.get("communication_style", ""))
+                comm_style = raw_style if raw_style in _VALID_STYLES else ""
+                vocab_hints = tuple(
+                    str(h) for h in vd.get("vocabulary_hints", []) if h
+                )[:5]
+                plat_persona = str(vd.get("platform_persona", ""))
+                enriched.append(
+                    dc_replace(
+                        profile,
+                        communication_style=comm_style,
+                        vocabulary_hints=vocab_hints,
+                        platform_persona=plat_persona,
+                    )
+                )
+            except (TypeError, ValueError):
+                logger.debug(
+                    "Voice field parse failed for agent %s — keeping defaults", profile.id
+                )
+                enriched.append(profile)
+
+        return enriched
+
+    # ------------------------------------------------------------------
     # Parsing helpers
     # ------------------------------------------------------------------
 
