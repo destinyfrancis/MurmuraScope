@@ -174,25 +174,30 @@ watch(
 
 <template>
   <div class="process-root">
-    <!-- Black 42px nav bar -->
     <nav class="app-nav">
-      <span class="brand">HKSimEngine</span>
-      <div class="nav-tabs">
+      <span class="nav-brand" @click="router.push('/')">HKSIMENGINE</span>
+      <span class="step-indicator">
+        <span class="step-num">{{ currentStep }}</span>
+        <span class="step-label">{{ steps[currentStep - 1]?.label }}</span>
+      </span>
+      <span class="step-divider" />
+      <div class="nav-view-switcher">
         <button
           v-for="step in steps"
           :key="step.key"
-          class="nav-tab"
-          :class="{ active: currentStep === step.key, completed: currentStep > step.key }"
+          class="view-switch-btn"
+          :class="{ active: currentStep === step.key, done: canGoToStep(step.key) && step.key < currentStep }"
           :disabled="!canGoToStep(step.key)"
           @click="goToStep(step.key)"
         >
           {{ step.navLabel }}
         </button>
       </div>
-      <div class="nav-status" v-if="currentStep === 3 && session.sessionId">
-        <span class="pulse-dot" />
-        <span class="nav-round">{{ roundLabel }}</span>
-      </div>
+      <span class="nav-spacer" />
+      <span v-if="roundLabel" class="nav-step-badge">
+        <span class="status-dot processing" />
+        {{ roundLabel }}
+      </span>
     </nav>
 
     <!-- 3px progress bar -->
@@ -234,59 +239,107 @@ watch(
 .process-root { display: flex; flex-direction: column; min-height: 100vh; }
 
 .app-nav {
-  height: 42px;
-  background: var(--bg-nav);
   display: flex;
   align-items: center;
-  padding: 0 18px;
-  gap: 14px;
-  flex-shrink: 0;
-  position: sticky;
-  top: 0;
-  z-index: 100;
+  height: 60px;
+  padding: 0 24px;
+  background: var(--bg-card, #FFF);
+  border-bottom: 1px solid var(--border, #EAEAEA);
 }
-.brand {
+.nav-brand {
   font-family: var(--font-mono);
-  font-weight: 700;
-  font-size: 13px;
-  color: #fff;
-  letter-spacing: .03em;
-  margin-right: 4px;
-}
-.nav-tabs {
-  display: flex;
-  gap: 2px;
-  background: rgba(255,255,255,.08);
-  border-radius: 5px;
-  padding: 2px;
-}
-.nav-tab {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  color: rgba(255,255,255,.38);
-  padding: 3px 9px;
-  border-radius: 3px;
-  border: none;
-  background: transparent;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--text-primary, #000);
+  margin-right: 24px;
   cursor: pointer;
-  letter-spacing: .04em;
 }
-.nav-tab:disabled { cursor: not-allowed; opacity: .25; }
-.nav-tab.active { background: #fff; color: #000; font-weight: 700; }
-.nav-tab.completed { color: rgba(255,255,255,.6); }
-.nav-status {
-  margin-left: auto;
+.step-indicator {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 4px;
+  margin-right: 16px;
 }
-.pulse-dot {
-  width: 7px; height: 7px; border-radius: 50%;
-  background: var(--accent);
-  animation: pulse 1.6s ease-in-out infinite;
+.step-num {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-muted, #999);
 }
-@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
-.nav-round { font-family: var(--font-mono); font-size: 9px; color: rgba(255,255,255,.38); }
+.step-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary, #000);
+}
+.step-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border, #E0E0E0);
+  margin: 0 12px;
+}
+.nav-step-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--accent, #FF6B35);
+  color: #FFF;
+  padding: 2px 8px;
+  border-radius: 2px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.nav-view-switcher {
+  display: flex;
+  background: #F5F5F5;
+  padding: 4px;
+  border-radius: var(--radius-md, 4px);
+  gap: 4px;
+}
+.view-switch-btn {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, #666);
+  background: none;
+  border: none;
+  padding: 6px 16px;
+  border-radius: var(--radius-sm, 2px);
+  cursor: pointer;
+  transition: background var(--duration-fast, 0.15s), color var(--duration-fast, 0.15s);
+}
+.view-switch-btn:hover:not(:disabled) {
+  color: var(--text-primary, #000);
+}
+.view-switch-btn.active {
+  background: var(--bg-card, #FFF);
+  color: var(--text-primary, #000);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+.view-switch-btn.done {
+  color: var(--text-muted, #999);
+}
+.view-switch-btn:disabled {
+  color: #D1D5DB;
+  cursor: not-allowed;
+}
+.nav-spacer { flex: 1; }
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.status-dot.processing {
+  background: #FFF;
+  animation: nav-pulse 1s infinite;
+}
+@keyframes nav-pulse {
+  50% { opacity: 0.5; }
+}
 
 .step-progress-bar {
   height: 3px;
