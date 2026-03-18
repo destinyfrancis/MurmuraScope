@@ -3,6 +3,11 @@
 
 Active in kg_driven mode only. Manages deliberation for the 30-100 high-importance
 agents (political leaders, institutions, media outlets) that drive narrative emergence.
+
+Phase 2 enrichment: agent_context now accepts optional fields:
+  persona, goals, stance_axes, key_relationships, emotional_state, attachment_style
+These are injected into the deliberation prompt when present, enabling richer
+character-driven decisions (especially for relationship-oriented scenarios).
 """
 from __future__ import annotations
 
@@ -16,21 +21,22 @@ logger = get_logger(__name__)
 
 _DELIBERATION_SYSTEM = """\
 You are simulating a specific actor in a scenario. Respond as that actor would,
-given their role, beliefs, and the current world events. Be concise and decisive.
-Return only valid JSON."""
+given their role, beliefs, emotional state, relationships, and current world events.
+Be concise and decisive. Return only valid JSON."""
 
 _DELIBERATION_USER = """\
 Scenario: {scenario_description}
 Active metrics: {active_metrics}
 
-You are: {name} ({role})
+You are: {name} ({role}){persona_block}
+Your core goals: {goals}
 Your current beliefs: {current_beliefs}
 Recent events you are aware of: {recent_events}
-Your current faction: {faction}
+Your current faction: {faction}{emotional_block}{relationship_block}
 
 Decide your action this round. Return JSON with:
 - decision: (string slug) your chosen action
-- reasoning: (1-3 sentences) why you chose this
+- reasoning: (1-3 sentences) why you chose this, referencing your relationships if relevant
 - belief_updates: (dict) metric_id → small delta (-0.3 to 0.3) reflecting how events changed your views
 - stance_statement: (1 sentence) public statement or action you take
 
@@ -63,6 +69,10 @@ class CognitiveAgentEngine:
         Args:
             agent_context: Dict with agent_id, name, role, current_beliefs,
                 recent_events, faction.
+                Optional enriched fields (Phase 2):
+                  persona (str), goals (list[str]), stance_axes (list[tuple]),
+                  key_relationships (list[dict]), emotional_state (dict),
+                  attachment_style (dict with style/anxiety/avoidance).
             scenario_description: Short scenario summary.
             active_metrics: Metric IDs from UniversalScenarioConfig.
 
@@ -70,14 +80,10 @@ class CognitiveAgentEngine:
             DeliberationResult. Never raises — returns safe default on failure.
         """
         agent_id = str(agent_context.get("agent_id", "unknown"))
-        user_content = _DELIBERATION_USER.format(
-            scenario_description=scenario_description[:300],
-            active_metrics=list(active_metrics),
-            name=agent_context.get("name", agent_id),
-            role=agent_context.get("role", "actor"),
-            current_beliefs=agent_context.get("current_beliefs", {}),
-            recent_events=agent_context.get("recent_events", [])[-3:],
-            faction=agent_context.get("faction", "none"),
+        user_content = _build_deliberation_prompt(
+            agent_context=agent_context,
+            scenario_description=scenario_description,
+            active_metrics=active_metrics,
         )
         messages = [
             {"role": "system", "content": _DELIBERATION_SYSTEM},
@@ -105,6 +111,92 @@ class CognitiveAgentEngine:
             belief_updates=belief_updates,
             stance_statement=str(raw.get("stance_statement", "")),
         )
+
+
+# ---------------------------------------------------------------------------
+# Private helpers
+# ---------------------------------------------------------------------------
+
+
+def _build_deliberation_prompt(
+    agent_context: dict[str, Any],
+    scenario_description: str,
+    active_metrics: tuple[str, ...],
+) -> str:
+    """Build the enriched deliberation prompt string.
+
+    Gracefully handles both the legacy context format (name, role, faction only)
+    and the enriched format (Phase 2: persona, goals, relationships, emotional state).
+    """
+    agent_id = str(agent_context.get("agent_id", "unknown"))
+
+    # Persona block (optional)
+    persona = agent_context.get("persona", "")
+    persona_block = f"\nPersona: {persona[:200]}" if persona else ""
+
+    # Goals
+    goals = agent_context.get("goals", [])
+    goals_str = ", ".join(str(g) for g in goals[:5]) if goals else "none specified"
+
+    # Emotional state block (optional)
+    emotional_state = agent_context.get("emotional_state") or {}
+    if emotional_state:
+        val = float(emotional_state.get("valence", 0.0))
+        aro = float(emotional_state.get("arousal", 0.3))
+        emotional_block = f"\nEmotional state: valence={val:.2f}, arousal={aro:.2f}"
+    else:
+        emotional_block = ""
+
+    # Relationship block (optional)
+    key_relationships = agent_context.get("key_relationships") or []
+    attachment = agent_context.get("attachment_style") or {}
+    relationship_block = _build_relationship_block(key_relationships, attachment)
+
+    return _DELIBERATION_USER.format(
+        scenario_description=scenario_description[:300],
+        active_metrics=list(active_metrics),
+        name=agent_context.get("name", agent_id),
+        role=agent_context.get("role", "actor"),
+        persona_block=persona_block,
+        goals=goals_str,
+        current_beliefs=agent_context.get("current_beliefs", {}),
+        recent_events=agent_context.get("recent_events", [])[-3:],
+        faction=agent_context.get("faction", "none"),
+        emotional_block=emotional_block,
+        relationship_block=relationship_block,
+    )
+
+
+def _build_relationship_block(
+    key_relationships: list[dict[str, Any]],
+    attachment: dict[str, Any],
+) -> str:
+    """Build the relationship context string for the prompt."""
+    if not key_relationships and not attachment:
+        return ""
+
+    lines: list[str] = ["\nRelationships:"]
+
+    if attachment:
+        style = attachment.get("style", "secure")
+        anxiety = float(attachment.get("anxiety", 0.2))
+        avoidance = float(attachment.get("avoidance", 0.2))
+        lines.append(
+            f"  Attachment style: {style} (anxiety={anxiety:.2f}, avoidance={avoidance:.2f})"
+        )
+
+    for rel in key_relationships[:5]:
+        other = rel.get("other_id", "?")
+        rel_type = rel.get("rel_type", "associate")
+        intimacy = float(rel.get("intimacy", 0.1))
+        trust = float(rel.get("trust", 0.0))
+        commitment = float(rel.get("commitment", 0.1))
+        lines.append(
+            f"  - {other} [{rel_type}]: intimacy={intimacy:.2f}, "
+            f"trust={trust:.2f}, commitment={commitment:.2f}"
+        )
+
+    return "\n".join(lines)
 
 
 def _default_result(agent_id: str) -> DeliberationResult:

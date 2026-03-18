@@ -18,7 +18,9 @@ import json
 import os
 from typing import Any
 
+from backend.app.models.relationship_state import AttachmentStyle
 from backend.app.models.universal_agent_profile import UniversalAgentProfile
+from backend.app.services.relationship_engine import infer_attachment_style
 from backend.app.utils.llm_client import LLMClient
 from backend.app.utils.logger import get_logger
 from backend.prompts.agent_generation_prompts import (
@@ -186,6 +188,31 @@ class KGAgentFactory:
 
         logger.info("generate_from_kg complete: produced %d profiles", len(profiles))
         return profiles
+
+    def infer_attachment_styles(
+        self,
+        profiles: list[UniversalAgentProfile],
+    ) -> dict[str, AttachmentStyle]:
+        """Stage 2.5 — derive attachment styles from Big Five (pure function, no LLM).
+
+        Args:
+            profiles: Agent profiles with Big Five traits.
+
+        Returns:
+            Dict mapping agent_id → AttachmentStyle.
+        """
+        result: dict[str, AttachmentStyle] = {}
+        for p in profiles:
+            result[p.id] = infer_attachment_style(
+                agent_id=p.id,
+                neuroticism=p.neuroticism,
+                agreeableness=p.agreeableness,
+                openness=p.openness,
+            )
+        logger.debug(
+            "infer_attachment_styles: %d styles generated", len(result)
+        )
+        return result
 
     def generate_agents_csv(
         self,

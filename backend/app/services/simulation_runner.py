@@ -111,6 +111,12 @@ class SimulationRunner(
         self._interaction_graph: dict[str, dict[str, list[str]]] = {}  # session_id → adj list
         self._prev_dominant_stance: dict[str, dict[str, float]] = {}  # session_id → metric→value
         self._scenario_description: dict[str, str] = {}  # session_id → text
+        # Phase 1/2: relationship simulation state (kg_driven only)
+        self._kg_relationship_states: dict[str, dict[tuple[str, str], Any]] = {}
+        self._kg_attachment_styles: dict[str, dict[str, Any]] = {}
+        self._kg_emotional_states: dict[str, dict[str, Any]] = {}
+        # Phase 4: relationship lifecycle service (kg_driven + emergence)
+        self._relationship_lifecycle: Any | None = None
 
     async def run(
         self,
@@ -383,6 +389,12 @@ class SimulationRunner(
             self._interaction_graph.pop(session_id, None)
             self._prev_dominant_stance.pop(session_id, None)
             self._scenario_description.pop(session_id, None)
+            # Phase 1/2/4: clean up relationship simulation state
+            self._kg_relationship_states.pop(session_id, None)
+            self._kg_attachment_styles.pop(session_id, None)
+            self._kg_emotional_states.pop(session_id, None)
+            if self._relationship_lifecycle is not None:
+                self._relationship_lifecycle.cleanup_session(session_id)
             # Close LanceDB connection to free resources
             if self._vector_store is not None:
                 try:
@@ -482,6 +494,9 @@ class SimulationRunner(
         ]
         if hc.emergence_enabled:
             critical.append(self._process_emotional_state(session_id, round_num))
+        # kg_driven + emergence: update multi-dimensional relationship states
+        if self._kg_mode.get(session_id) and hc.emergence_enabled:
+            critical.append(self._process_relationship_states(session_id, round_num))
         results = await asyncio.gather(*critical, return_exceptions=True)
         if self._profiler:
             self._profiler.end_hook("group_1", round_num, _t_g1)
@@ -607,6 +622,19 @@ class SimulationRunner(
             self._create_tracked_task(
                 session_id,
                 self._kg_faction_and_tipping(session_id, round_num),
+            )
+
+        # kg_driven + emergence: relationship lifecycle detection (every 3 rounds)
+        if (
+            self._kg_mode.get(session_id)
+            and hc.emergence_enabled
+            and round_num > 0
+            and round_num % 3 == 0
+            and self._relationship_lifecycle is not None
+        ):
+            self._create_tracked_task(
+                session_id,
+                self._process_relationship_lifecycle(session_id, round_num),
             )
 
         # Clean up posts buffer for completed round to prevent memory growth
@@ -1078,6 +1106,9 @@ class SimulationRunner(
         if self._tipping_detector is None:
             from backend.app.services.emergence_tracker import TippingPointDetector  # noqa: PLC0415
             self._tipping_detector = TippingPointDetector()
+        if self._relationship_lifecycle is None:
+            from backend.app.services.relationship_lifecycle import RelationshipLifecycleService  # noqa: PLC0415
+            self._relationship_lifecycle = RelationshipLifecycleService()
 
         # Initialise per-session state
         self._current_round_events[session_id] = []
@@ -1178,13 +1209,47 @@ class SimulationRunner(
 
         for agent in tier1:
             try:
+                agent_id = agent.get("id", "")
+                # Phase 2: enrich context with persona, goals, relationships,
+                # emotional state, and attachment style when available.
+                emotional_state = self._kg_emotional_states.get(
+                    session_id, {}
+                ).get(agent_id)
+                attachment = self._kg_attachment_styles.get(
+                    session_id, {}
+                ).get(agent_id)
+                rel_states = self._kg_relationship_states.get(
+                    session_id, {}
+                )
+                key_relationships = _build_key_relationships(
+                    agent_id=agent_id,
+                    rel_states=rel_states,
+                )
                 agent_context = {
-                    "agent_id": agent.get("id", ""),
+                    "agent_id": agent_id,
                     "name": agent.get("name", ""),
                     "role": agent.get("role", ""),
+                    "persona": agent.get("persona", ""),
+                    "goals": list(agent.get("goals", [])),
                     "current_beliefs": metrics,
                     "recent_events": [e.content for e in current_events],
                     "faction": agent.get("faction", "none"),
+                    "emotional_state": (
+                        {
+                            "valence": getattr(emotional_state, "valence", 0.0),
+                            "arousal": getattr(emotional_state, "arousal", 0.3),
+                        }
+                        if emotional_state is not None else {}
+                    ),
+                    "attachment_style": (
+                        {
+                            "style": attachment.style,
+                            "anxiety": attachment.anxiety,
+                            "avoidance": attachment.avoidance,
+                        }
+                        if attachment is not None else {}
+                    ),
+                    "key_relationships": key_relationships,
                 }
                 result = await self._cognitive_engine.deliberate(
                     agent_context=agent_context,
@@ -1201,6 +1266,139 @@ class SimulationRunner(
                     agent.get("id", "?"), session_id,
                 )
         self._active_metrics[session_id] = metrics
+
+    async def _process_relationship_states(
+        self, session_id: str, round_num: int
+    ) -> None:
+        """Group 1 parallel: update multi-dimensional relationship states.
+
+        Reads interaction valences from simulation_actions for this round,
+        runs RelationshipEngine.batch_update(), and stores updated states
+        both in the in-memory cache and in the relationship_states table.
+
+        Active only in kg_driven mode + emergence_enabled.
+        """
+        from backend.app.services.relationship_engine import RelationshipEngine  # noqa: PLC0415
+
+        rel_states = self._kg_relationship_states.get(session_id)
+        if not rel_states:
+            return
+
+        try:
+            engine = RelationshipEngine()
+
+            # Gather interaction valences from simulation_actions this round
+            valences: dict[tuple[str, str], float] = {}
+            try:
+                async with __import__("backend.app.utils.db", fromlist=["get_db"]).get_db() as db:
+                    cursor = await db.execute(
+                        """
+                        SELECT oasis_username, target_agent_username, sentiment
+                        FROM simulation_actions
+                        WHERE session_id = ? AND round_number = ?
+                          AND target_agent_username IS NOT NULL
+                          AND target_agent_username != ''
+                        """,
+                        (session_id, round_num),
+                    )
+                    rows = await cursor.fetchall()
+                    for row in rows:
+                        aid, bid, sentiment = row[0], row[1], (row[2] or "neutral")
+                        v = 0.5 if sentiment == "positive" else (-0.5 if sentiment == "negative" else 0.0)
+                        valences[(str(aid), str(bid))] = v
+            except Exception:
+                logger.debug(
+                    "_process_relationship_states: could not load valences session=%s",
+                    session_id,
+                )
+
+            profiles = {
+                r["oasis_username"]: {
+                    "agreeableness": float(r.get("agreeableness", 0.5) or 0.5),
+                    "neuroticism": float(r.get("neuroticism", 0.5) or 0.5),
+                }
+                for r in self._round_profiles.get(session_id, [])
+                if r.get("oasis_username")
+            }
+            attachment_styles = self._kg_attachment_styles.get(session_id, {})
+
+            updated = engine.batch_update(
+                states=rel_states,
+                interactions=valences,
+                profiles=profiles,
+                attachment_styles=attachment_styles,
+            )
+
+            # Update in-memory cache (immutable replace)
+            new_states = dict(rel_states)
+            for state in updated:
+                new_states[(state.agent_a_id, state.agent_b_id)] = state
+            self._kg_relationship_states[session_id] = new_states
+
+            # Persist updated states to DB
+            if updated:
+                async with __import__("backend.app.utils.db", fromlist=["get_db"]).get_db() as db:
+                    await db.executemany(
+                        """
+                        INSERT OR REPLACE INTO relationship_states
+                            (session_id, agent_a_id, agent_b_id, round_number,
+                             intimacy, passion, commitment, satisfaction,
+                             alternatives, investment, trust,
+                             interaction_count, rounds_since_change,
+                             updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                        """,
+                        [
+                            (
+                                session_id,
+                                s.agent_a_id, s.agent_b_id, round_num,
+                                s.intimacy, s.passion, s.commitment,
+                                s.satisfaction, s.alternatives, s.investment,
+                                s.trust, s.interaction_count, s.rounds_since_change,
+                            )
+                            for s in updated
+                        ],
+                    )
+                    await db.commit()
+
+        except Exception:
+            logger.exception(
+                "_process_relationship_states failed session=%s round=%d",
+                session_id, round_num,
+            )
+
+    async def _process_relationship_lifecycle(
+        self, session_id: str, round_num: int
+    ) -> None:
+        """Group 3 periodic: detect and persist relationship lifecycle events.
+
+        Active only in kg_driven mode + emergence_enabled.
+        Reads current relationship states from _kg_relationship_states, detects
+        lifecycle transitions, and persists events to network_events table.
+        """
+        if self._relationship_lifecycle is None:
+            return
+        rel_states = self._kg_relationship_states.get(session_id, {})
+        if not rel_states:
+            return
+        try:
+            events = self._relationship_lifecycle.detect_events(
+                session_id=session_id,
+                round_number=round_num,
+                rel_states=rel_states,
+            )
+            if events:
+                async with __import__("backend.app.utils.db", fromlist=["get_db"]).get_db() as db:
+                    await self._relationship_lifecycle.persist_events(events, db)
+                logger.debug(
+                    "_process_relationship_lifecycle: %d events session=%s round=%d",
+                    len(events), session_id, round_num,
+                )
+        except Exception:
+            logger.exception(
+                "_process_relationship_lifecycle failed session=%s round=%d",
+                session_id, round_num,
+            )
 
     async def _kg_faction_and_tipping(
         self, session_id: str, round_num: int
@@ -1399,3 +1597,53 @@ def _check_exit_code(
         raise RuntimeError(
             f"OASIS subprocess for session {session_id} exited with code {exit_code}"
         )
+
+
+def _build_key_relationships(
+    agent_id: str,
+    rel_states: dict,
+) -> list[dict]:
+    """Extract top-5 key relationships for agent_id from relationship_states dict.
+
+    Args:
+        agent_id: The agent whose perspective we use.
+        rel_states: Dict keyed by (agent_a_id, agent_b_id) → RelationshipState.
+
+    Returns:
+        List of relationship dicts suitable for CognitiveAgentEngine context.
+    """
+    from backend.app.models.relationship_state import RelationshipState  # noqa: PLC0415
+
+    relationships: list[dict] = []
+    for (aid, bid), state in rel_states.items():
+        if aid != agent_id:
+            continue
+        if not isinstance(state, RelationshipState):
+            continue
+        relationships.append({
+            "other_id": bid,
+            "rel_type": _infer_rel_type(state),
+            "intimacy": state.intimacy,
+            "trust": state.trust,
+            "commitment": state.commitment,
+            "passion": state.passion,
+        })
+    # Sort by intimacy + |trust| (most salient relationships first)
+    relationships.sort(
+        key=lambda r: r["intimacy"] + abs(r["trust"]),
+        reverse=True,
+    )
+    return relationships[:5]
+
+
+def _infer_rel_type(state: Any) -> str:
+    """Heuristically label relationship type from state dimensions."""
+    if state.passion > 0.4 and state.intimacy > 0.3:
+        return "romantic"
+    if state.trust < -0.3:
+        return "adversarial"
+    if state.commitment > 0.6:
+        return "committed"
+    if state.intimacy > 0.3:
+        return "close"
+    return "associate"

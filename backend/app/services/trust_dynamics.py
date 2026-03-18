@@ -8,6 +8,14 @@ Trust scores are stored in the ``agent_relationships.trust_score`` column
 (added via ALTER TABLE at startup) and range from -1.0 to +1.0.
 
 Decay factor: 0.95 per round (relationships naturally fade without interaction).
+
+Phase 1 integration note:
+    ``update_trust_from_round()`` now also writes back trust_score changes into
+    ``relationship_states`` via ``RelationshipEngine`` when the session is running
+    in kg_driven mode and relationship states have been initialized.
+    The agent_relationships.trust_score column continues to be the authoritative
+    source of truth for backward-compatible consumers (hk_demographic mode is
+    completely unchanged).
 """
 
 from __future__ import annotations
@@ -366,6 +374,51 @@ class TrustDynamicsService:
             parts.append(f"不信任: {dist_str}")
 
         return "【信任關係】" + " | ".join(parts)
+
+    async def sync_trust_to_relationship_states(
+        self,
+        session_id: str,
+        round_number: int,
+        updates: tuple[TrustUpdate, ...],
+    ) -> None:
+        """Write trust_score changes from TrustUpdates into relationship_states table.
+
+        Called optionally by SimulationRunner after update_trust_from_round()
+        when relationship_states rows exist (kg_driven mode with Phase 1 enabled).
+        Completely no-ops if relationship_states has no rows for this session — so
+        hk_demographic mode is unaffected.
+
+        Uses UPDATE only (does not INSERT) to avoid creating relationship_states
+        rows for pairs that were never initialized.
+
+        Args:
+            session_id: Session UUID.
+            round_number: Current round number.
+            updates: TrustUpdate tuples from update_trust_from_round().
+        """
+        if not updates:
+            return
+        try:
+            async with get_db() as db:
+                for upd in updates:
+                    await db.execute(
+                        """
+                        UPDATE relationship_states
+                        SET trust = ?, updated_at = datetime('now')
+                        WHERE session_id = ?
+                          AND agent_a_id = CAST(? AS TEXT)
+                          AND agent_b_id = CAST(? AS TEXT)
+                          AND round_number = ?
+                        """,
+                        (upd.new_score, session_id,
+                         upd.agent_a_id, upd.agent_b_id, round_number),
+                    )
+                await db.commit()
+        except Exception:
+            logger.debug(
+                "sync_trust_to_relationship_states failed (non-critical) session=%s",
+                session_id,
+            )
 
 
 # ---------------------------------------------------------------------------

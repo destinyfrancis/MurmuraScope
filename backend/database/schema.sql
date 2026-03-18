@@ -858,3 +858,47 @@ CREATE TABLE IF NOT EXISTS seed_persona_templates (
 );
 CREATE INDEX IF NOT EXISTS idx_spt_graph   ON seed_persona_templates(graph_id);
 CREATE INDEX IF NOT EXISTS idx_spt_session ON seed_persona_templates(session_id);
+
+-- ---------------------------------------------------------------------------
+-- relationship_states: Multi-dimensional per-agent-pair relationship state
+-- Added in: relationship simulation capability (Phase 1)
+-- Directional: (session_id, agent_a_id, agent_b_id, round_number) is the unique key.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS relationship_states (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id          TEXT    NOT NULL,
+    agent_a_id          TEXT    NOT NULL,
+    agent_b_id          TEXT    NOT NULL,
+    round_number        INTEGER NOT NULL DEFAULT 0,
+    intimacy            REAL    NOT NULL DEFAULT 0.1,
+    passion             REAL    NOT NULL DEFAULT 0.1,
+    commitment          REAL    NOT NULL DEFAULT 0.1,
+    satisfaction        REAL    NOT NULL DEFAULT 0.1,
+    alternatives        REAL    NOT NULL DEFAULT 0.3,
+    investment          REAL    NOT NULL DEFAULT 0.05,
+    trust               REAL    NOT NULL DEFAULT 0.0,
+    interaction_count   INTEGER NOT NULL DEFAULT 0,
+    rounds_since_change INTEGER NOT NULL DEFAULT 0,
+    created_at          TEXT    DEFAULT (datetime('now')),
+    updated_at          TEXT    DEFAULT (datetime('now'))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_rs_pair
+    ON relationship_states(session_id, agent_a_id, agent_b_id, round_number);
+CREATE INDEX IF NOT EXISTS idx_rs_session
+    ON relationship_states(session_id, round_number);
+
+-- ---------------------------------------------------------------------------
+-- attachment_styles: Per-agent attachment style (inferred from Big Five)
+-- Added in: relationship simulation capability (Phase 1)
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS attachment_styles (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id  TEXT    NOT NULL,
+    agent_id    TEXT    NOT NULL,
+    style       TEXT    NOT NULL DEFAULT 'secure',
+    anxiety     REAL    NOT NULL DEFAULT 0.2,
+    avoidance   REAL    NOT NULL DEFAULT 0.2,
+    created_at  TEXT    DEFAULT (datetime('now')),
+    UNIQUE(session_id, agent_id) ON CONFLICT REPLACE
+);
+CREATE INDEX IF NOT EXISTS idx_as_session ON attachment_styles(session_id);
