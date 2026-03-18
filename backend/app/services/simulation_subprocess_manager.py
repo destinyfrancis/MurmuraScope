@@ -29,6 +29,7 @@ class SimulationSubprocessManager:
     def __init__(self) -> None:
         self._processes: dict[str, asyncio.subprocess.Process] = {}
         self._report_pending: dict[str, bool] = {}
+        self._auto_release_tasks: dict[str, asyncio.Task] = {}
 
     # ------------------------------------------------------------------
     # Launch
@@ -154,9 +155,10 @@ class SimulationSubprocessManager:
         """
         self._report_pending[session_id] = True
         logger.info("keep_alive_for_report: %s", session_id)
-        asyncio.create_task(self._auto_release(session_id, timeout_s=1800))
+        task = asyncio.create_task(self._auto_release(session_id, timeout_s=1800))
+        self._auto_release_tasks[session_id] = task
 
-    async def _auto_release(self, session_id: str, timeout_s: int) -> None:
+    async def _auto_release(self, session_id: str, timeout_s: float) -> None:
         """Auto-release a session after *timeout_s* seconds if still pending.
 
         Args:
@@ -177,6 +179,9 @@ class SimulationSubprocessManager:
         Args:
             session_id: UUID of the session to release.
         """
+        task = self._auto_release_tasks.pop(session_id, None)
+        if task is not None and not task.done():
+            task.cancel()
         self._report_pending.pop(session_id, None)
         if self.is_running(session_id):
             await self.stop(session_id)

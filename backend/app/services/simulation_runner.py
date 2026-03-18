@@ -353,7 +353,11 @@ class SimulationRunner(
 
             # --- 2. Ensure subprocess is not still running (orphan prevention) ---
             # process is None only if subprocess creation itself failed.
-            if process is not None and process.returncode is None:
+            # Skip killing if report generation is pending — the subprocess must
+            # stay alive so the report agent can interview agents.
+            if (process is not None
+                    and process.returncode is None
+                    and not self._subprocess_mgr._report_pending.get(session_id)):
                 logger.warning(
                     "Cleaning up orphaned subprocess for session %s (PID %d)",
                     session_id,
