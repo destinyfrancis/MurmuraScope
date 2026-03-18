@@ -50,3 +50,7 @@ export function getNodeEvidence(graphId, nodeId) {
 export function getNodeNeighborhood(graphId, nodeId, hops = 2) {
   return api.get(`/graph/${graphId}/node/${nodeId}/neighborhood`, { params: { hops } })
 }
+
+export function getRelationshipStates(sessionId, roundNumber = -1) {
+  return api.get(`/graph/${sessionId}/relationships`, { params: { round_number: roundNumber } })
+}

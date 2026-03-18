@@ -777,6 +777,59 @@ async def get_graph_diff(
     )
 
 
+@router.get("/{session_id}/relationships")
+async def get_relationship_states(session_id: str, round_number: int = -1) -> dict:
+    """Get relationship states for visualization.
+
+    Returns directional relationship data for all agent pairs.
+    round_number=-1 means latest round.
+    """
+    try:
+        async with get_db() as db:
+            if round_number == -1:
+                cursor = await db.execute(
+                    "SELECT MAX(round_number) FROM relationship_states WHERE session_id = ?",
+                    (session_id,),
+                )
+                row = await cursor.fetchone()
+                round_number = row[0] if row and row[0] is not None else 0
+
+            cursor = await db.execute(
+                """SELECT agent_a_id, agent_b_id, intimacy, passion, commitment,
+                          satisfaction, alternatives, investment, trust,
+                          interaction_count, round_number
+                   FROM relationship_states
+                   WHERE session_id = ? AND round_number = ?
+                   ORDER BY intimacy DESC""",
+                (session_id, round_number),
+            )
+            rows = await cursor.fetchall()
+    except Exception:
+        logger.exception("get_relationship_states failed for session %s", session_id)
+        raise HTTPException(status_code=500, detail="Relationship states fetch failed")
+
+    return {
+        "session_id": session_id,
+        "round_number": round_number,
+        "relationships": [
+            {
+                "agent_a": r[0],
+                "agent_b": r[1],
+                "intimacy": r[2],
+                "passion": r[3],
+                "commitment": r[4],
+                "satisfaction": r[5],
+                "alternatives": r[6],
+                "investment": r[7],
+                "trust": r[8],
+                "interaction_count": r[9],
+                "rusbult_commitment": max(0.0, min(1.0, (r[5] or 0.0) - (r[6] or 0.0) + (r[7] or 0.0))),
+            }
+            for r in rows
+        ],
+    }
+
+
 @router.get("/{graph_id}/node/{node_id}/evidence")
 async def get_node_evidence(graph_id: str, node_id: str) -> APIResponse:
     """Return evidence for a KG node: matching agent memories + data provenance."""

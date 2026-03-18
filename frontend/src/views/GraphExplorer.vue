@@ -9,10 +9,14 @@ import GraphRoundScrubber from '../components/GraphRoundScrubber.vue'
 import GraphDetailDrawer from '../components/GraphDetailDrawer.vue'
 import GraphMinimap from '../components/GraphMinimap.vue'
 import ContagionMap from '../components/ContagionMap.vue'
+import RelationshipGraph from '../components/RelationshipGraph.vue'
 
 const props = defineProps({
   sessionId: { type: String, required: true },
 })
+
+// Tab state
+const activeTab = ref('graph')
 
 const canvasRef = ref(null)
 const loading = ref(true)
@@ -175,98 +179,165 @@ onMounted(async () => {
 
 <template>
   <div class="explorer-layout">
-    <!-- Toolbar -->
-    <GraphToolbar
-      :entity-types="entityTypes"
-      :active-types="activeTypes"
-      :show-echo-chambers="showEchoChambers"
-      :layout="layout"
-      @filter-change="handleFilterChange"
-      @search-query="handleSearchQuery"
-      @echo-toggle="handleEchoToggle"
-      @layout-change="handleLayoutChange"
-    />
-    <button
-      class="contagion-toggle"
-      :class="{ active: showContagionMap }"
-      @click="showContagionMap = !showContagionMap"
-    >
-      情緒傳染
-    </button>
+    <!-- Tab bar -->
+    <div class="explorer-tabs">
+      <button
+        class="explorer-tab"
+        :class="{ active: activeTab === 'graph' }"
+        @click="activeTab = 'graph'"
+      >
+        知識圖譜
+      </button>
+      <button
+        class="explorer-tab"
+        :class="{ active: activeTab === 'relationships' }"
+        @click="activeTab = 'relationships'"
+      >
+        關係圖
+      </button>
+    </div>
 
-    <!-- Main area -->
-    <div class="explorer-main">
-      <!-- Loading -->
-      <div v-if="loading" class="explorer-loading">
-        <div class="loading-spinner" />
-        <p>載入圖譜中...</p>
-      </div>
-
-      <!-- Error -->
-      <div v-else-if="error" class="explorer-error">
-        <p>{{ error }}</p>
-        <button class="btn-retry" @click="fetchGraph">重試</button>
-      </div>
-
-      <!-- Canvas -->
-      <GraphCanvas
-        v-else
-        ref="canvasRef"
-        :nodes="nodes"
-        :edges="edges"
-        :highlighted-nodes="highlightedNodes"
-        :cluster-data="clusterData"
-        :contagion-agent-ids="contagionAgentIds"
-        :community-summaries="communitySummaries"
-        :triple-conflicts="tripleConflicts"
-        :polarization-data="polarizationData"
-        :latest-posts="latestPosts"
-        :show-echo-chambers="showEchoChambers"
+    <!-- ── Knowledge Graph tab ── -->
+    <template v-if="activeTab === 'graph'">
+      <!-- Toolbar -->
+      <GraphToolbar
+        :entity-types="entityTypes"
         :active-types="activeTypes"
-        @node-click="handleNodeClick"
+        :show-echo-chambers="showEchoChambers"
+        :layout="layout"
+        @filter-change="handleFilterChange"
+        @search-query="handleSearchQuery"
+        @echo-toggle="handleEchoToggle"
+        @layout-change="handleLayoutChange"
       />
-      <!-- Minimap -->
-      <GraphMinimap
-        v-if="nodes.length > 0"
-        :nodes="nodes"
-        :graph-instance="canvasRef"
-      />
-      <!-- Contagion Map overlay -->
-      <ContagionMap
+      <button
+        class="contagion-toggle"
+        :class="{ active: showContagionMap }"
+        @click="showContagionMap = !showContagionMap"
+      >
+        情緒傳染
+      </button>
+
+      <!-- Main area -->
+      <div class="explorer-main">
+        <!-- Loading -->
+        <div v-if="loading" class="explorer-loading">
+          <div class="loading-spinner" />
+          <p>載入圖譜中...</p>
+        </div>
+
+        <!-- Error -->
+        <div v-else-if="error" class="explorer-error">
+          <p>{{ error }}</p>
+          <button class="btn-retry" @click="fetchGraph">重試</button>
+        </div>
+
+        <!-- Canvas -->
+        <GraphCanvas
+          v-else
+          ref="canvasRef"
+          :nodes="nodes"
+          :edges="edges"
+          :highlighted-nodes="highlightedNodes"
+          :cluster-data="clusterData"
+          :contagion-agent-ids="contagionAgentIds"
+          :community-summaries="communitySummaries"
+          :triple-conflicts="tripleConflicts"
+          :polarization-data="polarizationData"
+          :latest-posts="latestPosts"
+          :show-echo-chambers="showEchoChambers"
+          :active-types="activeTypes"
+          @node-click="handleNodeClick"
+        />
+        <!-- Minimap -->
+        <GraphMinimap
+          v-if="nodes.length > 0"
+          :nodes="nodes"
+          :graph-instance="canvasRef"
+        />
+        <!-- Contagion Map overlay -->
+        <ContagionMap
+          :session-id="sessionId"
+          :visible="showContagionMap"
+          @toggle="showContagionMap = !showContagionMap"
+        />
+      </div>
+
+      <!-- Round scrubber -->
+      <div class="explorer-scrubber">
+        <GraphRoundScrubber
+          :available-rounds="availableRounds"
+          :current-round="currentRound"
+          @round-change="handleRoundChange"
+        />
+      </div>
+
+      <!-- Detail drawer -->
+      <GraphDetailDrawer
+        :visible="drawerVisible"
+        :selected-node="selectedNode"
         :session-id="sessionId"
-        :visible="showContagionMap"
-        @toggle="showContagionMap = !showContagionMap"
+        :graph-id="graphId"
+        @close="drawerVisible = false"
       />
-    </div>
+    </template>
 
-    <!-- Round scrubber -->
-    <div class="explorer-scrubber">
-      <GraphRoundScrubber
-        :available-rounds="availableRounds"
-        :current-round="currentRound"
-        @round-change="handleRoundChange"
-      />
+    <!-- ── Relationship Graph tab ── -->
+    <div v-else-if="activeTab === 'relationships'" class="explorer-rel-wrapper">
+      <RelationshipGraph :session-id="sessionId" />
     </div>
-
-    <!-- Detail drawer -->
-    <GraphDetailDrawer
-      :visible="drawerVisible"
-      :selected-node="selectedNode"
-      :session-id="sessionId"
-      :graph-id="graphId"
-      @close="drawerVisible = false"
-    />
   </div>
 </template>
 
 <style scoped>
 .explorer-layout {
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto auto 1fr auto;
   height: 100vh;
   overflow: hidden;
 }
 
+/* Tab bar */
+.explorer-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 8px 12px 0;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.explorer-tab {
+  padding: 6px 16px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.explorer-tab:hover {
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+}
+
+.explorer-tab.active {
+  background: var(--bg-primary);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* Relationship tab wrapper */
+.explorer-rel-wrapper {
+  overflow: auto;
+  padding: 16px;
+  grid-row: 2 / -1;
+}
+
+/* Graph tab — main canvas area */
 .explorer-main {
   position: relative;
   overflow: hidden;
