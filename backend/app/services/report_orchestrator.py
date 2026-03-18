@@ -169,8 +169,14 @@ class ReportOrchestrator:
         completed_sections: list[str] = []
 
         for chapter in chapters:
-            async def _handler(name: str, params: dict) -> str:
-                return await tool_handler(name, params)
+            # Capture chapter in default arg to avoid closure cell sharing
+            # across loop iterations (safe today but fragile under gather).
+            async def _handler(
+                name: str,
+                params: dict,
+                _th: Callable[[str, dict[str, Any]], Awaitable[str]] = tool_handler,
+            ) -> str:
+                return await _th(name, params)
 
             # Fix 2: use chapter's suggested_tools as nudge hints instead of
             # computing unused before generate_section runs (which always gave empty set)

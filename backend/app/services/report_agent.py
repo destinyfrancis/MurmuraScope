@@ -31,6 +31,17 @@ logger = get_logger("report_agent")
 
 _MAX_REACT_ITERATIONS = 10
 
+# Module-level LLM client — reused across all legacy ReACT calls to share
+# the httpx connection pool and avoid per-call socket leaks.
+_llm_client: LLMClient | None = None
+
+
+def _get_llm_client() -> LLMClient:
+    global _llm_client
+    if _llm_client is None:
+        _llm_client = LLMClient()
+    return _llm_client
+
 TOOLS: dict[str, str] = {
     "query_graph": (
         "Semantic knowledge graph query — retrieves community-level insights, "
@@ -914,8 +925,8 @@ async def _call_llm(
     messages: list[dict[str, str]],
     system_prompt: str,
 ) -> str:
-    """Call LLM for report generation / chat via Fireworks Minimax M2P5."""
-    client = LLMClient()
+    """Call LLM for report generation / chat (shares module-level connection pool)."""
+    client = _get_llm_client()
     full_messages = [
         {"role": "system", "content": system_prompt},
         *messages,

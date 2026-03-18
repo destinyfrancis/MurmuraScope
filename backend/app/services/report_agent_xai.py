@@ -17,6 +17,16 @@ from backend.app.services.simulation_ipc import SimulationIPC
 from backend.app.utils.db import get_db
 from backend.app.utils.llm_client import LLMClient
 
+# Module-level LLM client shared across all XAI calls to reuse httpx pool.
+_xai_llm_client: LLMClient | None = None
+
+
+def _get_xai_llm() -> LLMClient:
+    global _xai_llm_client
+    if _xai_llm_client is None:
+        _xai_llm_client = LLMClient()
+    return _xai_llm_client
+
 
 async def handle_decision_summary(
     session_id: str, params: dict[str, Any], _ipc: SimulationIPC
@@ -224,7 +234,7 @@ async def _generate_sub_queries(query: str) -> tuple[str, ...]:
     Returns:
         Tuple of sub-query strings (1–5 elements).
     """
-    llm = LLMClient()
+    llm = _get_xai_llm()
     prompt = (
         "將以下查詢分解為3-5個具體的子查詢，每個子查詢針對模擬數據的不同面向。\n"
         "只輸出JSON陣列格式：[\"子查詢1\", \"子查詢2\", ...]\n\n"
@@ -232,8 +242,7 @@ async def _generate_sub_queries(query: str) -> tuple[str, ...]:
     )
     llm_response = await llm.chat(
         [{"role": "user", "content": prompt}],
-        provider="anthropic",
-        model="claude-haiku-4-5-20251001",
+        provider="openrouter",
         max_tokens=256,
     )
     response = llm_response.content
@@ -410,7 +419,7 @@ async def get_topic_evolution(
     if max_rn == 0:
         return TopicEvolutionResult(windows=(), migration_path="", inflection_round=None)
 
-    llm = LLMClient()
+    llm = _get_xai_llm()
 
     async def _process_window(
         session_id: str, start: int, end: int, llm: LLMClient
@@ -433,8 +442,7 @@ async def get_topic_evolution(
         )
         llm_response = await llm.chat(
             [{"role": "user", "content": prompt}],
-            provider="anthropic",
-            model="claude-haiku-4-5-20251001",
+            provider="openrouter",
             max_tokens=128,
         )
         response_text = llm_response.content
@@ -578,7 +586,7 @@ async def get_agent_story_arcs(
     # Take up to 10 agents
     selected = [dict(r) for r in rows[:10]]
 
-    llm = LLMClient()
+    llm = _get_xai_llm()
 
     async def _generate_arc(session_id: str, agent: dict, llm: LLMClient) -> dict | None:
         agent_id = agent["agent_id"]
@@ -606,8 +614,7 @@ async def get_agent_story_arcs(
         )
         llm_response = await llm.chat(
             [{"role": "user", "content": prompt}],
-            provider="anthropic",
-            model="claude-haiku-4-5-20251001",
+            provider="openrouter",
             max_tokens=256,
         )
         arc_summary = llm_response.content.strip()

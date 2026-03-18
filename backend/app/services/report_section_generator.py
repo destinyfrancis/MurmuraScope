@@ -88,6 +88,7 @@ async def generate_section(
 
     total_tool_calls = 0
     iteration = 0
+    _force_final_sent = False  # prevent duplicate SECTION_FORCE_FINAL_MSG
 
     while iteration < _MAX_ITERATIONS:
         iteration += 1
@@ -116,9 +117,10 @@ async def generate_section(
                 continue
             return _extract_final_answer(response)
 
-        # Enforce max tool calls
-        if total_tool_calls >= _MAX_TOOL_CALLS:
+        # Enforce max tool calls — send force-final only once
+        if total_tool_calls >= _MAX_TOOL_CALLS and not _force_final_sent:
             messages.append({"role": "user", "content": SECTION_FORCE_FINAL_MSG})
+            _force_final_sent = True
 
     # Force final answer on timeout
     final = await llm_caller(messages + [{"role": "user", "content": SECTION_FORCE_FINAL_MSG}])

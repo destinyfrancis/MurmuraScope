@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -255,13 +255,13 @@ class TestGenerateSubQueries:
             usage={"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
             cost_usd=0.0,
         )
+        mock_instance = MagicMock()
+        mock_instance.chat = AsyncMock(return_value=mock_llm_response)
 
         with patch(
-            "backend.app.services.report_agent_xai.LLMClient"
-        ) as MockLLMClient:
-            instance = MockLLMClient.return_value
-            instance.chat = AsyncMock(return_value=mock_llm_response)
-
+            "backend.app.services.report_agent_xai._get_xai_llm",
+            return_value=mock_instance,
+        ):
             from backend.app.services.report_agent_xai import _generate_sub_queries
 
             result = asyncio.run(_generate_sub_queries("test query"))
@@ -278,13 +278,13 @@ class TestGenerateSubQueries:
             usage={"prompt_tokens": 10, "completion_tokens": 10, "total_tokens": 20},
             cost_usd=0.0,
         )
+        mock_instance = MagicMock()
+        mock_instance.chat = AsyncMock(return_value=mock_llm_response)
 
         with patch(
-            "backend.app.services.report_agent_xai.LLMClient"
-        ) as MockLLMClient:
-            instance = MockLLMClient.return_value
-            instance.chat = AsyncMock(return_value=mock_llm_response)
-
+            "backend.app.services.report_agent_xai._get_xai_llm",
+            return_value=mock_instance,
+        ):
             from backend.app.services.report_agent_xai import _generate_sub_queries
 
             result = asyncio.run(_generate_sub_queries("test query"))
@@ -452,9 +452,12 @@ class TestGetTopicEvolution:
             usage={"prompt_tokens": 5, "completion_tokens": 3, "total_tokens": 8},
             cost_usd=0.0,
         )
-        with patch("backend.app.services.report_agent_xai.LLMClient") as MockLLM:
-            instance = MockLLM.return_value
-            instance.chat = AsyncMock(return_value=mock_response)
+        mock_llm_instance = MagicMock()
+        mock_llm_instance.chat = AsyncMock(return_value=mock_response)
+        with patch(
+            "backend.app.services.report_agent_xai._get_xai_llm",
+            return_value=mock_llm_instance,
+        ):
             from backend.app.services.report_agent_xai import get_topic_evolution
             result = await get_topic_evolution("sess2", window_size=5)
 
