@@ -22,6 +22,7 @@ import sys
 from pathlib import Path
 from typing import Any, Callable, Coroutine
 
+from backend.app.models.kg_session_state import KGSessionState
 from backend.app.services.simulation_hooks_agent import AgentHooksMixin
 from backend.app.services.simulation_hooks_kg import KGHooksMixin
 from backend.app.services.simulation_hooks_macro import MacroHooksMixin
@@ -101,20 +102,8 @@ class SimulationRunner(
         self._cognitive_engine: Any | None = None
         self._faction_mapper: Any | None = None
         self._tipping_detector: Any | None = None
-        # kg_driven per-session state
-        self._current_round_events: dict[str, list] = {}  # session_id → events
-        self._event_content_history: dict[str, list[str]] = {}  # session_id → strings
-        self._tier1_agents: dict[str, list] = {}  # session_id → agent profiles
-        self._active_metrics: dict[str, dict[str, float]] = {}  # session_id → metric_id→value
-        self._agent_beliefs: dict[str, dict[str, dict[str, float]]] = {}  # session_id → agent_id→beliefs
-        self._belief_history: dict[str, list] = {}  # session_id → snapshots
-        self._interaction_graph: dict[str, dict[str, list[str]]] = {}  # session_id → adj list
-        self._prev_dominant_stance: dict[str, dict[str, float]] = {}  # session_id → metric→value
-        self._scenario_description: dict[str, str] = {}  # session_id → text
-        # Phase 1/2: relationship simulation state (kg_driven only)
-        self._kg_relationship_states: dict[str, dict[tuple[str, str], Any]] = {}
-        self._kg_attachment_styles: dict[str, dict[str, Any]] = {}
-        self._kg_emotional_states: dict[str, dict[str, Any]] = {}
+        # kg_driven per-session state — all 12 fields consolidated into KGSessionState
+        self._kg_sessions: dict[str, KGSessionState] = {}
         # Phase 4: relationship lifecycle service (kg_driven + emergence)
         self._relationship_lifecycle: Any | None = None
 
@@ -380,19 +369,7 @@ class SimulationRunner(
             self._pending_arousal_deltas.pop(session_id, None)
             # kg_driven mode: clean up per-session state
             self._kg_mode.pop(session_id, None)
-            self._current_round_events.pop(session_id, None)
-            self._event_content_history.pop(session_id, None)
-            self._tier1_agents.pop(session_id, None)
-            self._active_metrics.pop(session_id, None)
-            self._agent_beliefs.pop(session_id, None)
-            self._belief_history.pop(session_id, None)
-            self._interaction_graph.pop(session_id, None)
-            self._prev_dominant_stance.pop(session_id, None)
-            self._scenario_description.pop(session_id, None)
-            # Phase 1/2/4: clean up relationship simulation state
-            self._kg_relationship_states.pop(session_id, None)
-            self._kg_attachment_styles.pop(session_id, None)
-            self._kg_emotional_states.pop(session_id, None)
+            self._kg_sessions.pop(session_id, None)
             if self._relationship_lifecycle is not None:
                 self._relationship_lifecycle.cleanup_session(session_id)
             # Close LanceDB connection to free resources
@@ -1110,19 +1087,14 @@ class SimulationRunner(
             from backend.app.services.relationship_lifecycle import RelationshipLifecycleService  # noqa: PLC0415
             self._relationship_lifecycle = RelationshipLifecycleService()
 
-        # Initialise per-session state
-        self._current_round_events[session_id] = []
-        self._event_content_history[session_id] = []
-        self._tier1_agents[session_id] = []
-        self._active_metrics[session_id] = {}
-        self._agent_beliefs[session_id] = {}
-        self._belief_history[session_id] = []
-        self._interaction_graph[session_id] = {}
-        self._prev_dominant_stance[session_id] = {}
-        self._scenario_description[session_id] = ""
+        # Initialise per-session state via KGSessionState
+        self._kg_sessions[session_id] = KGSessionState()
 
         # Load scenario description + active metrics from DB (if available)
         await self._load_kg_session_context(session_id, config)
+
+        # Initialise relationship states and attachment styles from KG edges
+        await self._init_relationship_and_attachment(session_id, config)
 
     async def _load_kg_session_context(
         self, session_id: str, config: dict[str, Any]
@@ -1138,7 +1110,7 @@ class SimulationRunner(
                 )
                 row = await cursor.fetchone()
                 if row and row["seed_text"]:
-                    self._scenario_description[session_id] = row["seed_text"][:500]
+                    self._kg_sessions[session_id].scenario_description = row["seed_text"][:500]
 
                 # Load tier-1 agents (those with importance >= 0.7 or first 30)
                 cursor = await db.execute(
@@ -1160,11 +1132,108 @@ class SimulationRunner(
                         "role": r["role"] or "",
                         "faction": r["faction"] or "none",
                     })
-                self._tier1_agents[session_id] = tier1
+                self._kg_sessions[session_id].tier1_agents = tier1
 
         except Exception:
             logger.warning(
                 "Could not load kg_driven context for session %s",
+                session_id,
+                exc_info=True,
+            )
+
+    async def _init_relationship_and_attachment(
+        self, session_id: str, config: dict[str, Any]
+    ) -> None:
+        """Initialise relationship states and attachment styles for kg_driven.
+
+        Loads KG edges for the session's graph and creates a RelationshipState
+        for each directed edge pair via RelationshipEngine.initialize_relationship().
+        Derives AttachmentStyle for every agent from their Big Five traits stored
+        in agent_profiles.
+
+        Errors are caught and logged — missing data leaves the dicts empty, which
+        is safe (hooks guard on empty dicts).
+        """
+        kg_state = self._kg_sessions.get(session_id)
+        if kg_state is None:
+            return
+        try:
+            from backend.app.services.relationship_engine import RelationshipEngine  # noqa: PLC0415
+            from backend.app.services.relationship_engine import infer_attachment_style  # noqa: PLC0415
+            from backend.app.utils.db import get_db  # noqa: PLC0415
+
+            engine = RelationshipEngine()
+
+            async with get_db() as db:
+                # Resolve graph_id from the session
+                cursor = await db.execute(
+                    "SELECT graph_id FROM simulation_sessions WHERE id = ?",
+                    (session_id,),
+                )
+                row = await cursor.fetchone()
+                graph_id = row["graph_id"] if row and row["graph_id"] else None
+
+                # Load KG edges and seed relationship states
+                if graph_id:
+                    cursor = await db.execute(
+                        """SELECT source_id, target_id, label
+                           FROM kg_edges
+                           WHERE graph_id = ?""",
+                        (graph_id,),
+                    )
+                    edges = await cursor.fetchall()
+                    rel_states: dict[tuple[str, str], Any] = {}
+                    for edge in edges:
+                        src = str(edge["source_id"])
+                        tgt = str(edge["target_id"])
+                        desc = str(edge["label"] or "")
+                        state = engine.initialize_relationship(
+                            agent_a_id=src,
+                            agent_b_id=tgt,
+                            edge_description=desc,
+                        )
+                        rel_states[(src, tgt)] = state
+                    kg_state.relationship_states = rel_states
+                    logger.debug(
+                        "_init_relationship_and_attachment: %d edges → %d relationship states session=%s",
+                        len(edges),
+                        len(rel_states),
+                        session_id,
+                    )
+
+                # Load agent Big Five traits and derive attachment styles
+                cursor = await db.execute(
+                    """SELECT id,
+                              CAST(json_extract(properties, '$.neuroticism') AS REAL) AS neuroticism,
+                              CAST(json_extract(properties, '$.agreeableness') AS REAL) AS agreeableness,
+                              CAST(json_extract(properties, '$.openness') AS REAL) AS openness
+                       FROM agent_profiles
+                       WHERE session_id = ?""",
+                    (session_id,),
+                )
+                agent_rows = await cursor.fetchall()
+                attachment_styles: dict[str, Any] = {}
+                for ar in agent_rows:
+                    agent_id = str(ar["id"])
+                    neuroticism = float(ar["neuroticism"] or 0.5)
+                    agreeableness = float(ar["agreeableness"] or 0.5)
+                    openness = float(ar["openness"] or 0.5)
+                    attachment_styles[agent_id] = infer_attachment_style(
+                        agent_id=agent_id,
+                        neuroticism=neuroticism,
+                        agreeableness=agreeableness,
+                        openness=openness,
+                    )
+                kg_state.attachment_styles = attachment_styles
+                logger.debug(
+                    "_init_relationship_and_attachment: %d attachment styles session=%s",
+                    len(attachment_styles),
+                    session_id,
+                )
+
+        except Exception:
+            logger.warning(
+                "_init_relationship_and_attachment failed session=%s — proceeding with empty states",
                 session_id,
                 exc_info=True,
             )
@@ -1175,24 +1244,27 @@ class SimulationRunner(
         """Pre-round: generate world events for kg_driven mode."""
         if self._world_event_gen is None:
             return
+        kg_state = self._kg_sessions.get(session_id)
+        if kg_state is None:
+            return
         try:
             events = await self._world_event_gen.generate(
-                scenario_description=self._scenario_description.get(session_id, ""),
+                scenario_description=kg_state.scenario_description,
                 round_number=round_num,
-                active_metrics=tuple(self._active_metrics.get(session_id, {}).keys()),
-                prev_dominant_stance=self._prev_dominant_stance.get(session_id, {}),
-                event_history=self._event_content_history.get(session_id, []),
+                active_metrics=tuple(kg_state.active_metrics.keys()),
+                prev_dominant_stance=kg_state.prev_dominant_stance,
+                event_history=kg_state.event_content_history,
             )
-            self._current_round_events[session_id] = events
-            hist = self._event_content_history.get(session_id, [])
-            hist.extend(e.content for e in events)
-            self._event_content_history[session_id] = hist
+            kg_state.current_round_events = events
+            kg_state.event_content_history = kg_state.event_content_history + [
+                e.content for e in events
+            ]
         except Exception:
             logger.exception(
                 "kg_driven world event generation failed session=%s round=%d",
                 session_id, round_num,
             )
-            self._current_round_events[session_id] = []
+            kg_state.current_round_events = []
 
     async def _kg_tier1_deliberation(
         self, session_id: str, round_num: int
@@ -1200,27 +1272,24 @@ class SimulationRunner(
         """Group 2: Tier 1 cognitive deliberation for kg_driven mode."""
         if self._cognitive_engine is None:
             return
-        tier1 = self._tier1_agents.get(session_id, [])
+        kg_state = self._kg_sessions.get(session_id)
+        if kg_state is None:
+            return
+        tier1 = kg_state.tier1_agents
         if not tier1:
             return
-        current_events = self._current_round_events.get(session_id, [])
-        metrics = self._active_metrics.get(session_id, {})
-        scenario = self._scenario_description.get(session_id, "")
+        current_events = kg_state.current_round_events
+        metrics = dict(kg_state.active_metrics)
+        scenario = kg_state.scenario_description
 
         for agent in tier1:
             try:
                 agent_id = agent.get("id", "")
                 # Phase 2: enrich context with persona, goals, relationships,
                 # emotional state, and attachment style when available.
-                emotional_state = self._kg_emotional_states.get(
-                    session_id, {}
-                ).get(agent_id)
-                attachment = self._kg_attachment_styles.get(
-                    session_id, {}
-                ).get(agent_id)
-                rel_states = self._kg_relationship_states.get(
-                    session_id, {}
-                )
+                emotional_state = kg_state.emotional_states.get(agent_id)
+                attachment = kg_state.attachment_styles.get(agent_id)
+                rel_states = kg_state.relationship_states
                 key_relationships = _build_key_relationships(
                     agent_id=agent_id,
                     rel_states=rel_states,
@@ -1265,7 +1334,7 @@ class SimulationRunner(
                     "Tier 1 deliberation failed for agent %s session=%s",
                     agent.get("id", "?"), session_id,
                 )
-        self._active_metrics[session_id] = metrics
+        kg_state.active_metrics = metrics
 
     async def _process_relationship_states(
         self, session_id: str, round_num: int
@@ -1280,12 +1349,13 @@ class SimulationRunner(
         """
         from backend.app.services.relationship_engine import RelationshipEngine  # noqa: PLC0415
 
-        rel_states = self._kg_relationship_states.get(session_id)
-        if not rel_states:
+        kg_state = self._kg_sessions.get(session_id)
+        if kg_state is None or not kg_state.relationship_states:
             return
 
         try:
             engine = RelationshipEngine()
+            rel_states = kg_state.relationship_states
 
             # Gather interaction valences from simulation_actions this round
             valences: dict[tuple[str, str], float] = {}
@@ -1320,7 +1390,7 @@ class SimulationRunner(
                 for r in self._round_profiles.get(session_id, [])
                 if r.get("oasis_username")
             }
-            attachment_styles = self._kg_attachment_styles.get(session_id, {})
+            attachment_styles = kg_state.attachment_styles
 
             updated = engine.batch_update(
                 states=rel_states,
@@ -1333,7 +1403,7 @@ class SimulationRunner(
             new_states = dict(rel_states)
             for state in updated:
                 new_states[(state.agent_a_id, state.agent_b_id)] = state
-            self._kg_relationship_states[session_id] = new_states
+            kg_state.relationship_states = new_states
 
             # Persist updated states to DB
             if updated:
@@ -1373,12 +1443,13 @@ class SimulationRunner(
         """Group 3 periodic: detect and persist relationship lifecycle events.
 
         Active only in kg_driven mode + emergence_enabled.
-        Reads current relationship states from _kg_relationship_states, detects
+        Reads current relationship states from KGSessionState.relationship_states, detects
         lifecycle transitions, and persists events to network_events table.
         """
         if self._relationship_lifecycle is None:
             return
-        rel_states = self._kg_relationship_states.get(session_id, {})
+        kg_state = self._kg_sessions.get(session_id)
+        rel_states = kg_state.relationship_states if kg_state is not None else {}
         if not rel_states:
             return
         try:
@@ -1404,7 +1475,10 @@ class SimulationRunner(
         self, session_id: str, round_num: int
     ) -> None:
         """Group 3 periodic: faction mapping + tipping point detection."""
-        agent_beliefs = self._agent_beliefs.get(session_id, {})
+        kg_state = self._kg_sessions.get(session_id)
+        if kg_state is None:
+            return
+        agent_beliefs = kg_state.agent_beliefs
         if not agent_beliefs:
             return
 
@@ -1415,7 +1489,7 @@ class SimulationRunner(
                     simulation_id=session_id,
                     round_number=round_num,
                     agent_beliefs=agent_beliefs,
-                    interaction_graph=self._interaction_graph.get(session_id, {}),
+                    interaction_graph=kg_state.interaction_graph,
                 )
                 await self._persist_faction_snapshot(snapshot)
             except Exception:
@@ -1427,12 +1501,12 @@ class SimulationRunner(
         # Tipping point detection
         if self._tipping_detector is not None:
             try:
-                current_events = self._current_round_events.get(session_id, [])
+                current_events = kg_state.current_round_events
                 tipping = self._tipping_detector.detect(
                     simulation_id=session_id,
                     round_number=round_num,
                     current_beliefs=agent_beliefs,
-                    belief_history=self._belief_history.get(session_id, [])[-3:],
+                    belief_history=kg_state.belief_history[-3:],
                     last_event_id=(
                         current_events[-1].event_id
                         if current_events
@@ -1449,9 +1523,7 @@ class SimulationRunner(
 
         # Snapshot beliefs for history
         belief_copy = {k: dict(v) for k, v in agent_beliefs.items()}
-        hist = self._belief_history.get(session_id, [])
-        hist.append(belief_copy)
-        self._belief_history[session_id] = hist
+        kg_state.belief_history = kg_state.belief_history + [belief_copy]
 
     async def _persist_faction_snapshot(self, snapshot: Any) -> None:
         """Persist FactionSnapshot to faction_snapshots_v2 table."""
