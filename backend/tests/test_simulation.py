@@ -381,8 +381,10 @@ class TestSimulationRunnerSubprocess:
         from backend.app.services.simulation_runner import SimulationRunner
 
         runner = SimulationRunner()
-        # Simulate an already-running session by inserting into _processes
-        runner._processes["session-1"] = MagicMock()
+        # Simulate an already-running session by inserting into _subprocess_mgr
+        mock_proc = MagicMock()
+        mock_proc.returncode = None  # marks as still running
+        runner._subprocess_mgr._processes["session-1"] = mock_proc
 
         with pytest.raises(ValueError, match="already running"):
             await runner.run(

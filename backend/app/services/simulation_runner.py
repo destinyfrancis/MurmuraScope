@@ -27,6 +27,7 @@ from backend.app.services.simulation_hooks_agent import AgentHooksMixin
 from backend.app.services.simulation_hooks_kg import KGHooksMixin
 from backend.app.services.simulation_hooks_macro import MacroHooksMixin
 from backend.app.services.simulation_hooks_social import SocialHooksMixin
+from backend.app.services.simulation_subprocess_manager import SimulationSubprocessManager
 from backend.app.utils.logger import get_logger
 
 logger = get_logger("simulation_runner")
@@ -65,7 +66,7 @@ class SimulationRunner(
         from backend.app.models.simulation_config import PRESET_STANDARD, SimPreset  # noqa: PLC0415
         self._preset: SimPreset = preset or PRESET_STANDARD
         self._dry_run = dry_run
-        self._processes: dict[str, asyncio.subprocess.Process] = {}
+        self._subprocess_mgr = SimulationSubprocessManager()
         self._action_logger: Any | None = None
         self._memory_service: Any | None = None
         self._vector_store: Any | None = None
@@ -132,7 +133,7 @@ class SimulationRunner(
             ValueError: If session is already running.
             RuntimeError: If prerequisites are missing or subprocess fails.
         """
-        if session_id in self._processes:
+        if self._subprocess_mgr.is_running(session_id):
             raise ValueError(f"Session {session_id} is already running")
 
         # B2B initialisation: generate company profiles if none exist for the session.
@@ -230,14 +231,13 @@ class SimulationRunner(
             # Pass API key via env var (not in the config file on disk).
             subprocess_env = {**os.environ, "OPENROUTER_API_KEY": _get_api_key()}
 
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=log_file,
-                cwd=str(_PROJECT_ROOT),
-                env=subprocess_env,
+            process = await self._subprocess_mgr.launch(
+                session_id,
+                cmd,
+                subprocess_env,
+                log_file,
+                _PROJECT_ROOT,
             )
-            self._processes[session_id] = process
 
             assert process.stdout is not None  # guaranteed by PIPE
             async for raw_line in process.stdout:
@@ -283,7 +283,7 @@ class SimulationRunner(
                         await self._execute_round_hooks(session_id, completed_round_int)
 
             await process.wait()
-            _check_exit_code(session_id, process)
+            self._subprocess_mgr.check_exit_code(session_id)
 
             # Take final KG snapshot at completion
             try:
@@ -355,7 +355,7 @@ class SimulationRunner(
                 except OSError:
                     pass  # Process already exited between check and kill
 
-            self._processes.pop(session_id, None)
+            self._subprocess_mgr.cleanup(session_id)
             # Clean up posts buffer to prevent memory leak
             self._posts_buffer.pop(session_id, None)
             # Clean up macro state cache
@@ -622,29 +622,16 @@ class SimulationRunner(
     async def stop(self, session_id: str) -> None:
         """Stop a running simulation subprocess (SIGTERM → SIGKILL).
 
+        Delegates to SimulationSubprocessManager.stop() which owns the
+        process lifecycle.
+
         Args:
             session_id: UUID of the session to stop.
 
         Raises:
             ValueError: If the session is not currently running.
         """
-        process = self._processes.get(session_id)
-        if process is None:
-            raise ValueError(f"No running process for session {session_id}")
-
-        logger.info("Stopping session %s (PID %d)", session_id, process.pid)
-        process.terminate()
-        try:
-            await asyncio.wait_for(process.wait(), timeout=5.0)
-        except asyncio.TimeoutError:
-            logger.warning(
-                "Process %d did not terminate — sending SIGKILL", process.pid
-            )
-            process.kill()
-            await process.wait()
-
-        self._processes.pop(session_id, None)
-        logger.info("Session %s stopped", session_id)
+        await self._subprocess_mgr.stop(session_id)
 
     async def get_action_logs(
         self, session_id: str
@@ -1658,17 +1645,6 @@ def _try_parse_jsonl(line: str) -> dict[str, Any] | None:
         return json.loads(line)
     except (json.JSONDecodeError, ValueError):
         return None
-
-
-def _check_exit_code(
-    session_id: str, process: asyncio.subprocess.Process
-) -> None:
-    """Raise RuntimeError if the process exited with a non-zero code."""
-    exit_code = process.returncode
-    if exit_code != 0:
-        raise RuntimeError(
-            f"OASIS subprocess for session {session_id} exited with code {exit_code}"
-        )
 
 
 def _build_key_relationships(
