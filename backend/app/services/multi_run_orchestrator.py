@@ -76,6 +76,7 @@ class MultiRunOrchestrator:
         trial_count: int = 500,
         concurrency: int = 20,
         df: int = 5,
+        surrogate_model: Any | None = None,
     ) -> MultiRunResult:
         """Execute Phase B ensemble.
 
@@ -102,7 +103,7 @@ class MultiRunOrchestrator:
 
         async def run_trial(_: int) -> str:
             async with sem:
-                return _simulate_trial(canonical, df=df)
+                return _simulate_trial(canonical, df=df, surrogate_model=surrogate_model)
 
         tasks = [run_trial(i) for i in range(n)]
         results = await asyncio.gather(*tasks)
@@ -143,7 +144,11 @@ def _sample_t(mean: float, std: float, df: int = 5) -> float:
     return max(0.0, min(1.0, mean + std * t))
 
 
-def _simulate_trial(canonical: CanonicalResult, df: int = 5) -> str:
+def _simulate_trial(
+    canonical: CanonicalResult,
+    df: int = 5,
+    surrogate_model: Any | None = None,
+) -> str:
     """Run one in-memory trial. Returns the realised outcome name.
 
     If ``canonical.interaction_graph`` is provided, runs one round of
@@ -151,9 +156,15 @@ def _simulate_trial(canonical: CanonicalResult, df: int = 5) -> str:
     belief draw.  This captures first-order social influence effects — herding,
     echo chambers, cascade starts — without any LLM cost.
 
+    If ``surrogate_model`` is a fitted SurrogateModelResult, uses its
+    predict_distribution() for outcome assignment instead of the ad-hoc
+    scoring function.
+
     Args:
         canonical: Phase A canonical result with belief distributions.
         df: Degrees of freedom for t-distribution sampling.
+        surrogate_model: Optional fitted SurrogateModelResult for data-driven
+            outcome prediction.  Falls back to ad-hoc scoring if None or unfitted.
     """
     if not canonical.scenario_outcomes:
         return "unknown"
@@ -177,7 +188,21 @@ def _simulate_trial(canonical: CanonicalResult, df: int = 5) -> str:
         vals = [sampled_beliefs[a].get(metric, 0.5) for a in sampled_beliefs]
         agg[metric] = sum(vals) / len(vals) if vals else 0.5
 
-    # Map metric state to outcome using simple scoring
+    # Surrogate model path — data-driven outcome assignment
+    if surrogate_model is not None and surrogate_model.is_fitted:
+        dist = surrogate_model.predict_distribution(agg)
+        outcomes = list(dist.keys())
+        weights = [dist.get(o, 0.0) for o in outcomes]
+        total_w = sum(weights) or 1.0
+        r = random.random() * total_w
+        cumulative = 0.0
+        for outcome, w in zip(outcomes, weights):
+            cumulative += w
+            if r <= cumulative:
+                return outcome
+        return outcomes[-1]
+
+    # Ad-hoc scoring fallback
     scores: dict[str, float] = {}
     n_outcomes = len(canonical.scenario_outcomes)
     for i, outcome in enumerate(canonical.scenario_outcomes):
