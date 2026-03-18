@@ -99,7 +99,10 @@ function handleWsMessage(event) {
 
     switch (msg.type) {
       case 'progress':
-        latestProgress.value = msg.data  // capture full progress payload for MacroPulseBar
+        // Throttle MacroPulseBar refresh to every 5 rounds — macro data only updates every 5 rounds
+        if (d.round && d.round % 5 === 0) {
+          latestProgress.value = msg.data
+        }
         if (d.round && d.round > currentRound.value) {
           currentRound.value = d.round
           addLog(`第 ${d.round}/${d.total || totalRounds.value} 回合完成 — ${d.detail || ''}`)

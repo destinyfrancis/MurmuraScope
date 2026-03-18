@@ -7,13 +7,13 @@ const props = defineProps({
   latestProgress: { type: Object, default: null }, // WebSocket progress payload
 })
 
-// Macro indicators we care about
+// Macro indicators we care about — keys must match _KEY_METRICS in macro_history.py
 const INDICATORS = [
-  { key: 'hsi', label: 'HSI', unit: '' },
+  { key: 'hsi_level', label: 'HSI', unit: '' },
   { key: 'unemployment_rate', label: '失業率', unit: '%' },
-  { key: 'ccl', label: 'CCL', unit: '' },
+  { key: 'ccl_index', label: 'CCL', unit: '' },
   { key: 'gdp_growth', label: 'GDP', unit: '%' },
-  { key: 'cpi', label: 'CPI', unit: '' },
+  { key: 'consumer_confidence', label: 'CCIdx', unit: '' },
 ]
 
 const macroHistory = ref([])
@@ -128,8 +128,8 @@ const PLATFORM_BTNS = [
     <!-- Divider -->
     <div class="divider" />
 
-    <!-- Social sentiment -->
-    <div class="sentiment-section">
+    <!-- Social sentiment — only shown when data is available from the DB -->
+    <div class="sentiment-section" v-if="sentiment">
       <div class="sentiment-label">社交情感</div>
       <div class="sentiment-bar">
         <div class="seg oppose" :style="{ flex: sentimentValues.oppose }" />
@@ -151,6 +151,11 @@ const PLATFORM_BTNS = [
           @click="platformFilter = btn.key"
         >{{ btn.label }}</button>
       </div>
+    </div>
+    <!-- Placeholder when sentiment data not yet available -->
+    <div class="sentiment-section sentiment-pending" v-else>
+      <div class="sentiment-label">社交情感</div>
+      <div class="sentiment-pending-text">數據待收集</div>
     </div>
   </div>
 </template>
@@ -277,5 +282,15 @@ const PLATFORM_BTNS = [
 .plat-btn:hover {
   background: #334155;
   color: #e2e8f0;
+}
+
+.sentiment-pending {
+  opacity: 0.45;
+}
+
+.sentiment-pending-text {
+  font-size: 9px;
+  color: #475569;
+  margin-top: 4px;
 }
 </style>
