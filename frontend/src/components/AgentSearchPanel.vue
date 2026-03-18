@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue'
+import AgentBadge from './AgentBadge.vue'
 
 const props = defineProps({
   agentList: { type: Array, default: () => [] },
@@ -27,6 +28,28 @@ const occupations = computed(() => {
   const set = new Set(props.agentList.map((a) => a.occupation).filter(Boolean))
   return [...set].sort()
 })
+
+// Stance badge — political_stance is REAL: 0.0=pro-establishment(建制), 0.5=centrist(中立), 1.0=pro-democracy(民主)
+function stanceBadge(agent) {
+  const stance = agent.political_stance
+  if (stance == null) return null
+  if (stance <= 0.33) return { label: '建制派', color: '#3b82f6' }
+  if (stance >= 0.67) return { label: '民主派', color: '#ef4444' }
+  return { label: '中立', color: '#64748b' }
+}
+
+// Tier badge
+function tierBadge(agent) {
+  const tier = agent.tier
+  if (tier == null) return null
+  return tier === 1
+    ? { label: 'Tier 1', color: '#10b981' }
+    : { label: 'Tier 2', color: '#94a3b8' }
+}
+
+function agentBadges(agent) {
+  return [stanceBadge(agent), tierBadge(agent)].filter(Boolean)
+}
 
 const filteredAgents = computed(() => {
   return props.agentList.filter((a) => {
@@ -99,6 +122,15 @@ const filteredAgents = computed(() => {
           <span>{{ agent.age ? agent.age + ' 歲' : '' }}</span>
           <span v-if="agent.district">{{ agent.district }}</span>
           <span v-if="agent.occupation">{{ agent.occupation }}</span>
+        </div>
+        <!-- Stance/Tier badges -->
+        <div class="agent-badges" v-if="agentBadges(agent).length">
+          <AgentBadge
+            v-for="(badge, i) in agentBadges(agent)"
+            :key="i"
+            :label="badge.label"
+            :color="badge.color"
+          />
         </div>
       </div>
       <div v-if="!loadingAgents && filteredAgents.length === 0" class="agent-empty">
@@ -230,5 +262,12 @@ const filteredAgents = computed(() => {
   flex-wrap: wrap;
   font-size: 11px;
   color: var(--text-muted);
+}
+
+.agent-badges {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 4px;
 }
 </style>
