@@ -152,7 +152,7 @@ onUnmounted(teardown)
   <div class="interaction-network">
     <div v-if="loading" class="net-loading">載入互動網絡...</div>
     <div v-else-if="!hasEdges" class="net-fallback">
-      互動連線需模擬回覆數據。目前顯示貼文熱度氣泡圖。
+      尚無 Agent 互動回覆數據。<br/>互動連線將在模擬產生回覆後顯示。
     </div>
     <svg v-else ref="svgRef" class="net-svg" />
   </div>
