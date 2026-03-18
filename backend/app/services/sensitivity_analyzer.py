@@ -73,6 +73,28 @@ class SensitivityRow:
     direction: str             # "positive" | "negative" | "flat"
 
 
+@dataclass(frozen=True)
+class SobolResult:
+    """Sobol sensitivity indices for all (parameter, metric) pairs.
+
+    Attributes:
+        period_start: Validation period start string.
+        period_end: Validation period end string.
+        parameters: Parameter names swept.
+        metrics: Metric names measured.
+        first_order: {param__metric: S1 index} — direct effect only.
+        total_order: {param__metric: ST index} — direct + interaction effects.
+        summary: Human-readable description.
+    """
+    period_start: str
+    period_end: str
+    parameters: list[str]
+    metrics: list[str]
+    first_order: dict[str, float]   # key = "param__metric"
+    total_order: dict[str, float]
+    summary: str
+
+
 # ---------------------------------------------------------------------------
 # Main service
 # ---------------------------------------------------------------------------
@@ -233,6 +255,100 @@ class SensitivityAnalyzer:
             "summary": summary,
         }
 
+    async def run_sobol(
+        self,
+        period_start: str,
+        period_end: str,
+        parameters: list[str] | None = None,
+        metrics: list[str] | None = None,
+        n_samples: int = 64,
+    ) -> "SobolResult":
+        """Sobol global sensitivity analysis using SALib Saltelli sampling.
+
+        Generates N*(2D+2) parameter combinations via Saltelli sampler,
+        evaluates directional accuracy for each, then computes first-order
+        (S1) and total-order (ST) Sobol indices.  ST captures parameter
+        interaction effects that ±25% grid sweeps miss.
+
+        Args:
+            period_start: Validation period start (e.g. '2021-Q1').
+            period_end: Validation period end (e.g. '2023-Q4').
+            parameters: Override sweep parameters (default: _SWEEP_PARAMETERS).
+            metrics: Override target metrics (default: _TARGET_METRICS).
+            n_samples: Base sample count N. Total = N*(2D+2). Default 64.
+
+        Returns:
+            SobolResult with first_order and total_order index dicts.
+        """
+        try:
+            from SALib.sample import sobol as saltelli  # noqa: PLC0415
+            from SALib.analyze import sobol as sobol_analyze  # noqa: PLC0415
+            import numpy as np  # noqa: PLC0415
+        except ImportError:
+            logger.error("SALib not installed — run: pip install SALib")
+            return SobolResult(
+                period_start=period_start, period_end=period_end,
+                parameters=[], metrics=[], first_order={}, total_order={},
+                summary="SALib not installed.",
+            )
+
+        from backend.app.services.calibrated_coefficients import CalibratedCoefficients  # noqa: PLC0415
+        from backend.app.services.retrospective_validator import RetrospectiveValidator  # noqa: PLC0415
+
+        sweep_params = parameters or _SWEEP_PARAMETERS
+        sweep_metrics = metrics or _TARGET_METRICS
+
+        coefficients = CalibratedCoefficients()
+        await coefficients.load()
+        validator = RetrospectiveValidator()
+
+        all_s1: dict[str, float] = {}
+        all_st: dict[str, float] = {}
+
+        for metric in sweep_metrics:
+            indices = await _run_sobol_for_metric(
+                validator=validator,
+                coefficients=coefficients,
+                metric=metric,
+                sweep_params=sweep_params,
+                period_start=period_start,
+                period_end=period_end,
+                n_samples=n_samples,
+                saltelli=saltelli,
+                sobol_analyze=sobol_analyze,
+                np=np,
+            )
+            for param, (s1, st) in indices.items():
+                key = f"{param}__{metric}"
+                all_s1[key] = s1
+                all_st[key] = st
+
+        if not all_s1:
+            return SobolResult(
+                period_start=period_start, period_end=period_end,
+                parameters=sweep_params, metrics=sweep_metrics,
+                first_order={}, total_order={},
+                summary=f"Insufficient data for Sobol analysis ({period_start}–{period_end}).",
+            )
+
+        top3 = sorted(all_st.items(), key=lambda x: x[1], reverse=True)[:3]
+        top_str = ", ".join(f"{k}={v:.3f}" for k, v in top3)
+        summary = (
+            f"Sobol analysis ({period_start}–{period_end}): "
+            f"{len(all_s1)} indices computed. Top ST: {top_str}."
+        )
+        logger.info("run_sobol complete: %s", summary)
+
+        return SobolResult(
+            period_start=period_start,
+            period_end=period_end,
+            parameters=sweep_params,
+            metrics=sweep_metrics,
+            first_order=all_s1,
+            total_order=all_st,
+            summary=summary,
+        )
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -357,3 +473,88 @@ def _empty_report(period_start: str, period_end: str) -> dict[str, Any]:
         "top_sensitivities": [],
         "summary": "Insufficient data to run sensitivity analysis.",
     }
+
+
+class _PatchedCoefficientsMulti:
+    """Override all (param → metric) coefficients for one Saltelli sample row."""
+
+    def __init__(
+        self,
+        base: Any,
+        metric: str,
+        params: list[str],
+        sample: Any,  # numpy array
+    ) -> None:
+        self._base = base
+        self._metric = metric
+        self._overrides: dict[str, float] = dict(zip(params, sample))
+
+    def get_all(self, metric: str) -> dict[str, float]:
+        slopes = dict(self._base.get_all(metric))
+        if metric == self._metric:
+            slopes.update(self._overrides)
+        return slopes
+
+    def get_all_by_sentiment(self, param: str) -> dict[str, float]:
+        slopes = dict(self._base.get_all_by_sentiment(param))
+        if param in self._overrides and self._metric:
+            slopes[self._metric] = self._overrides[param]
+        return slopes
+
+
+async def _run_sobol_for_metric(
+    validator: Any,
+    coefficients: Any,
+    metric: str,
+    sweep_params: list[str],
+    period_start: str,
+    period_end: str,
+    n_samples: int,
+    saltelli: Any,
+    sobol_analyze: Any,
+    np: Any,
+) -> dict[str, tuple[float, float]]:
+    """Compute Sobol S1+ST indices for one metric. Returns {param: (S1, ST)}."""
+    baseline_coeffs: list[float] = []
+    for param in sweep_params:
+        slopes = coefficients.get_all_by_sentiment(param)
+        baseline_coeffs.append(slopes.get(metric, 0.0))
+
+    bounds = []
+    for bc in baseline_coeffs:
+        if abs(bc) < _MIN_BASELINE_ABS:
+            bounds.append([-0.05, 0.05])
+        else:
+            lo, hi = sorted([bc * 0.5, bc * 1.5])
+            bounds.append([lo, hi])
+
+    problem = {"num_vars": len(sweep_params), "names": sweep_params, "bounds": bounds}
+    param_values = saltelli.sample(problem, n_samples, calc_second_order=False, seed=42)
+
+    historical = await validator._load_historical_series(period_start, period_end)
+    series = historical.get(metric)
+    if not series or len(series) < 2:
+        return {}
+
+    actual_values = [v for _, v in series]
+    Y = np.zeros(len(param_values))
+    for i, sample in enumerate(param_values):
+        patched = _PatchedCoefficientsMulti(coefficients, metric, sweep_params, sample)
+        predicted = validator._generate_trajectory(
+            metric=metric,
+            initial_value=actual_values[0],
+            n_steps=len(actual_values),
+            coefficients=patched,
+        )
+        metrics_dict = await validator._compute_metrics(predicted, actual_values)
+        Y[i] = metrics_dict.get("directional_accuracy", 0.5)
+
+    try:
+        Si = sobol_analyze.analyze(problem, Y, calc_second_order=False, print_to_console=False)
+        return {
+            param: (round(float(Si["S1"][j]), 4), round(float(Si["ST"][j]), 4))
+            for j, param in enumerate(sweep_params)
+        }
+    except Exception as exc:
+        logger.warning("Sobol analyze failed for metric=%s: %s", metric, exc)
+        return {}
