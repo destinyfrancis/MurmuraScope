@@ -410,11 +410,11 @@ async def get_topic_evolution(
     if max_rn == 0:
         return TopicEvolutionResult(windows=(), migration_path="", inflection_round=None)
 
-    windows: list[TopicWindow] = []
     llm = LLMClient()
 
-    for start in range(1, max_rn + 1, window_size):
-        end = min(start + window_size - 1, max_rn)
+    async def _process_window(
+        session_id: str, start: int, end: int, llm: LLMClient
+    ) -> "TopicWindow | None":
         async with get_db() as db:
             rows = await (
                 await db.execute(
@@ -423,11 +423,9 @@ async def get_topic_evolution(
                     (session_id, start, end),
                 )
             ).fetchall()
-
         descriptions = [r["description"] for r in rows if r["description"]]
         if not descriptions:
-            continue
-
+            return None
         prompt = (
             "從以下描述中提取2-4個主要議題標籤（短詞）：\n"
             + "\n".join(descriptions[:10])
@@ -447,15 +445,19 @@ async def get_topic_evolution(
                 topics = tuple(_json.loads(match.group()))
             except _json.JSONDecodeError:
                 pass
-
-        windows.append(
-            TopicWindow(
-                rounds=f"{start}-{end}",
-                dominant_topics=topics,
-                emerging=(),
-                fading=(),
-            )
+        return TopicWindow(
+            rounds=f"{start}-{end}",
+            dominant_topics=topics,
+            emerging=(),
+            fading=(),
         )
+
+    coros = [
+        _process_window(session_id, start, min(start + window_size - 1, max_rn), llm)
+        for start in range(1, max_rn + 1, window_size)
+    ]
+    gather_results = await _asyncio.gather(*coros, return_exceptions=True)
+    windows = [w for w in gather_results if isinstance(w, TopicWindow)]
 
     topic_sequence = [w.dominant_topics[0] for w in windows if w.dominant_topics]
     migration_path = " → ".join(dict.fromkeys(topic_sequence))
@@ -495,10 +497,11 @@ async def get_platform_breakdown(session_id: str) -> dict:
                 (session_id,),
             )
         ).fetchall()
-        platforms = [r["platform"] for r in platform_rows]
+    platforms = [r["platform"] for r in platform_rows]
 
-        result: dict = {}
-        for platform in platforms:
+    result: dict = {}
+    for platform in platforms:
+        async with get_db() as db:
             rows = await (
                 await db.execute(
                     "SELECT sentiment, action_type FROM simulation_actions "
@@ -506,18 +509,18 @@ async def get_platform_breakdown(session_id: str) -> dict:
                     (session_id, platform),
                 )
             ).fetchall()
-            total = len(rows)
-            if total == 0:
-                continue
-            sentiments = [r["sentiment"] for r in rows]
-            action_types = [r["action_type"] for r in rows]
-            sentiment_counts = Counter(sentiments)
-            action_counts = Counter(action_types)
-            result[platform] = {
-                "total_actions": total,
-                "sentiment": {k: round(v / total, 2) for k, v in sentiment_counts.items()},
-                "top_action_types": [t for t, _ in action_counts.most_common(3)],
-            }
+        total = len(rows)
+        if total == 0:
+            continue
+        sentiments = [r["sentiment"] for r in rows]
+        action_types = [r["action_type"] for r in rows]
+        sentiment_counts = Counter(sentiments)
+        action_counts = Counter(action_types)
+        result[platform] = {
+            "total_actions": total,
+            "sentiment": {k: round(v / total, 2) for k, v in sentiment_counts.items()},
+            "top_action_types": [t for t, _ in action_counts.most_common(3)],
+        }
 
     return result
 
@@ -555,13 +558,15 @@ async def get_agent_story_arcs(
     async with get_db() as db:
         rows = await (
             await db.execute(
-                """SELECT cf.agent_id, cf.simulation_id,
+                """SELECT cf.agent_id,
+                          COALESCE(ap.entity_type, ap.agent_type, 'unknown') as agent_type,
                           COUNT(sa.id) as action_count
                    FROM cognitive_fingerprints cf
+                   LEFT JOIN agent_profiles ap ON ap.id = cf.agent_id
                    LEFT JOIN simulation_actions sa
                        ON sa.agent_id = cf.agent_id AND sa.session_id = ?
                    WHERE cf.simulation_id = ?
-                   GROUP BY cf.agent_id, cf.simulation_id
+                   GROUP BY cf.agent_id, agent_type
                    ORDER BY action_count DESC""",
                 (session_id, session_id),
             )
@@ -574,9 +579,8 @@ async def get_agent_story_arcs(
     selected = [dict(r) for r in rows[:10]]
 
     llm = LLMClient()
-    arcs: list[dict] = []
 
-    for agent in selected:
+    async def _generate_arc(session_id: str, agent: dict, llm: LLMClient) -> dict | None:
         agent_id = agent["agent_id"]
         async with get_db() as db:
             action_rows = await (
@@ -590,7 +594,7 @@ async def get_agent_story_arcs(
             ).fetchall()
 
         if not action_rows:
-            continue
+            return None
 
         timeline = "\n".join(
             f"Round {r['round_number']}: {r['sentiment']} — {(r['content'] or '')[:80]}"
@@ -614,9 +618,9 @@ async def get_agent_story_arcs(
             for s in sentiments
         ]
 
-        arcs.append({
+        return {
             "agent_id": agent_id,
-            "agent_type": agent.get("simulation_id", "unknown"),
+            "agent_type": agent.get("agent_type", "unknown"),
             "arc_summary": arc_summary,
             "key_turning_round": action_rows[len(action_rows) // 2]["round_number"],
             "stance_shift": (
@@ -624,6 +628,10 @@ async def get_agent_story_arcs(
                 f"{sentiments[-1] if sentiments else '?'}"
             ),
             "sentiment_trajectory": sentiment_vals[:5],
-        })
+        }
+
+    coros = [_generate_arc(session_id, agent, llm) for agent in selected]
+    results = await _asyncio.gather(*coros, return_exceptions=True)
+    arcs = [a for a in results if isinstance(a, dict)]
 
     return arcs

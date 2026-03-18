@@ -566,7 +566,7 @@ async def _handle_interview_agents(
                     f"\n[議題標籤]：{latest['topic_tags'] or '[]'}"
                 )
         except Exception:
-            logger.debug(
+            logger.warning(
                 "Could not fetch deliberation context for agent %s", agent_id, exc_info=True
             )
 
