@@ -391,10 +391,18 @@ async function startBuild() {
       </div>
 
       <div v-if="building" class="progress-section">
+        <div class="ring-loader-container">
+          <div class="ring-loader">
+            <div class="ring ring-1" />
+            <div class="ring ring-2" />
+            <div class="ring ring-3" />
+          </div>
+          <p class="ring-label">{{ progressMsg || '構建知識圖譜中...' }}</p>
+          <p class="ring-progress">{{ progress }}%</p>
+        </div>
         <div class="progress-bar">
           <div class="progress-fill" :style="{ width: progress + '%' }" />
         </div>
-        <p class="progress-text">{{ progressMsg }}</p>
       </div>
 
       <p v-if="error" class="error-text">{{ error }}</p>
@@ -597,6 +605,63 @@ async function startBuild() {
 .progress-text {
   font-size: 13px;
   color: var(--text-muted);
+}
+
+.ring-loader-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  gap: 16px;
+}
+.ring-loader {
+  position: relative;
+  width: 100px;
+  height: 100px;
+}
+.ring {
+  position: absolute;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  animation: ring-rotate 1.5s linear infinite;
+}
+.ring-1 {
+  width: 80px;
+  height: 80px;
+  top: 10px;
+  left: 10px;
+  border-top-color: #000;
+}
+.ring-2 {
+  width: 60px;
+  height: 60px;
+  top: 20px;
+  left: 20px;
+  border-top-color: var(--accent, #FF6B35);
+  animation-delay: 0.2s;
+}
+.ring-3 {
+  width: 40px;
+  height: 40px;
+  top: 30px;
+  left: 30px;
+  border-top-color: #666;
+  animation-delay: 0.4s;
+}
+@keyframes ring-rotate {
+  to { transform: rotate(360deg); }
+}
+.ring-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary, #000);
+  font-family: var(--font-mono);
+}
+.ring-progress {
+  font-size: 11px;
+  color: var(--text-muted, #999);
+  font-family: var(--font-mono);
 }
 
 .error-text {

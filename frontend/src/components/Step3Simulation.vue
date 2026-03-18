@@ -723,4 +723,32 @@ const factionAgentColourMap = computed(() => {
   50% { transform: skewX(0.5deg); filter: hue-rotate(30deg); }
   100% { opacity: 0; transform: none; filter: none; }
 }
+
+.ripple-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px;
+  gap: 16px;
+  position: relative;
+}
+.ripple-ring {
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border, #EAEAEA);
+  border-radius: 50%;
+  animation: ripple 2s infinite;
+}
+@keyframes ripple {
+  0%   { transform: scale(0.8); opacity: 1; }
+  100% { transform: scale(2.5); opacity: 0; }
+}
+.ripple-label {
+  margin-top: 60px;
+  font-size: 12px;
+  color: var(--text-muted, #999);
+  font-family: var(--font-mono);
+}
 </style>
