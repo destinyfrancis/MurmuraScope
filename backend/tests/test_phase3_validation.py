@@ -83,17 +83,20 @@ def _make_result(**kwargs) -> ValidationResult:
 
 class TestScoreMetric:
     def test_perfect_result(self) -> None:
-        r = _make_result(directional_accuracy=1.0, pearson_r=1.0, mape=0.0)
+        # brier_score=0.0 gives BSS=1.0; all four components perfect → composite=1.0
+        r = _make_result(directional_accuracy=1.0, pearson_r=1.0, mape=0.0, brier_score=0.0)
         assert _score_metric(r) == pytest.approx(1.0)
 
     def test_poor_result(self) -> None:
-        r = _make_result(directional_accuracy=0.0, pearson_r=0.0, mape=1.0)
+        # brier_score=0.25 gives BSS=0.0; all four components zero → composite=0.0
+        r = _make_result(directional_accuracy=0.0, pearson_r=0.0, mape=1.0, brier_score=0.25)
         assert _score_metric(r) == pytest.approx(0.0)
 
     def test_typical_result(self) -> None:
+        # Uninformative brier (default 0.25) contributes 0 skill; range check still valid
         r = _make_result(directional_accuracy=0.7, pearson_r=0.6, mape=0.10)
         score = _score_metric(r)
-        assert 0.5 < score < 0.9
+        assert 0.4 < score < 0.9
 
 
 class TestGrade:
@@ -265,6 +268,48 @@ class TestPatchedCoefficients:
         # For a different metric, should not override
         result = patched.get_all("ccl_index")
         assert result["negative_ratio"] == pytest.approx(-0.002)
+
+
+# ---------------------------------------------------------------------------
+# Brier skill score integration in _score_metric
+# ---------------------------------------------------------------------------
+
+class TestBrierScoreIntegration:
+    """_score_metric must include Brier skill score in composite."""
+
+    def _make_result(self, *, directional_accuracy, pearson_r, mape, brier_score):
+        return ValidationResult(
+            metric="test_metric",
+            directional_accuracy=directional_accuracy,
+            pearson_r=pearson_r,
+            mape=mape,
+            brier_score=brier_score,
+            timing_offset_quarters=0,
+            n_observations=20,
+            period_start="2020-Q1",
+            period_end="2022-Q4",
+        )
+
+    def test_perfect_brier_raises_score(self):
+        """Perfect Brier (0.0) must produce higher composite than uninformative (0.25)."""
+        base = dict(directional_accuracy=0.6, pearson_r=0.5, mape=0.2)
+        perfect = _score_metric(self._make_result(**base, brier_score=0.0))
+        baseline = _score_metric(self._make_result(**base, brier_score=0.25))
+        assert perfect > baseline, (
+            f"Perfect Brier score ({perfect:.4f}) should exceed uninformative ({baseline:.4f})"
+        )
+
+    def test_uninformative_brier_contributes_zero_skill(self):
+        """Brier=0.25 (uninformative) must contribute 0 to composite."""
+        r = self._make_result(directional_accuracy=0.7, pearson_r=0.6, mape=0.1, brier_score=0.25)
+        score = _score_metric(r)
+        expected = 0.3 * 0.7 + 0.3 * 0.6 + 0.2 * (1.0 - 0.1) + 0.2 * 0.0
+        assert abs(score - expected) < 1e-6, f"Expected {expected:.6f}, got {score:.6f}"
+
+    def test_perfect_score_all_metrics(self):
+        """Perfect result on all metrics must give composite = 1.0."""
+        r = self._make_result(directional_accuracy=1.0, pearson_r=1.0, mape=0.0, brier_score=0.0)
+        assert abs(_score_metric(r) - 1.0) < 1e-6
 
 
 # ---------------------------------------------------------------------------

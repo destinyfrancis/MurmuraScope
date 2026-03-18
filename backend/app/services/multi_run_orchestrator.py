@@ -466,11 +466,30 @@ def _compute_confidence_intervals(
     counts: dict[str, int],
     total: int,
 ) -> dict[str, tuple[float, float]]:
-    """Compute 95% Wilson score confidence intervals for each outcome."""
-    ci = {}
+    """Compute 95% Wilson score confidence intervals for each outcome.
+
+    Wilson score is preferred over the Wald interval because it maintains
+    near-nominal 95% coverage even at small n or extreme probabilities (p near
+    0 or 1), where Wald coverage degrades to ~89%.
+
+    Formula:
+        center = (p̂ + z²/2n) / (1 + z²/n)
+        margin = z * sqrt(p̂(1-p̂)/n + z²/4n²) / (1 + z²/n)
+    """
+    ci: dict[str, tuple[float, float]] = {}
     z = 1.96  # 95% CI
+    z2 = z * z  # 3.8416
+
     for outcome, count in counts.items():
-        p = count / total if total > 0 else 0.0
-        margin = z * math.sqrt(p * (1 - p) / total) if total > 0 else 0.0
-        ci[outcome] = (max(0.0, p - margin), min(1.0, p + margin))
+        if total <= 0:
+            ci[outcome] = (0.0, 1.0)
+            continue
+
+        p = count / total
+        n = total
+        denominator = 1.0 + z2 / n
+        center = (p + z2 / (2.0 * n)) / denominator
+        margin = (z * math.sqrt(p * (1.0 - p) / n + z2 / (4.0 * n * n))) / denominator
+        ci[outcome] = (max(0.0, center - margin), min(1.0, center + margin))
+
     return ci

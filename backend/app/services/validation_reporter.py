@@ -37,19 +37,28 @@ _GRADE_THRESHOLDS: list[tuple[float, str]] = [
     (0.0,  "F"),
 ]
 
+# Reference Brier score for an uninformative (always-p=0.5) predictor.
+_BRIER_REFERENCE = 0.25
+
 
 def _score_metric(result: ValidationResult) -> float:
-    """Compute a composite score [0, 1] from the three validation metrics.
+    """Compute a composite score [0, 1] from four validation metrics.
 
     Weights:
-      - Directional accuracy: 40%
-      - |Pearson r|: 40%
-      - 1 - min(MAPE, 1): 20%
+      - Directional accuracy: 30%
+      - |Pearson r|:          30%
+      - 1 - min(MAPE, 1):    20%
+      - Brier skill score:   20%
+
+    Brier skill score = max(0, 1 - BS / 0.25) where 0.25 is the uninformative
+    baseline (always predicting p=0.5). A perfect probabilistic predictor scores
+    1.0; random scores 0.0; worse than random is clamped to 0.0.
     """
     dir_score = result.directional_accuracy
     corr_score = abs(result.pearson_r)
     mape_score = max(0.0, 1.0 - min(result.mape, 1.0))
-    return 0.4 * dir_score + 0.4 * corr_score + 0.2 * mape_score
+    brier_skill = max(0.0, 1.0 - result.brier_score / _BRIER_REFERENCE)
+    return 0.3 * dir_score + 0.3 * corr_score + 0.2 * mape_score + 0.2 * brier_skill
 
 
 def _grade(score: float) -> str:
@@ -60,7 +69,11 @@ def _grade(score: float) -> str:
 
 
 def _interpret(result: ValidationResult) -> str:
-    """Return a one-line interpretation string for a single metric result."""
+    """Return a one-line interpretation string for a single metric result.
+
+    Evaluates three primary metrics (directional accuracy, Pearson r, MAPE).
+    Brier skill score contributes to the composite grade but is not reflected here.
+    """
     dir_ok = result.directional_accuracy >= _DIRECTIONAL_GOOD
     corr_ok = abs(result.pearson_r) >= _PEARSON_GOOD
     mape_ok = result.mape <= _MAPE_GOOD

@@ -1007,3 +1007,39 @@ class TestBacktestResultCoverage80:
         assert hasattr(result, "coverage_80")
         assert 0.0 <= result.coverage_80 <= 1.0
         assert "coverage_80" in result.to_dict()
+
+
+class TestMapeScale:
+    """_compute_mape must return a fraction in [0, 1], not a percentage."""
+
+    def test_mape_fraction_for_10_percent_error(self):
+        """Given 10% prediction error, _compute_mape must return 0.10, not 10.0."""
+        forecaster = TimeSeriesForecaster()
+        # actual=[100,100,100,100], predicted=[110,110,110,110] -> MAPE = 10% = 0.10 fraction
+        # _compute_mape uses leave-one-out on last 20%: for 4 values, test_start=max(1,int(4*0.8))=3
+        # actuals = values[3:] = [110.0], preds = values[2:3] = [100.0]
+        # ape = |110-100|/110 = 0.0909...
+        # Use a longer series where we control the last 20%:
+        # 20 values: first 16 = 100, last 4 = 110 -> test_start=16
+        # actuals=[110,110,110,110], preds=[100,110,110,110]
+        # ape=[0.0909,0,0,0] -> mean=0.02272...
+        # Better: use series where all values are equal except shift:
+        # 5 values: [100,100,100,100,110] -> test_start=max(1,int(5*0.8))=4
+        # actuals=[110], preds=[100] -> ape=|110-100|/110=0.0909
+        # To get exactly 10%: actual=100, pred=110 -> ape=|100-110|/100=0.10
+        # 5 values: [110,110,110,110,100] -> test_start=4
+        # actuals=[100], preds=[110] -> ape=|100-110|/100=0.10 -> mean=0.10
+        vals = np.array([110.0, 110.0, 110.0, 110.0, 100.0])
+        mape = forecaster._compute_mape(vals)
+        assert mape < 1.0, f"MAPE should be fraction (0.10), got {mape} (looks like percentage)"
+        assert abs(mape - 0.10) < 1e-6, f"Expected 0.10, got {mape}"
+
+    def test_mape_zero_for_perfect_forecast(self):
+        """Perfect forecast (constant series) -> MAPE = 0.0."""
+        forecaster = TimeSeriesForecaster()
+        vals = np.array([50.0, 60.0, 70.0, 80.0, 90.0])
+        # test_start=max(1,int(5*0.8))=4; actuals=[90], preds=[80] -> ape=|90-80|/90=0.111
+        # Use a constant series: actuals == preds -> ape=0
+        vals_const = np.array([50.0, 50.0, 50.0, 50.0, 50.0])
+        mape = forecaster._compute_mape(vals_const)
+        assert mape == 0.0, f"Perfect forecast should give MAPE=0.0, got {mape}"

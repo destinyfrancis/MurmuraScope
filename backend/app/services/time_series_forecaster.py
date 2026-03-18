@@ -510,9 +510,9 @@ class TimeSeriesForecaster:
                         np.abs((actuals - preds) / actuals),
                         0.0,
                     )
-                mape = float(np.mean(ape)) * 100
+                mape = float(np.mean(ape))
                 logger.debug(
-                    "Model selection: model=%s holdout_mape=%.2f%%", model_name, mape
+                    "Model selection: model=%s holdout_mape=%.2f%%", model_name, mape * 100
                 )
                 if mape < best_mape:
                     best_mape = mape
@@ -926,7 +926,7 @@ class TimeSeriesForecaster:
         preds = values[test_start - 1: n - 1]  # naive 1-step
         with np.errstate(divide="ignore", invalid="ignore"):
             ape = np.where(actuals != 0, np.abs((actuals - preds) / actuals), 0.0)
-        return float(np.mean(ape) * 100)
+        return float(np.mean(ape))
 
     @staticmethod
     def _diagnose_residuals(residuals: "np.ndarray") -> "dict | None":
