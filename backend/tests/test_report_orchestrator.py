@@ -60,19 +60,24 @@ def test_orchestrator_outline_handles_trailing_prose():
 @pytest.mark.asyncio
 async def test_orchestrator_generate_returns_markdown():
     """generate() returns assembled markdown string."""
-    from unittest.mock import AsyncMock
+    from unittest.mock import AsyncMock, MagicMock
     from backend.app.services.report_orchestrator import ReportOrchestrator
 
-    mock_llm = AsyncMock()
+    def _resp(text: str) -> MagicMock:
+        r = MagicMock()
+        r.content = text
+        return r
+
+    mock_llm = MagicMock()
     # Phase 1: outline response
-    # Phase 2+: section responses (tool call then final answer)
-    mock_llm.complete.side_effect = [
-        '{"chapters": [{"title": "趨勢預測", "thesis": "將會升級", "suggested_tools": ["insight_forge"]}]}',
-        '<tool_call>{"name": "insight_forge", "parameters": {"query": "test"}}</tool_call>',
-        '<tool_call>{"name": "interview_agents", "parameters": {}}</tool_call>',
-        '<tool_call>{"name": "get_sentiment_timeline", "parameters": {}}</tool_call>',
-        "Final Answer: This is the section content.",
-    ]
+    # Phase 2: section generation — tool calls then final answer
+    mock_llm.chat = AsyncMock(side_effect=[
+        _resp('{"chapters": [{"title": "趨勢預測", "thesis": "將會升級", "suggested_tools": ["insight_forge"]}]}'),
+        _resp('<tool_call>{"name": "insight_forge", "parameters": {"query": "test"}}</tool_call>'),
+        _resp('<tool_call>{"name": "interview_agents", "parameters": {}}</tool_call>'),
+        _resp('<tool_call>{"name": "get_sentiment_timeline", "parameters": {}}</tool_call>'),
+        _resp("Final Answer: This is the section content."),
+    ])
 
     async def mock_tool(name, params):
         return f"mock result from {name}"

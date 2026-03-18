@@ -30,6 +30,14 @@ _FALLBACK_CHAPTERS = [
 ]
 
 
+def _make_llm_caller(llm: LLMClient) -> Callable[[list[dict]], Awaitable[str]]:
+    """Return an async callable wrapping llm.chat() → str."""
+    async def _caller(msgs: list[dict]) -> str:
+        resp = await llm.chat(msgs)
+        return resp.content
+    return _caller
+
+
 class ReportOrchestrator:
     """Coordinates 3-phase report generation."""
 
@@ -136,10 +144,11 @@ class ReportOrchestrator:
             scenario_question=scenario_question,
             sim_mode=sim_mode,
         )
-        outline_response = await self._llm.complete([
+        _outline_resp = await self._llm.chat([
             {"role": "system", "content": PLANNING_SYSTEM_PROMPT},
             {"role": "user", "content": planning_prompt},
         ])
+        outline_response = _outline_resp.content
         chapters = self._parse_outline(outline_response)
         if not chapters:
             chapters = list(_FALLBACK_CHAPTERS)
@@ -171,7 +180,7 @@ class ReportOrchestrator:
                 section_outline=chapter,
                 previous_sections=completed_sections,
                 tool_handler=_handler,
-                llm_caller=lambda msgs: self._llm.complete(msgs),
+                llm_caller=_make_llm_caller(self._llm),
                 unused_tools=unused,
             )
             completed_sections.append(f"## {chapter['title']}\n\n{section_md}")
