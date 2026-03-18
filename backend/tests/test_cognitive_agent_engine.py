@@ -212,14 +212,14 @@ async def test_deliberate_topic_tags_malformed_skips_non_strings():
 
 @pytest.mark.asyncio
 async def test_deliberate_topic_tags_capped_at_five():
-    """topic_tags are capped at 5 entries."""
+    """topic_tags are capped at 4 entries."""
     engine = CognitiveAgentEngine()
     mock_response = {
         "decision": "observe",
         "reasoning": "many topics",
         "belief_updates": {},
         "stance_statement": "Watch",
-        "topic_tags": ["t1", "t2", "t3", "t4", "t5", "t6", "t7"],
+        "topic_tags": ["t1", "t2", "t3", "t4", "t5", "t6"],
         "emotional_reaction": "複雜",
     }
     with patch.object(engine._llm, "chat_json", new_callable=AsyncMock) as mock_llm:
@@ -229,7 +229,7 @@ async def test_deliberate_topic_tags_capped_at_five():
             scenario_description="test",
             active_metrics=("escalation_index",),
         )
-    assert len(result.topic_tags) == 5
+    assert len(result.topic_tags) == 4
 
 
 @pytest.mark.asyncio

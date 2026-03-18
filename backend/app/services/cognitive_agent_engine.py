@@ -112,11 +112,11 @@ class CognitiveAgentEngine:
             if k in active_set and isinstance(v, (int, float))
         }
 
-        # Extract topic_tags: filter to strings only, cap at 5
+        # Extract topic_tags: filter to strings only, cap at 4
         raw_tags = raw.get("topic_tags", [])
         topic_tags: tuple[str, ...] = ()
         if isinstance(raw_tags, list):
-            topic_tags = tuple(str(t) for t in raw_tags if isinstance(t, str))[:5]
+            topic_tags = tuple(str(t) for t in raw_tags if isinstance(t, str))[:4]
 
         # Extract emotional_reaction: cap at 50 chars
         emotional_reaction = str(raw.get("emotional_reaction", ""))[:50]

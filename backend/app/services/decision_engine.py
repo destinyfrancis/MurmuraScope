@@ -37,6 +37,8 @@ CREATE TABLE IF NOT EXISTS agent_decisions (
     action        TEXT    NOT NULL,
     reasoning     TEXT,
     confidence    REAL    NOT NULL DEFAULT 0.5,
+    topic_tags        TEXT,
+    emotional_reaction TEXT,
     created_at    TEXT    DEFAULT (datetime('now'))
 );
 """
@@ -303,7 +305,8 @@ class DecisionEngine:
             cursor = await db.execute(
                 f"""
                 SELECT id, session_id, agent_id, round_number,
-                       decision_type, action, reasoning, confidence, created_at
+                       decision_type, action, reasoning, confidence,
+                       topic_tags, emotional_reaction, created_at
                 FROM agent_decisions
                 WHERE {where}
                 ORDER BY round_number DESC, id DESC

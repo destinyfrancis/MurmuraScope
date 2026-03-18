@@ -612,7 +612,7 @@ class TestTopicTagsPersistence:
         from backend.app.services.cognitive_agent_engine import DeliberationResult
 
         deliberation = DeliberationResult(
-            agent_id="a1",
+            agent_id="1",
             decision="emigrate",
             reasoning="I fear instability",
             belief_updates={},
@@ -633,7 +633,7 @@ class TestTopicTagsPersistence:
                 topic_tags, emotional_reaction)
                VALUES (?,?,?,?,?,?,?,?)""",
             (
-                "sess1", "a1", 1, deliberation.decision, deliberation.decision,
+                "sess1", 1, 1, deliberation.decision, deliberation.decision,
                 deliberation.reasoning,
                 json.dumps(list(deliberation.topic_tags)),
                 deliberation.emotional_reaction,
@@ -642,7 +642,7 @@ class TestTopicTagsPersistence:
         await test_db.commit()
 
         row = await (await test_db.execute(
-            "SELECT topic_tags, emotional_reaction FROM agent_decisions WHERE agent_id='a1'"
+            "SELECT topic_tags, emotional_reaction FROM agent_decisions WHERE agent_id=1"
         )).fetchone()
 
         import json as _json_check
