@@ -69,7 +69,11 @@ def _grade(score: float) -> str:
 
 
 def _interpret(result: ValidationResult) -> str:
-    """Return a one-line interpretation string for a single metric result."""
+    """Return a one-line interpretation string for a single metric result.
+
+    Evaluates three primary metrics (directional accuracy, Pearson r, MAPE).
+    Brier skill score contributes to the composite grade but is not reflected here.
+    """
     dir_ok = result.directional_accuracy >= _DIRECTIONAL_GOOD
     corr_ok = abs(result.pearson_r) >= _PEARSON_GOOD
     mape_ok = result.mape <= _MAPE_GOOD
