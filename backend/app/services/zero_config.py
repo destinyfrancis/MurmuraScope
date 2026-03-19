@@ -184,7 +184,7 @@ class ZeroConfigService:
         messages = [{"role": "user", "content": prompt}]
         try:
             raw = await llm.chat(messages, max_tokens=10, temperature=0.0)
-            result = raw.strip().lower()
+            result = raw.content.strip().lower()
             if "hk_demographic" in result:
                 return "hk_demographic"
             return "kg_driven"

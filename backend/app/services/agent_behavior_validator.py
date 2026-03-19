@@ -98,8 +98,9 @@ class AgentBehaviorValidator:
             reasoning=reasoning[:400],
         )
         try:
-            response = await client.complete(prompt, max_tokens=5, temperature=0.0)
-            score = float(response.strip().split()[0])
+            messages = [{"role": "user", "content": prompt}]
+            response = await client.chat(messages, max_tokens=5, temperature=0.0)
+            score = float(response.content.strip().split()[0])
             return max(1.0, min(5.0, score))
         except Exception as exc:
             logger.debug("LLM judge failed: %s", exc)
