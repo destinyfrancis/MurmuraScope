@@ -474,6 +474,18 @@ const factionAgentColourMap = computed(() => {
       @open-fork="openForkModal"
     />
 
+    <div class="sim-quick-links">
+      <router-link
+        v-if="props.session?.sessionId"
+        :to="`/app/graph/${props.session.sessionId}`"
+        class="quick-link"
+        target="_blank"
+        title="在新分頁開啟知識圖譜"
+      >
+        🗺 知識圖譜
+      </router-link>
+    </div>
+
     <ForkModal
       :show="showForkModal"
       :current-round="currentRound"
@@ -604,6 +616,33 @@ const factionAgentColourMap = computed(() => {
   flex-direction: column;
   height: calc(100vh - 120px);
   min-height: 0;
+}
+
+.sim-quick-links {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  flex-shrink: 0;
+}
+
+.quick-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  background: var(--bg-card);
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.quick-link:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .sim-body {

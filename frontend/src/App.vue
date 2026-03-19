@@ -20,6 +20,8 @@ function goHome() {
         <router-link to="/app" class="nav-link">工作區</router-link>
         <router-link to="/learn" class="nav-link">教學</router-link>
         <router-link to="/landing" class="nav-link">關於</router-link>
+        <router-link to="/god-view" class="nav-link">神眼終端</router-link>
+        <router-link to="/dashboard" class="nav-link">預測面板</router-link>
       </nav>
     </header>
     <main class="app-main">
