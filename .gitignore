@@ -43,8 +43,15 @@ frontend/dist/
 # OASIS
 oasis_output/
 
-# Claude / Personal
+# Claude / Personal (never commit these)
 CLAUDE.md
+.claude/
+NEXT_PHASES.md
+SYSTEM_ASSESSMENT.md
+academic_evaluation_report.md
+.superpowers/
+.coverage
+*.local.md
 
 # Playwright MCP
 .playwright-mcp/
