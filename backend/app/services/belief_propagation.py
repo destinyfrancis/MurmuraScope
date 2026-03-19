@@ -92,7 +92,7 @@ class BeliefPropagationEngine:
                 # Strong low belief (< 0.5) → resists upward pressure.
                 # Strong high belief (> 0.5) → resists downward pressure.
                 current = current_beliefs.get(metric_id, 0.5)
-                contradicting = (raw_delta > 0 and current < 0.5) or (raw_delta < 0 and current > 0.5)
+                contradicting = (raw_delta > 0 and current > 0.5) or (raw_delta < 0 and current < 0.5)
                 if contradicting:
                     raw_delta *= (1.0 - fingerprint.confirmation_bias)
 

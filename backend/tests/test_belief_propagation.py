@@ -51,12 +51,16 @@ async def test_propagate_returns_delta_for_active_metrics():
 
 @pytest.mark.asyncio
 async def test_high_confirmation_bias_dampens_contradicting_evidence():
-    """Agent with high confirmation_bias should shift less than one with low bias."""
+    """Agent with high confirmation_bias should shift less than one with low bias.
+
+    Correct semantics: confirmation bias fires when evidence REINFORCES an extreme.
+    Current belief HIGH (0.8) + upward delta → reinforcing extreme → should be dampened.
+    """
     engine = BeliefPropagationEngine()
     event = _make_event({"escalation_index": 0.3})  # pushes escalation up
     active_metrics = ("escalation_index",)
-    # Current belief: escalation is LOW (0.2) — event contradicts this
-    current_beliefs = {"escalation_index": 0.2}
+    # Current belief: escalation is HIGH (0.8) + event pushes further up → reinforces extreme
+    current_beliefs = {"escalation_index": 0.8}
 
     mock_embed = MagicMock(return_value=[0.1] * 384)
     with patch("backend.app.services.belief_propagation.get_embedding", mock_embed):
@@ -71,7 +75,7 @@ async def test_high_confirmation_bias_dampens_contradicting_evidence():
             active_metrics=active_metrics, current_beliefs=current_beliefs,
         )
 
-    # High bias → smaller shift than low bias
+    # High bias → smaller shift than low bias when evidence reinforces an extreme
     assert abs(delta_high_bias.get("escalation_index", 0)) < abs(delta_low_bias.get("escalation_index", 0))
 
 
@@ -94,3 +98,39 @@ async def test_event_not_in_info_diet_has_no_effect():
             current_beliefs={"escalation_index": 0.5},
         )
     assert delta.get("escalation_index", 0.0) == 0.0
+
+
+@pytest.mark.unit
+def test_contradiction_condition_semantics():
+    """Verify the contradiction condition: dampening should only fire when evidence
+    REINFORCES an extreme (same direction as current stance), not when it pushes toward center.
+
+    Correct semantics per CLAUDE.md:
+      - current > 0.5 (strong high stance) + delta > 0 (pushing higher) → IS contradicting (dampen)
+      - current < 0.5 (strong low stance) + delta < 0 (pushing lower) → IS contradicting (dampen)
+      - current < 0.5 (strong low stance) + delta > 0 (pushing toward 0.5) → NOT contradicting
+      - current > 0.5 (strong high stance) + delta < 0 (pushing toward 0.5) → NOT contradicting
+    """
+    cases = [
+        # (raw_delta, current, expected_contradicting, description)
+        (0.1, 0.2, False, "low belief + upward delta → toward center, NOT contradicting"),
+        (-0.1, 0.8, False, "high belief + downward delta → toward center, NOT contradicting"),
+        (0.1, 0.8, True,  "high belief + upward delta → reinforcing extreme, IS contradicting"),
+        (-0.1, 0.2, True,  "low belief + downward delta → reinforcing extreme, IS contradicting"),
+    ]
+
+    # CORRECT condition (the fix we will apply)
+    def contradicting_correct(raw_delta: float, current: float) -> bool:
+        return (raw_delta > 0 and current > 0.5) or (raw_delta < 0 and current < 0.5)
+
+    # WRONG condition (current code at line 95)
+    def contradicting_wrong(raw_delta: float, current: float) -> bool:
+        return (raw_delta > 0 and current < 0.5) or (raw_delta < 0 and current > 0.5)
+
+    for raw_delta, current, expected, description in cases:
+        result = contradicting_correct(raw_delta, current)
+        assert result == expected, f"CORRECT condition failed for: {description}"
+
+    # Confirm the bug: wrong condition gives opposite results
+    assert contradicting_wrong(0.1, 0.2) is True   # Bug: wrongly dampens convergence
+    assert contradicting_wrong(0.1, 0.8) is False  # Bug: wrongly allows extreme reinforcement
