@@ -38,6 +38,7 @@ logger = get_logger("agent_memory")
 
 _SALIENCE_DECAY = 0.85
 _SALIENCE_PRUNE_THRESHOLD = 0.05
+_SALIENCE_MIN_FLOOR = 0.07  # memories stabilize here — above prune threshold, never deleted
 _MAX_MEMORIES_PER_AGENT_PER_ROUND = 3
 _CONTEXT_ROUNDS_LOOKBACK = 5
 _MAX_CONTEXT_MEMORIES = 10
@@ -395,10 +396,10 @@ class AgentMemoryService:
                 await db.execute(
                     """
                     UPDATE agent_memories
-                    SET salience_score = salience_score * ?
+                    SET salience_score = MAX(salience_score * ?, ?)
                     WHERE session_id = ?
                     """,
-                    (_SALIENCE_DECAY, session_id),
+                    (_SALIENCE_DECAY, _SALIENCE_MIN_FLOOR, session_id),
                 )
                 cursor = await db.execute(
                     """
