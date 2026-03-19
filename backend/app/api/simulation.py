@@ -67,7 +67,7 @@ async def list_sessions(limit: int = 20, offset: int = 0) -> APIResponse:
         )
     except Exception as exc:
         logger.exception("list_sessions failed")
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.post("/create", response_model=APIResponse)
@@ -230,7 +230,7 @@ async def create_simulation(req: SimulationCreateRequest) -> APIResponse:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         logger.exception("create_simulation failed")
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.post("/start", response_model=APIResponse)
@@ -251,7 +251,7 @@ async def start_simulation(req: SimulationStartRequest) -> APIResponse:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         logger.exception("start_simulation failed for session %s", req.session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.post("/estimate-cost", response_model=APIResponse)
@@ -381,7 +381,7 @@ async def quick_start(req: dict) -> APIResponse:
         raise
     except Exception as exc:
         logger.exception("quick_start failed")
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.post("/quick-start/upload", response_model=APIResponse)
@@ -439,7 +439,7 @@ async def quick_start_upload(
         raise
     except Exception as exc:
         logger.exception("quick_start_upload failed")
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -475,7 +475,7 @@ async def list_benchmarks(limit: int = 50) -> APIResponse:
         )
     except Exception as exc:
         logger.exception("list_benchmarks failed")
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/admin/benchmarks/{target}", response_model=APIResponse)
@@ -511,7 +511,7 @@ async def get_benchmark(target: str) -> APIResponse:
         raise
     except Exception as exc:
         logger.exception("get_benchmark failed for target %s", target)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.post("/admin/benchmarks/run", response_model=APIResponse)
@@ -635,7 +635,7 @@ async def get_session_status(session_id: str) -> APIResponse:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:
         logger.exception("get_session_status failed for session %s", session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/{session_id}/agents", response_model=APIResponse)
@@ -653,7 +653,7 @@ async def list_agents(session_id: str) -> APIResponse:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:
         logger.exception("list_agents failed for session %s", session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.post("/suggest-config", response_model=APIResponse)
@@ -693,7 +693,7 @@ async def suggest_config(req: ConfigSuggestRequest) -> APIResponse:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         logger.exception("suggest_config failed")
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/{session_id}/actions", response_model=APIResponse)
@@ -726,7 +726,7 @@ async def get_session_actions(
         )
     except Exception as exc:
         logger.exception("get_session_actions failed for session %s", session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/{session_id}/actions/sentiment", response_model=APIResponse)
@@ -744,7 +744,7 @@ async def get_sentiment_summary(session_id: str) -> APIResponse:
         )
     except Exception as exc:
         logger.exception("get_sentiment_summary failed for session %s", session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/{session_id}/agents/{agent_id}/memories", response_model=APIResponse)
@@ -782,7 +782,8 @@ async def get_agent_memories(
         logger.exception(
             "get_agent_memories failed for session %s agent %d", session_id, agent_id
         )
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        logger.exception("Internal error in get_agent_memories")
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get(
@@ -830,13 +831,15 @@ async def search_agent_memories(
             },
         )
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        logger.exception("Internal error in search_agent_memories")
+        raise HTTPException(status_code=503, detail="Internal server error") from exc
     except Exception as exc:
         logger.exception(
             "search_agent_memories failed session=%s agent=%d q=%s",
             session_id, agent_id, q,
         )
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        logger.exception("Internal error in search_agent_memories")
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -879,7 +882,7 @@ async def get_decisions(
         )
     except Exception as exc:
         logger.exception("get_decisions failed for session %s", session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/{session_id}/decisions/summary", response_model=APIResponse)
@@ -907,7 +910,7 @@ async def get_decisions_summary(session_id: str) -> APIResponse:
         )
     except Exception as exc:
         logger.exception("get_decisions_summary failed for session %s", session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -934,7 +937,7 @@ async def list_companies(session_id: str) -> APIResponse:
         )
     except Exception as exc:
         logger.exception("list_companies failed for session %s", session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/{session_id}/companies/{company_id}/decisions", response_model=APIResponse)
@@ -961,7 +964,7 @@ async def get_company_decisions(
         )
     except Exception as exc:
         logger.exception("get_company_decisions failed for session %s company %d", session_id, company_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/{session_id}/supply-chain", response_model=APIResponse)
@@ -988,7 +991,7 @@ async def get_supply_chain(session_id: str) -> APIResponse:
         )
     except Exception as exc:
         logger.exception("get_supply_chain failed for session %s", session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/{session_id}/consumption", response_model=APIResponse)
@@ -1025,7 +1028,7 @@ async def get_consumption_trends(
         )
     except Exception as exc:
         logger.exception("get_consumption_trends failed for session %s", session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/{session_id}/agents/{agent_id}/consumption", response_model=APIResponse)
@@ -1060,7 +1063,8 @@ async def get_agent_consumption(
         logger.exception(
             "get_agent_consumption failed for session %s agent %d", session_id, agent_id
         )
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        logger.exception("Internal error in get_agent_consumption")
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.post("/{session_id}/companies/summary", response_model=APIResponse)
@@ -1090,7 +1094,7 @@ async def get_company_summary(session_id: str) -> APIResponse:
         )
     except Exception as exc:
         logger.exception("get_company_summary failed for session %s", session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -1154,7 +1158,7 @@ async def get_echo_chambers(
         )
     except Exception as exc:
         logger.exception("get_echo_chambers failed for session %s", session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/{session_id}/contagion", response_model=APIResponse)
@@ -1252,7 +1256,7 @@ async def get_contagion_data(session_id: str) -> APIResponse:
         )
     except Exception as exc:
         logger.exception("get_contagion_data failed for session %s", session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.post("/{session_id}/shock", response_model=APIResponse)
@@ -1306,7 +1310,7 @@ async def inject_live_shock(session_id: str, shock: ScheduledShock) -> APIRespon
         raise
     except Exception as exc:
         logger.exception("inject_live_shock failed for session %s", session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -1394,7 +1398,7 @@ async def get_contagion_tree(
         )
     except Exception as exc:
         logger.exception("get_contagion_tree failed for session %s", session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/{session_id}/contagion-stats", response_model=APIResponse)
@@ -1464,7 +1468,7 @@ async def get_contagion_stats(
         )
     except Exception as exc:
         logger.exception("get_contagion_stats failed for session %s", session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -1489,7 +1493,7 @@ async def get_confidence_report(session_id: str) -> APIResponse:
         )
     except Exception as exc:
         logger.exception("get_confidence_report failed for session %s", session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -1569,7 +1573,7 @@ async def evidence_search(
         )
     except Exception as exc:
         logger.exception("evidence_search failed for session %s q=%s", session_id, q)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -1596,7 +1600,7 @@ async def get_faction_snapshots(simulation_id: str) -> APIResponse:
         )
     except Exception as exc:
         logger.exception("get_faction_snapshots failed for simulation %s", simulation_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/{simulation_id}/tipping-points", response_model=APIResponse)
@@ -1618,7 +1622,7 @@ async def get_tipping_points(simulation_id: str) -> APIResponse:
         )
     except Exception as exc:
         logger.exception("get_tipping_points failed for simulation %s", simulation_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/{simulation_id}/multi-run", response_model=APIResponse)
@@ -1641,7 +1645,7 @@ async def get_multi_run_result(simulation_id: str) -> APIResponse:
         )
     except Exception as exc:
         logger.exception("get_multi_run_result failed for simulation %s", simulation_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 async def _load_canonical_inputs(
@@ -1790,4 +1794,4 @@ async def get_world_events(simulation_id: str) -> APIResponse:
         raise
     except Exception as exc:
         logger.exception("get_world_events failed for simulation %s", simulation_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc

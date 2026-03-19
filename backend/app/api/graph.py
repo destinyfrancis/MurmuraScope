@@ -584,7 +584,7 @@ async def analyze_seed(req: GraphBuildRequest) -> APIResponse:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         logger.exception("analyze_seed failed")
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/{graph_id}/snapshots", response_model=APIResponse)
@@ -902,4 +902,4 @@ async def get_node_evidence(graph_id: str, node_id: str) -> APIResponse:
         raise
     except Exception as exc:
         logger.exception("get_node_evidence failed for graph %s node %s", graph_id, node_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc

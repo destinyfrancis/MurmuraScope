@@ -157,7 +157,7 @@ async def create_branch(session_id: str, req: BranchRequest | None = None) -> AP
         raise
     except Exception as exc:
         logger.exception("create_branch failed for session %s", session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/{session_id}/branches", response_model=APIResponse)
@@ -196,7 +196,7 @@ async def list_branches(session_id: str) -> APIResponse:
         )
     except Exception as exc:
         logger.exception("list_branches failed for session %s", session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/compare/{session_a}/{session_b}", response_model=APIResponse)
@@ -342,7 +342,7 @@ async def compare_sessions(session_a: str, session_b: str) -> APIResponse:
         )
     except Exception as exc:
         logger.exception("compare_sessions failed for %s vs %s", session_a, session_b)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -369,7 +369,7 @@ async def scan_scenarios(session_id: str, body: dict | None = None) -> APIRespon
         )
     except Exception as exc:
         logger.exception("scan_scenarios failed for session %s", session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -396,7 +396,7 @@ async def run_monte_carlo(session_id: str, body: dict | None = None) -> APIRespo
         )
     except Exception as exc:
         logger.exception("run_monte_carlo failed for session %s", session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/{session_id}/ensemble-results", response_model=APIResponse)
@@ -422,7 +422,7 @@ async def get_ensemble_results(session_id: str) -> APIResponse:
         )
     except Exception as exc:
         logger.exception("get_ensemble_results failed for session %s", session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -474,7 +474,7 @@ async def run_real_ensemble(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:
         logger.exception("run_real_ensemble failed for session %s", session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/{session_id}/ensemble/results", response_model=APIResponse)
@@ -569,4 +569,4 @@ async def get_real_ensemble_results(session_id: str) -> APIResponse:
         )
     except Exception as exc:
         logger.exception("get_real_ensemble_results failed for session %s", session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc

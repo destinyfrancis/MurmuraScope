@@ -45,7 +45,7 @@ async def get_macro_history(
         raise
     except Exception as exc:
         logger.exception("get_macro_history failed for session %s", session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/forecast/{metric}", response_model=APIResponse)
@@ -68,7 +68,7 @@ async def get_forecast(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         logger.exception("get_forecast failed for metric %s", metric)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/forecast/{metric}/backtest", response_model=APIResponse)
@@ -111,7 +111,7 @@ async def get_forecast_backtest(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         logger.exception("get_forecast_backtest failed for metric %s", metric)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/forecast/hsi-decomposition", response_model=APIResponse)
@@ -141,7 +141,7 @@ async def get_hsi_decomposition(
         )
     except Exception as exc:
         logger.exception("get_hsi_decomposition failed")
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -199,7 +199,7 @@ async def get_retrospective_validation(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         logger.exception("get_retrospective_validation failed")
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -277,7 +277,7 @@ async def get_community_summaries(
         )
     except Exception as exc:
         logger.exception("get_community_summaries failed for session %s", session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/{session_id}/global-narrative", response_model=APIResponse)
@@ -305,7 +305,7 @@ async def get_global_narrative(
         )
     except Exception as exc:
         logger.exception("get_global_narrative failed for session %s", session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/{session_id}/triple-conflicts", response_model=APIResponse)
@@ -330,7 +330,7 @@ async def get_triple_conflicts(
         )
     except Exception as exc:
         logger.exception("get_triple_conflicts failed for session %s", session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/{session_id}/polarization", response_model=APIResponse)
@@ -381,7 +381,7 @@ async def get_polarization(
         )
     except Exception as exc:
         logger.exception("get_polarization failed for session %s", session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -443,7 +443,7 @@ async def get_network_events(
         )
     except Exception as exc:
         logger.exception("get_network_events failed for session %s", session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -506,7 +506,8 @@ async def get_agent_feed(
         logger.exception(
             "get_agent_feed failed for session %s agent %s", session_id, agent_id
         )
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        logger.exception("Internal error in get_agent_feed")
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/{session_id}/filter-bubble", response_model=APIResponse)
@@ -560,7 +561,7 @@ async def get_filter_bubble(
         )
     except Exception as exc:
         logger.exception("get_filter_bubble failed for session %s", session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/{session_id}/filter-bubble-history", response_model=APIResponse)
@@ -598,7 +599,7 @@ async def get_filter_bubble_history(session_id: str) -> APIResponse:
         )
     except Exception as exc:
         logger.exception("get_filter_bubble_history failed for session %s", session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/{session_id}/virality", response_model=APIResponse)
@@ -661,7 +662,7 @@ async def get_virality(
         )
     except Exception as exc:
         logger.exception("get_virality failed for session %s", session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/{session_id}/polarization-history", response_model=APIResponse)
@@ -702,7 +703,7 @@ async def get_polarization_history(session_id: str) -> APIResponse:
         )
     except Exception as exc:
         logger.exception("get_polarization_history failed for session %s", session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -759,7 +760,7 @@ async def get_emotional_state(
         )
     except Exception as exc:
         logger.exception("get_emotional_state failed session=%s agent=%d", session_id, agent_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/{session_id}/emotional-heatmap", response_model=APIResponse)
@@ -815,7 +816,7 @@ async def get_emotional_heatmap(
         )
     except Exception as exc:
         logger.exception("get_emotional_heatmap failed session=%s", session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/{session_id}/agents/{agent_id}/beliefs", response_model=APIResponse)
@@ -866,7 +867,7 @@ async def get_agent_beliefs(
         )
     except Exception as exc:
         logger.exception("get_agent_beliefs failed session=%s agent=%d", session_id, agent_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/{session_id}/cognitive-dissonance", response_model=APIResponse)
@@ -922,7 +923,7 @@ async def get_cognitive_dissonance(
         )
     except Exception as exc:
         logger.exception("get_cognitive_dissonance failed session=%s", session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/{session_id}/emotional-contagion-map", response_model=APIResponse)
@@ -991,4 +992,4 @@ async def get_emotional_contagion(
         )
     except Exception as exc:
         logger.exception("get_emotional_contagion failed session=%s", session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc

@@ -54,7 +54,7 @@ async def get_public_report(token: str) -> APIResponse:
         raise
     except Exception as exc:
         logger.exception("get_public_report failed for token %s", token)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.post("/generate", response_model=APIResponse)
@@ -81,7 +81,7 @@ async def generate_report(req: ReportGenerateRequest) -> APIResponse:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         logger.exception("generate_report failed for session %s", req.session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/{report_id}", response_model=APIResponse)
@@ -116,7 +116,7 @@ async def get_report(report_id: str) -> APIResponse:
         raise
     except Exception as exc:
         logger.exception("get_report failed for report %s", report_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.post("/chat", response_model=APIResponse)
@@ -141,7 +141,7 @@ async def chat_with_report(req: ReportChatRequest) -> APIResponse:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         logger.exception("chat_with_report failed for session %s", req.session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.post("/interview", response_model=APIResponse)
@@ -243,7 +243,8 @@ async def interview_agent(req: AgentInterviewRequest) -> APIResponse:
             req.agent_id,
             req.session_id,
         )
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        logger.exception("Internal error in interview_agent")
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/{report_id}/pdf")
@@ -305,7 +306,7 @@ async def export_report_pdf(report_id: str):
         raise
     except Exception as exc:
         logger.exception("export_report_pdf failed for report %s", report_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.post("/{report_id}/share", response_model=APIResponse)
@@ -333,7 +334,7 @@ async def share_report(report_id: str) -> APIResponse:
         raise
     except Exception as exc:
         logger.exception("share_report failed for report %s", report_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 # ---------------------------------------------------------------------------

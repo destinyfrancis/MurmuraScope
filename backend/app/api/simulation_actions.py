@@ -66,7 +66,7 @@ async def list_groups(
             rows = await cursor.fetchall()
     except Exception as exc:
         logger.exception("list_groups failed session=%s", session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
     return [dict(row) for row in rows]
 
@@ -113,7 +113,7 @@ async def get_group_members(
         raise
     except Exception as exc:
         logger.exception("get_group_members failed session=%s group=%d", session_id, group_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
     return [dict(row) for row in rows]
 
@@ -163,7 +163,7 @@ async def list_collective_actions(
             rows = await cursor.fetchall()
     except Exception as exc:
         logger.exception("list_collective_actions failed session=%s", session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
     return [dict(row) for row in rows]
 
@@ -217,7 +217,8 @@ async def get_agent_attention(
         logger.exception(
             "get_agent_attention failed session=%s agent=%d", session_id, agent_id
         )
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        logger.exception("Internal error in get_agent_attention")
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
     return [dict(row) for row in rows]
 
@@ -271,7 +272,7 @@ async def list_wealth_transfers(
             rows = await cursor.fetchall()
     except Exception as exc:
         logger.exception("list_wealth_transfers failed session=%s", session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
     return [dict(row) for row in rows]
 
@@ -327,6 +328,6 @@ async def list_fact_checks(
             rows = await cursor.fetchall()
     except Exception as exc:
         logger.exception("list_fact_checks failed session=%s", session_id)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
     return [dict(row) for row in rows]
