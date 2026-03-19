@@ -248,6 +248,10 @@ async function startGeneration() {
       timestamp: new Date().toISOString(),
     }]
 
+    if (pollTimer) {
+      clearInterval(pollTimer)
+      pollTimer = null
+    }
     pollTimer = setInterval(() => pollReportStatus(reportId), 3000)
   } catch (err) {
     error.value = err.response?.data?.detail || err.message || '生成失敗'

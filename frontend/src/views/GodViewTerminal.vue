@@ -557,6 +557,10 @@ async function refresh() {
 function toggleAutoRefresh() {
   autoRefresh.value = !autoRefresh.value
   if (autoRefresh.value) {
+    if (refreshTimer) {
+      clearInterval(refreshTimer)
+      refreshTimer = null
+    }
     refreshTimer = setInterval(() => {
       if (loading.value) {
         refreshSkipped.value = true
@@ -567,8 +571,10 @@ function toggleAutoRefresh() {
     }, 30_000)
     refresh()
   } else {
-    clearInterval(refreshTimer)
-    refreshTimer = null
+    if (refreshTimer) {
+      clearInterval(refreshTimer)
+      refreshTimer = null
+    }
   }
 }
 
