@@ -22,6 +22,7 @@ from backend.app.services.report_agent_xai import (
     handle_sentiment_timeline as _handle_sentiment_timeline,
     insight_forge as _insight_forge,
 )
+from backend.app.services.report_section_generator import _truncate_observation
 from backend.app.services.simulation_ipc import SimulationIPC
 from backend.app.utils.db import get_db
 from backend.app.utils.llm_client import LLMClient, get_report_provider_model
@@ -272,7 +273,7 @@ class ReportAgent:
 
                 messages.append({
                     "role": "user",
-                    "content": f"OBSERVATION from {tool_name}:\n{observation}",
+                    "content": f"OBSERVATION from {tool_name}:\n{_truncate_observation(observation)}",
                 })
             else:
                 _log_step(

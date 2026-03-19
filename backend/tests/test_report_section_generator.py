@@ -39,3 +39,21 @@ def test_section_generator_handles_malformed_tool_call():
     text = '<tool_call>not valid json</tool_call>'
     calls = _extract_tool_calls(text)
     assert calls == []
+
+
+def test_observation_truncated_before_append():
+    """Observations longer than limit must be truncated."""
+    from backend.app.services.report_section_generator import _truncate_observation
+
+    long_obs = "x" * 10000
+    truncated = _truncate_observation(long_obs)
+    assert len(truncated) <= 3000, f"Observation not truncated: {len(truncated)} chars"
+    assert "[truncated" in truncated
+
+
+def test_short_observation_not_changed():
+    """Observations under the limit pass through unchanged."""
+    from backend.app.services.report_section_generator import _truncate_observation
+
+    short_obs = "Agent count is 500."
+    assert _truncate_observation(short_obs) == short_obs

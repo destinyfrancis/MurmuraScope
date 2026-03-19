@@ -16,6 +16,14 @@ logger = get_logger("report_section_generator")
 _MIN_TOOL_CALLS = 3
 _MAX_TOOL_CALLS = 5
 _MAX_ITERATIONS = 8
+_MAX_OBS_CHARS = 2000  # ~500 tokens — keeps context manageable across iterations
+
+
+def _truncate_observation(obs: str) -> str:
+    """Truncate tool observation to _MAX_OBS_CHARS to prevent context explosion."""
+    if len(obs) <= _MAX_OBS_CHARS:
+        return obs
+    return obs[:_MAX_OBS_CHARS] + f"\n…[truncated {len(obs) - _MAX_OBS_CHARS} chars]"
 
 
 def _count_tool_calls(text: str) -> int:
@@ -103,7 +111,7 @@ async def generate_section(
                 observation = await tool_handler(tc["name"], tc.get("parameters", {}))
             except Exception as e:
                 observation = f"Error executing {tc['name']}: {e}"
-            messages.append({"role": "user", "content": f"Observation: {observation}"})
+            messages.append({"role": "user", "content": f"Observation: {_truncate_observation(observation)}"})
 
         # Check for final answer
         if _has_final_answer(response):
