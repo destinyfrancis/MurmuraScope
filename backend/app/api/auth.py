@@ -24,12 +24,20 @@ from backend.app.utils.logger import get_logger
 import os
 import secrets
 
-AUTH_SECRET_KEY: str = os.environ.get("AUTH_SECRET_KEY", secrets.token_urlsafe(32))
-AUTH_ALGORITHM = "HS256"
-AUTH_TOKEN_EXPIRE_DAYS = 7
-
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = get_logger("api.auth")
+
+_raw_secret = os.environ.get("AUTH_SECRET_KEY")
+if not _raw_secret:
+    _raw_secret = secrets.token_urlsafe(32)
+    logger.warning(
+        "AUTH_SECRET_KEY env var not set — using ephemeral secret. "
+        "All JWT tokens will be invalidated on restart. "
+        "Set AUTH_SECRET_KEY in your environment for stable auth."
+    )
+AUTH_SECRET_KEY: str = _raw_secret
+AUTH_ALGORITHM = "HS256"
+AUTH_TOKEN_EXPIRE_DAYS = 7
 
 _pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 _oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")

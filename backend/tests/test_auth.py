@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 import pytest_asyncio
+from unittest.mock import patch
 
 from backend.app.api.auth import (
     _create_access_token,
@@ -196,3 +197,45 @@ class TestEmailNormalization:
             json={"email": "camelcase@example.com", "password": "password123"},
         )
         assert resp.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Unit tests: AUTH_SECRET_KEY configuration
+# ---------------------------------------------------------------------------
+
+
+class TestAuthSecretKeyConfiguration:
+    @pytest.mark.unit
+    def test_auth_secret_key_uses_env_when_set(self, monkeypatch):
+        """AUTH_SECRET_KEY must use the env var value when set."""
+        test_secret = "test-stable-secret-key-123456789abcdef"
+        monkeypatch.setenv("AUTH_SECRET_KEY", test_secret)
+
+        # Reload the auth module to pick up the new env var
+        import importlib
+        import backend.app.api.auth as auth_module
+        importlib.reload(auth_module)
+
+        assert auth_module.AUTH_SECRET_KEY == test_secret
+
+    @pytest.mark.unit
+    def test_auth_secret_key_warns_when_missing(self, monkeypatch, caplog):
+        """When AUTH_SECRET_KEY is missing, a warning must be logged."""
+        # Remove the env var
+        monkeypatch.delenv("AUTH_SECRET_KEY", raising=False)
+
+        # Reload the auth module to trigger the initialization code
+        import importlib
+        import logging
+        import backend.app.api.auth as auth_module
+
+        # Capture logging at WARNING level
+        with caplog.at_level(logging.WARNING, logger="api.auth"):
+            importlib.reload(auth_module)
+
+        # Verify the warning was logged
+        assert any(
+            "AUTH_SECRET_KEY env var not set" in record.message
+            and "ephemeral secret" in record.message
+            for record in caplog.records
+        ), f"Expected warning not found in logs: {[r.message for r in caplog.records]}"
