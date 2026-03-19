@@ -48,6 +48,18 @@ class LLMResponse:
 # Provider configuration (immutable dict of dicts)
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Retry / backoff constants
+# ---------------------------------------------------------------------------
+
+_MAX_RETRIES = 3
+_RETRY_STATUSES: frozenset[int] = frozenset({429, 500, 502, 503, 504})
+_RETRY_BASE_DELAY_S = 1.0
+
+# ---------------------------------------------------------------------------
+# Provider configuration (immutable dict of dicts)
+# ---------------------------------------------------------------------------
+
 _PROVIDERS: dict[str, dict[str, Any]] = {
     "fireworks": {
         "base_url": "https://api.fireworks.ai/inference/v1",
@@ -418,9 +430,40 @@ class LLMClient:
 
         client = self._get_http_client()
         _t0 = time.monotonic()
-        resp = await client.post(url, json=payload, headers=headers)
+        last_exc: Exception | None = None
+        for attempt in range(_MAX_RETRIES):
+            try:
+                resp = await client.post(url, json=payload, headers=headers)
+                resp.raise_for_status()
+                break  # success — exit retry loop
+            except httpx.HTTPStatusError as exc:
+                last_exc = exc
+                status = exc.response.status_code if exc.response is not None else 0
+                if status in _RETRY_STATUSES and attempt < _MAX_RETRIES - 1:
+                    delay = _RETRY_BASE_DELAY_S * (2 ** attempt)
+                    logger.warning(
+                        "LLM %s HTTP %d — retrying in %.1fs (attempt %d/%d)",
+                        model, status, delay, attempt + 1, _MAX_RETRIES,
+                    )
+                    await asyncio.sleep(delay)
+                else:
+                    raise
+            except (httpx.ConnectError, httpx.TimeoutException) as exc:
+                last_exc = exc
+                if attempt < _MAX_RETRIES - 1:
+                    delay = _RETRY_BASE_DELAY_S * (2 ** attempt)
+                    logger.warning(
+                        "LLM %s connection error — retrying in %.1fs (attempt %d/%d): %s",
+                        model, delay, attempt + 1, _MAX_RETRIES, exc,
+                    )
+                    await asyncio.sleep(delay)
+                else:
+                    raise
+        else:
+            # Loop exhausted without break — all retries failed
+            if last_exc is not None:
+                raise last_exc
         _latency_ms = round((time.monotonic() - _t0) * 1000)
-        resp.raise_for_status()
         data = resp.json()
 
         choice = data["choices"][0]
