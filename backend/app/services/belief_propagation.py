@@ -174,6 +174,9 @@ class BeliefPropagationEngine:
                     if neighbor_id not in cascade_out:
                         cascade_out[neighbor_id] = {}
                     existing = cascade_out[neighbor_id].get(metric_id, 0.0)
-                    cascade_out[neighbor_id][metric_id] = existing + delta * effective_factor
+                    accumulated = existing + delta * effective_factor
+                    # Clamp accumulated delta to [-1.0, 1.0] to prevent overflow
+                    # from multiple high-influence agents.
+                    cascade_out[neighbor_id][metric_id] = max(-1.0, min(1.0, accumulated))
 
         return cascade_out

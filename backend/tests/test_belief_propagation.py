@@ -134,3 +134,42 @@ def test_contradiction_condition_semantics():
     # Confirm the bug: wrong condition gives opposite results
     assert contradicting_wrong(0.1, 0.2) is True   # Bug: wrongly dampens convergence
     assert contradicting_wrong(0.1, 0.8) is False  # Bug: wrongly allows extreme reinforcement
+
+
+@pytest.mark.unit
+def test_cascade_deltas_bounded():
+    """cascade() output deltas must stay in [-1.0, 1.0].
+
+    Actual signature: cascade(all_deltas, interaction_graph) -> neighbour deltas.
+    - all_deltas: {agent_id: {metric_id: delta}}
+    - interaction_graph: {agent_id: [neighbour_ids]}
+
+    With multiple high-influence agents all pushing the same metric,
+    accumulated delta can exceed ±1.0 without clamping.
+    """
+    engine = BeliefPropagationEngine()
+
+    # 3 agents all pushing metric_a up by 0.5
+    # Each gets effective_factor = 0.3 * (1 + 0.5 * leadership_score)
+    # With leadership_score = 1.0 (max degree), effective_factor = 0.45
+    # Accumulated: 3 * 0.5 * 0.45 = 0.675 (within bounds)
+    # But with 6 agents or higher credibility, can exceed 1.0
+    all_deltas = {
+        "agent_1": {"metric_a": 0.7},
+        "agent_2": {"metric_a": 0.7},
+        "agent_3": {"metric_a": 0.7},
+        "agent_4": {"metric_a": 0.7},
+    }
+    interaction_graph = {
+        "agent_1": ["target_agent", "agent_2", "agent_3", "agent_4"],
+        "agent_2": ["target_agent", "agent_1", "agent_3", "agent_4"],
+        "agent_3": ["target_agent", "agent_1", "agent_2", "agent_4"],
+        "agent_4": ["target_agent", "agent_1", "agent_2", "agent_3"],
+        "target_agent": [],
+    }
+
+    result = engine.cascade(all_deltas, interaction_graph)
+
+    if "target_agent" in result:
+        for metric, delta in result["target_agent"].items():
+            assert -1.0 <= delta <= 1.0, f"Cascade delta out of bounds: {metric}={delta}"
