@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { getEmotionalContagionMap } from '@/api/simulation'
 
 const props = defineProps({
@@ -92,6 +92,10 @@ watch(() => props.sessionId, () => {
     fetchData()
     startAutoRefresh()
   }
+})
+
+onUnmounted(() => {
+  stopAutoRefresh()
 })
 </script>
 

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { getNetworkEvents } from '@/api/simulation'
 
 const props = defineProps({
@@ -109,6 +109,10 @@ watch(() => props.sessionId, () => {
 
 watch(() => props.currentRound, (r) => {
   if (r != null) fetchEvents()
+})
+
+onUnmounted(() => {
+  stopAutoRefresh()
 })
 </script>
 

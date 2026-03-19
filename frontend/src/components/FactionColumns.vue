@@ -41,11 +41,6 @@ const factionPosts = computed(() => {
   return map
 })
 
-const FACTION_PALETTE = [
-  '#3b82f6', '#ef4444', '#10b981', '#f59e0b',
-  '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16',
-]
-
 const columns = computed(() => {
   const cols = echoData.value.map((f, idx) => ({
     id: f.id ?? f.cluster_id,
