@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { marked } from 'marked'
-import { generateReport, getReportStatus } from '../api/report.js'
+import { generateReport, getReportStatus, invokeXaiTool } from '../api/report.js'
 
 const props = defineProps({
   session: { type: Object, required: true },
@@ -210,6 +210,8 @@ async function startGeneration() {
   reactSteps.value = []
   reportContent.value = ''
   collapsedSteps.value = new Set()
+  xaiResults.value = {}
+  xaiLoading.value = null
 
   reactSteps.value = [{
     step_type: 'Thought',
@@ -268,6 +270,45 @@ onUnmounted(() => {
   }
   if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
 })
+
+// ---------------------------------------------------------------------------
+// XAI tool panel
+// ---------------------------------------------------------------------------
+
+const XAI_TOOLS = [
+  { name: 'query_graph',                label: '知識圖譜查詢' },
+  { name: 'get_global_narrative',       label: '全局敘事分析' },
+  { name: 'get_sentiment_distribution', label: '情緒分佈' },
+  { name: 'get_demographic_breakdown',  label: '人口結構拆解' },
+  { name: 'interview_agents',           label: '智能體訪談' },
+  { name: 'get_macro_context',          label: '宏觀經濟背景' },
+  { name: 'calculate_cashflow',         label: '現金流預測' },
+  { name: 'get_decision_summary',       label: '決策統計摘要' },
+  { name: 'get_sentiment_timeline',     label: '情緒時間軸' },
+  { name: 'get_ensemble_forecast',      label: '集成預測分佈' },
+  { name: 'get_macro_history',          label: '宏觀指標歷史' },
+  { name: 'get_validation_summary',     label: '預測可信度報告' },
+  { name: 'insight_forge',              label: '深度洞察查詢' },
+  { name: 'get_topic_evolution',        label: '議題演變追蹤' },
+  { name: 'get_platform_breakdown',     label: '平台行為拆解' },
+  { name: 'get_agent_story_arcs',       label: 'Agent 故事弧線' },
+]
+
+const xaiResults = ref({})
+const xaiLoading = ref(null)
+
+async function runXaiTool(toolName) {
+  if (!props.session?.sessionId) return
+  xaiLoading.value = toolName
+  try {
+    const result = await invokeXaiTool(props.session.sessionId, toolName)
+    xaiResults.value = { ...xaiResults.value, [toolName]: result }
+  } catch (e) {
+    xaiResults.value = { ...xaiResults.value, [toolName]: { error: e.message } }
+  } finally {
+    xaiLoading.value = null
+  }
+}
 </script>
 
 <template>
@@ -406,15 +447,39 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
+
+    <!-- XAI sidebar — visible only after report is complete -->
+    <div v-if="completed" class="xai-sidebar">
+      <h3 class="xai-title">🔬 深度分析工具</h3>
+      <button
+        v-for="tool in XAI_TOOLS"
+        :key="tool.name"
+        class="xai-btn"
+        :class="{ active: xaiLoading === tool.name }"
+        :disabled="xaiLoading !== null"
+        @click="runXaiTool(tool.name)"
+      >
+        <span v-if="xaiLoading === tool.name">⏳ </span>{{ tool.label }}
+      </button>
+      <div
+        v-for="(result, name) in xaiResults"
+        :key="name"
+        class="xai-result-block"
+      >
+        <h4 class="xai-result-title">{{ name }}</h4>
+        <pre class="xai-result-body">{{ JSON.stringify(result, null, 2) }}</pre>
+      </div>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .step4 {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 220px;
   gap: 20px;
   min-height: 500px;
+  align-items: start;
 }
 
 .react-panel,
@@ -826,5 +891,67 @@ onUnmounted(() => {
   border: none;
   cursor: pointer;
   font-size: 0.9rem;
+}
+
+/* XAI sidebar */
+.xai-sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  padding: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  overflow-y: auto;
+  max-height: 80vh;
+}
+.xai-title {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted, #aaa);
+}
+.xai-btn {
+  display: block;
+  width: 100%;
+  margin-bottom: 6px;
+  padding: 7px 10px;
+  background: var(--bg-input, #1e1e1e);
+  border: 1px solid var(--border-color, #333);
+  border-radius: 5px;
+  color: var(--text-primary, #e0e0e0);
+  cursor: pointer;
+  text-align: left;
+  font-size: 12px;
+  transition: var(--transition);
+}
+.xai-btn:hover:not(:disabled) {
+  border-color: var(--accent-orange, #FF6B35);
+  color: var(--accent-orange, #FF6B35);
+}
+.xai-btn.active,
+.xai-btn:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+.xai-result-block {
+  margin-top: 10px;
+  border-top: 1px solid var(--border-color, #333);
+  padding-top: 8px;
+}
+.xai-result-title {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent-orange, #FF6B35);
+}
+.xai-result-body {
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-size: 10px;
+  font-family: var(--font-mono, monospace);
+  max-height: 180px;
+  overflow-y: auto;
+  margin: 0;
+  color: var(--text-secondary, #888);
 }
 </style>

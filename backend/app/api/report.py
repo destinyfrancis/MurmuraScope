@@ -3,6 +3,7 @@
 import json
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel as _BaseModel
 
 from backend.app.models.request import (
     AgentInterviewRequest,
@@ -331,3 +332,38 @@ async def share_report(report_id: str) -> APIResponse:
     except Exception as exc:
         logger.exception("share_report failed for report %s", report_id)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+# ---------------------------------------------------------------------------
+# XAI tool interactive endpoint
+# ---------------------------------------------------------------------------
+
+class XAIToolRequest(_BaseModel):
+    tool_name: str
+    params: dict = {}
+
+
+@router.post("/{session_id}/xai-tool", response_model=APIResponse)
+async def invoke_xai_tool(session_id: str, req: XAIToolRequest) -> APIResponse:
+    """Invoke a single named XAI tool and return its output."""
+    from backend.app.services.report_agent import TOOLS, _TOOL_HANDLERS
+
+    if req.tool_name not in TOOLS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown tool: {req.tool_name!r}. Available: {list(TOOLS.keys())}",
+        )
+    handler = _TOOL_HANDLERS.get(req.tool_name)
+    if handler is None:
+        raise HTTPException(
+            status_code=501,
+            detail=f"No handler registered for tool {req.tool_name!r}",
+        )
+    try:
+        result = await handler(session_id, **req.params)
+        return APIResponse(success=True, data={"tool": req.tool_name, "result": result})
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("invoke_xai_tool failed: tool=%s session=%s", req.tool_name, session_id)
+        return APIResponse(success=False, data=None, error=str(exc))

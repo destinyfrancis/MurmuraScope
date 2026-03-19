@@ -35,3 +35,11 @@ export function shareReport(reportId) {
 export function getPublicReport(token) {
   return api.get(`/report/public/${token}`)
 }
+
+export async function invokeXaiTool(sessionId, toolName, params = {}) {
+  const res = await api.post(`/report/${sessionId}/xai-tool`, {
+    tool_name: toolName,
+    params,
+  })
+  return res.data?.data
+}
