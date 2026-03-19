@@ -225,11 +225,11 @@ function startScenario(key) {
 <template>
   <div class="home">
     <section class="hero">
-      <h1 class="hero-title">HKSimEngine</h1>
-      <p class="hero-subtitle">香港社會模擬引擎</p>
+      <h1 class="hero-title">Morai</h1>
+      <p class="hero-subtitle">通用預測引擎</p>
       <p class="hero-desc">
-        基於多代理人系統嘅社會動態模擬平台，透過知識圖譜、AI
-        代理人同宏觀數據驅動，深入分析香港社會議題。
+        掉任何種子文字入去——新聞、劇本、地緣政治事件——AI 自動構建世界、生成 agents、開始模擬。
+        結合多智能體系統、知識圖譜同宏觀預測，預見集體行為。
       </p>
     </section>
 

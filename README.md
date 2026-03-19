@@ -843,9 +843,9 @@ POST /api/domain-packs/save
 ## 🧪 測試 / Testing
 
 ```bash
-make test                              # 單元測試 Unit only (~2001 tests, ~21s)
+make test                              # 單元測試 Unit only (~2396 tests, ~18s)
 make test-int                          # 集成測試 Integration (~186 tests)
-make test-all                          # 完整測試 Full suite (~2200 tests, ~62s)
+make test-all                          # 完整測試 Full suite (~2582 tests, ~65s)
 make test-file F=test_belief_system    # 單文件 Single file
 make test-changed                      # 僅測試 git 變更文件
 ```
