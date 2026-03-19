@@ -15,7 +15,7 @@ const props = defineProps({
   },
 })
 
-const sparklineRefs = ref({})
+const sparklineRefs = {}
 
 function drawSparkline(el, data, isPositive) {
   if (!el || !data || data.length === 0) return
@@ -61,7 +61,7 @@ function drawSparkline(el, data, isPositive) {
 
 function renderSparklines() {
   props.indicators.forEach((ind) => {
-    const el = document.getElementById(`sparkline-${ind.key}`)
+    const el = sparklineRefs[ind.key]
     if (el) {
       const isPositive = ind.change >= 0
       drawSparkline(el, ind.trend, isPositive)
@@ -104,7 +104,7 @@ watch(
           <span class="ind-value">
             {{ ind.value }}{{ ind.unit }}
           </span>
-          <svg :id="`sparkline-${ind.key}`" class="sparkline" />
+          <svg :ref="el => { if (el) sparklineRefs[ind.key] = el }" class="sparkline" />
         </div>
       </div>
     </div>

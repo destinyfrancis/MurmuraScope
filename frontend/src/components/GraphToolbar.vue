@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onUnmounted } from 'vue'
 
 const props = defineProps({
   entityTypes: { type: Array, default: () => [] },
@@ -49,6 +49,8 @@ function onSearch() {
     emit('search-query', searchText.value.trim())
   }, 300)
 }
+
+onUnmounted(() => clearTimeout(searchTimer))
 </script>
 
 <template>

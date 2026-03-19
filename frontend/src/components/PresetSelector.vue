@@ -41,6 +41,11 @@ const presets = [
 ]
 
 const selected = ref(props.modelValue.name || 'standard')
+
+watch(() => props.modelValue?.name, (name) => {
+  selected.value = name || 'standard'
+})
+
 const customAgents = ref(200)
 const customRounds = ref(25)
 

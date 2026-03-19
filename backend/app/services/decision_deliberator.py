@@ -27,7 +27,7 @@ from backend.app.models.decision import AgentDecision, DecisionType, DECISION_AC
 from backend.app.services.agent_factory import AgentProfile
 from backend.app.services.macro_state import MacroState
 from backend.app.utils.db import get_db
-from backend.app.utils.llm_client import LLMClient
+from backend.app.utils.llm_client import LLMClient, get_agent_provider_model
 from backend.app.utils.logger import get_logger
 from backend.prompts.decision_prompts import build_deliberation_prompt
 
@@ -38,7 +38,7 @@ logger = get_logger("decision_deliberator")
 # ---------------------------------------------------------------------------
 
 _DEFAULT_BATCH_SIZE: int = 10
-_DEFAULT_PROVIDER: str = "fireworks"
+_DEFAULT_PROVIDER: str = get_agent_provider_model()[0]
 _DEFAULT_CONFIDENCE: float = 0.5
 _MAX_RETRIES: int = 1
 _BASE_BACKOFF_SEC: float = 2.0

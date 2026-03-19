@@ -10,8 +10,9 @@ import json
 import uuid
 from typing import Any
 
-from backend.app.utils.llm_client import LLMClient
+from backend.app.utils.llm_client import LLMClient, get_agent_provider_model
 from backend.app.utils.logger import get_logger
+from backend.app.utils.prompt_security import sanitize_seed_text
 from backend.prompts.ontology_prompts import (
     ENTITY_EXTRACTION_SYSTEM,
     ENTITY_EXTRACTION_USER,
@@ -32,10 +33,10 @@ class EntityExtractor:
     def __init__(
         self,
         llm_client: LLMClient | None = None,
-        provider: str = "fireworks",
+        provider: str | None = None,
     ) -> None:
         self._llm = llm_client or LLMClient()
-        self._provider = provider
+        self._provider = provider or get_agent_provider_model()[0]
 
     async def extract(
         self,
@@ -64,7 +65,7 @@ class EntityExtractor:
                 "content": ENTITY_EXTRACTION_USER.format(
                     entity_types=", ".join(entity_types),
                     relation_types=", ".join(relation_types),
-                    seed_text=seed_text,
+                    seed_text=sanitize_seed_text(seed_text),
                     hk_data_json=json.dumps(hk_data, ensure_ascii=False, indent=2),
                 ),
             },

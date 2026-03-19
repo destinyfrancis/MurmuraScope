@@ -30,8 +30,14 @@ async function loadMacroHistory() {
 
 watch(() => props.sessionId, (id) => { if (id) loadMacroHistory() }, { immediate: true })
 
-// Also refresh when new progress event arrives (new round)
-watch(() => props.latestProgress, () => { if (props.sessionId) loadMacroHistory() })
+// Also refresh when new progress event arrives — throttled to every 5 rounds
+watch(() => props.latestProgress, (newVal) => {
+  if (!props.sessionId) return
+  const round = newVal?.round_number ?? newVal?.data?.round_number
+  // Allow through if round is undefined, or if round is 1, or divisible by 5
+  if (round !== undefined && round !== 1 && round % 5 !== 0) return
+  loadMacroHistory()
+})
 
 // Build per-indicator sparkline data (last 8 rounds)
 const indicatorCards = computed(() => {

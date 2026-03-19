@@ -10,8 +10,8 @@ function avatarInitial(name) {
 
 function stanceLabel(stance) {
   if (stance == null) return { text: '未知', cls: 'stance-neutral' }
-  if (stance > 0.6) return { text: '建制派', cls: 'stance-supportive' }
-  if (stance < 0.4) return { text: '民主派', cls: 'stance-opposing' }
+  if (stance <= 0.33) return { text: '建制派', cls: 'stance-supportive' }
+  if (stance >= 0.67) return { text: '民主派', cls: 'stance-opposing' }
   return { text: '中立', cls: 'stance-neutral' }
 }
 

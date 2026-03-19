@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
-import { chatWithReport, chatWithAgent, getReport } from '../api/report.js'
+import { chatWithReport, chatWithAgent } from '../api/report.js'
+import { getSessionAgents } from '../api/simulation.js'
 
 const props = defineProps({
   sessionId: { type: String, required: true },
@@ -21,6 +22,15 @@ onMounted(async () => {
       content: '歡迎進入深度交互模式。你可以針對報告內容提問，或者同個別代理人對話。',
     },
   ]
+
+  if (props.sessionId) {
+    try {
+      const res = await getSessionAgents(props.sessionId)
+      agents.value = res.data?.data || res.data || []
+    } catch (e) {
+      console.error('Failed to load agents', e)
+    }
+  }
 })
 
 function scrollToBottom() {
@@ -58,7 +68,7 @@ async function sendMessage() {
 
     const assistantMsg = {
       role: 'assistant',
-      content: res.data.response || res.data.message || '（無回應）',
+      content: res.data?.data?.response || res.data?.data?.message || res.data?.response || res.data?.message || '（無回應）',
     }
     messages.value = [...messages.value, assistantMsg]
   } catch (err) {

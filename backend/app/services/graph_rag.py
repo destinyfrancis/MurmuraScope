@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from backend.app.utils.db import get_db
-from backend.app.utils.llm_client import LLMClient
+from backend.app.utils.llm_client import LLMClient, get_agent_provider_model
 from backend.app.utils.logger import get_logger
 
 logger = get_logger("graph_rag")
@@ -298,7 +298,7 @@ class GraphRAGService:
                         {"role": "system", "content": COMMUNITY_SUMMARY_SYSTEM},
                         {"role": "user", "content": user_prompt},
                     ],
-                    provider="openrouter",
+                    provider=get_agent_provider_model()[0],
                     max_tokens=512,
                 )
             except Exception as exc:
@@ -367,7 +367,7 @@ class GraphRAGService:
 
                 records = [
                     {
-                        "memory_id": s.cluster_id + round_number * 1000,
+                        "memory_id": s.cluster_id * 100000 + round_number,
                         "session_id": session_id,
                         "agent_id": -1,  # sentinel for community summaries
                         "round_number": s.round_number,
@@ -532,7 +532,7 @@ class GraphRAGService:
                     {"role": "system", "content": SUBGRAPH_INSIGHT_SYSTEM},
                     {"role": "user", "content": user_prompt},
                 ],
-                provider="openrouter",
+                provider=get_agent_provider_model()[0],
                 max_tokens=1024,
             )
 
@@ -579,7 +579,8 @@ class GraphRAGService:
             lance_results = await asyncio.to_thread(_search)
             if lance_results:
                 # Enrich with full summary data from SQLite
-                cluster_ids = [int(r.get("memory_id", 0)) % 1000 for r in lance_results]
+                                # Decode: memory_id = cluster_id * 100000 + round_number
+                cluster_ids = [int(r.get("memory_id", 0)) // 100000 for r in lance_results]
                 return await self._load_summaries_by_clusters(session_id, cluster_ids)
         except Exception:
             logger.debug("LanceDB community search failed, falling back to SQL")
@@ -811,7 +812,7 @@ class GraphRAGService:
                     {"role": "system", "content": GLOBAL_NARRATIVE_SYSTEM},
                     {"role": "user", "content": user_prompt},
                 ],
-                provider="openrouter",
+                provider=get_agent_provider_model()[0],
                 max_tokens=1536,
             )
 

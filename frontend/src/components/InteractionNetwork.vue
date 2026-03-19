@@ -20,6 +20,10 @@ function teardown() {
   if (svgRef.value) d3.select(svgRef.value).on('.zoom', null)
   if (simulation) { simulation.stop(); simulation = null }
   if (tooltip) { tooltip.remove(); tooltip = null }
+  // Remove zoom listeners to prevent accumulation
+  if (svgRef.value) {
+    d3.select(svgRef.value).on('.zoom', null)
+  }
 }
 
 async function loadData() {

@@ -357,6 +357,10 @@ function drawNode(node, ctx, globalScale) {
 function initGraph() {
   if (!containerRef.value) return
 
+  // Remove old hull listeners before attaching new ones to prevent accumulation
+  containerRef.value.removeEventListener('mousemove', handleHullHover)
+  containerRef.value.removeEventListener('click', handleHullClick)
+
   if (graphInstance) {
     graphInstance._destructor?.()
     graphInstance = null
@@ -431,7 +435,12 @@ function refreshHighlights() {
 // Watchers
 // ---------------------------------------------------------------------------
 watch([nodes, edges], () => {
-  initGraph()
+  if (!graphInstance) {
+    initGraph()
+    return
+  }
+  // Incremental update - much cheaper than full reinit
+  graphInstance.graphData(buildGraphData())
 }, { deep: true })
 
 watch(highlightedNodes, () => {

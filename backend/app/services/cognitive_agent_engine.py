@@ -99,7 +99,7 @@ class CognitiveAgentEngine:
         ]
 
         try:
-            raw = await self._llm.chat_json(messages, max_tokens=512, temperature=0.5)
+            raw = await self._llm.chat_json(messages, max_tokens=1024, temperature=0.5)
         except Exception as exc:
             logger.warning("CognitiveAgentEngine: LLM failed for %s: %s", agent_id, exc)
             return _default_result(agent_id)

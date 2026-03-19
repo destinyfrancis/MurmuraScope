@@ -11,15 +11,26 @@ const report = ref(null)
 const loading = ref(true)
 const error = ref(null)
 
+const sanitize = (html) => {
+  return html
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/\son\w+\s*=/gi, ' data-removed=')
+    .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
+    .replace(/<object[\s\S]*?<\/object>/gi, '')
+    .replace(/<embed[^>]*>/gi, '')
+    .replace(/javascript\s*:/gi, 'data-blocked:')
+    .replace(/<base[^>]*>/gi, '')
+}
+
 const renderedMarkdown = computed(() => {
   if (!report.value?.content) return ''
-  return marked.parse(report.value.content)
+  return sanitize(marked.parse(report.value.content))
 })
 
 onMounted(async () => {
   try {
     const res = await getReport(props.reportId)
-    report.value = res.data
+    report.value = res.data?.data || res.data
   } catch (err) {
     error.value = '無法載入報告'
     console.error(err)

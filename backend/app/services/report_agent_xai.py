@@ -15,7 +15,7 @@ from typing import Any
 
 from backend.app.services.simulation_ipc import SimulationIPC
 from backend.app.utils.db import get_db
-from backend.app.utils.llm_client import LLMClient
+from backend.app.utils.llm_client import LLMClient, get_report_provider_model
 
 # Module-level LLM client shared across all XAI calls to reuse httpx pool.
 _xai_llm_client: LLMClient | None = None
@@ -240,9 +240,11 @@ async def _generate_sub_queries(query: str) -> tuple[str, ...]:
         "只輸出JSON陣列格式：[\"子查詢1\", \"子查詢2\", ...]\n\n"
         f"查詢：{query}"
     )
+    _r_provider, _r_model = get_report_provider_model()
     llm_response = await llm.chat(
         [{"role": "user", "content": prompt}],
-        provider="openrouter",
+        provider=_r_provider,
+        model=_r_model,
         max_tokens=256,
     )
     response = llm_response.content
@@ -270,11 +272,11 @@ async def _search_agent_memories(session_id: str, query: str) -> list[dict]:
     """
     async with get_db() as db:
         cursor = await db.execute(
-            """SELECT am.content, am.agent_id, ap.name as agent_name
+            """SELECT am.memory_text, am.agent_id, ap.oasis_username as agent_name
                FROM agent_memories am
-               LEFT JOIN agent_profiles ap ON am.agent_id = ap.id
-               WHERE am.session_id = ? AND am.content LIKE ?
-               ORDER BY am.salience DESC LIMIT 5""",
+               LEFT JOIN agent_profiles ap ON am.agent_id = ap.id AND ap.session_id = am.session_id
+               WHERE am.session_id = ? AND am.memory_text LIKE ?
+               ORDER BY am.salience_score DESC LIMIT 5""",
             (session_id, f"%{query[:20]}%"),
         )
         rows = await cursor.fetchall()
@@ -293,7 +295,7 @@ async def _search_kg_nodes_edges(session_id: str, query: str) -> list[dict]:
     """
     async with get_db() as db:
         cursor = await db.execute(
-            """SELECT kn.label, ke.relation_type, ke.description
+            """SELECT kn.title AS label, ke.relation_type, ke.description
                FROM kg_edges ke
                JOIN kg_nodes kn ON ke.source_id = kn.id
                WHERE ke.session_id = ? AND ke.description LIKE ?
@@ -440,9 +442,11 @@ async def get_topic_evolution(
             + "\n".join(descriptions[:10])
             + "\n只輸出JSON陣列：[\"議題1\",...]"
         )
+        _r_provider, _r_model = get_report_provider_model()
         llm_response = await llm.chat(
             [{"role": "user", "content": prompt}],
-            provider="openrouter",
+            provider=_r_provider,
+            model=_r_model,
             max_tokens=128,
         )
         response_text = llm_response.content
@@ -612,9 +616,11 @@ async def get_agent_story_arcs(
             f"這個Agent的行為時間線：\n{timeline}\n\n"
             "用2-3句話描述這個Agent的故事弧（立場如何隨時間演化）："
         )
+        _r_provider, _r_model = get_report_provider_model()
         llm_response = await llm.chat(
             [{"role": "user", "content": prompt}],
-            provider="openrouter",
+            provider=_r_provider,
+            model=_r_model,
             max_tokens=256,
         )
         arc_summary = llm_response.content.strip()

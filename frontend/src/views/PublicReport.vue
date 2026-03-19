@@ -1,5 +1,6 @@
 <script setup>
 import { ref, onMounted } from 'vue'
+import { marked } from 'marked'
 import { getPublicReport } from '../api/report.js'
 
 const props = defineProps({
@@ -9,6 +10,23 @@ const props = defineProps({
 const report = ref(null)
 const loading = ref(true)
 const error = ref(null)
+const copied = ref(false)
+
+const sanitize = (html) => {
+  return html
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/\son\w+\s*=/gi, ' data-removed=')
+    .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
+    .replace(/<object[\s\S]*?<\/object>/gi, '')
+    .replace(/<embed[^>]*>/gi, '')
+    .replace(/javascript\s*:/gi, 'data-blocked:')
+    .replace(/<base[^>]*>/gi, '')
+}
+
+function renderMarkdown(text) {
+  if (!text) return ''
+  return sanitize(marked.parse(text))
+}
 
 async function fetchReport() {
   loading.value = true
@@ -32,8 +50,6 @@ function copyUrl() {
   copied.value = true
   setTimeout(() => { copied.value = false }, 2000)
 }
-
-const copied = ref(false)
 
 onMounted(fetchReport)
 </script>
@@ -95,25 +111,6 @@ onMounted(fetchReport)
   </div>
 </template>
 
-<script>
-export default {
-  methods: {
-    renderMarkdown(md) {
-      if (!md) return ''
-      // Basic markdown to HTML (headings, bold, lists, paragraphs)
-      return md
-        .replace(/^### (.*$)/gm, '<h3>$1</h3>')
-        .replace(/^## (.*$)/gm, '<h2>$1</h2>')
-        .replace(/^# (.*$)/gm, '<h1>$1</h1>')
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/^\- (.*$)/gm, '<li>$1</li>')
-        .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
-        .replace(/\n\n/g, '</p><p>')
-        .replace(/^(?!<[hul])/gm, '<p>')
-    },
-  },
-}
-</script>
 
 <style scoped>
 .public-report {

@@ -89,7 +89,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { getMacroHistory } from '@/api/simulation'
 
 // ── Props ────────────────────────────────────────────────────────────────────
@@ -233,9 +233,12 @@ onMounted(() => {
 })
 
 watch(() => props.sessionId, () => {
+  stopAutoRefresh()
   fetchHistory()
   startAutoRefresh()
 })
+
+onUnmounted(stopAutoRefresh)
 </script>
 
 <style scoped>

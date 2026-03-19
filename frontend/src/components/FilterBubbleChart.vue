@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { getFilterBubble, getFilterBubbleHistory } from '@/api/simulation'
 
 const props = defineProps({
@@ -86,9 +86,12 @@ onMounted(() => {
 })
 
 watch(() => props.sessionId, () => {
+  stopAutoRefresh()
   fetchData()
   startAutoRefresh()
 })
+
+onUnmounted(stopAutoRefresh)
 </script>
 
 <template>

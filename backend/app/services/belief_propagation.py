@@ -6,6 +6,7 @@ fingerprint modulation. Active in kg_driven mode only.
 """
 from __future__ import annotations
 
+import asyncio
 import math
 from typing import Any
 
@@ -16,15 +17,16 @@ from backend.app.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-def get_embedding(text: str) -> list[float]:
+async def get_embedding(text: str) -> list[float]:
     """Get 384-dim embedding for text using the existing EmbeddingProvider.
 
-    EmbeddingProvider.embed_single() is synchronous (sentence-transformers).
-    Call directly — do NOT await.
+    EmbeddingProvider.embed_single() is synchronous (sentence-transformers),
+    so we wrap it in asyncio.to_thread to avoid blocking the event loop.
     """
     from backend.app.services.embedding_provider import EmbeddingProvider  # noqa: PLC0415
     provider = EmbeddingProvider()
-    return provider.embed_single(text).tolist()
+    result = await asyncio.to_thread(provider.embed_single, text)
+    return result.tolist()
 
 
 def _cosine_similarity(a: list[float], b: list[float]) -> float:

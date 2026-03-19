@@ -97,9 +97,12 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
+import axios from 'axios'
+
+const api = axios.create({ baseURL: '/api' })
 
 const route = useRoute()
-const sessionId = route.params.sessionId
+const sessionId = computed(() => route.params.sessionId)
 const query = ref('')
 const results = ref({ memories: [], graph_nodes: [], actions: [] })
 const loading = ref(false)
@@ -132,8 +135,10 @@ async function search() {
   if (!query.value.trim()) return
   loading.value = true
   try {
-    const res = await fetch(`/api/simulation/${sessionId}/evidence-search?q=${encodeURIComponent(query.value)}&limit=20`)
-    if (res.ok) results.value = await res.json()
+    const res = await api.get(`/simulation/${sessionId.value}/evidence-search`, {
+      params: { q: query.value, limit: 20 },
+    })
+    results.value = res.data?.data || res.data || { memories: [], graph_nodes: [], actions: [] }
   } catch (e) {
     console.error('Evidence search error:', e)
   } finally {

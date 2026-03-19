@@ -12,7 +12,7 @@ const router = useRouter()
 onMounted(async () => {
   try {
     const res = await getSession(props.sessionId)
-    const scenarioType = res.data.scenario_type || 'property'
+    const scenarioType = res.data?.data?.scenario_type || res.data?.scenario_type || 'hk_demographic'
     router.replace({
       name: 'Process',
       params: { scenarioType },

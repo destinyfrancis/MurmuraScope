@@ -25,6 +25,16 @@ from backend.app.utils.logger import get_logger
 
 logger = get_logger("emergence_guards")
 
+_emergence_llm: LLMClient | None = None
+
+
+def _get_emergence_llm() -> "LLMClient":
+    global _emergence_llm
+    if _emergence_llm is None:
+        from backend.app.utils.llm_client import LLMClient  # noqa: PLC0415
+        _emergence_llm = LLMClient()
+    return _emergence_llm
+
 
 # ---------------------------------------------------------------------------
 # DiversityResult + DiversityChecker (unchanged)
@@ -284,9 +294,9 @@ class BiasProbe:
         self, profiles: list[dict], scenario: str,
     ) -> list[str]:
         """Call the LLM for each profile and return list of stances."""
-        from backend.app.utils.llm_client import LLMClient
+        from backend.app.utils.llm_client import get_agent_provider_model  # noqa: PLC0415
 
-        llm = LLMClient()
+        llm = _get_emergence_llm()
         sem = asyncio.Semaphore(self._SEMAPHORE_LIMIT)
 
         async def _query_one(profile: dict) -> str:
@@ -318,7 +328,7 @@ class BiasProbe:
                                 ),
                             },
                         ],
-                        provider="openrouter",
+                        provider=get_agent_provider_model()[0],
                         temperature=0.7,
                         max_tokens=256,
                     )

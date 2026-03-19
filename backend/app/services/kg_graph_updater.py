@@ -233,10 +233,19 @@ class KGGraphUpdater:
     def __init__(
         self,
         llm_client: Any | None = None,
-        provider: str = "fireworks",
+        provider: str | None = None,
     ) -> None:
-        self._llm = llm_client
-        self._provider = provider
+        from backend.app.utils.llm_client import LLMClient, get_agent_provider_model  # noqa: PLC0415
+
+        if llm_client is not None:
+            self._llm = llm_client
+        else:
+            self._llm = LLMClient()
+
+        if provider is not None:
+            self._provider = provider
+        else:
+            self._provider = get_agent_provider_model()[0]
 
     def _get_llm(self) -> Any:
         """Lazy-load LLM client to avoid circular imports."""
@@ -531,14 +540,17 @@ class KGGraphUpdater:
             max_tokens=2048,
         )
 
-        # Validate + prefix node IDs
+        # Validate + prefix node IDs (immutable — do not mutate LLM response)
         prefix = session_id[:8] + "_"
         new_nodes = result.get("new_nodes", [])
+        fixed_nodes = []
         for node in new_nodes:
             if not node.get("id", "").startswith(prefix):
-                node["id"] = prefix + node.get("id", uuid.uuid4().hex[:8])
+                node = {**node, "id": prefix + node.get("id", uuid.uuid4().hex[:8])}
+            fixed_nodes.append(node)
+        new_nodes = fixed_nodes
 
-        return result
+        return {**result, "new_nodes": new_nodes}
 
     # ------------------------------------------------------------------
     # Persistence

@@ -15,7 +15,7 @@
           </option>
         </select>
         <button class="gv-btn" :class="{ active: autoRefresh }" @click="toggleAutoRefresh">
-          {{ autoRefresh ? '⟳ AUTO ON' : '⟳ AUTO OFF' }}
+          ⟳ {{ autoRefresh ? (refreshSkipped ? 'AUTO (DELAYED)' : 'AUTO ON') : 'AUTO OFF' }}
         </button>
         <button class="gv-btn primary" :disabled="loading" @click="refresh">
           {{ loading ? 'LOADING...' : 'REFRESH' }}
@@ -292,6 +292,7 @@ const loading = ref(false)
 const contractsLoading = ref(false)
 const signalsLoading = ref(false)
 const autoRefresh = ref(false)
+const refreshSkipped = ref(false)
 const lastRefreshed = ref('')
 const currentTime = ref('')
 const feedScrollEl = ref(null)
@@ -447,7 +448,7 @@ function updateClock() {
 async function loadSessions() {
   try {
     const res = await listSessions(50, 0)
-    sessions.value = (res.data?.sessions || res.data?.data || []).sort(
+    sessions.value = (res.data?.data?.sessions || []).sort(
       (a, b) => new Date(b.created_at) - new Date(a.created_at)
     )
   } catch {
@@ -460,7 +461,7 @@ async function loadContracts() {
   contractsLoading.value = true
   try {
     const res = await getMatchedContracts(selectedSessionId.value, 8)
-    matchedContracts.value = res.data?.matches || res.data?.data || []
+    matchedContracts.value = res.data?.data?.matches || res.data?.data || []
   } catch {
     matchedContracts.value = []
   } finally {
@@ -473,7 +474,7 @@ async function loadSignals() {
   signalsLoading.value = true
   try {
     const res = await getTradingSignals(selectedSessionId.value, 10)
-    signals.value = res.data?.signals || res.data?.data || []
+    signals.value = res.data?.data?.signals || res.data?.data || []
   } catch {
     signals.value = []
   } finally {
@@ -485,7 +486,7 @@ async function loadFeed() {
   if (!selectedSessionId.value) return
   try {
     const res = await getSessionActions(selectedSessionId.value, { limit: 50 })
-    const actions = res.data?.actions || res.data?.data || []
+    const actions = res.data?.data || []
     feedItems.value = [...actions].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
 
     // Build per-round sentiment for consensus panel
@@ -556,7 +557,14 @@ async function refresh() {
 function toggleAutoRefresh() {
   autoRefresh.value = !autoRefresh.value
   if (autoRefresh.value) {
-    refreshTimer = setInterval(refresh, 30_000)
+    refreshTimer = setInterval(() => {
+      if (loading.value) {
+        refreshSkipped.value = true
+        return
+      }
+      refreshSkipped.value = false
+      refresh()
+    }, 30_000)
     refresh()
   } else {
     clearInterval(refreshTimer)

@@ -17,6 +17,7 @@ from backend.app.models.response import APIResponse, GraphBuildResponse
 from backend.app.services.implicit_stakeholder_service import ImplicitStakeholderService
 from backend.app.utils.db import get_db
 from backend.app.utils.logger import get_logger
+from backend.app.utils.prompt_security import sanitize_seed_text
 
 router = APIRouter(prefix="/graph", tags=["graph"])
 logger = get_logger("api.graph")
@@ -290,13 +291,14 @@ async def build_graph(req: GraphBuildRequest) -> APIResponse:
     mem_result = None
 
     # --- Step 2: seed injection (best-effort, never blocks the response) ---
-    if req.seed_text and req.seed_text.strip():
+    safe_seed = sanitize_seed_text(req.seed_text) if req.seed_text else ""
+    if safe_seed and safe_seed.strip():
         try:
             from backend.app.services.text_processor import TextProcessor  # noqa: PLC0415
             from backend.app.services.seed_graph_injector import SeedGraphInjector  # noqa: PLC0415
 
             processor = TextProcessor()
-            processed = await processor.process(req.seed_text)
+            processed = await processor.process(safe_seed)
 
             injector = SeedGraphInjector()
             inject_result = await injector.inject(graph_id, processed)
@@ -319,7 +321,7 @@ async def build_graph(req: GraphBuildRequest) -> APIResponse:
                 {"id": str(n.get("id", "")), "label": str(n.get("label") or n.get("title") or ""), "entity_type": str(n.get("type") or n.get("entity_type") or "")}
                 for n in (_HK_PROPERTY_NODES or [])
             ]
-            discovery = await implicit_svc.discover(graph_id, req.seed_text, existing_for_dedup)
+            discovery = await implicit_svc.discover(graph_id, safe_seed, existing_for_dedup)
             implicit_nodes = discovery.nodes_added
             logger.info(
                 "Implicit stakeholder discovery for graph %s: +%d nodes",
@@ -336,7 +338,7 @@ async def build_graph(req: GraphBuildRequest) -> APIResponse:
         try:
             from backend.app.services.memory_initialization import MemoryInitializationService  # noqa: PLC0415
             mem_svc = MemoryInitializationService()
-            mem_result = await mem_svc.build_from_graph(graph_id, req.seed_text)
+            mem_result = await mem_svc.build_from_graph(graph_id, safe_seed)
             logger.info(
                 "Memory init for graph %s: %d world ctx, %d persona templates, %d edges",
                 graph_id,
@@ -544,9 +546,11 @@ async def analyze_seed(req: GraphBuildRequest) -> APIResponse:
     if not req.seed_text or not req.seed_text.strip():
         raise HTTPException(status_code=400, detail="seed_text is required")
 
+    safe_seed = sanitize_seed_text(req.seed_text)
+
     try:
         processor = TextProcessor()
-        result = await processor.process(req.seed_text)
+        result = await processor.process(safe_seed)
 
         # Also get agent suggestions
         suggestions = await processor.suggest_agents(result)

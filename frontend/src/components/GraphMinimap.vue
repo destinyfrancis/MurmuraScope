@@ -16,7 +16,6 @@ const props = defineProps({
 })
 
 const minimapCanvas = ref(null)
-let animFrame = null
 let intervalId = null
 
 function draw() {
@@ -70,7 +69,6 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (intervalId) clearInterval(intervalId)
-  if (animFrame) cancelAnimationFrame(animFrame)
 })
 
 watch(() => props.nodes, draw, { deep: false })

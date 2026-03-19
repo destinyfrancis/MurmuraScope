@@ -104,7 +104,7 @@ class SimulationManager:
             graph_id=graph_id,
             scenario_type=scenario_type,
             platforms=request.get("platforms", {"twitter": True, "reddit": True}),
-            llm_provider=request.get("llm_provider", "openrouter"),
+            llm_provider=request.get("llm_provider") or os.environ.get("AGENT_LLM_PROVIDER") or os.environ.get("LLM_PROVIDER", "openrouter"),
         )
 
         # Derive stable paths for this session.
@@ -124,7 +124,7 @@ class SimulationManager:
                 await key_store.store_key(
                     session_id=session.id,
                     api_key=user_api_key,
-                    provider=request.get("llm_provider", "openrouter"),
+                    provider=request.get("llm_provider") or os.environ.get("AGENT_LLM_PROVIDER", "google"),
                     model=request.get("llm_model", ""),
                     base_url=request.get("llm_base_url", ""),
                 )
@@ -843,8 +843,8 @@ async def _update_session_round(session_id: str, current_round: int) -> None:
                 (current_round, session_id),
             )
             await db.commit()
-    except Exception:
-        pass  # current_round column may not exist in all schema versions
+    except Exception as e:
+        logger.debug("_update_session_round failed (column may not exist): %s", e)
 
 
 async def _build_runner_config(session: SessionState) -> dict[str, Any]:
@@ -913,7 +913,9 @@ async def _build_runner_config(session: SessionState) -> dict[str, Any]:
             base_url = _PROVIDERS.get(provider, {}).get("base_url", "")
 
     if not llm_model or llm_model in ("accounts/fireworks/models/deepseek/deepseek-v3.2", "deepseek/deepseek-v3.2"):
-        llm_model = "deepseek/deepseek-v3.2"
+        # Use AGENT_LLM_MODEL env var if set, else default for the provider
+        agent_model_env = os.environ.get("AGENT_LLM_MODEL", "")
+        llm_model = agent_model_env or "deepseek/deepseek-v3.2"
 
     return {
         "session_id": session.id,

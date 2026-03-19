@@ -28,15 +28,25 @@ async function runEnsemble() {
 
 function startPolling() {
   polling.value = true
+  let pollCount = 0
+  const MAX_POLLS = 150  // 150 × 2s = 5 minutes
   pollTimer = setInterval(async () => {
+    pollCount++
+    if (pollCount > MAX_POLLS) {
+      stopPolling()
+      error.value = '多次執行逾時（超過5分鐘），請重試'
+      return
+    }
     try {
       const res = await getMultiRun(props.sessionId)
-      if (res.data.data.result) {
-        result.value = res.data.data.result
+      const multiRunResult = res.data?.data?.result
+      if (multiRunResult) {
+        result.value = multiRunResult
         stopPolling()
       }
-    } catch {
+    } catch (e) {
       stopPolling()
+      error.value = e.message || '獲取結果失敗'
     }
   }, 2000)
 }

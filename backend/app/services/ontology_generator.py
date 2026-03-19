@@ -7,7 +7,7 @@ generic (domain-agnostic) ontology defaults.
 
 from __future__ import annotations
 
-from backend.app.utils.llm_client import LLMClient
+from backend.app.utils.llm_client import LLMClient, get_agent_provider_model
 from backend.app.utils.logger import get_logger
 from backend.prompts.ontology_prompts import (
     DEFAULT_GENERIC_ENTITY_TYPES,
@@ -34,10 +34,10 @@ class OntologyGenerator:
     def __init__(
         self,
         llm_client: LLMClient | None = None,
-        provider: str = "fireworks",
+        provider: str | None = None,
     ) -> None:
         self._llm = llm_client or LLMClient()
-        self._provider = provider
+        self._provider = provider or get_agent_provider_model()[0]
 
     async def generate(
         self,

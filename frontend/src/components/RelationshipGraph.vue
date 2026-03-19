@@ -41,9 +41,9 @@ async function fetchData() {
   error.value = null
   try {
     const res = await getRelationshipStates(props.sessionId, props.roundNumber)
-    const data = res.data
-    relationships.value = data.relationships || []
-    currentRound.value = data.round_number ?? 0
+    const data = res.data?.data || res.data
+    relationships.value = data?.relationships || []
+    currentRound.value = data?.round_number ?? 0
   } catch (err) {
     error.value = `載入失敗：${err.message || '未知錯誤'}`
   } finally {
@@ -121,9 +121,15 @@ function handleCellEnter(event, agentA, agentB) {
   hoveredCell.value = rel ? { ...rel } : null
   if (hoveredCell.value) {
     const rect = event.target.getBoundingClientRect()
+    // position: fixed — do NOT add scroll offsets
+    const TOOLTIP_W = 220
+    const TOOLTIP_H = 130
+    const top = Math.min(rect.bottom + 6, window.innerHeight - TOOLTIP_H - 8)
+    const left = Math.min(rect.left, window.innerWidth - TOOLTIP_W - 8)
     tooltipStyle.value = {
-      top: `${rect.bottom + window.scrollY + 6}px`,
-      left: `${rect.left + window.scrollX}px`,
+      display: 'block',
+      top: `${Math.max(8, top)}px`,
+      left: `${Math.max(8, left)}px`,
     }
   }
 }

@@ -19,6 +19,7 @@ async function loadFactions() {
     const data = res.data?.data || res.data || []
     echoData.value = (Array.isArray(data) ? data : data.communities || []).slice(0, 4)
   } catch (err) {
+    if (props.sessionId !== capturedId) return
     console.warn('[FactionColumns] Failed to load echo chamber data:', err)
     echoData.value = []
   }
@@ -39,6 +40,11 @@ const factionPosts = computed(() => {
   map['__other__'] = props.posts.filter(p => !allInFaction.has(String(p.agent_id)))
   return map
 })
+
+const FACTION_PALETTE = [
+  '#3b82f6', '#ef4444', '#10b981', '#f59e0b',
+  '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16',
+]
 
 const columns = computed(() => {
   const cols = echoData.value.map((f, idx) => ({

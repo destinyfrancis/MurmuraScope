@@ -25,15 +25,18 @@ async function loadPackDetails(packId) {
   }
 }
 
-onMounted(() => loadPackDetails(props.session.domainPackId))
-watch(() => props.session.domainPackId, (id) => loadPackDetails(id))
+const emit = defineEmits(['simulation-created', 'update:session'])
 
-// Express mode: session already created — skip config and auto-emit
-onMounted(() => {
+onMounted(async () => {
+  // Express mode: if session already exists, emit immediately
   if (props.session.sessionId) {
     emit('simulation-created', { sessionId: props.session.sessionId })
+    return  // skip loadPackDetails since we're navigating away
   }
+  // Normal mode: load pack details
+  await loadPackDetails(props.session.domainPackId)
 })
+watch(() => props.session.domainPackId, (id) => loadPackDetails(id))
 
 // Pack-specific shock type labels (for the shock form placeholder / hints)
 const packShockTypes = computed(() => {
@@ -50,8 +53,6 @@ const packIsZh = computed(() => {
 function shockLabel(spec) {
   return packIsZh.value ? spec.label_zh : spec.label_en
 }
-
-const emit = defineEmits(['simulation-created'])
 
 const config = reactive({
   agentCount: props.session.config.agentCount,
@@ -179,7 +180,7 @@ async function startSimulation() {
       })),
     })
 
-    Object.assign(props.session.config, config)
+    emit('update:session', { ...props.session, config: { ...props.session?.config, ...config } })
 
     const sessionId = res.data?.data?.session_id || res.data?.session_id
     emit('simulation-created', {

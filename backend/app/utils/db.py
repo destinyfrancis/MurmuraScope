@@ -78,6 +78,7 @@ async def apply_migrations() -> None:
     """
     migrations = [
         "ALTER TABLE agent_profiles ADD COLUMN tier INTEGER DEFAULT 2",
+        "ALTER TABLE agent_profiles ADD COLUMN political_stance REAL DEFAULT 0.5",
         "ALTER TABLE kg_edges ADD COLUMN round_number INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE agent_decisions ADD COLUMN topic_tags TEXT",
         "ALTER TABLE agent_decisions ADD COLUMN emotional_reaction TEXT",
@@ -97,6 +98,13 @@ async def apply_migrations() -> None:
                 if "duplicate column name" not in str(exc).lower():
                     logger.warning("Migration skipped with unexpected error: %s — sql: %s", exc, sql)
         for sql in index_migrations:
-            await db.execute(sql)
-            await db.commit()
+            try:
+                await db.execute(sql)
+                await db.commit()
+            except Exception as e:
+                err_msg = str(e).lower()
+                if "already exists" in err_msg:
+                    pass  # expected on repeated startup
+                else:
+                    logger.warning("Index migration warning: %s | SQL: %s", e, sql[:100])
     logger.info("DB migrations applied")

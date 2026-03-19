@@ -24,7 +24,7 @@ from backend.app.services.report_agent_xai import (
 )
 from backend.app.services.simulation_ipc import SimulationIPC
 from backend.app.utils.db import get_db
-from backend.app.utils.llm_client import LLMClient
+from backend.app.utils.llm_client import LLMClient, get_report_provider_model
 from backend.app.utils.logger import get_logger
 
 logger = get_logger("report_agent")
@@ -163,7 +163,7 @@ class ReportAgent:
         if scenario_question is not None:
             from backend.app.services.report_orchestrator import ReportOrchestrator  # noqa: PLC0415
 
-            orchestrator = ReportOrchestrator(llm_client=LLMClient())
+            orchestrator = ReportOrchestrator(llm_client=_get_llm_client())
 
             async def _tool_handler(name: str, params: dict[str, Any]) -> str:
                 return await self._execute_tool(name, params, session_id)
@@ -932,9 +932,11 @@ async def _call_llm(
         *messages,
     ]
     try:
+        _r_provider, _r_model = get_report_provider_model()
         response = await client.chat(
             full_messages,
-            provider="openrouter",
+            provider=_r_provider,
+            model=_r_model,
             max_tokens=4096,
         )
         return response.content

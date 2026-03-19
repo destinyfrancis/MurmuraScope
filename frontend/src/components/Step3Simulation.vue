@@ -53,6 +53,7 @@ let shockBannerTimer = null
 const showGlitch = ref(false)
 
 // Follow Mode
+const agentsLoaded = ref(false)
 const followedAgent = ref(null)
 const showMiniCogmap = ref(true)
 const sessionAgents = ref([])
@@ -84,6 +85,7 @@ let ws = null
 const MAX_RECONNECT = 5
 let reconnectAttempts = 0
 let reconnectTimer = null
+let isUnmounted = false
 
 function addLog(message, type = 'info') {
   const entry = {
@@ -199,12 +201,15 @@ function connectWs() {
   }
 
   ws.onclose = () => {
+    if (isUnmounted) return
     addLog('WebSocket 連接已關閉')
     if (!completed.value && running.value && reconnectAttempts < MAX_RECONNECT) {
       const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000)
       reconnectAttempts++
       addLog(`${delay / 1000}s 後重連 (${reconnectAttempts}/${MAX_RECONNECT})...`)
-      reconnectTimer = setTimeout(connectWs, delay)
+      reconnectTimer = setTimeout(() => {
+        if (!isUnmounted) connectWs()
+      }, delay)
     }
   }
 }
@@ -364,7 +369,7 @@ async function pollCognitiveData(sessionId) {
       getWorldEvents(sessionId),
     ])
     if (factRes.status === 'fulfilled') {
-      factionSnapshots.value = factRes.value.data.data.snapshots ?? []
+      factionSnapshots.value = factRes.value.data?.data?.snapshots ?? []
       factionCount.value = (() => {
         const snaps = factionSnapshots.value
         if (!snaps.length) return 0
@@ -372,11 +377,11 @@ async function pollCognitiveData(sessionId) {
       })()
     }
     if (tippRes.status === 'fulfilled') {
-      tippingPoints.value = tippRes.value.data.data.tipping_points ?? []
+      tippingPoints.value = tippRes.value.data?.data?.tipping_points ?? []
       tippingCount.value  = tippingPoints.value.length
     }
     if (weRes.status === 'fulfilled') {
-      worldEvents.value = weRes.value.data.data.events ?? []
+      worldEvents.value = weRes.value.data?.data?.events ?? []
     }
   } catch (e) {
     console.warn('pollCognitiveData failed:', e)
@@ -422,12 +427,16 @@ onMounted(() => {
   if (props.session.sessionId) {
     start()
     getSessionAgents(props.session.sessionId)
-      .then(r => { sessionAgents.value = r.data?.data || [] })
+      .then(r => {
+        sessionAgents.value = r.data?.data || []
+        agentsLoaded.value = true
+      })
       .catch(() => {})
   }
 })
 
 onUnmounted(() => {
+  isUnmounted = true
   if (reconnectTimer) {
     clearTimeout(reconnectTimer)
     reconnectTimer = null

@@ -12,7 +12,7 @@ from typing import Any, Callable, Awaitable
 
 from backend.app.services.report_section_generator import generate_section
 from backend.app.utils.db import get_db
-from backend.app.utils.llm_client import LLMClient
+from backend.app.utils.llm_client import LLMClient, get_report_provider_model
 from backend.app.utils.logger import get_logger
 from backend.prompts.report_prompts import (
     PLANNING_SYSTEM_PROMPT,
@@ -31,9 +31,11 @@ _FALLBACK_CHAPTERS = [
 
 
 def _make_llm_caller(llm: LLMClient) -> Callable[[list[dict]], Awaitable[str]]:
-    """Return an async callable wrapping llm.chat() → str."""
+    """Return an async callable wrapping llm.chat() → str, using report provider/model from env."""
+    provider, model = get_report_provider_model()
+
     async def _caller(msgs: list[dict]) -> str:
-        resp = await llm.chat(msgs)
+        resp = await llm.chat(msgs, provider=provider, model=model)
         return resp.content
     return _caller
 
@@ -144,10 +146,11 @@ class ReportOrchestrator:
             scenario_question=scenario_question,
             sim_mode=sim_mode,
         )
+        provider, model = get_report_provider_model()
         _outline_resp = await self._llm.chat([
             {"role": "system", "content": PLANNING_SYSTEM_PROMPT},
             {"role": "user", "content": planning_prompt},
-        ])
+        ], provider=provider, model=model)
         outline_response = _outline_resp.content
         chapters = self._parse_outline(outline_response)
         if not chapters:

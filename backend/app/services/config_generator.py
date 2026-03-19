@@ -8,8 +8,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from backend.app.utils.llm_client import LLMClient
+from backend.app.utils.llm_client import LLMClient, get_agent_provider_model
 from backend.app.utils.logger import get_logger
+from backend.app.utils.prompt_security import sanitize_scenario_description
 from backend.prompts.config_prompts import (
     CONFIG_SYSTEM,
     CONFIG_USER,
@@ -151,7 +152,7 @@ class ConfigGenerator:
             {
                 "role": "user",
                 "content": CONFIG_USER.format(
-                    user_query=user_query[:500],
+                    user_query=sanitize_scenario_description(user_query)[:500],
                     seed_context=seed_context,
                 ),
             },
@@ -160,7 +161,7 @@ class ConfigGenerator:
         try:
             data = await self._llm.chat_json(
                 messages,
-                provider="fireworks",
+                provider=get_agent_provider_model()[0],
                 temperature=0.4,
                 max_tokens=1500,
             )

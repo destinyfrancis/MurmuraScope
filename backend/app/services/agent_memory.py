@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 import aiosqlite
 
 from backend.app.utils.db import get_db
-from backend.app.utils.llm_client import LLMClient
+from backend.app.utils.llm_client import LLMClient, get_agent_provider_model
 from backend.app.utils.logger import get_logger
 from backend.app.utils.token_budget import TokenBudget
 from backend.app.utils.token_counter import TokenCounter
@@ -682,15 +682,20 @@ class AgentMemoryService:
             ]
             input_text = "\n".join(memory_texts)
 
-            summary = await self._llm.chat(
-                system=MEMORY_COMPRESSION_SYSTEM,
-                user=MEMORY_COMPRESSION_USER.format(
-                    agent_id=agent_id,
-                    memory_count=len(old_memories),
-                    memories=input_text,
-                ),
+            response = await self._llm.chat(
+                [
+                    {"role": "system", "content": MEMORY_COMPRESSION_SYSTEM},
+                    {"role": "user", "content": MEMORY_COMPRESSION_USER.format(
+                        agent_id=agent_id,
+                        memory_count=len(old_memories),
+                        memories=input_text,
+                    )},
+                ],
+                provider=get_agent_provider_model()[0],
+                model=get_agent_provider_model()[1],
                 max_tokens=512,
             )
+            summary = response.content
 
             if not summary or not summary.strip():
                 return False
@@ -707,6 +712,8 @@ class AgentMemoryService:
 
                 # Delete originals from SQLite
                 old_ids = [r[0] for r in old_memories]
+                if not old_ids:
+                    return False
                 placeholders = ",".join("?" * len(old_ids))
                 await db.execute(
                     f"DELETE FROM agent_memories WHERE id IN ({placeholders})",
@@ -763,7 +770,7 @@ class AgentMemoryService:
             nodes = [dict(r) for r in await cursor.fetchall()]
             cursor = await db.execute(
                 f"SELECT * FROM kg_edges"
-                f" WHERE source IN ({placeholders}) OR target IN ({placeholders})",
+                f" WHERE source_id IN ({placeholders}) OR target_id IN ({placeholders})",
                 entity_ids + entity_ids,
             )
             edges = [dict(r) for r in await cursor.fetchall()]
@@ -937,7 +944,7 @@ class AgentMemoryService:
         try:
             data = await self._llm.chat_json(
                 messages,
-                provider="fireworks",
+                provider=get_agent_provider_model()[0],
                 temperature=0.4,
                 max_tokens=4096,
             )
@@ -976,11 +983,18 @@ class AgentMemoryService:
             )
             try:
                 result = await self._llm.chat_json(
-                    system=(
-                        "Rate the salience (0.0-1.0) of each agent's memory. "
-                        'Return JSON: {"salience_scores": [0.8, 0.6, ...]}'
-                    ),
-                    user=prompt,
+                    [
+                        {
+                            "role": "system",
+                            "content": (
+                                "Rate the salience (0.0-1.0) of each agent's memory. "
+                                'Return JSON: {"salience_scores": [0.8, 0.6, ...]}'
+                            ),
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    provider=get_agent_provider_model()[0],
+                    model=get_agent_provider_model()[1],
                 )
                 scores = result.get("salience_scores", [0.5] * len(batch))
                 # Guard: ensure correct count, values clamped to [0, 1]

@@ -14,8 +14,9 @@ from typing import Any
 from backend.app.services.entity_extractor import EntityExtractor
 from backend.app.services.ontology_generator import OntologyGenerator
 from backend.app.utils.db import get_db
-from backend.app.utils.llm_client import LLMClient
+from backend.app.utils.llm_client import LLMClient, get_agent_provider_model
 from backend.app.utils.logger import get_logger
+from backend.app.utils.prompt_security import sanitize_seed_text
 from backend.prompts.ontology_prompts import (
     COMMUNITY_SUMMARY_SYSTEM,
     COMMUNITY_SUMMARY_USER,
@@ -34,12 +35,12 @@ class GraphBuilderService:
     def __init__(
         self,
         llm_client: LLMClient | None = None,
-        provider: str = "fireworks",
+        provider: str | None = None,
     ) -> None:
         self._llm = llm_client or LLMClient()
-        self._provider = provider
-        self._ontology_gen = OntologyGenerator(self._llm, provider)
-        self._entity_ext = EntityExtractor(self._llm, provider)
+        self._provider = provider or get_agent_provider_model()[0]
+        self._ontology_gen = OntologyGenerator(self._llm, self._provider)
+        self._entity_ext = EntityExtractor(self._llm, self._provider)
 
     # ------------------------------------------------------------------
     # Build
@@ -64,6 +65,7 @@ class GraphBuilderService:
             Summary dict with graph_id, node_count, edge_count,
             entity_types, and relation_types.
         """
+        seed_text = sanitize_seed_text(seed_text)
         graph_id = f"graph_{session_id}_{uuid.uuid4().hex[:8]}"
         logger.info("Building graph %s for session %s", graph_id, session_id)
 
@@ -549,20 +551,28 @@ class GraphBuilderService:
                     interaction_counts[username] = interaction_counts.get(username, 0) + 1
 
         try:
-            from backend.app.utils.db import get_db  # noqa: PLC0415
             async with get_db() as db:
                 # Decay all edges for this session
                 await db.execute(
                     "UPDATE kg_edges SET weight = weight * 0.98 WHERE session_id = ?",
                     (session_id,),
                 )
-                # Boost interacted edges
+                # Boost interacted edges (only edges involving the interacting node)
                 if interaction_counts:
-                    for _username, count in interaction_counts.items():
+                    for username, count in interaction_counts.items():
                         boost = 0.1 * count
+                        # Look up the node for this username
+                        cursor = await db.execute(
+                            "SELECT id FROM kg_nodes WHERE session_id = ? AND (title = ? OR id LIKE ?)",
+                            (session_id, username, f"%_{username}"),
+                        )
+                        node_row = await cursor.fetchone()
+                        if not node_row:
+                            continue
+                        node_id = node_row[0]
                         await db.execute(
-                            "UPDATE kg_edges SET weight = weight + ? WHERE session_id = ?",
-                            (boost, session_id),
+                            "UPDATE kg_edges SET weight = weight + ? WHERE session_id = ? AND (source_id = ? OR target_id = ?)",
+                            (boost, session_id, node_id, node_id),
                         )
                 await db.commit()
 
@@ -574,8 +584,7 @@ class GraphBuilderService:
                 row = await cursor.fetchone()
                 return row[0] if row else 0
         except Exception:
-            import logging  # noqa: PLC0415
-            logging.getLogger(__name__).exception(
+            logger.exception(
                 "update_weights_from_actions failed session=%s", session_id
             )
             return 0
@@ -596,10 +605,7 @@ class GraphBuilderService:
         Returns:
             True if snapshot was saved successfully.
         """
-        import json  # noqa: PLC0415
-
         try:
-            from backend.app.utils.db import get_db  # noqa: PLC0415
             async with get_db() as db:
                 # Fetch current nodes and edges
                 node_rows = await (
@@ -657,15 +663,13 @@ class GraphBuilderService:
                 )
                 await db.commit()
 
-            import logging  # noqa: PLC0415
-            logging.getLogger(__name__).info(
+            logger.info(
                 "KG snapshot saved: session=%s round=%d nodes=%d edges=%d",
                 session_id, round_number, node_count, edge_count,
             )
             return True
         except Exception:
-            import logging  # noqa: PLC0415
-            logging.getLogger(__name__).exception(
+            logger.exception(
                 "take_snapshot failed session=%s round=%d", session_id, round_number
             )
             return False
@@ -684,10 +688,7 @@ class GraphBuilderService:
         Returns:
             Snapshot dict with 'nodes' and 'edges', or empty dict if not found.
         """
-        import json  # noqa: PLC0415
-
         try:
-            from backend.app.utils.db import get_db  # noqa: PLC0415
             async with get_db() as db:
                 row = await (
                     await db.execute(
@@ -702,8 +703,7 @@ class GraphBuilderService:
                 return {}
             return json.loads(row[0] or "{}")
         except Exception:
-            import logging  # noqa: PLC0415
-            logging.getLogger(__name__).exception(
+            logger.exception(
                 "get_snapshot failed session=%s round=%d", session_id, round_number
             )
             return {}

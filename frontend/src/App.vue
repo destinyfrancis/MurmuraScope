@@ -93,6 +93,7 @@ function goHome() {
   --shadow-elevated:0 8px 32px rgba(0,0,0,0.1);
 
   /* Motion */
+  --transition: all 0.2s ease;
   --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
   --ease-decelerate: cubic-bezier(0.0, 0, 0.2, 1);
   --ease-spring: cubic-bezier(0.23, 1, 0.32, 1);

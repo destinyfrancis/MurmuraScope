@@ -175,7 +175,7 @@ function getFbReactions(post) {
     <div
       v-if="!autoScroll && posts.length > 0"
       class="scroll-notice"
-      @click="autoScroll = true"
+      @click="autoScroll = true; nextTick(() => { if (feedContainer.value) feedContainer.value.scrollTop = feedContainer.value.scrollHeight })"
     >
       有新貼文 - 點擊跳到底部
     </div>

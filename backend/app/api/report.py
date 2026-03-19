@@ -15,6 +15,7 @@ from backend.app.services.report_agent import ReportAgent
 from backend.app.services.simulation_ipc import SimulationIPC
 from backend.app.utils.db import get_db
 from backend.app.utils.logger import get_logger
+from backend.app.utils.prompt_security import sanitize_scenario_description
 
 _CHAT_AGENT_SYSTEM = """You are roleplaying as a Hong Kong resident agent in a social simulation.
 Stay in character based on your demographic profile, personality, and memories.
@@ -61,11 +62,12 @@ async def generate_report(req: ReportGenerateRequest) -> APIResponse:
     """Generate an analysis report from a completed simulation."""
     try:
         agent = ReportAgent()
+        safe_question = sanitize_scenario_description(req.scenario_question) if req.scenario_question else None
         report = await agent.generate_report(
             session_id=req.session_id,
             report_type=req.report_type,
             focus_areas=req.focus_areas or [],
-            scenario_question=req.scenario_question,
+            scenario_question=safe_question,
         )
         return APIResponse(
             success=True,

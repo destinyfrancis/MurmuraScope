@@ -9,9 +9,10 @@ defineProps({
 const expanded = ref(new Set())
 
 function toggle(id) {
-  if (expanded.value.has(id)) expanded.value.delete(id)
-  else expanded.value.add(id)
-  expanded.value = new Set(expanded.value)
+  const next = new Set(expanded.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  expanded.value = next
 }
 
 const COLOUR = {

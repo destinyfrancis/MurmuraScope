@@ -166,7 +166,7 @@ function signalIcon(contribution) {
 function netShift(sigs) {
   if (!sigs.length) return null
   const total = sigs.reduce((s, sg) => s + (sg.contribution || 0), 0)
-  return (total * 100).toFixed(2)
+  return total * 100
 }
 
 async function loadStockTickers() {
@@ -224,8 +224,7 @@ async function loadSessions() {
   loadingSessions.value = true
   try {
     const res = await listSessions(20, 0)
-    const all = res?.data?.data || res?.data || []
-    sessions.value = all.filter(s => s.status === 'completed')
+    sessions.value = (res?.data?.data?.sessions || []).filter(s => s.status === 'completed')
   } catch {
     sessions.value = []
   } finally {
@@ -529,7 +528,7 @@ onMounted(() => {
                 <span
                   :class="['signal-net-value', netShift(signals) > 0 ? 'signal-bullish' : netShift(signals) < 0 ? 'signal-bearish' : 'signal-neutral']"
                 >
-                  {{ netShift(signals) > 0 ? '+' : '' }}{{ netShift(signals) }}%
+                  {{ netShift(signals) > 0 ? '+' : '' }}{{ netShift(signals) != null ? netShift(signals).toFixed(2) : '0.00' }}%
                 </span>
               </div>
               <div class="signal-list">
