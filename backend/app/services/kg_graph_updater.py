@@ -241,8 +241,8 @@ class KGGraphUpdater:
     def _get_llm(self) -> Any:
         """Lazy-load LLM client to avoid circular imports."""
         if self._llm is None:
-            from backend.app.utils.llm_client import LLMClient  # noqa: PLC0415
-            self._llm = LLMClient()
+            from backend.app.utils.llm_client import get_default_client  # noqa: PLC0415
+            self._llm = get_default_client()
         return self._llm
 
     # ------------------------------------------------------------------

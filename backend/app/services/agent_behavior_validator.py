@@ -89,8 +89,8 @@ class AgentBehaviorValidator:
         reasoning: str,
     ) -> float:
         """Call LLM to rate decision consistency. Returns 1–5 float."""
-        from backend.app.utils.llm_client import LLMClient  # noqa: PLC0415
-        client = LLMClient()
+        from backend.app.utils.llm_client import get_default_client  # noqa: PLC0415
+        client = get_default_client()
         prompt = _LLM_JUDGE_PROMPT.format(
             persona=persona[:300],
             context=context[:400],

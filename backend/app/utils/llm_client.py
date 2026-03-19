@@ -591,3 +591,16 @@ class LLMClient:
             usage=usage,
             cost_usd=cost,
         )
+
+
+# Module-level singleton for service code (not report_agent which has its own)
+_default_client: "LLMClient | None" = None
+
+
+def get_default_client() -> "LLMClient":
+    """Return the shared module-level LLMClient singleton.
+    Use this in service code instead of LLMClient() per call."""
+    global _default_client
+    if _default_client is None:
+        _default_client = LLMClient()
+    return _default_client

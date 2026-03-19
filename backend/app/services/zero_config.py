@@ -170,8 +170,8 @@ class ZeroConfigService:
 
     async def _llm_detect_mode(self, seed_text: str) -> str:
         """Single LLM call to classify seed text as hk_demographic or kg_driven."""
-        from backend.app.utils.llm_client import LLMClient  # noqa: PLC0415
-        llm = LLMClient()
+        from backend.app.utils.llm_client import get_default_client  # noqa: PLC0415
+        llm = get_default_client()
         prompt = (
             "Classify the following scenario text into exactly one category:\n"
             "- hk_demographic: scenario is specifically about Hong Kong society, "

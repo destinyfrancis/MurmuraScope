@@ -80,10 +80,10 @@ class SocialHooksMixin:
                 )
                 return
 
-            from backend.app.utils.llm_client import LLMClient  # noqa: PLC0415
+            from backend.app.utils.llm_client import get_default_client  # noqa: PLC0415
             graph_rag = GraphRAGService(
                 vector_store=self._vector_store,
-                llm_client=LLMClient(),
+                llm_client=get_default_client(),
             )
             summaries = await graph_rag.generate_community_summaries(
                 session_id, round_number, echo_result
