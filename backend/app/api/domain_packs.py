@@ -247,7 +247,7 @@ async def generate_domain_pack(req: GeneratePackRequest) -> dict:
         gen = DomainGenerator(llm_client=_ProviderLLM(llm, req.provider))
         pack = await gen.generate(req.description)
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise HTTPException(status_code=422, detail="Validation error") from exc
     except Exception as exc:
         logger.error("Domain generation failed: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Domain generation failed. Please try again.") from exc
@@ -285,7 +285,7 @@ async def save_custom_domain_pack(req: SavePackRequest) -> dict:
             source=req.source,  # type: ignore[arg-type]
         )
     except Exception as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise HTTPException(status_code=422, detail="Validation error") from exc
 
     try:
         async with get_db() as db:

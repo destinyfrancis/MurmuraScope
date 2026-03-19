@@ -30,23 +30,19 @@ HKMA_API_BASE = "https://api.hkma.gov.hk/public/market-data-and-statistics/month
 
 HKMA_ENDPOINTS: dict[str, str] = {
     "hibor": f"{HKMA_API_BASE}/er-ir/hk-interbank-ir-endperiod",
-    "prime_rate": f"{HKMA_API_BASE}/er-ir/best-lending-rate",
+    # "prime_rate" endpoint removed — HKMA best-lending-rate API returns HTTP 400
+    # Use World Bank lending rate instead (see download_prime_rate).
     "exchange_rate": f"{HKMA_API_BASE}/er-ir/er-hkd-per-100-foreign-currency-end-period",
 }
 
 # HKMA HIBOR requires segment parameter
 HKMA_HIBOR_PARAMS: dict[str, str] = {"segment": "hibor.fixing"}
 
-CENSTATD_DATASETS: dict[str, str] = {
-    "cpi": "hk-censtatd-tablechart-520",
-    "gdp": "hk-censtatd-tablechart-310",
-}
-
-# Direct CSV download URLs as fallback when CKAN package_show fails
-CENSTATD_DIRECT_CSV_URLS: dict[str, str] = {
-    "cpi": "https://www.censtatd.gov.hk/en/web_table.html?id=52D",
-    "gdp": "https://www.censtatd.gov.hk/en/web_table.html?id=31D",
-}
+# World Bank API replaces former data.gov.hk CKAN sources (CKAN is permanently 404)
+_WB_BASE = "https://api.worldbank.org/v2/country/HKG/indicator"
+_WB_CPI_INDICATOR = "FP.CPI.TOTL"           # CPI (2010 = 100)
+_WB_GDP_INDICATOR = "NY.GDP.MKTP.KD.ZG"     # GDP growth annual %
+_WB_LENDING_RATE = "FR.INR.LEND"            # Lending interest rate %
 
 
 # NOTE: All hardcoded fallback data has been removed.
@@ -197,55 +193,59 @@ async def download_hibor(client: httpx.AsyncClient | None = None) -> EconomyResu
 
 
 async def download_prime_rate(client: httpx.AsyncClient | None = None) -> EconomyResult:
-    """Download best lending rate (prime rate) from HKMA.
+    """Download lending interest rate for HK from World Bank.
 
-    Falls back to hardcoded 2024-Q4 data if the API is unavailable.
+    The HKMA best-lending-rate API endpoint now returns HTTP 400 (removed).
+    Falls back to World Bank FR.INR.LEND (lending interest rate %) for HK.
     """
     own_client = client is None
     if own_client:
         client = httpx.AsyncClient()
 
     try:
-        raw_records = await _fetch_hkma_data(client, HKMA_ENDPOINTS["prime_rate"])
+        url = f"{_WB_BASE}/{_WB_LENDING_RATE}"
+        resp = await client.get(url, params={"format": "json", "per_page": 60, "mrv": 60}, timeout=30.0)
+        resp.raise_for_status()
+        data = resp.json()
 
-        if not raw_records:
-            return _empty_result("hkma_prime_rate", "HKMA prime rate API returned no data")
+        if not isinstance(data, list) or len(data) < 2 or not data[1]:
+            return _empty_result("wb_lending_rate", "World Bank lending rate returned no data for HK")
 
+        raw_records = data[1]
         RAW_DIR.mkdir(parents=True, exist_ok=True)
-        raw_path = RAW_DIR / "hkma_prime_rate.json"
+        raw_path = RAW_DIR / "wb_lending_rate.json"
         raw_path.write_text(json.dumps(raw_records, indent=2, ensure_ascii=False), encoding="utf-8")
 
         records: list[EconomyRecord] = []
         for entry in raw_records:
-            period = entry.get("end_of_month", entry.get("year_month", ""))
-            # Best lending rate fields vary; common keys: best_lending_rate, blr
-            for rate_key in ("best_lending_rate", "blr", "rate"):
-                val = _try_parse_float(str(entry.get(rate_key, "")))
-                if val is not None:
-                    records.append(EconomyRecord(
-                        category="interest_rate",
-                        metric="prime_rate",
-                        value=val,
-                        unit="percent",
-                        period=str(period),
-                        source="HKMA",
-                        source_url=HKMA_ENDPOINTS["prime_rate"],
-                    ))
-                    break  # only one rate per entry
+            year = str(entry.get("date", "")).strip()
+            val = _try_parse_float(str(entry.get("value", "")))
+            if not year or val is None:
+                continue
+            period = f"{year}-Q4"
+            records.append(EconomyRecord(
+                category="interest_rate",
+                metric="prime_rate",
+                value=val,
+                unit="percent",
+                period=period,
+                source="World Bank",
+                source_url=url,
+            ))
 
         if not records:
-            return _empty_result("hkma_prime_rate", "HKMA prime rate API returned no data")
+            return _empty_result("wb_lending_rate", "World Bank lending rate: no valid records")
 
-        logger.info("Parsed %d prime rate records", len(records))
+        logger.info("Parsed %d lending rate records from World Bank", len(records))
         return EconomyResult(
-            source_name="hkma_prime_rate",
+            source_name="wb_lending_rate",
             records=tuple(records),
             raw_file_path=str(raw_path),
             row_count=len(records),
         )
     except Exception:
-        logger.warning("Failed to download prime rate data — using fallback", exc_info=True)
-        return _empty_result("hkma_prime_rate", "HKMA prime rate API returned no data")
+        logger.warning("Failed to download lending rate from World Bank", exc_info=True)
+        return _empty_result("wb_lending_rate", "World Bank lending rate fetch failed")
     finally:
         if own_client:
             await client.aclose()
@@ -364,57 +364,79 @@ async def _download_censtatd_dataset(
     return EconomyResult(source_name=dataset_id, records=(), raw_file_path="", row_count=0)
 
 
-async def download_cpi(client: httpx.AsyncClient | None = None) -> EconomyResult:
-    """Download Consumer Price Index data from censtatd.
+async def _download_wb_economy(
+    client: httpx.AsyncClient,
+    indicator_id: str,
+    category: str,
+    metric: str,
+    unit: str,
+    source_name: str,
+) -> EconomyResult:
+    """Generic World Bank economy data fetcher (annual → Q4 records)."""
+    url = f"{_WB_BASE}/{indicator_id}"
+    try:
+        resp = await client.get(url, params={"format": "json", "per_page": 60, "mrv": 60}, timeout=30.0)
+        resp.raise_for_status()
+        data = resp.json()
+        if not isinstance(data, list) or len(data) < 2 or not data[1]:
+            return _empty_result(source_name, f"World Bank {indicator_id}: no data")
+        raw_records = data[1]
+    except Exception:
+        logger.warning("World Bank fetch failed for %s", indicator_id, exc_info=True)
+        return _empty_result(source_name, f"World Bank {indicator_id} fetch failed")
 
-    Falls back to hardcoded 2024 data if CKAN and direct CSV both fail.
-    """
+    RAW_DIR.mkdir(parents=True, exist_ok=True)
+    raw_path = RAW_DIR / f"wb_{source_name}.json"
+    raw_path.write_text(json.dumps(raw_records, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    records: list[EconomyRecord] = []
+    for entry in raw_records:
+        year = str(entry.get("date", "")).strip()
+        val = _try_parse_float(str(entry.get("value", "")))
+        if not year or val is None:
+            continue
+        records.append(EconomyRecord(
+            category=category,
+            metric=metric,
+            value=round(val, 4),
+            unit=unit,
+            period=f"{year}-Q4",
+            source="World Bank",
+            source_url=url,
+        ))
+
+    logger.info("World Bank %s: %d records", source_name, len(records))
+    return EconomyResult(
+        source_name=source_name,
+        records=tuple(records),
+        raw_file_path=str(raw_path),
+        row_count=len(records),
+    )
+
+
+async def download_cpi(client: httpx.AsyncClient | None = None) -> EconomyResult:
+    """Download CPI (2010=100) for HK from World Bank (replaces CKAN which is 404)."""
     own_client = client is None
     if own_client:
         client = httpx.AsyncClient()
-
     try:
-        result = await _download_censtatd_dataset(
-            client,
-            dataset_id=CENSTATD_DATASETS["cpi"],
-            category="price_index",
-            metric_prefix="cpi",
-            unit="index",
+        return await _download_wb_economy(
+            client, _WB_CPI_INDICATOR, "price_index", "cpi_composite", "index", "cpi",
         )
-        if result.row_count == 0:
-            logger.warning("CPI: no data from CKAN — no fallback")
-        return result
-    except Exception:
-        logger.warning("CPI download failed — no fallback available", exc_info=True)
-        return _empty_result("cpi", "CPI download failed")
     finally:
         if own_client:
             await client.aclose()
 
 
 async def download_gdp(client: httpx.AsyncClient | None = None) -> EconomyResult:
-    """Download GDP data from censtatd.
-
-    Falls back to hardcoded 2023-2024 data if CKAN and direct CSV both fail.
-    """
+    """Download GDP growth rate for HK from World Bank (replaces CKAN which is 404)."""
     own_client = client is None
     if own_client:
         client = httpx.AsyncClient()
-
     try:
-        result = await _download_censtatd_dataset(
-            client,
-            dataset_id=CENSTATD_DATASETS["gdp"],
-            category="gdp",
-            metric_prefix="gdp",
-            unit="hkd_million",
+        return await _download_wb_economy(
+            client, _WB_GDP_INDICATOR, "gdp", "gdp_growth_rate", "percent", "gdp",
         )
-        if result.row_count == 0:
-            logger.warning("GDP: no data from CKAN — no fallback")
-        return result
-    except Exception:
-        logger.warning("GDP download failed — no fallback available", exc_info=True)
-        return _empty_result("gdp", "GDP download failed")
     finally:
         if own_client:
             await client.aclose()

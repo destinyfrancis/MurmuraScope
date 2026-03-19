@@ -105,6 +105,8 @@ class SimulationRunner(
         self._macro_history: Any | None = None
         # Tracks the latest MacroState per session for feedback accumulation
         self._macro_state: dict[str, Any] = {}
+        # Per-session locks protecting _macro_state writes (Plan A — H3 race condition)
+        self._macro_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
         self._decision_engine: Any | None = None
         self._media_model: Any | None = None
         self._consumption_tracker: Any | None = None
@@ -178,7 +180,8 @@ class SimulationRunner(
         if session_id not in self._macro_state:
             restored = await self._restore_macro_state(session_id)
             if restored is not None:
-                self._macro_state[session_id] = restored
+                async with self._macro_locks[session_id]:
+                    self._macro_state[session_id] = restored
 
         # Detect kg_driven mode and initialise services
         await self._init_kg_driven_mode(session_id, config)
@@ -499,9 +502,9 @@ class SimulationRunner(
                 )
                 rows = await cursor.fetchall()
         except Exception:
-            logger.debug(
+            logger.error(
                 "_fetch_and_cache_profiles failed session=%s — using empty cache",
-                session_id,
+                session_id, exc_info=True,
             )
             rows = []
         self._round_profiles[session_id] = rows
@@ -663,13 +666,13 @@ class SimulationRunner(
                 self._process_attention_allocation(session_id, round_num),
             )
         # Phase 1C: network evolution (structural tie / bridge / triadic closure detection)
-        if round_num > 0 and round_num % hc.network_evolution_interval == 0:
+        if hc.emergence_enabled and round_num > 0 and round_num % hc.network_evolution_interval == 0:
             self._create_tracked_task(
                 session_id,
                 self._process_network_evolution(session_id, round_num),
             )
         # Phase 2: virality scoring
-        if round_num > 0 and round_num % hc.virality_interval == 0:
+        if hc.emergence_enabled and round_num > 0 and round_num % hc.virality_interval == 0:
             self._create_tracked_task(
                 session_id,
                 self._process_virality_scoring(session_id, round_num),
@@ -958,7 +961,7 @@ class SimulationRunner(
             from backend.scripts.action_logger import ActionLogger  # noqa: PLC0415
             if self._action_logger is None:
                 self._action_logger = ActionLogger()
-            await self._action_logger.log_post(
+            logged = await self._action_logger.log_post(
                 session_id=session_id,
                 round_number=round_number,
                 oasis_username=username,
@@ -966,9 +969,8 @@ class SimulationRunner(
                 platform=platform,
                 post_id=post_id,
             )
-            # Enrich WS broadcast data with sentiment + timestamp
-            sentiment = self._action_logger._detect_sentiment(content) if self._action_logger else "neutral"
-            data["sentiment"] = sentiment
+            # Enrich WS broadcast data with sentiment from the logged action
+            data["sentiment"] = logged.sentiment
         except Exception:
             logger.exception("action_logger.log_post failed session=%s", session_id)
 
@@ -1445,9 +1447,9 @@ class SimulationRunner(
                     if metric_id in metrics:
                         metrics[metric_id] = max(0.0, min(1.0, metrics[metric_id] + delta))
             except Exception:
-                logger.debug(
+                logger.warning(
                     "Tier 1 deliberation failed for agent %s session=%s",
-                    agent.get("id", "?"), session_id,
+                    agent.get("id", "?"), session_id, exc_info=True,
                 )
         kg_state.active_metrics = metrics
 

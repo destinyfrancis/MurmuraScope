@@ -10,7 +10,8 @@ import json
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
+from backend.app.api.auth import _limiter
 
 from backend.app.models.request import GraphBuildRequest
 from backend.app.models.response import APIResponse, GraphBuildResponse
@@ -267,7 +268,8 @@ def _row_to_edge(row: Any) -> dict[str, Any]:
 
 
 @router.post("/build", response_model=APIResponse)
-async def build_graph(req: GraphBuildRequest) -> APIResponse:
+@_limiter.limit("10/minute")
+async def build_graph(request: Request, req: GraphBuildRequest) -> APIResponse:
     """Build knowledge graph from scenario type and seed text.
 
     Step 1: Persist the pre-defined HK Property Market base graph.
@@ -539,7 +541,8 @@ def _extract_pdf_text(raw: bytes) -> str:
 
 
 @router.post("/analyze-seed", response_model=APIResponse)
-async def analyze_seed(req: GraphBuildRequest) -> APIResponse:
+@_limiter.limit("15/minute")
+async def analyze_seed(request: Request, req: GraphBuildRequest) -> APIResponse:
     """Analyze seed text and return structured insights without building graph."""
     from backend.app.services.text_processor import TextProcessor  # noqa: PLC0415
 
@@ -581,7 +584,7 @@ async def analyze_seed(req: GraphBuildRequest) -> APIResponse:
             meta={"scenario_type": req.scenario_type},
         )
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail="Bad request") from exc
     except Exception as exc:
         logger.exception("analyze_seed failed")
         raise HTTPException(status_code=500, detail="Internal server error") from exc

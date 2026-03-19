@@ -32,19 +32,20 @@ class MacroHooksMixin:
             if self._macro_history is None:
                 self._macro_history = MacroHistoryService()
 
-            if session_id not in self._macro_state:
-                self._macro_state[session_id] = await self._macro_controller.get_baseline()
+            async with self._macro_locks[session_id]:
+                if session_id not in self._macro_state:
+                    self._macro_state[session_id] = await self._macro_controller.get_baseline()
 
-            current_state = self._macro_state[session_id]
+                current_state = self._macro_state[session_id]
 
-            updated_state = await self._macro_controller.update_from_actions(
-                current_state=current_state,
-                session_id=session_id,
-                round_number=round_number,
-            )
+                updated_state = await self._macro_controller.update_from_actions(
+                    current_state=current_state,
+                    session_id=session_id,
+                    round_number=round_number,
+                )
 
-            updated_state = self._clamp_macro_state(updated_state)
-            self._macro_state[session_id] = updated_state
+                updated_state = self._clamp_macro_state(updated_state)
+                self._macro_state[session_id] = updated_state
 
             await self._persist_macro_state(session_id, round_number, updated_state)
 
@@ -178,17 +179,18 @@ class MacroHooksMixin:
             )
 
             if adjustments and session_id in self._macro_state:
-                current = self._macro_state[session_id]
-                updates: dict[str, Any] = {}
-                for field, delta in adjustments.items():
-                    current_val = getattr(current, field, None)
-                    if current_val is not None and isinstance(current_val, (int, float)):
-                        updates[field] = type(current_val)(current_val + delta)
-                if updates:
-                    new_state = self._clamp_macro_state(
-                        dataclasses.replace(current, **updates)
-                    )
-                    self._macro_state[session_id] = new_state
+                async with self._macro_locks[session_id]:
+                    current = self._macro_state[session_id]
+                    updates: dict[str, Any] = {}
+                    for field, delta in adjustments.items():
+                        current_val = getattr(current, field, None)
+                        if current_val is not None and isinstance(current_val, (int, float)):
+                            updates[field] = type(current_val)(current_val + delta)
+                    if updates:
+                        new_state = self._clamp_macro_state(
+                            dataclasses.replace(current, **updates)
+                        )
+                        self._macro_state[session_id] = new_state
                     await self._persist_macro_state(
                         session_id, round_number, new_state
                     )
@@ -524,24 +526,25 @@ class MacroHooksMixin:
                 macro_adjustments["hsi_level"] = -round(relocate_count * 30.0, 2)
 
             if macro_adjustments and session_id in self._macro_state:
-                current = self._macro_state[session_id]
-                updates: dict[str, Any] = {}
-                for field, delta in macro_adjustments.items():
-                    current_val = getattr(current, field, None)
-                    if current_val is not None and isinstance(current_val, (int, float)):
-                        updates[field] = type(current_val)(current_val + delta)
-                if updates:
-                    new_state = self._clamp_macro_state(
-                        dataclasses.replace(current, **updates)
-                    )
-                    self._macro_state[session_id] = new_state
-                    await self._persist_macro_state(session_id, round_number, new_state)
-                    logger.info(
-                        "B2B macro adjustments applied session=%s round=%d fields=%s",
-                        session_id,
-                        round_number,
-                        list(updates.keys()),
-                    )
+                async with self._macro_locks[session_id]:
+                    current = self._macro_state[session_id]
+                    updates: dict[str, Any] = {}
+                    for field, delta in macro_adjustments.items():
+                        current_val = getattr(current, field, None)
+                        if current_val is not None and isinstance(current_val, (int, float)):
+                            updates[field] = type(current_val)(current_val + delta)
+                    if updates:
+                        new_state = self._clamp_macro_state(
+                            dataclasses.replace(current, **updates)
+                        )
+                        self._macro_state[session_id] = new_state
+                        await self._persist_macro_state(session_id, round_number, new_state)
+                        logger.info(
+                            "B2B macro adjustments applied session=%s round=%d fields=%s",
+                            session_id,
+                            round_number,
+                            list(updates.keys()),
+                        )
 
         except Exception:
             logger.exception(

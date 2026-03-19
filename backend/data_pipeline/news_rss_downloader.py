@@ -357,7 +357,7 @@ async def _store_snapshot_counts(headlines: Sequence[NewsHeadline]) -> None:
     async with get_db() as db:
         for source_name, count in counts.items():
             await db.execute(
-                "INSERT INTO hk_data_snapshots "
+                "INSERT OR REPLACE INTO hk_data_snapshots "
                 "(category, metric, value, unit, period, source, source_url) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?)",
                 ("news", source_name, float(count), "count", today, "rss", ""),

@@ -345,22 +345,23 @@ class AgentHooksMixin:
             macro_adjustments = summary.get("macro_adjustments", {})
             if macro_adjustments and session_id in self._macro_state:
                 import dataclasses  # noqa: PLC0415
-                current = self._macro_state[session_id]
-                updates: dict[str, Any] = {}
-                for field, delta in macro_adjustments.items():
-                    current_val = getattr(current, field, None)
-                    if current_val is not None and isinstance(current_val, (int, float)):
-                        updates[field] = type(current_val)(current_val + delta)
-                if updates:
-                    new_state = self._clamp_macro_state(dataclasses.replace(current, **updates))
-                    self._macro_state[session_id] = new_state
-                    await self._persist_macro_state(session_id, round_number, new_state)
-                    logger.info(
-                        "Applied macro adjustments session=%s round=%d fields=%s",
-                        session_id,
-                        round_number,
-                        list(updates.keys()),
-                    )
+                async with self._macro_locks[session_id]:
+                    current = self._macro_state[session_id]
+                    updates: dict[str, Any] = {}
+                    for field, delta in macro_adjustments.items():
+                        current_val = getattr(current, field, None)
+                        if current_val is not None and isinstance(current_val, (int, float)):
+                            updates[field] = type(current_val)(current_val + delta)
+                    if updates:
+                        new_state = self._clamp_macro_state(dataclasses.replace(current, **updates))
+                        self._macro_state[session_id] = new_state
+                        await self._persist_macro_state(session_id, round_number, new_state)
+                        logger.info(
+                            "Applied macro adjustments session=%s round=%d fields=%s",
+                            session_id,
+                            round_number,
+                            list(updates.keys()),
+                        )
         except Exception:
             logger.exception(
                 "_process_round_decisions failed session=%s round=%d",

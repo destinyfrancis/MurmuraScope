@@ -2,7 +2,8 @@
 
 import json
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
+from backend.app.api.auth import _limiter
 from pydantic import BaseModel as _BaseModel
 
 from backend.app.models.request import (
@@ -58,7 +59,8 @@ async def get_public_report(token: str) -> APIResponse:
 
 
 @router.post("/generate", response_model=APIResponse)
-async def generate_report(req: ReportGenerateRequest) -> APIResponse:
+@_limiter.limit("5/minute")
+async def generate_report(request: Request, req: ReportGenerateRequest) -> APIResponse:
     """Generate an analysis report from a completed simulation."""
     try:
         agent = ReportAgent()
@@ -78,7 +80,7 @@ async def generate_report(req: ReportGenerateRequest) -> APIResponse:
             },
         )
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail="Bad request") from exc
     except Exception as exc:
         logger.exception("generate_report failed for session %s", req.session_id)
         raise HTTPException(status_code=500, detail="Internal server error") from exc
@@ -138,7 +140,7 @@ async def chat_with_report(req: ReportChatRequest) -> APIResponse:
             },
         )
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail="Bad request") from exc
     except Exception as exc:
         logger.exception("chat_with_report failed for session %s", req.session_id)
         raise HTTPException(status_code=500, detail="Internal server error") from exc
@@ -236,7 +238,7 @@ async def interview_agent(req: AgentInterviewRequest) -> APIResponse:
             },
         )
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail="Bad request") from exc
     except Exception as exc:
         logger.exception(
             "interview_agent failed for agent %d session %s",

@@ -203,25 +203,25 @@ async def _fetch_trends(
 # ---------------------------------------------------------------------------
 
 
-async def download_all_trends() -> DownloadResult:
+async def download_all_trends(client: object = None) -> list[DownloadResult]:  # noqa: ARG001
     """Download Google Trends data for all HK-related keywords.
 
     Uses a 24-hour in-memory cache to avoid excessive API calls. On 429 or
     timeout errors, returns empty results with an error message (no fallback).
 
     Returns:
-        DownloadResult with category="search_trends".
+        List with a single DownloadResult (list for pipeline compatibility).
     """
     global _cached_records, _last_fetch_time  # noqa: PLW0603
 
     if not HAS_PYTRENDS:
         logger.warning("pytrends not installed — skipping Google Trends download")
-        return DownloadResult(
+        return [DownloadResult(
             category="search_trends",
             row_count=0,
             records=(),
             error="pytrends not installed (pip install pytrends>=4.9.0)",
-        )
+        )]
 
     # Check 24h cache
     now = time.monotonic()
@@ -231,46 +231,46 @@ async def download_all_trends() -> DownloadResult:
             len(_cached_records),
             _CACHE_TTL_SECONDS - (now - _last_fetch_time),
         )
-        return DownloadResult(
+        return [DownloadResult(
             category="search_trends",
             row_count=len(_cached_records),
             records=tuple(_cached_records),
-        )
+        )]
 
     try:
         records = await _fetch_trends(KEYWORDS)
         _cached_records = records
         _last_fetch_time = time.monotonic()
         logger.info("Google Trends: %d quarterly records fetched", len(records))
-        return DownloadResult(
+        return [DownloadResult(
             category="search_trends",
             row_count=len(records),
             records=tuple(records),
-        )
+        )]
     except TooManyRequestsError:
         logger.warning("Google Trends 429 rate limit — returning empty results")
-        return DownloadResult(
+        return [DownloadResult(
             category="search_trends",
             row_count=0,
             records=(),
             error="Google Trends rate limit (429) — retry after 24h",
-        )
+        )]
     except (TimeoutError, OSError) as exc:
         logger.warning("Google Trends network error: %s", exc)
-        return DownloadResult(
+        return [DownloadResult(
             category="search_trends",
             row_count=0,
             records=(),
             error=f"Network error: {exc}",
-        )
+        )]
     except ImportError as exc:
         logger.warning("Google Trends import error: %s", exc)
-        return DownloadResult(
+        return [DownloadResult(
             category="search_trends",
             row_count=0,
             records=(),
             error=str(exc),
-        )
+        )]
 
 
 def get_trend_index(

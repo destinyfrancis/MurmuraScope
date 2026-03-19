@@ -1,22 +1,19 @@
 """HK retail sales and tourism data downloader.
 
-Sources: data.gov.hk CKAN API
-  - Monthly retail sales value (HKD billions)
-  - Visitor arrivals (total monthly)
-  - Mainland visitor proportion
+Updated 2026-03: data.gov.hk CKAN API is permanently unavailable (HTTP 404).
+Now uses World Bank API:
+  - NE.CON.PRVT.KD.ZG — household consumption growth (retail proxy)
+  - ST.INT.ARVL        — international tourism arrivals
 
 Data strategy:
-  1. Attempt CKAN datastore_search on known resource IDs.
-  2. On failure, use hardcoded 2024 monthly estimates as fallback.
-
-Hardcoded fallbacks are derived from HKTB and C&SD published 2024 figures.
+  1. Fetch from World Bank API.
+  2. Return empty result on failure (no hardcoded fallback).
 """
 
 from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
 
 import httpx
 
@@ -24,13 +21,12 @@ from backend.app.utils.logger import get_logger
 
 logger = get_logger("data_pipeline.retail_tourism")
 
-_CKAN_SEARCH = "https://data.gov.hk/en/api/3/action/datastore_search"
+_WB_BASE = "https://api.worldbank.org/v2/country/HKG/indicator"
 
-# data.gov.hk resource IDs for retail/tourism datasets
-# These IDs are stable but may change if the dataset is updated.
-_RESOURCE_IDS: dict[str, str] = {
-    "retail_sales": "b5bc3b67-2e54-4f19-9c6d-f4b53a5e8a3c",
-    "visitor_arrivals": "44c5e038-cfd5-4d44-9396-22d3ed9e5ee3",
+_WB_INDICATORS: dict[str, tuple[str, str, str]] = {
+    # key: (indicator_id, metric_name, unit)
+    "retail_sales": ("NE.CON.PRVT.KD.ZG", "retail_sales_growth_pct", "percent"),
+    "visitor_arrivals": ("ST.INT.ARVL",     "visitor_arrivals_thousands", "thousands"),
 }
 
 # ---------------------------------------------------------------------------
@@ -59,83 +55,35 @@ class DownloadResult:
     error: str | None = None
 
 
-
-# NOTE: All hardcoded fallback data removed.
-# If CKAN API is unavailable, empty results are returned.
-
-
 # ---------------------------------------------------------------------------
-# CKAN fetch helpers
+# World Bank fetch helper
 # ---------------------------------------------------------------------------
 
 
-async def _fetch_ckan_resource(
+async def _fetch_wb_indicator(
     client: httpx.AsyncClient,
-    resource_id: str,
-    limit: int = 24,
+    indicator_id: str,
+    *,
+    mrv: int = 30,
+    timeout: float = 20.0,
 ) -> list[dict]:
-    """Attempt to fetch records from a data.gov.hk CKAN resource.
+    """Fetch annual HK records for a World Bank indicator.
 
-    Returns empty list on any failure without raising.
+    Returns the records list or [] on failure.
     """
-    params = {"resource_id": resource_id, "limit": str(limit)}
+    url = f"{_WB_BASE}/{indicator_id}"
     try:
-        resp = await client.get(_CKAN_SEARCH, params=params, timeout=20.0)
-        if resp.status_code != 200:
-            logger.debug("CKAN returned HTTP %d for resource %s", resp.status_code, resource_id)
-            return []
+        resp = await client.get(
+            url, params={"format": "json", "per_page": mrv, "mrv": mrv}, timeout=timeout,
+        )
+        resp.raise_for_status()
         data = resp.json()
-        if not data.get("success"):
-            logger.debug("CKAN success=False for resource %s", resource_id)
-            return []
-        return data.get("result", {}).get("records", [])
-    except (httpx.RequestError, httpx.TimeoutException, json.JSONDecodeError, ValueError) as exc:
-        logger.debug("CKAN fetch failed for resource %s: %s", resource_id, exc)
+        if isinstance(data, list) and len(data) == 2:
+            return data[1] or []
         return []
-
-
-def _parse_retail_records(ckan_rows: list[dict]) -> list[RetailTourismRecord]:
-    """Parse CKAN retail sales rows into RetailTourismRecord list."""
-    records: list[RetailTourismRecord] = []
-    for row in ckan_rows:
-        try:
-            period = str(row.get("period", row.get("date", row.get("month", ""))))
-            value = float(row.get("value", row.get("sales_value", 0)))
-            if not period:
-                continue
-            records.append(RetailTourismRecord(
-                metric="retail_sales_hkd_billion",
-                value=round(value, 2),
-                unit="HKD_billion",
-                period=period,
-                source="ckan_retail",
-            ))
-        except (KeyError, ValueError, TypeError):
-            continue
-    return records
-
-
-def _parse_visitor_records(ckan_rows: list[dict]) -> list[RetailTourismRecord]:
-    """Parse CKAN visitor arrival rows into RetailTourismRecord list."""
-    records: list[RetailTourismRecord] = []
-    for row in ckan_rows:
-        try:
-            period = str(row.get("period", row.get("date", row.get("month", ""))))
-            total = float(row.get("total", row.get("arrivals", 0)))
-            if not period:
-                continue
-            records.append(RetailTourismRecord(
-                metric="visitor_arrivals_million",
-                value=round(total / 1_000_000, 4) if total > 10_000 else round(total, 4),
-                unit="million",
-                period=period,
-                source="ckan_tourism",
-            ))
-        except (KeyError, ValueError, TypeError):
-            continue
-    return records
-
-
+    except Exception as exc:
+        logger.debug("World Bank fetch failed for %s: %s", indicator_id, exc)
+        return []
 
 
 # ---------------------------------------------------------------------------
@@ -146,10 +94,10 @@ def _parse_visitor_records(ckan_rows: list[dict]) -> list[RetailTourismRecord]:
 async def download_all_retail_tourism(
     client: httpx.AsyncClient,
 ) -> list[DownloadResult]:
-    """Download HK retail sales and visitor arrival data.
+    """Download HK retail sales and visitor arrival data from World Bank.
 
-    Tries data.gov.hk CKAN for both datasets; falls back to hardcoded 2024
-    monthly estimates if the API is unavailable or returns no data.
+    Replaces former CKAN-based downloader (data.gov.hk CKAN is permanently 404).
+    Uses World Bank annual indicators; reports as Q4 period labels.
 
     Args:
         client: Shared httpx.AsyncClient from the pipeline orchestrator.
@@ -157,40 +105,35 @@ async def download_all_retail_tourism(
     Returns:
         List of DownloadResult with RetailTourismRecord tuples.
     """
-    results: list[DownloadResult] = []
     all_records: list[RetailTourismRecord] = []
 
-    # --- Retail sales ---
-    retail_rows = await _fetch_ckan_resource(
-        client, _RESOURCE_IDS["retail_sales"], limit=24
-    )
-    if retail_rows:
-        parsed = _parse_retail_records(retail_rows)
-        all_records.extend(parsed)
-        logger.info("Retail sales (CKAN): %d records", len(parsed))
-    else:
-        logger.warning("Retail sales CKAN unavailable — using 2024 fallback")
+    for key, (indicator_id, metric, unit) in _WB_INDICATORS.items():
+        rows = await _fetch_wb_indicator(client, indicator_id)
+        for row in rows:
+            year = str(row.get("date", "")).strip()
+            raw_val = row.get("value")
+            if not year or raw_val is None:
+                continue
+            try:
+                val = round(float(raw_val), 4)
+            except (TypeError, ValueError):
+                continue
+            # Visitor arrivals: convert to thousands
+            if key == "visitor_arrivals" and val > 10_000:
+                val = round(val / 1000.0, 2)
+            all_records.append(RetailTourismRecord(
+                metric=metric,
+                value=val,
+                unit=unit,
+                period=f"{year}-Q4",
+                source="World Bank",
+            ))
+        logger.info("Retail/tourism WB %s: %d records", key, sum(1 for r in all_records if r.metric == metric))
 
-    # --- Visitor arrivals ---
-    visitor_rows = await _fetch_ckan_resource(
-        client, _RESOURCE_IDS["visitor_arrivals"], limit=24
-    )
-    if visitor_rows:
-        parsed = _parse_visitor_records(visitor_rows)
-        all_records.extend(parsed)
-        logger.info("Visitor arrivals (CKAN): %d records", len(parsed))
-    else:
-        logger.warning("Visitor arrivals CKAN unavailable — using 2024 fallback")
-
-    error_msg = None if all_records else "CKAN retail/tourism APIs unavailable — no fallback"
-    if not all_records:
-        logger.warning("Retail/tourism: no data from CKAN — no fallback")
-
-    results.append(DownloadResult(
+    error_msg = None if all_records else "World Bank retail/tourism APIs returned no data"
+    return [DownloadResult(
         category="retail_tourism",
         row_count=len(all_records),
         records=tuple(all_records),
         error=error_msg,
-    ))
-
-    return results
+    )]

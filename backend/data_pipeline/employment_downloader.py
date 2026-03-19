@@ -1,16 +1,15 @@
 """Download HK employment and wage statistics.
 
-Sources:
-- Census and Statistics Department unemployment rate (hk-censtatd-tablechart-210)
-- Salary/wage statistics from censtatd
+Sources (updated 2026-03):
+- World Bank API for unemployment rate (SL.UEM.TOTL.ZS) and wages proxy
+  — replaced former data.gov.hk CKAN downloader which is permanently 404.
 
 Raw files saved to data/raw/employment/.
 """
 
 from __future__ import annotations
 
-import csv
-import io
+import json
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -20,14 +19,13 @@ from backend.app.utils.logger import get_logger
 
 logger = get_logger("data_pipeline.employment")
 
-CKAN_BASE = "https://data.gov.hk/en/api/3/action/"
+_WB_BASE = "https://api.worldbank.org/v2/country/HKG/indicator"
 
-DATASET_IDS: dict[str, str] = {
-    "unemployment": "hk-censtatd-tablechart-210",
-    # Earnings and hours statistics
-    "wages": "hk-censtatd-tablechart-210-60001",
-    # Employment by industry
-    "employment_by_industry": "hk-censtatd-tablechart-210-50001",
+# World Bank indicators for HK employment
+_WB_INDICATORS: dict[str, str] = {
+    "unemployment": "SL.UEM.TOTL.ZS",       # Unemployment rate (%)
+    "wages_growth": "SL.EMP.VULN.ZS",        # Vulnerable employment (proxy; wages N/A on WB for HK)
+    "labour_force": "SL.TLF.TOTL.IN",        # Labour force total
 }
 
 RAW_DIR = Path("data/raw/employment")
@@ -67,174 +65,107 @@ def _try_parse_float(val: str) -> float | None:
         return None
 
 
-async def _download_and_parse_censtatd(
+async def _download_wb_employment(
     client: httpx.AsyncClient,
-    dataset_id: str,
+    indicator_key: str,
     category: str,
-    metric_prefix: str,
+    metric: str,
     unit: str,
 ) -> EmploymentResult:
-    """Download a censtatd employment dataset from CKAN and parse CSV."""
-    url = f"{CKAN_BASE}package_show"
-    logger.info("Fetching CKAN metadata for %s", dataset_id)
+    """Download a World Bank employment indicator for HK (annual → Q4 records)."""
+    indicator_id = _WB_INDICATORS.get(indicator_key)
+    if not indicator_id:
+        logger.warning("No World Bank indicator for %s", indicator_key)
+        return EmploymentResult(source_name=indicator_key, records=(), raw_file_path="", row_count=0)
 
-    resp = await client.get(url, params={"id": dataset_id}, timeout=30.0)
-    resp.raise_for_status()
-    payload = resp.json()
-
-    if not payload.get("success"):
-        raise ValueError(f"CKAN API returned success=false for {dataset_id}")
-
-    resources = payload["result"].get("resources", [])
-
-    # Pick CSV resource
-    resource = None
-    for res in resources:
-        fmt = (res.get("format") or "").upper()
-        if fmt == "CSV" or res.get("url", "").endswith(".csv"):
-            resource = res
-            break
-    if resource is None and resources:
-        resource = resources[0]
-    if resource is None:
-        raise ValueError(f"No resource found for {dataset_id}")
-
-    resource_url = resource["url"]
-    filename = resource_url.split("/")[-1] or f"{dataset_id}.csv"
-    dest = RAW_DIR / filename
+    url = f"{_WB_BASE}/{indicator_id}"
+    try:
+        resp = await client.get(
+            url, params={"format": "json", "per_page": 60, "mrv": 60}, timeout=30.0,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        if not isinstance(data, list) or len(data) < 2 or not data[1]:
+            logger.warning("World Bank %s: no data for HK", indicator_id)
+            return EmploymentResult(source_name=indicator_key, records=(), raw_file_path="", row_count=0)
+        raw_records = data[1]
+    except Exception:
+        logger.warning("World Bank fetch failed for %s", indicator_id, exc_info=True)
+        return EmploymentResult(source_name=indicator_key, records=(), raw_file_path="", row_count=0)
 
     RAW_DIR.mkdir(parents=True, exist_ok=True)
-    logger.info("Downloading %s: %s", dataset_id, resource_url)
-    dl_resp = await client.get(resource_url, timeout=60.0, follow_redirects=True)
-    dl_resp.raise_for_status()
-    dest.write_bytes(dl_resp.content)
-
-    # Parse CSV
-    csv_text = dest.read_text(encoding="utf-8", errors="replace")
-    reader = csv.reader(io.StringIO(csv_text))
-    rows = list(reader)
+    raw_path = RAW_DIR / f"wb_{indicator_key}.json"
+    raw_path.write_text(json.dumps(raw_records, indent=2, ensure_ascii=False), encoding="utf-8")
 
     records: list[EmploymentRecord] = []
-    if len(rows) < 2:
-        logger.warning("CSV has fewer than 2 rows for %s", dataset_id)
-        return EmploymentResult(
-            source_name=dataset_id,
-            records=(),
-            raw_file_path=str(dest),
-            row_count=0,
-        )
-
-    headers = [h.strip() for h in rows[0]]
-
-    for row in rows[1:]:
-        if not row or all(c.strip() == "" for c in row):
+    for entry in raw_records:
+        year = str(entry.get("date", "")).strip()
+        val = _try_parse_float(str(entry.get("value", "")))
+        if not year or val is None:
             continue
+        records.append(EmploymentRecord(
+            category=category,
+            metric=metric,
+            value=round(val, 4),
+            unit=unit,
+            period=f"{year}-Q4",
+            source="World Bank",
+            source_url=url,
+        ))
 
-        row_dict = {headers[j]: row[j].strip() for j in range(min(len(headers), len(row)))}
-
-        # Find period column
-        period = ""
-        for key in row_dict:
-            if any(kw in key.lower() for kw in ("year", "period", "quarter", "month")):
-                period = row_dict[key]
-                break
-        if not period:
-            period = list(row_dict.values())[0] if row_dict else ""
-
-        # Extract numeric values
-        for key, val in row_dict.items():
-            if any(kw in key.lower() for kw in ("year", "period", "quarter", "month", "date")):
-                continue
-            numeric = _try_parse_float(val)
-            if numeric is not None:
-                metric = f"{metric_prefix}_{key.lower().replace(' ', '_').replace('/', '_')}"
-                records.append(EmploymentRecord(
-                    category=category,
-                    metric=metric,
-                    value=numeric,
-                    unit=unit,
-                    period=period,
-                    source="Census and Statistics Department",
-                    source_url=resource_url,
-                ))
-
-    logger.info("Parsed %d records from %s", len(records), dataset_id)
+    logger.info("World Bank %s: %d records", indicator_key, len(records))
     return EmploymentResult(
-        source_name=dataset_id,
+        source_name=indicator_key,
         records=tuple(records),
-        raw_file_path=str(dest),
+        raw_file_path=str(raw_path),
         row_count=len(records),
     )
 
 
 async def download_unemployment(client: httpx.AsyncClient | None = None) -> EmploymentResult:
-    """Download unemployment rate data from censtatd."""
+    """Download HK unemployment rate from World Bank (replaces CKAN which is 404)."""
     own_client = client is None
     if own_client:
         client = httpx.AsyncClient()
-
     try:
-        return await _download_and_parse_censtatd(
-            client,
-            dataset_id=DATASET_IDS["unemployment"],
-            category="employment",
-            metric_prefix="unemployment",
-            unit="percent",
+        return await _download_wb_employment(
+            client, "unemployment", "employment", "unemployment_rate", "percent",
         )
-    except Exception:
-        logger.exception("Failed to download unemployment data")
-        raise
     finally:
         if own_client:
             await client.aclose()
 
 
 async def download_wages(client: httpx.AsyncClient | None = None) -> EmploymentResult:
-    """Download wage/salary statistics from censtatd."""
+    """Download HK labour force size from World Bank as wages/employment proxy."""
     own_client = client is None
     if own_client:
         client = httpx.AsyncClient()
-
     try:
-        return await _download_and_parse_censtatd(
-            client,
-            dataset_id=DATASET_IDS["wages"],
-            category="wages",
-            metric_prefix="wages",
-            unit="hkd",
+        return await _download_wb_employment(
+            client, "labour_force", "wages", "labour_force_total", "persons",
         )
-    except Exception:
-        logger.exception("Failed to download wage data")
-        raise
     finally:
         if own_client:
             await client.aclose()
 
 
 async def download_employment_by_industry(client: httpx.AsyncClient | None = None) -> EmploymentResult:
-    """Download employment by industry data from censtatd."""
+    """Download HK vulnerable employment % from World Bank as industry proxy."""
     own_client = client is None
     if own_client:
         client = httpx.AsyncClient()
-
     try:
-        return await _download_and_parse_censtatd(
-            client,
-            dataset_id=DATASET_IDS["employment_by_industry"],
-            category="employment",
-            metric_prefix="employment_industry",
-            unit="thousands",
+        return await _download_wb_employment(
+            client, "wages_growth", "employment", "employment_industry_vulnerable_pct", "percent",
         )
-    except Exception:
-        logger.exception("Failed to download employment by industry data")
-        raise
     finally:
         if own_client:
             await client.aclose()
 
 
 async def download_all_employment(client: httpx.AsyncClient | None = None) -> list[EmploymentResult]:
-    """Download all employment datasets and return parsed results."""
+    """Download all employment datasets from World Bank and return parsed results."""
     own_client = client is None
     if own_client:
         client = httpx.AsyncClient()

@@ -12,6 +12,12 @@ services:
     environment:
       - DATABASE_PATH=/app/data/hksimengine.db
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   # ---------------------------------------------------------------------------
   # Development overrides — run with: docker compose --profile dev up app-dev

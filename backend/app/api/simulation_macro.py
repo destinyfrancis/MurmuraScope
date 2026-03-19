@@ -65,7 +65,7 @@ async def get_forecast(
             meta={"metric": metric, "horizon": horizon},
         )
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail="Bad request") from exc
     except Exception as exc:
         logger.exception("get_forecast failed for metric %s", metric)
         raise HTTPException(status_code=500, detail="Internal server error") from exc
@@ -108,7 +108,7 @@ async def get_forecast_backtest(
             },
         )
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail="Bad request") from exc
     except Exception as exc:
         logger.exception("get_forecast_backtest failed for metric %s", metric)
         raise HTTPException(status_code=500, detail="Internal server error") from exc
@@ -196,7 +196,7 @@ async def get_retrospective_validation(
             },
         )
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail="Bad request") from exc
     except Exception as exc:
         logger.exception("get_retrospective_validation failed")
         raise HTTPException(status_code=500, detail="Internal server error") from exc

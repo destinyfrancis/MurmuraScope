@@ -78,14 +78,10 @@ def _download_weekly_sync(ticker: str, start_year: int) -> list[WeeklyRecord]:
     logger.info("Downloading %s from %s (daily → weekly resample)", ticker, start)
 
     try:
-        raw = yf.download(
-            ticker,
-            start=start,
-            interval="1d",
-            auto_adjust=True,
-            progress=False,
-            threads=False,
-        )
+        # Use Ticker().history() instead of yf.download() to avoid MultiIndex
+        # columns introduced in yfinance 2.x when downloading a single ticker.
+        ticker_obj = yf.Ticker(ticker)
+        raw = ticker_obj.history(start=start, auto_adjust=True, raise_errors=False)
     except Exception as exc:
         logger.warning("yfinance download failed for %s: %s", ticker, exc)
         return []
@@ -93,6 +89,21 @@ def _download_weekly_sync(ticker: str, start_year: int) -> list[WeeklyRecord]:
     if raw is None or raw.empty:
         logger.warning("No data returned by yfinance for %s", ticker)
         return []
+
+    # Normalise column names — Ticker.history() returns flat columns
+    # ('Open', 'High', 'Low', 'Close', 'Volume') but may include extras.
+    if hasattr(raw.columns, "levels"):
+        # Defensive: flatten MultiIndex if somehow returned
+        raw.columns = raw.columns.get_level_values(0)
+
+    # Keep only the five OHLCV columns we need
+    available = set(raw.columns)
+    needed = {"Open", "High", "Low", "Close", "Volume"}
+    missing = needed - available
+    if missing:
+        logger.warning("Missing columns %s for ticker %s — skipping", missing, ticker)
+        return []
+    raw = raw[list(needed)]
 
     try:
         weekly = raw.resample("W-FRI").agg(

@@ -478,7 +478,7 @@ async def run_real_ensemble(
             },
         )
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=404, detail="Not found") from exc
     except Exception as exc:
         logger.exception("run_real_ensemble failed for session %s", session_id)
         raise HTTPException(status_code=500, detail="Internal server error") from exc

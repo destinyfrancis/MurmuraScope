@@ -91,9 +91,13 @@ ALL_CATEGORIES = (
 # 'category' or 'source_url'.  These need adaptation before normalize_all().
 _ADAPT_CATEGORIES = frozenset(
     {"weather", "transport", "china_macro", "fred", "retail_tourism", "trade", "rvd",
-     "yfinance", "censtatd", "news_rss", "google_trends", "discuss", "hkgolden",
+     "yfinance", "censtatd", "news_rss", "google_trends",
      "stocks_weekly"}
 )
+
+# Forum scrapers return unstructured post objects (no numeric 'value' field).
+# These are raw social text data — not inserted into hk_data_snapshots.
+_FORUM_CATEGORIES = frozenset({"discuss", "hkgolden"})
 
 
 @dataclass(frozen=True)
@@ -141,20 +145,29 @@ def _adapt_record(rec: Any, fallback_category: str) -> _AdaptedRecord:
     period = str(getattr(rec, "period", None) or getattr(rec, "date", "") or "")
     # category
     category = getattr(rec, "category", None) or fallback_category
-    # metric: FredRecord has series_id, others have metric
-    metric = getattr(rec, "metric", None) or getattr(rec, "series_id", "unknown")
+    # metric: FredRecord has series_id; TrendsRecord has keyword; others have metric
+    metric = (
+        getattr(rec, "metric", None)
+        or getattr(rec, "series_id", None)
+        or getattr(rec, "keyword", None)
+        or "unknown"
+    )
     # unit
     unit = getattr(rec, "unit", "") or ""
     # source_url
     source_url = getattr(rec, "source_url", "") or ""
+    # value: standard 'value' attr; TrendsRecord uses 'interest_value'
+    raw_value = getattr(rec, "value", None)
+    if raw_value is None:
+        raw_value = getattr(rec, "interest_value", 0.0)
 
     return _AdaptedRecord(
         category=category,
         metric=metric,
-        value=float(rec.value),
+        value=float(raw_value),
         unit=unit,
         period=period,
-        source=rec.source,
+        source=getattr(rec, "source", fallback_category),
         source_url=source_url,
     )
 
@@ -240,14 +253,48 @@ async def _run_category(
         downloaders["yfinance"] = download_all_yfinance
     if download_all_censtatd is not None:
         downloaders["censtatd"] = download_all_censtatd
-    if download_all_news is not None:
-        downloaders["news_rss"] = download_all_news
+    # news_rss is handled as a special case below (manages its own DB writes)
     if download_all_trends is not None:
         downloaders["google_trends"] = download_all_trends
     if download_all_discuz is not None:
         downloaders["discuss"] = download_all_discuz
     if download_all_hkgolden is not None:
         downloaders["hkgolden"] = download_all_hkgolden
+
+    # news_rss: special handler — manages its own DB writes, no positional client
+    if category == "news_rss":
+        start = time.monotonic()
+        if download_all_news is None:
+            return DownloadSummary(
+                category=category,
+                datasets_attempted=0,
+                datasets_succeeded=0,
+                total_records=0,
+                elapsed_seconds=0.0,
+                error="news_rss_downloader not available (feedparser not installed)",
+            )
+        try:
+            result = await download_all_news()
+            elapsed = time.monotonic() - start
+            return DownloadSummary(
+                category=category,
+                datasets_attempted=result.sources_fetched,
+                datasets_succeeded=result.sources_fetched if result.headline_count > 0 else 0,
+                total_records=result.headline_count,
+                elapsed_seconds=round(elapsed, 2),
+                error=result.error,
+            )
+        except Exception as exc:
+            elapsed = time.monotonic() - start
+            logger.exception("Failed to download news_rss")
+            return DownloadSummary(
+                category=category,
+                datasets_attempted=0,
+                datasets_succeeded=0,
+                total_records=0,
+                elapsed_seconds=round(elapsed, 2),
+                error=str(exc),
+            )
 
     # stocks_weekly: special handler — no httpx client, calls download_all_stocks directly
     if category == "stocks_weekly":
@@ -323,6 +370,15 @@ async def _run_category(
                 logger.info(
                     "Social sentiment: %d aggregated records processed",
                     len(sentiment_records),
+                )
+
+            # ----------------------------------------------------------------
+            # Forum scrapers: raw social text — skip hk_data_snapshots insert
+            # ----------------------------------------------------------------
+            elif category in _FORUM_CATEGORIES:
+                logger.info(
+                    "Forum category %s: %d posts scraped (not normalised into snapshots)",
+                    category, total_records,
                 )
 
             # ----------------------------------------------------------------

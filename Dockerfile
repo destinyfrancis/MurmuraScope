@@ -42,6 +42,9 @@ COPY --from=frontend-builder /app/frontend/dist ./backend/static
 # Copy data directory (schemas, prompts, etc.)
 COPY data/ ./data/
 
+RUN adduser --disabled-password --gecos "" morai
+USER morai
+
 EXPOSE 5001
 
 CMD ["uvicorn", "backend.run:app", "--host", "0.0.0.0", "--port", "5001"]

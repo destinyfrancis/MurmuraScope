@@ -69,7 +69,7 @@ _DEFAULT_SEASON = 4           # default quarterly seasonal period
 _SEASONAL_METRICS: dict[str, int] = {
     "ccl_index": 4, "unemployment_rate": 4, "gdp_growth": 4,
     "consumer_confidence": 4, "hsi_level": 12, "cpi_yoy": 12,
-    "hibor_1m": 4, "prime_rate": 4, "net_migration": 4,
+    "hibor_1m": 12, "prime_rate": 4, "net_migration": 4,
     "retail_sales_index": 4, "tourist_arrivals": 4,
 }
 
@@ -173,7 +173,7 @@ class TimeSeriesForecaster:
 
         horizon = max(1, min(horizon, 24))
 
-        history = await self._load_history(metric)
+        history = await self._load_history(metric, metric_db_map)
         n = len(history)
         logger.info(
             "Forecasting metric=%s horizon=%d n_historical=%d",
@@ -468,6 +468,16 @@ class TimeSeriesForecaster:
 
         import pandas as pd  # noqa: PLC0415
 
+        # Detect frequency from history period labels
+        _is_monthly = (
+            history
+            and len(history[0][0].split("-")) == 2
+            and len(history[0][0].split("-")[1]) == 2
+            and history[0][0].split("-")[1].isdigit()
+        )
+        pd_freq = "MS" if _is_monthly else "QS"
+        sf_freq = "ME" if _is_monthly else "QE"
+
         def _build_df(hist: list[tuple[str, float]]) -> "pd.DataFrame":
             periods = [h[0] for h in hist]
             values = np.array([h[1] for h in hist], dtype=np.float64)
@@ -475,14 +485,17 @@ class TimeSeriesForecaster:
             try:
                 parts = first.split("-")
                 start_year = int(parts[0])
-                start_q = int(parts[1][1]) if len(parts) > 1 and parts[1].startswith("Q") else 1
-                start_month = (start_q - 1) * 3 + 1
+                if _is_monthly:
+                    start_month = int(parts[1]) if len(parts) > 1 else 1
+                else:
+                    start_q = int(parts[1][1]) if len(parts) > 1 and parts[1].startswith("Q") else 1
+                    start_month = (start_q - 1) * 3 + 1
                 start_date = f"{start_year}-{start_month:02d}-01"
             except (ValueError, IndexError):
                 start_date = "2019-01-01"
             return pd.DataFrame({
                 "unique_id": ["hk"] * len(values),
-                "ds": pd.date_range(start_date, periods=len(values), freq="QS"),
+                "ds": pd.date_range(start_date, periods=len(values), freq=pd_freq),
                 "y": values,
             })
 
@@ -499,7 +512,7 @@ class TimeSeriesForecaster:
 
         for model_name, model_obj in candidates:
             try:
-                sf = StatsForecast(models=[model_obj], freq="QE", n_jobs=1)
+                sf = StatsForecast(models=[model_obj], freq=sf_freq, n_jobs=1)
                 sf.fit(train_df)
                 fc_df = sf.predict(h=holdout)
                 preds = fc_df.iloc[:, -1].values[:holdout].astype(np.float64)
@@ -641,9 +654,19 @@ class TimeSeriesForecaster:
     # Private helpers
     # ------------------------------------------------------------------
 
-    async def _load_history(self, metric: str) -> list[tuple[str, float]]:
+    async def _load_history(
+        self,
+        metric: str,
+        metric_db_map: dict[str, tuple[str, str]] | None = None,
+    ) -> list[tuple[str, float]]:
         """Load (period, value) pairs from DB; falls back to hardcoded baseline."""
-        category, metric_key = METRIC_DB_MAP[metric]
+        resolved_map = metric_db_map if metric_db_map is not None else METRIC_DB_MAP
+        if metric not in resolved_map:
+            logger.warning(
+                "_load_history: metric '%s' not in metric_db_map — returning empty", metric
+            )
+            return []
+        category, metric_key = resolved_map[metric]
         records: list[tuple[str, float]] = []
 
         try:
@@ -981,7 +1004,7 @@ class TimeSeriesForecaster:
     def _next_period_labels(last_period: str, horizon: int) -> list[str]:
         """Generate *horizon* period labels after *last_period*.
 
-        Supports 'YYYY-QN' quarterly labels and plain 'YYYY' annual labels.
+        Supports 'YYYY-QN' quarterly, 'YYYY-MM' monthly, and plain 'YYYY' annual.
         Falls back to ordinal labels (t+1, t+2, …) for unrecognised formats.
         """
         labels: list[str] = []
@@ -995,6 +1018,19 @@ class TimeSeriesForecaster:
                     labels.append(_quarter_label(base_year, base_q, i))
                 return labels
             except (ValueError, IndexError):
+                pass
+        if len(parts) == 2 and len(parts[1]) == 2 and parts[1].isdigit():
+            # Monthly: 2024-01 → 2024-02, …
+            try:
+                base_year = int(parts[0])
+                base_month = int(parts[1])
+                for i in range(1, horizon + 1):
+                    total = base_month + i
+                    y = base_year + (total - 1) // 12
+                    m = (total - 1) % 12 + 1
+                    labels.append(f"{y}-{m:02d}")
+                return labels
+            except ValueError:
                 pass
         if len(parts) == 1:
             # Annual: 2023 → 2024, …

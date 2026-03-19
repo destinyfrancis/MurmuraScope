@@ -53,7 +53,7 @@ async def upload_file(
             session_id=session_id,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail="Bad request") from exc
     except Exception as exc:
         logger.exception("Unexpected error during file ingestion")
         raise HTTPException(status_code=500, detail="File ingestion failed") from exc

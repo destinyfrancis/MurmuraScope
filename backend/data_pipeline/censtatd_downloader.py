@@ -1,13 +1,15 @@
-"""Download real historical economic data from data.gov.hk CKAN API.
+"""Download real historical economic data for HK from the World Bank API.
 
-Replaces synthetic seed data with actual C&SD (Census and Statistics Department)
-published statistics for: unemployment, CPI, GDP, retail sales, visitor arrivals,
-net migration, and a derived consumer confidence proxy.
+Replaces the former data.gov.hk CKAN-based downloader which became permanently
+unavailable (all CKAN endpoints return HTTP 404).  The World Bank Data API is
+free, requires no authentication, and covers all required indicators.
+
+World Bank endpoint pattern:
+  https://api.worldbank.org/v2/country/HKG/indicator/<ID>?format=json&per_page=100&mrv=60
 
 Data strategy:
-  1. Try CKAN package_show with known dataset ID.
-  2. Fall back to package_search with keyword.
-  3. Return empty + error if nothing works (NO hardcoded fallback data).
+  1. Fetch from World Bank API with retry.
+  2. Return empty + error if the API is unavailable.
 
 Raw JSON saved to data/raw/censtatd/.
 """
@@ -25,37 +27,26 @@ from backend.app.utils.logger import get_logger
 
 logger = get_logger("data_pipeline.censtatd")
 
-_CKAN_BASE = "https://data.gov.hk/en/api/3/action"
+_WB_BASE = "https://api.worldbank.org/v2/country/HKG/indicator"
 _RAW_DIR = Path("data/raw/censtatd")
 _MAX_RETRIES = 3
 _BACKOFF_BASE_S = 1.0
 
-_KNOWN_DATASETS: dict[str, str] = {
-    "unemployment": "hk-censtatd-tablechart-006",
-    "cpi": "hk-censtatd-tablechart-520",
-    "gdp": "hk-censtatd-tablechart-310",
-    "retail_sales": "hk-censtatd-tablechart-133",
-    "visitor_arrivals": "hk-censtatd-tablechart-1300",
-    "population": "hk-censtatd-tablechart-002",
-}
-
-_SEARCH_KEYWORDS: dict[str, str] = {
-    "unemployment": "unemployment rate hong kong",
-    "cpi": "consumer price index composite hong kong",
-    "gdp": "gross domestic product hong kong",
-    "retail_sales": "retail sales value index hong kong",
-    "visitor_arrivals": "visitor arrivals hong kong",
-    "population": "mid-year population estimates hong kong",
+# World Bank indicator IDs for Hong Kong
+_WB_INDICATORS: dict[str, str] = {
+    "unemployment": "SL.UEM.TOTL.ZS",          # Unemployment rate (%)
+    "cpi": "FP.CPI.TOTL",                       # CPI (2010 = 100)
+    "gdp": "NY.GDP.MKTP.KD.ZG",                 # GDP growth (annual %)
+    "gdp_current": "NY.GDP.MKTP.CD",            # GDP current USD
+    "retail_sales": "NE.CON.PRVT.KD.ZG",        # Household consumption growth (proxy for retail)
+    "visitor_arrivals": "ST.INT.ARVL",           # International tourism arrivals
+    "population": "SP.POP.TOTL",                 # Total population
+    "net_migration": "SM.POP.NETM",              # Net migration
 }
 
 _QUARTER_FOR_MONTH: dict[int, str] = {
     1: "Q1", 2: "Q1", 3: "Q1", 4: "Q2", 5: "Q2", 6: "Q2",
     7: "Q3", 8: "Q3", 9: "Q3", 10: "Q4", 11: "Q4", 12: "Q4",
-}
-
-_MONTH_ABBR: dict[str, str] = {
-    "jan": "01", "feb": "02", "mar": "03", "apr": "04", "may": "05", "jun": "06",
-    "jul": "07", "aug": "08", "sep": "09", "oct": "10", "nov": "11", "dec": "12",
 }
 
 # ---------------------------------------------------------------------------
@@ -101,123 +92,9 @@ def _safe_float(value: object) -> float | None:
         return None
 
 
-def _normalize_period(raw: str) -> str:
-    """Normalize period strings to YYYY-QN or YYYY-MM format."""
-    raw = raw.strip()
-    if len(raw) == 7 and raw[4] == "-" and raw[5] == "Q":
-        return raw
-    # "2024 Q1" / "2024-Q1" / "2024/Q1"
-    for sep in (" ", "-", "/"):
-        if sep + "Q" in raw.upper():
-            parts = raw.upper().replace(sep, " ").split()
-            for i, p in enumerate(parts):
-                if p.startswith("Q") and len(p) == 2 and p[1].isdigit():
-                    return f"{parts[i - 1] if i > 0 else parts[0]}-{p}"
-    if len(raw) == 6 and raw[4].upper() == "Q" and raw[5].isdigit():
-        return f"{raw[:4]}-Q{raw[5]}"
-    if len(raw) == 7 and raw[4] == "-" and raw[5:7].isdigit():
-        return raw
-    if len(raw) == 7 and raw[2] == "/" and raw[3:7].isdigit():
-        return f"{raw[3:7]}-{raw[0:2]}"
-    lower = raw.lower()
-    for abbr, num in _MONTH_ABBR.items():
-        if lower.startswith(abbr):
-            digits = "".join(c for c in raw if c.isdigit())
-            if len(digits) >= 4:
-                return f"{digits[-4:]}-{num}"
-    if len(raw) == 4 and raw.isdigit():
-        return f"{raw}-Q4"
-    return raw
-
-
-def _is_monthly(period: str) -> bool:
-    return len(period) == 7 and period[4] == "-" and period[5:7].isdigit()
-
-
-def _monthly_to_quarterly(records: list[CenstatdRecord]) -> list[CenstatdRecord]:
-    """Average monthly records into quarterly buckets."""
-    buckets: dict[tuple[str, str], list[CenstatdRecord]] = {}
-    for rec in records:
-        if _is_monthly(rec.period):
-            month = int(rec.period[5:7])
-            q = _QUARTER_FOR_MONTH.get(month)
-            key = (rec.metric, f"{rec.period[:4]}-{q}") if q else (rec.metric, rec.period)
-        else:
-            key = (rec.metric, rec.period)
-        buckets.setdefault(key, []).append(rec)
-
-    result: list[CenstatdRecord] = []
-    for (metric, q_period), recs in sorted(buckets.items()):
-        avg_val = sum(r.value for r in recs) / len(recs)
-        t = recs[0]
-        result.append(CenstatdRecord(q_period, metric, round(avg_val, 4), t.unit, t.source, t.source_url))
-    return result
-
-
-async def _fetch_with_retry(
-    client: httpx.AsyncClient, url: str, params: dict[str, Any], *, timeout: float = 30.0,
-) -> dict[str, Any] | None:
-    """GET with 3 retries and exponential backoff (1s, 2s, 4s)."""
-    for attempt in range(_MAX_RETRIES):
-        try:
-            resp = await client.get(url, params=params, timeout=timeout)
-            resp.raise_for_status()
-            data = resp.json()
-            if data.get("success"):
-                return data
-        except (httpx.HTTPStatusError, httpx.RequestError, httpx.TimeoutException) as exc:
-            logger.debug("Attempt %d failed for %s: %s", attempt + 1, url, exc)
-        except (json.JSONDecodeError, ValueError):
-            return None
-        if attempt < _MAX_RETRIES - 1:
-            await asyncio.sleep(_BACKOFF_BASE_S * (2 ** attempt))
-    return None
-
-
-def _pick_best_resource(resources: list[dict[str, Any]]) -> str | None:
-    """Pick datastore-active > CSV > first resource."""
-    for res in resources:
-        if res.get("datastore_active") is True:
-            return res.get("id")
-    for res in resources:
-        if (res.get("format") or "").upper() == "CSV":
-            return res.get("id")
-    return next((res.get("id") for res in resources if res.get("id")), None)
-
-
-async def _find_resource_id(client: httpx.AsyncClient, key: str) -> str | None:
-    """Discover CKAN resource ID: package_show first, then package_search."""
-    known_id = _KNOWN_DATASETS.get(key)
-    if known_id:
-        data = await _fetch_with_retry(client, f"{_CKAN_BASE}/package_show", {"id": known_id})
-        if data:
-            rid = _pick_best_resource(data.get("result", {}).get("resources", []))
-            if rid:
-                return rid
-
-    kw = _SEARCH_KEYWORDS.get(key, key)
-    data = await _fetch_with_retry(client, f"{_CKAN_BASE}/package_search", {"q": kw, "rows": 3})
-    if data:
-        for pkg in data.get("result", {}).get("results", []):
-            rid = _pick_best_resource(pkg.get("resources", []))
-            if rid:
-                return rid
-
-    logger.warning("Could not find CKAN resource for %s", key)
-    return None
-
-
-async def _datastore_search(client: httpx.AsyncClient, resource_id: str, limit: int = 500) -> list[dict]:
-    """Fetch records from CKAN datastore_search with retry."""
-    data = await _fetch_with_retry(
-        client, f"{_CKAN_BASE}/datastore_search",
-        {"resource_id": resource_id, "limit": str(limit)},
-    )
-    if data is None:
-        return []
-    recs = data.get("result", {}).get("records", [])
-    logger.info("datastore_search: %d records for %s", len(recs), resource_id)
-    return recs
+def _year_to_q4(year: str) -> str:
+    """Convert a year string to YYYY-Q4 period (World Bank reports annual data)."""
+    return f"{year}-Q4"
 
 
 def _save_raw(filename: str, data: Any) -> None:
@@ -225,217 +102,190 @@ def _save_raw(filename: str, data: Any) -> None:
     (_RAW_DIR / filename).write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
-def _src_url(resource_id: str) -> str:
-    return f"https://data.gov.hk/en/api/3/action/datastore_search?resource_id={resource_id}"
-
-
-def _extract_period(row: dict) -> str:
-    """Extract and normalize period from a CKAN row."""
-    raw = str(row.get("period", row.get("Period", row.get("date",
-              row.get("month", row.get("quarter", row.get("Year", "")))))))
-    return _normalize_period(raw)
-
-
-def _extract_value(row: dict, columns: tuple[str, ...]) -> float | None:
-    """Try columns in order, return first valid float."""
-    for col in columns:
-        val = _safe_float(row.get(col))
-        if val is not None:
-            return val
-    return None
-
-
-async def _download_simple(
+async def _fetch_wb_indicator(
     client: httpx.AsyncClient,
-    dataset_key: str,
+    indicator_id: str,
+    *,
+    per_page: int = 100,
+    mrv: int = 60,
+    timeout: float = 30.0,
+) -> list[dict[str, Any]]:
+    """Fetch annual HK data for a World Bank indicator.
+
+    Returns the records list from the World Bank JSON response, or [] on failure.
+    The World Bank API returns a two-element list: [metadata, records].
+    """
+    url = f"{_WB_BASE}/{indicator_id}"
+    params: dict[str, Any] = {"format": "json", "per_page": per_page, "mrv": mrv}
+
+    for attempt in range(_MAX_RETRIES):
+        try:
+            resp = await client.get(url, params=params, timeout=timeout)
+            resp.raise_for_status()
+            data = resp.json()
+            if isinstance(data, list) and len(data) == 2:
+                records = data[1] or []
+                logger.info("World Bank %s: %d records", indicator_id, len(records))
+                return records
+            logger.warning("Unexpected World Bank response format for %s", indicator_id)
+            return []
+        except (httpx.HTTPStatusError, httpx.RequestError, httpx.TimeoutException) as exc:
+            logger.debug("WB attempt %d failed for %s: %s", attempt + 1, indicator_id, exc)
+        except (json.JSONDecodeError, ValueError):
+            return []
+        if attempt < _MAX_RETRIES - 1:
+            await asyncio.sleep(_BACKOFF_BASE_S * (2 ** attempt))
+    return []
+
+
+def _parse_wb_records(
+    raw_rows: list[dict[str, Any]],
     category: str,
     metric: str,
     unit: str,
-    columns: tuple[str, ...],
+    source_url: str,
+    *,
+    normalize_fn: Any = None,
+) -> list[CenstatdRecord]:
+    """Convert World Bank API rows into CenstatdRecord list.
+
+    World Bank rows have structure: {date: "2024", value: 2.79, ...}
+    We emit one Q4 record per year (annual data reported as year-end).
+    """
+    records: list[CenstatdRecord] = []
+    for row in raw_rows:
+        year = str(row.get("date", "")).strip()
+        val = _safe_float(row.get("value"))
+        if not year or val is None:
+            continue
+        period = _year_to_q4(year)
+        if normalize_fn:
+            val = normalize_fn(val)
+        records.append(CenstatdRecord(
+            period, metric, round(val, 4), unit, "World Bank", source_url,
+        ))
+    return records
+
+
+async def _download_wb_simple(
+    client: httpx.AsyncClient,
+    indicator_key: str,
+    category: str,
+    metric: str,
+    unit: str,
     *,
     normalize_fn: Any = None,
 ) -> DownloadResult:
-    """Generic downloader for single-metric datasets.
-
-    Handles resource discovery, datastore fetch, parsing, and monthly->quarterly.
-    """
-    resource_id = await _find_resource_id(client, dataset_key)
-    if resource_id is None:
+    """Generic World Bank downloader for a single indicator."""
+    indicator_id = _WB_INDICATORS.get(indicator_key)
+    if not indicator_id:
         return DownloadResult(category=category, row_count=0, records=(),
-                              error=f"Could not locate {dataset_key} dataset on data.gov.hk")
+                              error=f"No World Bank indicator ID for {indicator_key}")
 
-    raw_rows = await _datastore_search(client, resource_id)
+    source_url = f"{_WB_BASE}/{indicator_id}"
+    raw_rows = await _fetch_wb_indicator(client, indicator_id)
     if not raw_rows:
         return DownloadResult(category=category, row_count=0, records=(),
-                              error=f"No records from datastore_search (resource={resource_id})")
+                              error=f"No data from World Bank for {indicator_id}")
 
-    _save_raw(f"{dataset_key}_raw.json", raw_rows)
-    source_url = _src_url(resource_id)
+    _save_raw(f"{indicator_key}_raw.json", raw_rows)
+    records = _parse_wb_records(raw_rows, category, metric, unit, source_url,
+                                 normalize_fn=normalize_fn)
 
-    records: list[CenstatdRecord] = []
-    for row in raw_rows:
-        period = _extract_period(row)
-        if not period:
-            continue
-        val = _extract_value(row, columns)
-        if val is None:
-            continue
-        if normalize_fn:
-            val = normalize_fn(val)
-        records.append(CenstatdRecord(period, metric, val, unit,
-                                       "Census and Statistics Department", source_url))
-
-    if any(_is_monthly(r.period) for r in records):
-        records = _monthly_to_quarterly(records)
-
-    logger.info("%s: parsed %d records", dataset_key, len(records))
+    logger.info("%s: parsed %d records from World Bank", indicator_key, len(records))
     return DownloadResult(category=category, row_count=len(records), records=tuple(records))
 
 
 # ---------------------------------------------------------------------------
-# Individual downloaders
+# Individual downloaders — now backed by World Bank API
 # ---------------------------------------------------------------------------
-
-_UNEMP_COLS = ("unemployment_rate", "Unemployment rate", "unemployment",
-               "seasonally_adjusted", "rate", "value", "Value")
-
-_CPI_COLS = ("composite", "Composite", "cpi_composite", "CPI(A)",
-             "index", "Index", "value", "Value")
-
-_RETAIL_COLS = ("value_index", "retail_sales_index", "index", "Index",
-                "value", "Value", "total")
-
-_VISITOR_COLS = ("total", "Total", "arrivals", "visitor_arrivals",
-                 "value", "Value", "number")
-
-
-def _normalize_visitor_count(val: float) -> float:
-    """Convert raw visitor count to thousands if needed."""
-    return round(val / 1000.0, 2) if val > 100_000 else round(val, 2)
 
 
 async def download_unemployment_historical(client: httpx.AsyncClient) -> DownloadResult:
-    """Download unemployment rate from C&SD. Returns quarterly percent values."""
-    return await _download_simple(client, "unemployment", "unemployment",
-                                   "unemployment_rate", "percent", _UNEMP_COLS)
+    """Download unemployment rate for HK from World Bank. Returns annual Q4 records."""
+    return await _download_wb_simple(
+        client, "unemployment", "unemployment", "unemployment_rate", "percent",
+    )
 
 
 async def download_cpi_historical(client: httpx.AsyncClient) -> DownloadResult:
-    """Download CPI-A Composite index from C&SD. Returns quarterly index values."""
-    return await _download_simple(client, "cpi", "price_index",
-                                   "cpi_composite", "index", _CPI_COLS)
+    """Download CPI index (2010=100) for HK from World Bank. Returns annual Q4 records."""
+    return await _download_wb_simple(
+        client, "cpi", "price_index", "cpi_composite", "index",
+    )
 
 
 async def download_retail_sales_historical(client: httpx.AsyncClient) -> DownloadResult:
-    """Download retail sales value index from C&SD. Returns quarterly index values."""
-    return await _download_simple(client, "retail_sales", "retail_tourism",
-                                   "retail_sales_index", "index", _RETAIL_COLS)
+    """Download household final consumption growth (retail proxy) from World Bank."""
+    return await _download_wb_simple(
+        client, "retail_sales", "retail_tourism", "retail_sales_index", "percent_change",
+    )
 
 
 async def download_visitor_arrivals_historical(client: httpx.AsyncClient) -> DownloadResult:
-    """Download visitor arrivals from C&SD/HKTB. Returns quarterly thousands."""
-    return await _download_simple(client, "visitor_arrivals", "retail_tourism",
-                                   "tourist_arrivals", "thousands", _VISITOR_COLS,
-                                   normalize_fn=_normalize_visitor_count)
+    """Download international tourism arrivals for HK from World Bank."""
+    def _to_thousands(val: float) -> float:
+        return round(val / 1000.0, 2) if val > 10_000 else round(val, 2)
+
+    return await _download_wb_simple(
+        client, "visitor_arrivals", "retail_tourism", "tourist_arrivals", "thousands",
+        normalize_fn=_to_thousands,
+    )
 
 
 async def download_gdp_historical(client: httpx.AsyncClient) -> DownloadResult:
-    """Download GDP at constant prices + compute YoY growth. Returns quarterly records."""
-    resource_id = await _find_resource_id(client, "gdp")
-    if resource_id is None:
-        return DownloadResult("gdp", 0, (), "Could not locate GDP dataset on data.gov.hk")
-
-    raw_rows = await _datastore_search(client, resource_id)
+    """Download GDP growth rate for HK from World Bank. Returns annual Q4 records."""
+    indicator_id = _WB_INDICATORS["gdp"]
+    source_url = f"{_WB_BASE}/{indicator_id}"
+    raw_rows = await _fetch_wb_indicator(client, indicator_id)
     if not raw_rows:
-        return DownloadResult("gdp", 0, (), f"No GDP records (resource={resource_id})")
+        return DownloadResult("gdp", 0, (), f"No data from World Bank for {indicator_id}")
 
     _save_raw("gdp_raw.json", raw_rows)
-    source_url = _src_url(resource_id)
-    src = "Census and Statistics Department"
-
-    gdp_cols = ("gdp", "GDP", "gdp_constant", "real_gdp", "value", "Value", "amount")
-    growth_cols = ("yoy_growth", "growth_rate", "YoY", "change_pct")
 
     records: list[CenstatdRecord] = []
     for row in raw_rows:
-        period = _extract_period(row)
-        if not period:
+        year = str(row.get("date", "")).strip()
+        val = _safe_float(row.get("value"))
+        if not year or val is None:
             continue
-        val = _extract_value(row, gdp_cols)
-        if val is not None:
-            records.append(CenstatdRecord(period, "gdp_constant_prices", val, "hkd_million", src, source_url))
-        g = _extract_value(row, growth_cols)
-        if g is not None:
-            records.append(CenstatdRecord(period, "gdp_growth_rate", g, "percent", src, source_url))
-
-    # Compute YoY growth from levels where not already present
-    existing_growth = {r.period for r in records if r.metric == "gdp_growth_rate"}
-    levels = {r.period: r.value for r in records if r.metric == "gdp_constant_prices"}
-
-    for period, val in sorted(levels.items()):
-        if period in existing_growth or "-Q" not in period:
-            continue
-        prev = f"{int(period[:4]) - 1}-{period[5:]}"
-        prev_val = levels.get(prev)
-        if prev_val and prev_val > 0:
-            yoy = round(((val - prev_val) / prev_val) * 100.0, 2)
-            records.append(CenstatdRecord(period, "gdp_growth_rate", yoy, "percent", src, source_url))
+        period = _year_to_q4(year)
+        records.append(CenstatdRecord(period, "gdp_growth_rate", round(val, 4),
+                                       "percent", "World Bank", source_url))
 
     logger.info("GDP: parsed %d records", len(records))
     return DownloadResult("gdp", len(records), tuple(records))
 
 
 async def download_net_migration(client: httpx.AsyncClient) -> DownloadResult:
-    """Download net migration from mid-year population estimates.
+    """Download net migration for HK from World Bank.
 
-    Derives net_migration = population_change - natural_increase, then
-    interpolates annual values to quarterly (divide by 4).
+    Uses the SM.POP.NETM indicator (annual net migration).
+    Interpolates annual values to quarterly (divide by 4).
     """
-    resource_id = await _find_resource_id(client, "population")
-    if resource_id is None:
-        return DownloadResult("migration", 0, (), "Could not locate population dataset on data.gov.hk")
-
-    raw_rows = await _datastore_search(client, resource_id)
+    indicator_id = _WB_INDICATORS["net_migration"]
+    source_url = f"{_WB_BASE}/{indicator_id}"
+    raw_rows = await _fetch_wb_indicator(client, indicator_id)
     if not raw_rows:
-        return DownloadResult("migration", 0, (), f"No population records (resource={resource_id})")
+        return DownloadResult("migration", 0, (), f"No data from World Bank for {indicator_id}")
 
-    _save_raw("population_raw.json", raw_rows)
-    source_url = _src_url(resource_id)
-
-    pop_cols = ("population", "Population", "mid_year_population", "total", "Total", "value", "Value")
-    nat_cols = ("natural_increase", "Natural increase", "births_minus_deaths", "net_natural")
-
-    pop_by_year: dict[str, float] = {}
-    nat_by_year: dict[str, float] = {}
-    for row in raw_rows:
-        yr_raw = str(row.get("year", row.get("Year", row.get("period", row.get("Period", "")))))
-        digits = "".join(c for c in yr_raw if c.isdigit())
-        if len(digits) < 4:
-            continue
-        year = digits[:4]
-        val = _extract_value(row, pop_cols)
-        if val is not None:
-            pop_by_year[year] = val
-        nat = _extract_value(row, nat_cols)
-        if nat is not None:
-            nat_by_year[year] = nat
+    _save_raw("migration_raw.json", raw_rows)
 
     records: list[CenstatdRecord] = []
-    years = sorted(pop_by_year.keys())
-    for i in range(1, len(years)):
-        yr, prev_yr = years[i], years[i - 1]
-        net_mig = (pop_by_year[yr] - pop_by_year[prev_yr]) - nat_by_year.get(yr, 0.0)
-        if abs(net_mig) > 10_000:
-            net_mig /= 1000.0
-        quarterly = round(net_mig / 4.0, 2)
+    for row in raw_rows:
+        year = str(row.get("date", "")).strip()
+        val = _safe_float(row.get("value"))
+        if not year or val is None:
+            continue
+        # Convert to thousands and split quarterly
+        quarterly = round(val / 4_000.0, 2) if abs(val) > 1000 else round(val / 4.0, 2)
         for q in ("Q1", "Q2", "Q3", "Q4"):
             records.append(CenstatdRecord(
-                f"{yr}-{q}", "net_migration", quarterly, "thousands",
-                "Census and Statistics Department", source_url,
+                f"{year}-{q}", "net_migration", quarterly, "thousands",
+                "World Bank", source_url,
             ))
 
-    logger.info("Net migration: %d quarterly records from %d annual observations",
-                len(records), max(len(years) - 1, 0))
+    logger.info("Net migration: %d quarterly records", len(records))
     return DownloadResult("migration", len(records), tuple(records))
 
 

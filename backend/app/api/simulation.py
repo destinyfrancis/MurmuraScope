@@ -13,7 +13,8 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, UploadFile
+from fastapi import APIRouter, HTTPException, Request, UploadFile
+from backend.app.api.auth import _limiter
 
 from backend.app.models.request import (
     SimulationCreateRequest,
@@ -227,14 +228,15 @@ async def create_simulation(req: SimulationCreateRequest) -> APIResponse:
         )
 
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail="Bad request") from exc
     except Exception as exc:
         logger.exception("create_simulation failed")
         raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.post("/start", response_model=APIResponse)
-async def start_simulation(req: SimulationStartRequest) -> APIResponse:
+@_limiter.limit("10/minute")
+async def start_simulation(request: Request, req: SimulationStartRequest) -> APIResponse:
     """Start a previously created simulation session."""
     try:
         manager = get_simulation_manager()
@@ -248,7 +250,7 @@ async def start_simulation(req: SimulationStartRequest) -> APIResponse:
             },
         )
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail="Bad request") from exc
     except Exception as exc:
         logger.exception("start_simulation failed for session %s", req.session_id)
         raise HTTPException(status_code=500, detail="Internal server error") from exc
@@ -268,7 +270,7 @@ async def estimate_simulation_cost(req: dict) -> APIResponse:
         from dataclasses import asdict  # noqa: PLC0415
         return APIResponse(success=True, data=asdict(breakdown))
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail="Bad request") from exc
 
 
 _QUICK_START_MAX_BYTES = 10 * 1024 * 1024  # 10 MB
@@ -632,7 +634,7 @@ async def get_session_status(session_id: str) -> APIResponse:
 
         return APIResponse(success=True, data=data)
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=404, detail="Not found") from exc
     except Exception as exc:
         logger.exception("get_session_status failed for session %s", session_id)
         raise HTTPException(status_code=500, detail="Internal server error") from exc
@@ -650,7 +652,7 @@ async def list_agents(session_id: str) -> APIResponse:
             meta={"session_id": session_id, "count": len(agents)},
         )
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=404, detail="Not found") from exc
     except Exception as exc:
         logger.exception("list_agents failed for session %s", session_id)
         raise HTTPException(status_code=500, detail="Internal server error") from exc
@@ -690,7 +692,7 @@ async def suggest_config(req: ConfigSuggestRequest) -> APIResponse:
             },
         )
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail="Bad request") from exc
     except Exception as exc:
         logger.exception("suggest_config failed")
         raise HTTPException(status_code=500, detail="Internal server error") from exc

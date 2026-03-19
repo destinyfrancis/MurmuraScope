@@ -33,6 +33,24 @@ if TYPE_CHECKING:
 
 logger = get_logger("batch_writer")
 
+# Whitelist of tables allowed for batch writes — prevents SQL injection via
+# dynamic table names.  Extend this set when adding new batch-writable tables.
+_ALLOWED_TABLES: frozenset[str] = frozenset({
+    # Test-only shorthand names (used in unit tests)
+    "memories", "actions",
+    # Production tables
+    "agent_memories", "simulation_actions", "agent_decisions", "belief_states",
+    "emotional_states", "cognitive_dissonance", "virality_scores", "agent_feeds",
+    "network_events", "memory_triples", "echo_chamber_snapshots",
+    "polarization_snapshots", "filter_bubble_snapshots", "news_headlines",
+    "wealth_transfers", "collective_actions", "collective_action_participants",
+    "kg_edges", "kg_nodes", "kg_snapshots", "world_events",
+    "faction_snapshots_v2", "tipping_points", "narrative_traces",
+    "cognitive_fingerprints", "multi_run_results", "agent_relationships",
+    "relationship_states", "attachment_styles", "consumption_records",
+    "company_decisions", "macro_scenarios",
+})
+
 
 class BatchWriter:
     """Accumulate rows and flush them in a single transaction per round.
@@ -71,6 +89,11 @@ class BatchWriter:
             columns: Ordered list of column names that map to the tuple
                      values passed to queue().
         """
+        if table not in _ALLOWED_TABLES:
+            raise ValueError(
+                f"Table {table!r} not in BatchWriter allowed list. "
+                "Add it to _ALLOWED_TABLES if this is intentional."
+            )
         if table not in self._schemas:
             col_list = ", ".join(columns)
             placeholders = ", ".join("?" for _ in columns)

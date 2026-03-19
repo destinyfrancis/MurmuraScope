@@ -768,6 +768,7 @@ CREATE TABLE IF NOT EXISTS cognitive_fingerprints (
     conformity             REAL NOT NULL DEFAULT 0.5,
     created_at             TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE INDEX IF NOT EXISTS idx_cf_simulation ON cognitive_fingerprints(simulation_id);
 
 CREATE TABLE IF NOT EXISTS world_events (
     id                 TEXT PRIMARY KEY,
@@ -780,6 +781,7 @@ CREATE TABLE IF NOT EXISTS world_events (
     credibility        REAL NOT NULL DEFAULT 1.0,
     created_at         TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE INDEX IF NOT EXISTS idx_we_sim_round ON world_events(simulation_id, round_number);
 
 CREATE TABLE IF NOT EXISTS faction_snapshots_v2 (
     id                      TEXT PRIMARY KEY,
@@ -791,6 +793,7 @@ CREATE TABLE IF NOT EXISTS faction_snapshots_v2 (
     inter_faction_hostility REAL NOT NULL,
     created_at              TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE INDEX IF NOT EXISTS idx_fs2_sim_round ON faction_snapshots_v2(simulation_id, round_number);
 
 CREATE TABLE IF NOT EXISTS tipping_points (
     id                     TEXT PRIMARY KEY,
