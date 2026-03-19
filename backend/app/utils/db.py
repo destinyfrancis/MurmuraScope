@@ -40,6 +40,9 @@ async def get_db() -> AsyncIterator[aiosqlite.Connection]:
         await db.execute("PRAGMA wal_autocheckpoint = 2000")
         await db.execute("PRAGMA cache_size = -65536")
         await db.execute("PRAGMA mmap_size = 268435456")
+        # Prevent SQLITE_BUSY under concurrent async writes: wait up to 5s before
+        # raising an error when another connection holds a write lock.
+        await db.execute("PRAGMA busy_timeout = 5000")
         db.row_factory = aiosqlite.Row
         yield db
     finally:
