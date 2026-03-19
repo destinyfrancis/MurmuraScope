@@ -453,9 +453,11 @@ class SimulationRunner(
                     session_id,
                     coro_name,
                 )
+            except asyncio.CancelledError:
+                pass  # Expected on clean shutdown
             except Exception:
-                logger.debug(
-                    "Tracked task error session=%s task=%s",
+                logger.error(
+                    "Tracked task crashed session=%s task=%s",
                     session_id,
                     coro_name,
                     exc_info=True,
