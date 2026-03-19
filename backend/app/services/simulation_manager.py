@@ -407,6 +407,12 @@ async def generate_agents(
         llm = llm_client or LLMClient()
 
         # Load KG nodes/edges from the database.
+        # kg_nodes.session_id stores the session_id passed to build_graph(),
+        # which may differ from graph_id (format: graph_{session_id}_{hex}).
+        # Extract the original session_id to query correctly.
+        from backend.app.services.graph_builder import _session_id_from_graph_id  # noqa: PLC0415
+        kg_session_id = _session_id_from_graph_id(graph_id)
+
         kg_nodes: list[dict[str, Any]] = []
         kg_edges: list[dict[str, Any]] = []
         try:
@@ -415,13 +421,13 @@ async def generate_agents(
                 cursor = await db.execute(
                     "SELECT id, entity_type, title, description, properties "
                     "FROM kg_nodes WHERE session_id = ?",
-                    (graph_id,),
+                    (kg_session_id,),
                 )
                 kg_nodes = [dict(row) for row in await cursor.fetchall()]
                 cursor = await db.execute(
                     "SELECT source_id, target_id, relation_type, description, weight "
                     "FROM kg_edges WHERE session_id = ?",
-                    (graph_id,),
+                    (kg_session_id,),
                 )
                 kg_edges = [dict(row) for row in await cursor.fetchall()]
         except Exception:
