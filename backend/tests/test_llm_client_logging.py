@@ -22,7 +22,7 @@ def test_openai_compat_logs_latency_and_tokens(caplog):
         client = LLMClient()
         with patch.object(client, "_get_http_client") as mock_http:
             mock_http.return_value.post = AsyncMock(return_value=fake_resp)
-            with caplog.at_level(logging.INFO, logger="hksimengine.llm_client"):
+            with caplog.at_level(logging.INFO, logger="morai.llm_client"):
                 result = await client._chat_openai_compat(
                     [{"role": "user", "content": "hi"}],
                     model="deepseek-v3",

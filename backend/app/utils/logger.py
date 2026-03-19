@@ -1,4 +1,4 @@
-"""Centralised logging configuration for HKSimEngine."""
+"""Centralised logging configuration for Morai."""
 from __future__ import annotations
 
 import logging
@@ -11,7 +11,7 @@ from pathlib import Path
 def setup_logging(
     *,
     level: int | None = None,
-    logger_name: str = "hksimengine",
+    logger_name: str = "morai",
 ) -> logging.Logger:
     """Configure and return the application root logger.
 
@@ -61,4 +61,4 @@ def setup_logging(
 
 def get_logger(name: str) -> logging.Logger:
     """Return a child logger under the application namespace."""
-    return logging.getLogger(f"hksimengine.{name}")
+    return logging.getLogger(f"morai.{name}")

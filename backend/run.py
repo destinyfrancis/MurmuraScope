@@ -1,4 +1,4 @@
-"""Uvicorn entry point for HKSimEngine backend."""
+"""Uvicorn entry point for Morai backend."""
 
 from __future__ import annotations
 

@@ -160,7 +160,7 @@ function goWorkspace() {
 
     <!-- Footer -->
     <footer class="landing-footer">
-      <span>HKSimEngine</span>
+      <span>Morai</span>
       <span>Hong Kong Society Simulation Engine</span>
     </footer>
   </div>

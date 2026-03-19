@@ -21,7 +21,7 @@ const lessonComponents = [
 <template>
   <div class="learn-page">
     <h1 class="learn-title">教學</h1>
-    <p class="learn-subtitle">了解 HKSimEngine 背後嘅原理</p>
+    <p class="learn-subtitle">了解 Morai 背後嘅原理</p>
 
     <!-- Lesson tabs -->
     <div class="lesson-tabs">

@@ -1,4 +1,4 @@
-"""FastAPI application factory for HKSimEngine."""
+"""FastAPI application factory for Morai."""
 
 from __future__ import annotations
 
@@ -21,8 +21,8 @@ _ROUTER_MODULES = ("auth", "graph", "simulation_macro", "simulation_branches", "
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Application lifespan: initialise DB and data scheduler on startup."""
-    logger = logging.getLogger("hksimengine")
-    logger.info("Starting HKSimEngine backend")
+    logger = logging.getLogger("morai")
+    logger.info("Starting Morai backend")
 
     # Kill stale simulation subprocesses from previous server instance
     import subprocess as _sp
@@ -464,7 +464,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
             logger.info("DataScheduler stopped")
         except Exception:
             logger.warning("DataScheduler stop failed")
-    logger.info("Shutting down HKSimEngine backend")
+    logger.info("Shutting down Morai backend")
 
 
 def create_app() -> FastAPI:
@@ -479,10 +479,10 @@ def create_app() -> FastAPI:
 
     log_level = logging.DEBUG if settings.DEBUG else logging.INFO
     setup_logging(level=log_level)
-    logger = logging.getLogger("hksimengine")
+    logger = logging.getLogger("morai")
 
     app = FastAPI(
-        title="HKSimEngine API",
+        title="Morai API",
         version="0.1.0",
         lifespan=_lifespan,
     )

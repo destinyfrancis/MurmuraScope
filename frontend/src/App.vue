@@ -13,7 +13,7 @@ function goHome() {
     <header class="app-header">
       <div class="header-left" @click="goHome">
         <span class="logo">⬡</span>
-        <span class="brand">HKSimEngine</span>
+        <span class="brand">Morai</span>
       </div>
       <nav class="header-nav">
         <router-link to="/" class="nav-link">首頁</router-link>
