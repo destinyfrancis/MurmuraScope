@@ -16,11 +16,17 @@ const selectedRound = ref(null)
 let _timer = null
 
 const EVENT_TYPES = [
-  { key: 'TIE_FORMED', label: '連結形成', color: '#22c55e', icon: '+' },
-  { key: 'TIE_DISSOLVED', label: '連結斷裂', color: '#ef4444', icon: '−' },
-  { key: 'BRIDGE_DETECTED', label: '橋接發現', color: '#3b82f6', icon: '⬡' },
-  { key: 'TRIADIC_CLOSURE', label: '三角閉合', color: '#a855f7', icon: '△' },
-  { key: 'CLUSTER_SHIFT', label: '群組遷移', color: '#f59e0b', icon: '↻' },
+  { key: 'TIE_FORMED',             label: '連結形成',   color: '#22c55e', icon: '+' },
+  { key: 'TIE_DISSOLVED',          label: '連結斷裂',   color: '#ef4444', icon: '−' },
+  { key: 'BRIDGE_DETECTED',        label: '橋接發現',   color: '#3b82f6', icon: '⬡' },
+  { key: 'TRIADIC_CLOSURE',        label: '三角閉合',   color: '#a855f7', icon: '△' },
+  { key: 'CLUSTER_SHIFT',          label: '群組遷移',   color: '#f59e0b', icon: '↻' },
+  // Relationship lifecycle events (kg_driven mode)
+  { key: 'RELATIONSHIP_FORMED',    label: '關係建立',   color: '#34d399', icon: '♥' },
+  { key: 'RELATIONSHIP_DEEPENED',  label: '關係深化',   color: '#60a5fa', icon: '↑' },
+  { key: 'RELATIONSHIP_CRISIS',    label: '關係危機',   color: '#f87171', icon: '⚡' },
+  { key: 'RELATIONSHIP_DISSOLVED', label: '關係破裂',   color: '#6b7280', icon: '✕' },
+  { key: 'RELATIONSHIP_STAGNATED', label: '關係停滯',   color: '#d1d5db', icon: '∼' },
 ]
 
 const EVENT_MAP = Object.fromEntries(EVENT_TYPES.map(e => [e.key, e]))
@@ -59,7 +65,7 @@ function selectRound(round) {
 }
 
 function eventMeta(type) {
-  return EVENT_MAP[type] || { label: type, color: '#6b7280', icon: '?' }
+  return EVENT_MAP[type] ?? { key: type, label: type, color: '#9ca3af', icon: '?' }
 }
 
 async function fetchEvents() {
