@@ -12,6 +12,7 @@ def _mock_zc_result() -> MagicMock:
         seed_text="HSI drops 10%",
         detected_entities=["HSI"],
         estimated_duration_seconds=120,
+        mode="hk_demographic",
     )
 
 
@@ -29,6 +30,9 @@ def _common_patches(preset_agents: int = 100, preset_rounds: int = 15):
     """
     mock_zc = MagicMock()
     mock_zc.prepare = AsyncMock(return_value=_mock_zc_result())
+    mock_zc.infer_time_config = AsyncMock(
+        return_value=MagicMock(to_dict=lambda: {"minutes_per_round": 1440, "round_label_unit": "day"})
+    )
 
     mock_gb = MagicMock()
     mock_gb.build_graph = AsyncMock(return_value={"graph_id": "graph-abc-123"})

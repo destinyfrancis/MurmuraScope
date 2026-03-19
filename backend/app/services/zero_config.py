@@ -264,3 +264,65 @@ class ZeroConfigService:
             estimated_duration_seconds=estimated_seconds,
             mode=mode,
         )
+
+    async def infer_time_config(
+        self,
+        seed_text: str,
+        round_count: int,
+        llm: Any | None = None,
+    ) -> "TimeConfig":
+        """LLM-infer scenario-appropriate time granularity.
+
+        Falls back to 1 day per round on any error.
+        """
+        from backend.app.models.time_config import TimeConfig
+
+        _DEFAULT = TimeConfig(
+            total_simulated_hours=round_count * 24,
+            minutes_per_round=1440,
+            round_label_unit="day",
+            rationale="Default: 1 day per round",
+        )
+
+        if llm is None:
+            try:
+                from backend.app.utils.llm_client import get_default_client
+                llm = get_default_client()
+            except Exception:
+                return _DEFAULT
+
+        prompt = (
+            "You are a simulation time-scale advisor. Given a scenario description, "
+            "determine the appropriate time granularity for an agent-based simulation.\n\n"
+            f"Scenario (first 500 chars): {seed_text[:500]}\n"
+            f"Number of simulation rounds: {round_count}\n\n"
+            "Return ONLY a JSON object with these fields:\n"
+            '- "total_simulated_hours": total real-world hours the simulation should cover\n'
+            '- "minutes_per_round": how many real-world minutes each round represents\n'
+            '- "round_label_unit": one of "hour", "day", "week", "month"\n'
+            '- "rationale": one-sentence explanation\n\n'
+            "Examples:\n"
+            '- Social media controversy (40 rounds): {"total_simulated_hours": 72, "minutes_per_round": 60, "round_label_unit": "hour", "rationale": "Social media storms peak within 72 hours"}\n'
+            '- Geopolitical conflict (30 rounds): {"total_simulated_hours": 720, "minutes_per_round": 1440, "round_label_unit": "day", "rationale": "Geopolitical events unfold over weeks"}\n'
+            '- Corporate competition (20 rounds): {"total_simulated_hours": 3360, "minutes_per_round": 10080, "round_label_unit": "week", "rationale": "Market dynamics shift weekly"}\n'
+        )
+
+        try:
+            import json
+            from backend.app.utils.llm_client import get_agent_provider_model
+            provider, model = get_agent_provider_model()
+            resp = await llm.chat(
+                [{"role": "user", "content": prompt}],
+                provider=provider,
+                model=model,
+            )
+            data = json.loads(resp.content)
+            return TimeConfig(
+                total_simulated_hours=int(data["total_simulated_hours"]),
+                minutes_per_round=int(data["minutes_per_round"]),
+                round_label_unit=str(data["round_label_unit"]),
+                rationale=str(data.get("rationale", "")),
+            )
+        except Exception:
+            logger.warning("Time config inference failed — using default (1 day/round)")
+            return _DEFAULT

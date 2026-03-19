@@ -99,7 +99,7 @@ class AgentInterviewRequest(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     session_id: str
-    agent_id: int
+    agent_id: int | str  # int for HK agents, str for kg_driven agents
     question: str
 
 

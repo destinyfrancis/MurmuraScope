@@ -561,6 +561,8 @@ def build_planning_user_prompt(
     round_count: int,
     scenario_question: str,
     sim_mode: str,
+    time_config: dict | None = None,
+    seed_text: str = "",
 ) -> str:
     """Build the user prompt for report planning.
 
@@ -570,15 +572,34 @@ def build_planning_user_prompt(
         round_count: Number of simulation rounds completed.
         scenario_question: The scenario question being investigated.
         sim_mode: Simulation mode (``"hk_demographic"`` or ``"kg_driven"``).
+        time_config: Optional time mapping dict from session config.
+        seed_text: Optional seed text for factual constraints.
 
     Returns:
         Formatted user prompt string.
     """
-    return (
+    base = (
         f"模擬問題：{scenario_question}\n\n"
         f"模擬規模：{agent_count}個Agent，{round_count}輪互動，模式={sim_mode}\n\n"
-        "請設計3-5章的報告結構，回答上述模擬問題。"
     )
+
+    time_section = ""
+    if time_config:
+        time_section = (
+            f"TIME MAPPING: Each simulation round represents {time_config.get('minutes_per_round', 1440)} "
+            f"real-world minutes ({time_config.get('round_label_unit', 'day')}s). "
+            f"Total simulation window: {time_config.get('total_simulated_hours', 720)} hours. "
+            f"Use '{time_config.get('round_label_unit', 'day').title()} N' labels instead of 'Round N'.\n\n"
+        )
+
+    seed_section = ""
+    if seed_text:
+        seed_section = (
+            f"FACTUAL CONSTRAINTS FROM SEED TEXT (do NOT contradict these):\n"
+            f"{seed_text[:2000]}\n\n"
+        )
+
+    return base + time_section + seed_section + "請設計3-5章的報告結構，回答上述模擬問題。"
 
 
 # Mode-specific section system prompts

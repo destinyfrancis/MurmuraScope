@@ -30,9 +30,11 @@ from backend.app.services.macro_controller import MacroController
 from backend.app.services.profile_generator import ProfileGenerator
 from backend.app.services.simulation_manager import (
     SimulationManager,
+    generate_agents,
     get_simulation_manager,
     store_agent_profiles,
     store_activity_profiles,
+    store_universal_agent_profiles,
 )
 from backend.app.services.supply_chain_builder import SupplyChainBuilder
 from backend.app.utils.db import get_db
@@ -283,13 +285,11 @@ async def _run_quick_start(seed_text: str, scenario_question: str = "", preset: 
     from backend.app.services.zero_config import ZeroConfigService  # noqa: PLC0415
     from backend.app.services.graph_builder import GraphBuilderService  # noqa: PLC0415
 
-    # Sanitize all user-controlled text before it reaches any LLM service.
     seed_text = _sanitize_seed(seed_text)
 
     zc = ZeroConfigService()
     config = await zc.prepare(seed_text)
 
-    # Apply preset overrides — the preset param was accepted but never applied before.
     from backend.app.models.simulation_config import resolve_preset  # noqa: PLC0415
     resolved = resolve_preset(preset)
     agent_count_final = resolved.agents
@@ -305,51 +305,76 @@ async def _run_quick_start(seed_text: str, scenario_question: str = "", preset: 
     )
     graph_id = graph_result.get("graph_id", "")
 
+    # --- Infer time config (MiroFish-style) ---
+    time_config = await zc.infer_time_config(seed_text, round_count_final)
+
     manager = get_simulation_manager()
+
+    is_kg = config.mode == "kg_driven"
+    scenario_type = "kg_driven" if is_kg else "property"
+
     session_data = await manager.create_session(
         {
             "name": f"Quick Start: {seed_text[:50]}",
-            "scenario_type": "property",
+            "scenario_type": scenario_type,
             "seed_text": seed_text,
             "agent_count": agent_count_final,
             "round_count": round_count_final,
             "graph_id": graph_id,
             "domain_pack_id": config.domain_pack_id,
-            "platforms": {"facebook": True, "instagram": True},
+            "platforms": {"twitter": True, "reddit": True} if is_kg else {"facebook": True, "instagram": True},
+            "time_config": time_config.to_dict(),
         },
         csv_path=None,
     )
     session_id = session_data["session_id"]
 
-    demographics = None
-    try:
-        from backend.app.domain.base import DomainPackRegistry as _DPR  # noqa: PLC0415
-        pack = _DPR.get(config.domain_pack_id)
-        demographics = pack.demographics
-    except (KeyError, Exception):
-        pass
+    if is_kg:
+        # --- kg_driven path: use KGAgentFactory via generate_agents() ---
+        profiles, csv_path = await generate_agents(
+            session_id=session_id,
+            request={
+                "graph_id": graph_id,
+                "seed_text": seed_text,
+                "agent_count": agent_count_final,
+            },
+            mode="kg_driven",
+        )
+        try:
+            await store_universal_agent_profiles(session_id, profiles)
+        except Exception:
+            logger.warning("Could not store universal agent profiles for %s", session_id, exc_info=True)
+    else:
+        # --- hk_demographic path: existing logic unchanged ---
+        demographics = None
+        try:
+            from backend.app.domain.base import DomainPackRegistry as _DPR  # noqa: PLC0415
+            pack = _DPR.get(config.domain_pack_id)
+            demographics = pack.demographics
+        except (KeyError, Exception):
+            pass
 
-    factory = AgentFactory(demographics=demographics)
-    profiles = factory.generate_population(agent_count_final, None)
+        factory = AgentFactory(demographics=demographics)
+        profiles = factory.generate_population(agent_count_final, None)
 
-    macro = MacroController()
-    macro_state = await macro.get_baseline_for_scenario("property")
+        macro = MacroController()
+        macro_state = await macro.get_baseline_for_scenario("property")
 
-    profile_gen = ProfileGenerator(agent_factory=factory)
-    csv_content = profile_gen.to_oasis_csv(profiles, macro_state)
-    session_dir = _PROJECT_ROOT / "data" / "sessions" / session_id
-    csv_path = str(session_dir / "agents.csv")
-    await asyncio.to_thread(Path(csv_path).write_text, csv_content, encoding="utf-8")
+        profile_gen = ProfileGenerator(agent_factory=factory)
+        csv_content = profile_gen.to_oasis_csv(profiles, macro_state)
+        session_dir = _PROJECT_ROOT / "data" / "sessions" / session_id
+        csv_path = str(session_dir / "agents.csv")
+        await asyncio.to_thread(Path(csv_path).write_text, csv_content, encoding="utf-8")
 
-    try:
-        await store_agent_profiles(session_id, profiles, profile_gen, macro_state)
-    except Exception:
-        logger.warning("Could not store agent profiles for quick-start session %s", session_id, exc_info=True)
+        try:
+            await store_agent_profiles(session_id, profiles, profile_gen, macro_state)
+        except Exception:
+            logger.warning("Could not store agent profiles for quick-start session %s", session_id, exc_info=True)
 
-    try:
-        await store_activity_profiles(session_id, profiles, session_dir, factory)
-    except Exception:
-        logger.warning("Could not store activity profiles for quick-start session %s", session_id, exc_info=True)
+        try:
+            await store_activity_profiles(session_id, profiles, session_dir, factory)
+        except Exception:
+            logger.warning("Could not store activity profiles for quick-start session %s", session_id, exc_info=True)
 
     asyncio.create_task(manager.start_session(session_id))
 
@@ -358,12 +383,14 @@ async def _run_quick_start(seed_text: str, scenario_question: str = "", preset: 
         data={
             "session_id": session_id,
             "graph_id": graph_id,
+            "mode": config.mode,
             "status_url": f"/api/simulation/{session_id}/status",
             "estimated_duration_seconds": estimated_duration,
             "domain_pack_id": config.domain_pack_id,
             "agent_count": agent_count_final,
             "round_count": round_count_final,
             "scenario_question": scenario_question,
+            "time_config": time_config.to_dict(),
         },
     )
 

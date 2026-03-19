@@ -153,14 +153,23 @@ async def interview_agent(req: AgentInterviewRequest) -> APIResponse:
     Enriches the prompt with agent memories and recent actions for realism.
     """
     try:
-        # Load agent profile
+        # Load agent profile — string IDs (kg_driven) look up by oasis_username,
+        # integer IDs (hk_demographic) look up by primary key.
         async with get_db() as db:
-            profile_row = await (
-                await db.execute(
-                    "SELECT * FROM agent_profiles WHERE id = ? AND session_id = ?",
-                    (req.agent_id, req.session_id),
-                )
-            ).fetchone()
+            if isinstance(req.agent_id, str):
+                profile_row = await (
+                    await db.execute(
+                        "SELECT * FROM agent_profiles WHERE session_id = ? AND oasis_username = ? LIMIT 1",
+                        (req.session_id, req.agent_id),
+                    )
+                ).fetchone()
+            else:
+                profile_row = await (
+                    await db.execute(
+                        "SELECT * FROM agent_profiles WHERE id = ? AND session_id = ?",
+                        (req.agent_id, req.session_id),
+                    )
+                ).fetchone()
 
         profile_ctx = ""
         if profile_row:
@@ -190,7 +199,7 @@ async def interview_agent(req: AgentInterviewRequest) -> APIResponse:
                     f"- {r['memory_text']}" for r in mem_rows
                 )
         except Exception:
-            logger.debug("Could not load memories for agent %d", req.agent_id)
+            logger.debug("Could not load memories for agent %s", req.agent_id)
 
         # Load recent actions
         action_ctx = ""
@@ -211,7 +220,7 @@ async def interview_agent(req: AgentInterviewRequest) -> APIResponse:
                     for r in action_rows
                 )
         except Exception:
-            logger.debug("Could not load actions for agent %d", req.agent_id)
+            logger.debug("Could not load actions for agent %s", req.agent_id)
 
         # Build enriched system prompt
         enriched_system = _CHAT_AGENT_SYSTEM
@@ -241,7 +250,7 @@ async def interview_agent(req: AgentInterviewRequest) -> APIResponse:
         raise HTTPException(status_code=400, detail="Bad request") from exc
     except Exception as exc:
         logger.exception(
-            "interview_agent failed for agent %d session %s",
+            "interview_agent failed for agent %s session %s",
             req.agent_id,
             req.session_id,
         )

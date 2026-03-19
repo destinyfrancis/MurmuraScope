@@ -573,6 +573,67 @@ async def store_agent_profiles(
     )
 
 
+async def store_universal_agent_profiles(
+    session_id: str,
+    profiles: list[Any],
+) -> None:
+    """Persist UniversalAgentProfile objects to agent_profiles table.
+
+    Adapts universal fields to the HK-schema columns:
+    - age=0, sex="N/A", district=entity_type, occupation=role
+    - income_bracket/education_level/marital_status/housing_type = "N/A"
+    - monthly_income=0, savings=0
+    - oasis_persona = persona, oasis_username = to_oasis_row()["username"]
+    """
+    import hashlib  # noqa: F811, PLC0415
+
+    now = datetime.utcnow().isoformat()
+    rows = []
+    for p in profiles:
+        oasis_row = p.to_oasis_row()
+        rows.append((
+            session_id,
+            p.entity_type,          # agent_type
+            0,                      # age (N/A for universal)
+            "N/A",                  # sex
+            p.entity_type,          # district → entity_type
+            p.role,                 # occupation → role
+            "N/A",                  # income_bracket
+            "N/A",                  # education_level
+            "N/A",                  # marital_status
+            "N/A",                  # housing_type
+            p.openness,
+            p.conscientiousness,
+            p.extraversion,
+            p.agreeableness,
+            p.neuroticism,
+            0,                      # monthly_income
+            0,                      # savings
+            p.persona,              # oasis_persona
+            oasis_row["username"],  # oasis_username
+            now,
+        ))
+
+    async with get_db() as db:
+        await db.executemany(
+            """INSERT INTO agent_profiles
+               (session_id, agent_type, age, sex, district,
+                occupation, income_bracket, education_level,
+                marital_status, housing_type,
+                openness, conscientiousness, extraversion,
+                agreeableness, neuroticism,
+                monthly_income, savings,
+                oasis_persona, oasis_username, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            rows,
+        )
+        await db.commit()
+
+    logger.info(
+        "Stored %d universal agent profiles for session %s", len(rows), session_id
+    )
+
+
 async def store_activity_profiles(
     session_id: str,
     profiles: list[Any],
@@ -679,6 +740,7 @@ def _infer_sim_mode(scenario_type: str) -> SimMode:
         "education": SimMode.LIFE_DECISION,
         "b2b": SimMode.B2B_CAMPAIGN,
         "macro": SimMode.MACRO_OPINION,
+        "kg_driven": SimMode.KG_DRIVEN,
     }
     return mapping.get(scenario_type, SimMode.LIFE_DECISION)
 

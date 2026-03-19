@@ -88,7 +88,7 @@ class ReportOrchestrator:
         try:
             async with get_db() as db:
                 session_row = await (await db.execute(
-                    "SELECT sim_mode, preset FROM simulation_sessions WHERE id=?",
+                    "SELECT sim_mode, preset, seed_text, config_json FROM simulation_sessions WHERE id=?",
                     (session_id,)
                 )).fetchone()
                 agent_count_row = await (await db.execute(
@@ -106,10 +106,22 @@ class ReportOrchestrator:
         if not session_row:
             return {"sim_mode": "kg_driven", "agent_count": 0, "round_count": 0}
 
+        # Extract time_config from config_json if present
+        time_config = None
+        config_json_raw = session_row["config_json"]
+        if config_json_raw:
+            try:
+                config_data = json.loads(config_json_raw)
+                time_config = config_data.get("time_config")
+            except (json.JSONDecodeError, TypeError):
+                pass
+
         return {
             "sim_mode": session_row["sim_mode"] or "kg_driven",
             "agent_count": agent_count_row["cnt"] if agent_count_row else 0,
             "round_count": (round_count_row["max_round"] or 0) if round_count_row else 0,
+            "seed_text": session_row["seed_text"] or "",
+            "time_config": time_config,
         }
 
     async def generate(
@@ -145,6 +157,8 @@ class ReportOrchestrator:
             round_count=meta.get("round_count", 0),
             scenario_question=scenario_question,
             sim_mode=sim_mode,
+            time_config=meta.get("time_config"),
+            seed_text=meta.get("seed_text", ""),
         )
         provider, model = get_report_provider_model()
         _outline_resp = await self._llm.chat([

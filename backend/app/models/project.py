@@ -28,6 +28,7 @@ class SimMode(str, Enum):
     LIFE_DECISION = "life_decision"
     B2B_CAMPAIGN = "b2b_campaign"
     MACRO_OPINION = "macro_opinion"
+    KG_DRIVEN = "kg_driven"
 
 
 class Platform(str, Enum):
