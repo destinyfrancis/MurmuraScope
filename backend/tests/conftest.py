@@ -97,31 +97,38 @@ async def test_client(tmp_path):
 
     test_db_file = str(tmp_path / "test_api.db")
 
-    with patch.dict(os.environ, {"DATABASE_PATH": test_db_file, "DEBUG": "false"}):
-        # Force settings to reload with patched env
-        import backend.app.config as config_mod
+    # Disable rate limiting for this test to prevent in-memory counter
+    # accumulation across test invocations sharing the same _limiter instance.
+    from backend.app.api.auth import _limiter as _auth_limiter
+    _auth_limiter.enabled = False
+    try:
+        with patch.dict(os.environ, {"DATABASE_PATH": test_db_file, "DEBUG": "false"}):
+            # Force settings to reload with patched env
+            import backend.app.config as config_mod
 
-        fresh_settings = config_mod.Settings()
-        with patch.object(config_mod, "_settings", fresh_settings):
-            # Pre-initialise schema so tables exist when the app starts
-            schema_path = os.path.join(
-                os.path.dirname(__file__), "..", "database", "schema.sql"
-            )
-            async with aiosqlite.connect(test_db_file) as db:
-                with open(schema_path, encoding="utf-8") as f:
-                    await db.executescript(f.read())
-                await db.commit()
+            fresh_settings = config_mod.Settings()
+            with patch.object(config_mod, "_settings", fresh_settings):
+                # Pre-initialise schema so tables exist when the app starts
+                schema_path = os.path.join(
+                    os.path.dirname(__file__), "..", "database", "schema.sql"
+                )
+                async with aiosqlite.connect(test_db_file) as db:
+                    with open(schema_path, encoding="utf-8") as f:
+                        await db.executescript(f.read())
+                    await db.commit()
 
-            from backend.app import create_app
+                from backend.app import create_app
 
-            app = create_app()
-            transport = ASGITransport(app=app)
+                app = create_app()
+                transport = ASGITransport(app=app)
 
-            async with AsyncClient(
-                transport=transport,
-                base_url="http://testserver",
-            ) as client:
-                yield client
+                async with AsyncClient(
+                    transport=transport,
+                    base_url="http://testserver",
+                ) as client:
+                    yield client
+    finally:
+        _auth_limiter.enabled = True
 
 
 # ---------------------------------------------------------------------------

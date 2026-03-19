@@ -300,14 +300,18 @@ CREATE INDEX IF NOT EXISTS idx_market_ticker_date ON market_data(ticker, date);
 
 -- ============================================================
 -- scenario_branches: 多情景對比（#8）
+-- id is TEXT UUID (scanner-created) or CAST(rowid AS TEXT) for legacy rows
+-- branch_session_id nullable: scanner branches are parameter stubs, not full sessions
+-- config_overrides: JSON parameter overrides stored by ScenarioScanner
 -- ============================================================
 CREATE TABLE IF NOT EXISTS scenario_branches (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id TEXT NOT NULL PRIMARY KEY,
     parent_session_id TEXT NOT NULL REFERENCES simulation_sessions(id),
-    branch_session_id TEXT NOT NULL REFERENCES simulation_sessions(id),
-    scenario_variant TEXT NOT NULL,
-    label TEXT NOT NULL,
+    branch_session_id TEXT REFERENCES simulation_sessions(id),
+    scenario_variant TEXT,
+    label TEXT NOT NULL DEFAULT '',
     fork_round INTEGER,
+    config_overrides TEXT,
     created_at TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_branch_parent ON scenario_branches(parent_session_id);

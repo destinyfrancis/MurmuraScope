@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import uuid
+
 from fastapi import APIRouter, HTTPException
 
 from backend.app.models.request import BranchRequest
@@ -126,21 +128,22 @@ async def create_branch(session_id: str, req: BranchRequest | None = None) -> AP
                     (branch_id, session_id),
                 )
 
+            branch_record_id = str(uuid.uuid4())
             try:
                 await db.execute(
                     """INSERT OR IGNORE INTO scenario_branches
-                       (parent_session_id, branch_session_id, scenario_variant,
+                       (id, parent_session_id, branch_session_id, scenario_variant,
                         label, fork_round, created_at)
-                       VALUES (?, ?, 'branch', ?, ?, datetime('now'))""",
-                    (session_id, branch_id, branch_label, req.fork_round),
+                       VALUES (?, ?, ?, 'branch', ?, ?, datetime('now'))""",
+                    (branch_record_id, session_id, branch_id, branch_label, req.fork_round),
                 )
             except Exception:
                 await db.execute(
                     """INSERT OR IGNORE INTO scenario_branches
-                       (parent_session_id, branch_session_id, scenario_variant,
+                       (id, parent_session_id, branch_session_id, scenario_variant,
                         label, created_at)
-                       VALUES (?, ?, 'branch', ?, datetime('now'))""",
-                    (session_id, branch_id, branch_label),
+                       VALUES (?, ?, ?, 'branch', ?, datetime('now'))""",
+                    (branch_record_id, session_id, branch_id, branch_label),
                 )
             await db.commit()
 
@@ -357,14 +360,18 @@ async def scan_scenarios(session_id: str, body: dict | None = None) -> APIRespon
     body = body or {}
     try:
         scanner = ScenarioScanner()
-        branch_ids = await scanner.scan(
+        scan_result = await scanner.scan(
             session_id=session_id,
             parameter_space=body.get("parameter_space", {}),
             max_variants=body.get("max_variants", 10),
         )
         return APIResponse(
             success=True,
-            data={"branch_ids": branch_ids, "count": len(branch_ids)},
+            data={
+                "branch_ids": scan_result.branch_ids,
+                "count": scan_result.n_variants,
+                "sampling_method": scan_result.sampling_method,
+            },
             meta={"session_id": session_id},
         )
     except Exception as exc:

@@ -423,26 +423,27 @@ class EnsembleRunner:
             )
 
             # Register in scenario_branches
+            branch_record_id = str(uuid.uuid4())
             try:
                 await db.execute(
                     """
                     INSERT OR IGNORE INTO scenario_branches
-                       (parent_session_id, branch_session_id, scenario_variant,
+                       (id, parent_session_id, branch_session_id, scenario_variant,
                         label, fork_round, created_at)
-                    VALUES (?, ?, 'ensemble', ?, NULL, datetime('now'))
+                    VALUES (?, ?, ?, 'ensemble', ?, NULL, datetime('now'))
                     """,
-                    (parent_session_id, branch_id, label),
+                    (branch_record_id, parent_session_id, branch_id, label),
                 )
             except Exception:
                 # Older schema without fork_round column
                 await db.execute(
                     """
                     INSERT OR IGNORE INTO scenario_branches
-                       (parent_session_id, branch_session_id, scenario_variant,
+                       (id, parent_session_id, branch_session_id, scenario_variant,
                         label, created_at)
-                    VALUES (?, ?, 'ensemble', ?, datetime('now'))
+                    VALUES (?, ?, ?, 'ensemble', ?, datetime('now'))
                     """,
-                    (parent_session_id, branch_id, label),
+                    (branch_record_id, parent_session_id, branch_id, label),
                 )
 
             await db.commit()

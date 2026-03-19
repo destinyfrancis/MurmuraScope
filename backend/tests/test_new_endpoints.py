@@ -14,7 +14,8 @@ class TestMultiRunPost:
             mock_cursor = AsyncMock()
             mock_cursor.fetchone.return_value = fake_session
             mock_db.return_value.__aenter__.return_value.execute = AsyncMock(return_value=mock_cursor)
-            with patch("backend.app.api.simulation.asyncio.create_task"):
+            with patch("backend.app.api.simulation.asyncio.create_task",
+                       side_effect=lambda coro: coro.close()):
                 app = create_app()
                 async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
                     r = await client.post("/api/simulation/sess-001/multi-run")
