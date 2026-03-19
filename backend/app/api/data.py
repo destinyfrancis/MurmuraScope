@@ -2,43 +2,46 @@
 
 from fastapi import APIRouter, Query
 
-from backend.app.models.response import APIResponse, DataDashboardResponse
+from backend.app.models.response import APIResponse
+from backend.app.utils.db import get_db
 
 router = APIRouter(prefix="/data", tags=["data"])
+
+# Metrics to surface per category.  Extend this dict as new metrics are stored.
+_DASHBOARD_METRICS: dict[str, list[str]] = {
+    "economy": ["gdp_growth", "inflation_rate", "hsi_level"],
+    "employment": ["unemployment_rate", "median_income"],
+    "property_market": ["ccl_index", "avg_price_psf", "rental_yield"],
+}
 
 
 @router.get("/dashboard", response_model=APIResponse)
 async def get_dashboard() -> APIResponse:
-    """Get the latest HK macro data dashboard."""
-    # TODO: Replace with real data service call
-    # dashboard = await data_service.get_dashboard()
-    mock = DataDashboardResponse(
-        population={
-            "total": 7_500_000,
-            "growth_rate": -0.3,
-            "median_age": 46.2,
-            "net_migration": -12000,
-        },
-        economy={
-            "gdp_growth": 2.5,
-            "inflation_rate": 2.1,
-            "base_rate": 5.25,
-            "hsi_index": 17800,
-        },
-        property_market={
-            "cci_index": 152.3,
-            "avg_price_psf": 12500,
-            "transaction_volume": 4200,
-            "rental_yield": 2.8,
-        },
-        employment={
-            "unemployment_rate": 3.0,
-            "median_income": 20000,
-            "labor_force_participation": 58.2,
-        },
-        latest_update="2026-03-10T00:00:00Z",
+    """Get the latest HK macro data dashboard from hk_data_snapshots."""
+    result: dict[str, dict[str, float]] = {cat: {} for cat in _DASHBOARD_METRICS}
+    latest_update: str = ""
+
+    try:
+        async with get_db() as db:
+            for category, metrics in _DASHBOARD_METRICS.items():
+                for metric in metrics:
+                    cursor = await db.execute(
+                        "SELECT value, period FROM hk_data_snapshots "
+                        "WHERE category = ? AND metric = ? "
+                        "ORDER BY period DESC LIMIT 1",
+                        (category, metric),
+                    )
+                    row = await cursor.fetchone()
+                    result[category][metric] = float(row["value"]) if row else 0.0
+                    if row and row["period"] > latest_update:
+                        latest_update = row["period"]
+    except Exception as e:
+        return APIResponse(success=False, data=None, error=str(e))
+
+    return APIResponse(
+        success=True,
+        data={**result, "latest_update": latest_update or None},
     )
-    return APIResponse(success=True, data=mock.model_dump())
 
 
 @router.get("/snapshots", response_model=APIResponse)
