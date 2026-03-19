@@ -247,7 +247,7 @@ class TestQuickStartEndpoint:
         with (
             patch("backend.app.api.simulation.ZeroConfigService", return_value=mock_zc, create=True),
             patch("backend.app.api.simulation.GraphBuilderService", return_value=mock_graph_builder, create=True),
-            patch("backend.app.api.simulation.SimulationManager", return_value=mock_manager),
+            patch("backend.app.api.simulation.get_simulation_manager", return_value=mock_manager),
             patch("backend.app.api.simulation.AgentFactory", return_value=mock_factory),
             patch("backend.app.api.simulation.MacroController", return_value=mock_macro),
             patch("backend.app.api.simulation.ProfileGenerator", return_value=mock_profile_gen),

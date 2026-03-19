@@ -54,7 +54,7 @@ def _common_patches(preset_agents: int = 100, preset_rounds: int = 15):
     stack.enter_context(_patch("backend.app.services.zero_config.ZeroConfigService", return_value=mock_zc))
     stack.enter_context(_patch("backend.app.api.simulation.GraphBuilderService", return_value=mock_gb, create=True))
     stack.enter_context(_patch("backend.app.services.graph_builder.GraphBuilderService", return_value=mock_gb))
-    stack.enter_context(_patch("backend.app.api.simulation.SimulationManager", return_value=mock_mgr))
+    stack.enter_context(_patch("backend.app.api.simulation.get_simulation_manager", return_value=mock_mgr))
     stack.enter_context(_patch("backend.app.api.simulation.AgentFactory", return_value=mock_factory))
     stack.enter_context(_patch("backend.app.api.simulation.MacroController", return_value=mock_macro))
     stack.enter_context(_patch("backend.app.api.simulation.ProfileGenerator", return_value=mock_prof))

@@ -29,6 +29,7 @@ from backend.app.services.macro_controller import MacroController
 from backend.app.services.profile_generator import ProfileGenerator
 from backend.app.services.simulation_manager import (
     SimulationManager,
+    get_simulation_manager,
     store_agent_profiles,
     store_activity_profiles,
 )
@@ -121,7 +122,7 @@ async def create_simulation(req: SimulationCreateRequest) -> APIResponse:
 
         macro_state = await macro.get_baseline_for_scenario(req.scenario_type or "property")
 
-        manager = SimulationManager()
+        manager = get_simulation_manager()
         request_dict = req.model_dump()
         session_data = await manager.create_session(request_dict, csv_path=None)
         session_id = session_data["session_id"]
@@ -235,7 +236,7 @@ async def create_simulation(req: SimulationCreateRequest) -> APIResponse:
 async def start_simulation(req: SimulationStartRequest) -> APIResponse:
     """Start a previously created simulation session."""
     try:
-        manager = SimulationManager()
+        manager = get_simulation_manager()
         await manager.start_session(req.session_id)
         return APIResponse(
             success=True,
@@ -301,7 +302,7 @@ async def _run_quick_start(seed_text: str, scenario_question: str = "", preset: 
     )
     graph_id = graph_result.get("graph_id", "")
 
-    manager = SimulationManager()
+    manager = get_simulation_manager()
     session_data = await manager.create_session(
         {
             "name": f"Quick Start: {seed_text[:50]}",
@@ -605,7 +606,7 @@ async def get_session_status_alias(session_id: str) -> APIResponse:
 async def get_session_status(session_id: str) -> APIResponse:
     """Get the current status and metadata of a simulation session."""
     try:
-        manager = SimulationManager()
+        manager = get_simulation_manager()
         session_data = await manager.get_session(session_id)
 
         # Include mini-ensemble summary (p25/p50/p75) if available
@@ -638,7 +639,7 @@ async def get_session_status(session_id: str) -> APIResponse:
 async def list_agents(session_id: str) -> APIResponse:
     """List all agent profiles stored for a simulation session."""
     try:
-        manager = SimulationManager()
+        manager = get_simulation_manager()
         agents = await manager.get_agents(session_id)
         return APIResponse(
             success=True,
