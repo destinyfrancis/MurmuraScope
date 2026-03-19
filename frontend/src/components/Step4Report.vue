@@ -3,6 +3,13 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { marked } from 'marked'
 import { generateReport, getReportStatus } from '../api/report.js'
 
+const props = defineProps({
+  session: { type: Object, required: true },
+  scenarioQuestion: { type: String, default: '' },
+})
+
+const emit = defineEmits(['report-generated', 'update:session'])
+
 const exporting = ref(false)
 async function exportPDF() {
   exporting.value = true
@@ -25,13 +32,6 @@ async function exportPDF() {
   }
 }
 
-const props = defineProps({
-  session: { type: Object, required: true },
-  scenarioQuestion: { type: String, default: '' },
-})
-
-const emit = defineEmits(['report-generated'])
-
 const questionInput = ref(props.scenarioQuestion)
 
 const generating = ref(false)
@@ -49,6 +49,10 @@ const elapsedLabel = ref('0s')
 let elapsedTimer = null
 
 function startElapsedTimer() {
+  if (elapsedTimer) {
+    clearInterval(elapsedTimer)
+    elapsedTimer = null
+  }
   startTime.value = Date.now()
   elapsedTimer = setInterval(() => {
     const sec = Math.round((Date.now() - startTime.value) / 1000)
@@ -64,11 +68,6 @@ const toolCallCount = computed(() =>
 const displayedReport = ref('')
 const isTyping = ref(false)
 let typewriterTimer = null
-
-const renderedReport = computed(() => {
-  if (!reportContent.value) return ''
-  return marked.parse(reportContent.value)
-})
 
 const renderedDisplayReport = computed(() => {
   if (!displayedReport.value) return ''
@@ -174,7 +173,7 @@ function mergeReactSteps(incoming) {
 async function pollReportStatus(reportId) {
   try {
     const res = await getReportStatus(reportId)
-    const data = res.data
+    const data = res.data?.data || res.data
 
     if (data.react_logs) {
       mergeReactSteps(data.react_logs)
@@ -227,7 +226,7 @@ async function startGeneration() {
 
     const resData = res.data?.data || res.data
     const reportId = resData.report_id
-    props.session.reportId = reportId
+    emit('update:session', { ...props.session, reportId: reportId })
 
     // If agent_log is already in the response (synchronous generation), use it directly
     if (resData.agent_log?.length) {
@@ -391,12 +390,18 @@ onUnmounted(() => {
           <span v-if="isTyping" class="typing-cursor">_</span>
         </div>
 
-        <div v-if="completed" class="report-regen-row">
+        <!-- Question input — always visible so user can set context before generating -->
+        <div class="report-question-row">
           <input
             v-model="questionInput"
             class="report-question-input"
-            placeholder="更改問題後重新生成，例如：GDP 增長率會轉負嗎？"
+            :disabled="generating"
+            placeholder="分析問題（可選）：例如「GDP 增長率會轉負嗎？」"
           />
+        </div>
+
+        <!-- Regen button — only after first completion -->
+        <div v-if="completed" class="report-regen-row">
           <button class="report-regen-btn" @click="startGeneration">重新生成</button>
         </div>
       </div>
@@ -788,21 +793,29 @@ onUnmounted(() => {
   50% { opacity: 0; }
 }
 
+.report-question-row {
+  margin-bottom: 12px;
+}
+
 .report-regen-row {
   display: flex;
   gap: 0.75rem;
-  margin-top: 1.5rem;
+  margin-top: 0.5rem;
   padding-top: 1rem;
   border-top: 1px solid var(--border-color);
 }
 .report-question-input {
-  flex: 1;
+  width: 100%;
   background: var(--bg-input, var(--bg-secondary));
   border: 1px solid var(--border-color);
   border-radius: 8px;
   color: var(--text-primary);
   padding: 0.5rem 0.75rem;
   font-size: 0.9rem;
+}
+.report-question-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 .report-regen-btn {
   white-space: nowrap;
