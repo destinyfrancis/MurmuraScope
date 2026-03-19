@@ -1,7 +1,6 @@
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
-import { getGraph } from '../api/graph.js'
-import { getGraphSnapshots, getGraphSnapshot } from '../api/graph.js'
+import { getGraph, getGraphSnapshots, getGraphSnapshot } from '../api/graph.js'
 import { getEchoChambers, getContagionData, getCommunitySummaries, getTripleConflicts, getPolarization } from '../api/simulation.js'
 import GraphCanvas from '../components/GraphCanvas.vue'
 import GraphToolbar from '../components/GraphToolbar.vue'
@@ -210,6 +209,12 @@ onMounted(async () => {
         @echo-toggle="handleEchoToggle"
         @layout-change="handleLayoutChange"
       />
+      <div class="graph-legend">
+        <span class="legend-item">
+          <span class="legend-dot implicit-dot"></span> 隱含持份者 (AI 推斷)
+        </span>
+      </div>
+
       <button
         class="contagion-toggle"
         :class="{ active: showContagionMap }"
@@ -412,5 +417,35 @@ onMounted(async () => {
   padding: 8px 16px;
   background: var(--bg-card);
   border-top: 1px solid var(--border-color);
+}
+
+/* Graph legend */
+.graph-legend {
+  display: flex;
+  gap: 12px;
+  padding: 4px 12px;
+  background: var(--bg-card);
+  font-size: 11px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-dot {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.implicit-dot {
+  border: 2px dashed #f59e0b;
+  background: transparent;
 }
 </style>

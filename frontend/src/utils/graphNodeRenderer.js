@@ -34,6 +34,21 @@ export function getNodeType(node) {
   return (node.type || node.category || 'default').toLowerCase()
 }
 
+/**
+ * Returns true if the node was discovered by ImplicitStakeholderService
+ * (i.e. properties.source === 'implicit_discovery').
+ */
+export function isImplicitNode(node) {
+  try {
+    const props = typeof node.properties === 'string'
+      ? JSON.parse(node.properties)
+      : (node.properties || {})
+    return props.source === 'implicit_discovery'
+  } catch {
+    return false
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Link styling helpers
 // ---------------------------------------------------------------------------
@@ -173,7 +188,19 @@ export function drawNode(node, ctx, globalScale, opts) {
   ctx.arc(node.x, node.y, r, 0, 2 * Math.PI)
   ctx.strokeStyle = isHighlighted ? '#fbbf24' : '#D1D5DB'
   ctx.lineWidth = isHighlighted ? 2.5 : 1.5
+  ctx.setLineDash([])
   ctx.stroke()
+
+  // Implicit stakeholder dashed amber ring (discovered by AI, not in seed text)
+  if (isImplicitNode(node)) {
+    ctx.beginPath()
+    ctx.arc(node.x, node.y, r + 3, 0, 2 * Math.PI)
+    ctx.setLineDash([4, 2])
+    ctx.strokeStyle = '#f59e0b'
+    ctx.lineWidth = 2
+    ctx.stroke()
+    ctx.setLineDash([])
+  }
 
   // Contagion border ring (on top of node)
   if (node.contagion_active) {
