@@ -16,8 +16,6 @@ const quickStartError = ref(null)
 
 const domainPacks = ref([])
 const selectedDomain = ref('hk_city')
-const packDetails = ref(null)
-const loadingDetails = ref(false)
 const showDomainBuilder = ref(false)
 const showDataConnector = ref(false)
 const customDomainPack = ref(null)
@@ -68,96 +66,8 @@ const canQuickStart = computed(() =>
   !quickStartLoading.value && (quickStartFile.value || quickStartText.value.trim())
 )
 
-const HK_SCENARIOS = [
-  {
-    key: 'property',
-    title: '買樓決策',
-    desc: '模擬香港樓市走勢，分析唔同經濟情境下嘅置業決策',
-    icon: '🏠',
-    color: 'var(--accent-blue)',
-  },
-  {
-    key: 'emigration',
-    title: '移民決策',
-    desc: '模擬移民潮對社會網絡同經濟嘅影響',
-    icon: '✈️',
-    color: 'var(--accent-purple)',
-  },
-  {
-    key: 'fertility',
-    title: '生育規劃',
-    desc: '分析社會因素對生育決策嘅影響同趨勢推演',
-    icon: '👶',
-    color: 'var(--accent-green)',
-  },
-  {
-    key: 'career',
-    title: '學科/就業前景',
-    desc: '模擬唔同學科畢業生嘅就業路徑同薪酬走勢',
-    icon: '🎓',
-    color: 'var(--accent-orange)',
-  },
-  {
-    key: 'b2b',
-    title: 'B2B 營銷預測',
-    desc: '模擬企業間嘅商業網絡同市場傳播效應',
-    icon: '📊',
-    color: 'var(--accent-cyan)',
-  },
-  {
-    key: 'opinion',
-    title: '宏觀民意推演',
-    desc: '模擬公眾輿論形成、傳播同演變過程',
-    icon: '🗣️',
-    color: 'var(--accent-red)',
-  },
-]
-
-// Scenario card colors to cycle through for non-HK packs
-const FALLBACK_COLORS = [
-  'var(--accent-blue)',
-  'var(--accent-purple)',
-  'var(--accent-green)',
-  'var(--accent-orange)',
-  'var(--accent-cyan)',
-  'var(--accent-red)',
-]
-
-const FALLBACK_ICONS = ['🌐', '📈', '🏗️', '💡', '🔬', '🌍']
-
-const activeScenarios = computed(() => {
-  // If pack has scenarios defined, map them to cards
-  if (packDetails.value?.scenarios?.length) {
-    return packDetails.value.scenarios.map((s, i) => ({
-      key: s.key || s.id || String(i),
-      title: s.title_zh || s.title || s.name_zh || s.name_en || s.name || `Scenario ${i + 1}`,
-      desc: s.desc_zh || s.desc || s.description || '',
-      icon: s.icon || FALLBACK_ICONS[i % FALLBACK_ICONS.length],
-      color: s.color || FALLBACK_COLORS[i % FALLBACK_COLORS.length],
-    }))
-  }
-  // Default to HK scenarios
-  return HK_SCENARIOS
-})
-
-async function fetchPackDetails(packId) {
-  loadingDetails.value = true
-  packDetails.value = null
-  try {
-    const res = await fetch(`/api/domain-packs/${packId}`)
-    if (res.ok) {
-      packDetails.value = await res.json()
-    }
-  } catch {
-    // Silently fall back to default scenarios
-  } finally {
-    loadingDetails.value = false
-  }
-}
-
 async function selectDomain(packId) {
   selectedDomain.value = packId
-  await fetchPackDetails(packId)
 }
 
 onMounted(async () => {
@@ -168,10 +78,8 @@ onMounted(async () => {
       domainPacks.value = data.packs || []
     }
   } catch {
-    // Fallback: use hardcoded HK scenarios only
+    // Fallback: no domain tabs shown
   }
-  // Load initial domain details
-  await fetchPackDetails(selectedDomain.value)
 })
 
 async function handleQuickStart() {
@@ -213,13 +121,7 @@ async function handleQuickStart() {
   }
 }
 
-function startScenario(key) {
-  router.push({
-    name: 'Process',
-    params: { scenarioType: key },
-    query: selectedDomain.value !== 'hk_city' ? { domainPackId: selectedDomain.value } : undefined,
-  })
-}
+
 </script>
 
 <template>
@@ -274,7 +176,7 @@ function startScenario(key) {
         v-model="quickStartText"
         :disabled="!!quickStartFile"
         class="qs-textarea"
-        placeholder="輸入新聞標題或場景描述，例如：恒指跌破 15000 點，樓市成交量大跌..."
+        placeholder="輸入場景描述，例如：美聯儲宣布加息200個基點，全球股市出現恐慌性拋售..."
         rows="3"
       />
 
@@ -282,7 +184,7 @@ function startScenario(key) {
       <input
         v-model="quickStartQuestion"
         class="qs-question"
-        placeholder="（選填）你想預測什麼？例如：失業率會否升破 4%？"
+        placeholder="（選填）你想預測什麼？例如：哪個陣營最終會佔主導？社會情緒走向如何？"
       />
 
       <!-- Preset pills -->
@@ -348,26 +250,6 @@ function startScenario(key) {
       <DataConnectorPanel />
     </div>
 
-    <section class="scenarios">
-      <h2 class="section-title">選擇模擬場景</h2>
-
-      <div v-if="loadingDetails" class="loading-hint">載入場景中...</div>
-
-      <div v-else class="scenario-grid">
-        <div
-          v-for="s in activeScenarios"
-          :key="s.key"
-          class="scenario-card"
-          :style="{ '--card-accent': s.color }"
-          @click="startScenario(s.key)"
-        >
-          <div class="card-icon">{{ s.icon }}</div>
-          <h3 class="card-title">{{ s.title }}</h3>
-          <p class="card-desc">{{ s.desc }}</p>
-          <div class="card-arrow">→</div>
-        </div>
-      </div>
-    </section>
   </div>
 </template>
 
@@ -627,90 +509,5 @@ function startScenario(key) {
   margin-bottom: 32px;
 }
 
-.section-title {
-  font-size: 20px;
-  font-weight: 600;
-  margin-bottom: 24px;
-  color: var(--text-secondary);
-}
 
-.loading-hint {
-  text-align: center;
-  color: var(--text-muted);
-  font-size: 14px;
-  padding: 48px 0;
-}
-
-.scenario-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 20px;
-}
-
-.scenario-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  padding: 28px 24px;
-  cursor: pointer;
-  transition: var(--transition);
-  position: relative;
-  overflow: hidden;
-  box-shadow: var(--shadow-card);
-}
-
-.scenario-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: var(--card-accent);
-  opacity: 0;
-  transition: var(--transition);
-}
-
-.scenario-card:hover {
-  border-color: var(--card-accent);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-}
-
-.scenario-card:hover::before {
-  opacity: 1;
-}
-
-.card-icon {
-  font-size: 32px;
-  margin-bottom: 12px;
-}
-
-.card-title {
-  font-size: 18px;
-  font-weight: 600;
-  margin-bottom: 8px;
-}
-
-.card-desc {
-  font-size: 14px;
-  color: var(--text-muted);
-  line-height: 1.5;
-}
-
-.card-arrow {
-  position: absolute;
-  bottom: 20px;
-  right: 20px;
-  font-size: 20px;
-  color: var(--card-accent);
-  opacity: 0;
-  transform: translateX(-8px);
-  transition: var(--transition);
-}
-
-.scenario-card:hover .card-arrow {
-  opacity: 1;
-  transform: translateX(0);
-}
 </style>

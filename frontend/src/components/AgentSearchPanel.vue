@@ -9,6 +9,7 @@ const props = defineProps({
   filterOccupation: { type: String, default: '' },
   loadingAgents: { type: Boolean, default: false },
   selectedAgentId: { type: Number, default: null },
+  simMode: { type: String, default: 'hk_demographic' },
 })
 
 const emit = defineEmits([
@@ -29,12 +30,13 @@ const occupations = computed(() => {
   return [...set].sort()
 })
 
-// Stance badge — political_stance is REAL: 0.0=pro-establishment(建制), 0.5=centrist(中立), 1.0=pro-democracy(民主)
+// Stance badge — political_stance: 0.0=conservative, 0.5=centrist, 1.0=progressive
 function stanceBadge(agent) {
   const stance = agent.political_stance
   if (stance == null) return null
-  if (stance <= 0.33) return { label: '建制派', color: '#3b82f6' }
-  if (stance >= 0.67) return { label: '民主派', color: '#ef4444' }
+  const isHK = props.simMode === 'hk_demographic'
+  if (stance <= 0.33) return { label: isHK ? '建制派' : '保守', color: '#3b82f6' }
+  if (stance >= 0.67) return { label: isHK ? '民主派' : '進步', color: '#ef4444' }
   return { label: '中立', color: '#64748b' }
 }
 
@@ -88,7 +90,7 @@ const filteredAgents = computed(() => {
     />
 
     <!-- Filter dropdowns -->
-    <div class="filter-row">
+    <div class="filter-row" v-if="simMode === 'hk_demographic'">
       <select
         :value="filterDistrict"
         class="filter-select"

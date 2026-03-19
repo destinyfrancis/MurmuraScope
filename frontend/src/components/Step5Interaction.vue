@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { getSessionAgents, getAgentMemories, searchAgentMemories, getSentimentSummary } from '../api/simulation.js'
+import { getSessionAgents, getAgentMemories, searchAgentMemories, getSentimentSummary, getSession } from '../api/simulation.js'
 import AgentSearchPanel from './AgentSearchPanel.vue'
 import AgentDetailPanel from './AgentDetailPanel.vue'
 import HKDistrictMap from './HKDistrictMap.vue'
@@ -28,6 +28,7 @@ const memorySearchTerm = ref('')
 const matchingAgentIds = ref([])
 const sentimentData = ref({})
 const selectedDistrict = ref(null)
+const simMode = ref('hk_demographic')
 
 async function loadAgents() {
   if (!props.session.sessionId) return
@@ -107,6 +108,12 @@ function onSelectDistrict(district) {
 
 onMounted(() => {
   loadAgents()
+  getSession(props.session.sessionId)
+    .then(res => {
+      const data = res.data?.data || res.data
+      simMode.value = data?.sim_mode || 'hk_demographic'
+    })
+    .catch(() => {})
   getSentimentSummary(props.session.sessionId)
     .then(res => {
       sentimentData.value = res.data?.data || {}
@@ -126,6 +133,7 @@ onMounted(() => {
         :agent-list="agentList"
         :loading-agents="loadingAgents"
         :selected-agent-id="selectedAgent?.id"
+        :sim-mode="simMode"
         @select-agent="selectAgent"
         @clear-selection="clearAgentSelection"
       />
@@ -140,8 +148,9 @@ onMounted(() => {
         @memory-search="onMemorySearch"
       />
 
-      <!-- District Map (cross-filtered) -->
+      <!-- District Map (cross-filtered) — only for HK mode -->
       <HKDistrictMap
+        v-if="simMode === 'hk_demographic'"
         :filter-query="memorySearchTerm"
         :agent-districts="agentDistrictMap"
         :matching-agent-ids="matchingAgentIds"

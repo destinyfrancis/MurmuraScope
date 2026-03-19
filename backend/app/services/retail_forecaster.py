@@ -110,7 +110,11 @@ class RetailForecaster:
             return self._baseline_forecast(session_id, round_number)
 
         sector_index = self._compute_sector_index(agg, macro_state)
-        total_index = sum(sector_index.values()) / max(len(sector_index), 1)
+        total_weight = sum(_RETAIL_BASELINE_HKD_BN.get(s, 1.0) for s in sector_index)
+        total_index = (
+            sum(idx * _RETAIL_BASELINE_HKD_BN.get(s, 1.0) for s, idx in sector_index.items())
+            / max(total_weight, 1.0)
+        )
         yoy_change_pct = (total_index - 100.0) / 100.0 * 100.0   # as %
 
         top_sector = max(sector_index, key=sector_index.get)  # type: ignore[arg-type]

@@ -217,6 +217,10 @@ DEFAULT_METRICS: list[str] = [
     "emigrate_rate",
 ]
 
+# Metrics actually computed by _mc_trial_worker's surrogate formulas.
+# Requesting any metric outside this set produces silent zeros — fail-fast instead.
+_WORKER_METRICS: frozenset[str] = frozenset(DEFAULT_METRICS)
+
 # Gaussian noise std-dev applied to decision confidence values
 _CONFIDENCE_NOISE_SIGMA = 0.1
 # Uniform ± fraction applied to macro coefficients
@@ -380,6 +384,14 @@ class MonteCarloEngine:
 
         if metrics is None:
             metrics = pack_metrics
+
+        # Fail-fast: unknown metrics produce silent zeros in the surrogate worker
+        unsupported = [m for m in metrics if m not in _WORKER_METRICS]
+        if unsupported:
+            raise ValueError(
+                f"Monte Carlo surrogate does not support metrics: {unsupported}. "
+                f"Supported: {sorted(_WORKER_METRICS)}"
+            )
 
         n_trials = max(10, min(n_trials, 2000))
 

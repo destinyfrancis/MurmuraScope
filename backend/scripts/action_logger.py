@@ -155,12 +155,25 @@ class ActionLogger:
         )
 
         await self._ensure_contagion_columns()
-        parent_id, spread_depth = await self._resolve_parent(
-            session_id, target_agent_username, round_number
-        )
 
         try:
             async with get_db() as db:
+                # Resolve parent and insert atomically in the same connection to
+                # avoid the race where another post is inserted between the two
+                # separate DB connections used previously.
+                parent_id, spread_depth = None, 0
+                if target_agent_username:
+                    cursor = await db.execute(
+                        """SELECT id, COALESCE(spread_depth, 0) as depth
+                           FROM simulation_actions
+                           WHERE session_id = ? AND oasis_username = ? AND round_number <= ?
+                           ORDER BY round_number DESC, id DESC LIMIT 1""",
+                        (session_id, target_agent_username, round_number),
+                    )
+                    row = await cursor.fetchone()
+                    if row:
+                        parent_id, spread_depth = row[0], row[1] + 1
+
                 await db.execute(
                     """
                     INSERT INTO simulation_actions

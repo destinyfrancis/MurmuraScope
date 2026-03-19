@@ -1,13 +1,22 @@
 <script setup>
 defineProps({
-  currentRound: { type: Number, required: true },
-  totalRounds: { type: Number, required: true },
-  progressPercent: { type: Number, required: true },
-  running: { type: Boolean, default: false },
-  completed: { type: Boolean, default: false },
+  currentRound:    { type: Number,  required: true },
+  totalRounds:     { type: Number,  required: true },
+  progressPercent: { type: Number,  required: true },
+  running:         { type: Boolean, default: false },
+  completed:       { type: Boolean, default: false },
+  tokenCostUsd:    { type: Number,  default: 0 },
+  modelName:       { type: String,  default: '' },
+  simMode:         { type: String,  default: '' },
 })
 
-const emit = defineEmits(['open-fork'])
+const emit = defineEmits(['open-fork', 'abort'])
+
+function handleAbort() {
+  if (confirm('確定要中止模擬？此操作不可逆。')) {
+    emit('abort')
+  }
+}
 </script>
 
 <template>
@@ -20,12 +29,21 @@ const emit = defineEmits(['open-fork'])
       <div class="progress-fill" :style="{ width: progressPercent + '%' }" />
     </div>
     <div class="sim-status">
-      <span v-if="running" class="status-badge running status-pulse">模擬中</span>
+      <span v-if="running"    class="status-badge running status-pulse">模擬中</span>
       <span v-else-if="completed" class="status-badge completed">已完成</span>
-      <span v-else class="status-badge idle">待開始</span>
+      <span v-else            class="status-badge idle">待開始</span>
     </div>
+    <span v-if="modelName" class="model-tag">MODEL: {{ modelName }}</span>
+    <span v-if="tokenCostUsd > 0" class="cost-tag">${{ tokenCostUsd.toFixed(4) }} USD</span>
     <button
-      v-if="running || completed"
+      v-if="running"
+      class="abort-btn"
+      @click="handleAbort"
+    >
+      &#x25A0; 中止
+    </button>
+    <button
+      v-if="completed"
       class="fork-btn"
       @click="emit('open-fork')"
     >
@@ -105,6 +123,38 @@ const emit = defineEmits(['open-fork'])
   color: var(--text-muted);
 }
 
+.model-tag {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  letter-spacing: 0.03em;
+}
+
+.cost-tag {
+  font-size: 11px;
+  color: var(--accent-green);
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.abort-btn {
+  padding: 6px 14px;
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: var(--transition);
+  flex-shrink: 0;
+}
+
+.abort-btn:hover {
+  background: rgba(239, 68, 68, 0.28);
+}
+
 .fork-btn {
   padding: 6px 14px;
   background: rgba(167, 139, 250, 0.15);
@@ -130,6 +180,6 @@ const emit = defineEmits(['open-fork'])
 
 @keyframes status-pulse-anim {
   0%, 100% { box-shadow: 0 0 0 0 rgba(74, 158, 255, 0.4); }
-  50% { box-shadow: 0 0 0 6px rgba(74, 158, 255, 0); }
+  50%       { box-shadow: 0 0 0 6px rgba(74, 158, 255, 0); }
 }
 </style>

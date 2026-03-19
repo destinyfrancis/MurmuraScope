@@ -114,7 +114,7 @@ function getFbReactions(post) {
 
       <div
         v-for="(post, i) in displayPosts"
-        :key="i"
+        :key="post.id || post.post_id || i"
         class="post-card"
       >
         <div
@@ -149,8 +149,8 @@ function getFbReactions(post) {
               <span class="action-icon">&#128172;</span>
               {{ post.comments || 0 }}
             </span>
-            <span v-if="post.sentiment" class="action-item sentiment">
-              {{ post.sentiment > 0 ? '+' : '' }}{{ (post.sentiment * 100).toFixed(0) }}%
+            <span v-if="post.sentiment != null && Number.isFinite(+post.sentiment)" class="action-item sentiment">
+              {{ +post.sentiment > 0 ? '+' : '' }}{{ (+post.sentiment * 100).toFixed(0) }}%
             </span>
           </div>
 

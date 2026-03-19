@@ -541,11 +541,25 @@ class GraphBuilderService:
         if not actions:
             return 0
 
+        # Normalise action type variants to canonical names before matching.
+        # OASIS emits both bare forms ("like") and compound forms ("like_post").
+        _CANONICAL_ACTION: dict[str, str] = {
+            "like": "like",
+            "like_post": "like",
+            "repost": "repost",
+            "repost_post": "repost",
+            "retweet": "repost",
+            "retweet_post": "repost",
+            "share": "repost",
+            "share_post": "repost",
+        }
+
         # Build interaction counts from actions
         interaction_counts: dict[str, int] = {}
         for action in actions:
-            action_type = action.get("action_type", "post")
-            if action_type in ("like", "repost", "retweet"):
+            raw_type = action.get("action_type", "post")
+            canonical = _CANONICAL_ACTION.get(raw_type, raw_type)
+            if canonical in ("like", "repost"):
                 username = action.get("oasis_username", "")
                 if username:
                     interaction_counts[username] = interaction_counts.get(username, 0) + 1

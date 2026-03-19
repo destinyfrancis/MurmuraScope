@@ -53,10 +53,11 @@ function getSentiment(districtName) {
 const activeDistricts = computed(() => {
   if (!props.filterQuery) return null
   if (props.matchingAgentIds.length === 0) return new Set()  // All dimmed
-  // Find which districts have agents matching the search
+  // Build Set once for O(1) lookups instead of O(n) includes per district
+  const matchingSet = new Set(props.matchingAgentIds)
   const active = new Set()
   for (const [district, agentIds] of Object.entries(props.agentDistricts)) {
-    if (agentIds.some(id => props.matchingAgentIds.includes(id))) {
+    if (agentIds.some(id => matchingSet.has(id))) {
       active.add(district)
     }
   }

@@ -226,3 +226,7 @@ export function getMultiRun(sessionId) {
 export function triggerMultiRun(sessionId) {
   return api.post(`/simulation/${sessionId}/multi-run`)
 }
+
+export function stopSimulation(sessionId) {
+  return api.post(`/simulation/${sessionId}/stop`)
+}

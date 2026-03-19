@@ -1797,6 +1797,23 @@ async def trigger_multi_run(simulation_id: str) -> APIResponse:
     )
 
 
+@router.post("/{session_id}/stop", response_model=APIResponse)
+async def stop_simulation(session_id: str) -> APIResponse:
+    """Stop a running simulation session."""
+    try:
+        manager = get_simulation_manager()
+        await manager.stop_session(session_id)
+        return APIResponse(
+            success=True,
+            data={"stopped": True, "session_id": session_id},
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("stop_simulation failed for session %s", session_id)
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
+
+
 @router.get("/{simulation_id}/world-events", response_model=APIResponse)
 async def get_world_events(simulation_id: str) -> APIResponse:
     """Return all world events generated for a kg_driven simulation."""

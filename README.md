@@ -29,6 +29,19 @@
 
 ---
 
+## 🆕 Latest Improvements (2026-03-19)
+
+- **Universal Mode UX:** Non-HK simulations no longer show HK district map or HK-specific filters
+- **Abort Button:** Real-time `■ 中止` button in simulation header — stops simulation immediately with `POST /{session_id}/stop`
+- **Token Cost Display:** Header shows live `$X.XXXX USD` spent + model name being used
+- **GraphRAG Real-time:** Knowledge graph now updates every round (was every 5 rounds)
+- **Agent Interaction Fix:** Fixed `sqlite3.Row.get()` crash in `/report/interview` — agent chat now works reliably for both HK and kg_driven simulations
+- **Generic Interview Questions:** Agent interview questions no longer hardcoded to HK scenarios
+- **Landing Page Redesign:** Clean dark UI inspired by modern prediction tools — universal, not HK-specific
+- **Demo Scenarios Removed:** Home page simplified — drop-zone quick start is now the primary entry point
+
+---
+
 ## 🌟 引擎特色 / What Makes Moirai Different
 
 大多數模擬工具只能處理固定領域。**Moirai 沒有這個限制。**

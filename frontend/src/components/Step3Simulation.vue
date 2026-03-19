@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { startSimulation, connectWebSocket, createBranch, injectShock, getSessionAgents, getEchoChambers, getContagionData, getCommunitySummaries, getTripleConflicts, getPolarization } from '../api/simulation.js'
-import { getFactions, getTippingPoints, getWorldEvents } from '../api/simulation.js'
+import { startSimulation, stopSimulation, connectWebSocket, createBranch, injectShock, getSessionAgents, getEchoChambers, getContagionData, getCommunitySummaries, getTripleConflicts, getPolarization } from '../api/simulation.js'
+import { getFactions, getTippingPoints, getWorldEvents, getSession } from '../api/simulation.js'
 import { getGraph, getGraphSnapshots, getGraphSnapshot } from '../api/graph.js'
 import GraphPanel from './GraphPanel.vue'
 import SimMonitor from './SimMonitor.vue'
@@ -32,6 +32,10 @@ const totalRounds = ref(props.session.config.roundCount)
 const activeTab = ref('feed')
 const error = ref(null)
 
+const modelName = ref('')
+const tokenCostUsd = ref(0)
+const simMode = ref('')
+
 // Fork modal state
 const showForkModal = ref(false)
 const forkLoading = ref(false)
@@ -44,6 +48,10 @@ const highlightedNodes = ref([])
 const posts = ref([])
 const logs = ref([])
 const latestProgress = ref(null)
+
+// Ring buffer caps — prevent unbounded memory growth on long runs
+const _MAX_POSTS = 500
+const _MAX_LOGS = 300
 
 // God Mode shock banner
 const shockBanner = ref(null)
@@ -93,7 +101,7 @@ function addLog(message, type = 'info') {
     message,
     type,
   }
-  logs.value = [...logs.value, entry]
+  logs.value = [...logs.value.slice(-(_MAX_LOGS - 1)), entry]
 }
 
 function handleWsMessage(event) {
@@ -115,8 +123,8 @@ function handleWsMessage(event) {
             fetchContagionData()
             pollCognitiveData(props.session.sessionId)
           }
+          fetchGraphSnapshots()
           if (d.round % 5 === 0) {
-            fetchGraphSnapshots()
             fetchCommunityData()
           }
         }
@@ -125,7 +133,7 @@ function handleWsMessage(event) {
       case 'post':
         if (d.source === 'shock') {
           addLog(`[衝擊事件] ${d.shock_type || ''}: ${d.content || ''}`, 'warning')
-          posts.value = [...posts.value, {
+          posts.value = [...posts.value.slice(-(_MAX_POSTS - 1)), {
             id: Date.now(),
             username: `[系統衝擊: ${d.shock_type || ''}]`,
             content: d.content || '',
@@ -134,7 +142,7 @@ function handleWsMessage(event) {
             isShock: true,
           }]
         } else {
-          posts.value = [...posts.value, {
+          posts.value = [...posts.value.slice(-(_MAX_POSTS - 1)), {
             id: Date.now(),
             username: d.username || `Agent`,
             content: d.content || '',
@@ -162,7 +170,7 @@ function handleWsMessage(event) {
 
       case 'news_shock':
         addLog(`[新聞注入] ${d.headline || ''} (${d.source || ''})`, 'warning')
-        posts.value = [...posts.value, {
+        posts.value = [...posts.value.slice(-(_MAX_POSTS - 1)), {
           id: Date.now(),
           username: `[新聞: ${d.source || 'RTHK'}]`,
           content: d.headline || '',
@@ -231,6 +239,20 @@ async function start() {
   }
 }
 
+async function abortSimulation() {
+  try {
+    await stopSimulation(props.session.sessionId)
+    running.value = false
+    addLog('模擬已被用戶中止', 'warning')
+    if (ws) {
+      ws.close()
+      ws = null
+    }
+  } catch (err) {
+    addLog('中止失敗: ' + (err.response?.data?.detail || err.message), 'error')
+  }
+}
+
 async function loadGraph() {
   const graphId = props.session.graphId
   if (!graphId) return
@@ -242,6 +264,18 @@ async function loadGraph() {
   } catch (err) {
     console.warn('Could not load graph for session:', err)
   }
+}
+
+async function fetchSessionInfo() {
+  try {
+    const res = await getSession(props.session.sessionId)
+    const data = res.data?.data || res.data
+    modelName.value = data?.llm_model || data?.config?.llm_model || ''
+    simMode.value = data?.sim_mode || ''
+    if (data?.estimated_cost_usd != null) {
+      tokenCostUsd.value = parseFloat(data.estimated_cost_usd) || 0
+    }
+  } catch { /* silent */ }
 }
 
 // Fork modal handlers
@@ -345,7 +379,13 @@ async function fetchGraphSnapshots() {
   try {
     const res = await getGraphSnapshots(props.session.graphId)
     const snapshots = res.data?.data || []
-    availableRounds.value = snapshots.map(s => s.round_number).sort((a, b) => a - b)
+    const rounds = snapshots.map(s => s.round_number).sort((a, b) => a - b)
+    availableRounds.value = rounds
+    // Auto-load the latest snapshot so graph updates dynamically
+    const latestRound = rounds[rounds.length - 1]
+    if (latestRound !== undefined && latestRound !== selectedGraphRound.value) {
+      await handleRoundChange(latestRound)
+    }
   } catch { /* silent */ }
 }
 
@@ -424,6 +464,7 @@ async function handleRoundChange(round) {
 
 onMounted(() => {
   loadGraph()
+  fetchSessionInfo()
   if (props.session.sessionId) {
     start()
     getSessionAgents(props.session.sessionId)
@@ -450,6 +491,10 @@ onUnmounted(() => {
 const progressPercent = ref(0)
 watch(currentRound, (r) => {
   progressPercent.value = Math.round((r / totalRounds.value) * 100)
+})
+
+watch(completed, (done) => {
+  if (done) fetchSessionInfo()
 })
 
 // Build a map of { agent_id: hexColour } from the latest faction snapshot.
@@ -480,7 +525,11 @@ const factionAgentColourMap = computed(() => {
       :progress-percent="progressPercent"
       :running="running"
       :completed="completed"
+      :model-name="modelName"
+      :token-cost-usd="tokenCostUsd"
+      :sim-mode="simMode"
       @open-fork="openForkModal"
+      @abort="abortSimulation"
     />
 
     <div class="sim-quick-links">

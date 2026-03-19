@@ -483,7 +483,10 @@ class Backtester:
         """
         original_load = self._forecaster._load_history
 
-        async def _patched_load(m: str) -> list[tuple[str, float]]:
+        async def _patched_load(
+            m: str,
+            metric_db_map: dict | None = None,  # noqa: ARG001
+        ) -> list[tuple[str, float]]:
             return train_data
 
         # Patch instance method (Python allows assigning to instance __dict__)

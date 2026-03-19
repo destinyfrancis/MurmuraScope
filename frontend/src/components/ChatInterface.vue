@@ -8,6 +8,7 @@ const props = defineProps({
   targetType: { type: String, default: 'report' },
   selectedAgent: { type: Object, default: null },
   interviewMode: { type: Boolean, default: false },
+  simMode: { type: String, default: '' },
 })
 
 const emit = defineEmits(['update:interviewMode'])
@@ -23,11 +24,11 @@ const sending = ref(false)
 const chatContainer = ref(null)
 
 const interviewQuestions = [
-  '你對目前香港樓市有咩睇法？',
-  '你有冇考慮過移民？點解？',
-  '你覺得而家嘅經濟環境對你有咩影響？',
-  '你平時喺社交媒體會討論啲咩話題？',
-  '你對政府嘅房屋政策有咩意見？',
+  '你對目前局勢有什麼看法？',
+  '你做了哪些決策，為什麼？',
+  '你的立場如何影響你的行動？',
+  '你在社交媒體上最關注哪些話題？',
+  '你認為未來情況會如何發展？',
 ]
 
 const generalQuestions = [

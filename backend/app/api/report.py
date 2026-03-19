@@ -18,9 +18,9 @@ from backend.app.utils.db import get_db
 from backend.app.utils.logger import get_logger
 from backend.app.utils.prompt_security import sanitize_scenario_description
 
-_CHAT_AGENT_SYSTEM = """You are roleplaying as a Hong Kong resident agent in a social simulation.
+_CHAT_AGENT_SYSTEM = """You are roleplaying as a simulation agent in a social simulation.
 Stay in character based on your demographic profile, personality, and memories.
-Answer in Traditional Chinese (繁體中文) mixed with Cantonese colloquialisms where appropriate.
+Answer in the language of the user's question.
 Reference your memories and recent actions when relevant."""
 
 router = APIRouter(prefix="/report", tags=["report"])
@@ -173,12 +173,13 @@ async def interview_agent(req: AgentInterviewRequest) -> APIResponse:
 
         profile_ctx = ""
         if profile_row:
+            _profile = dict(profile_row)
             profile_ctx = (
-                f"姓名：{profile_row.get('username', '未知')}\n"
-                f"年齡：{profile_row.get('age', '?')} 歲\n"
-                f"職業：{profile_row.get('occupation', '?')}\n"
-                f"地區：{profile_row.get('district', '?')}\n"
-                f"性格：{profile_row.get('user_char', '')[:200]}\n"
+                f"姓名：{_profile.get('username', '未知')}\n"
+                f"年齡：{_profile.get('age', '?')} 歲\n"
+                f"職業：{_profile.get('occupation', '?')}\n"
+                f"地區：{_profile.get('district', '?')}\n"
+                f"性格：{_profile.get('user_char', '')[:200]}\n"
             )
 
         # Load recent memories

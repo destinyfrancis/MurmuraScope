@@ -411,13 +411,10 @@ class SupplyChainBuilder:
         """Insert KG nodes for each company into kg_nodes."""
         import json
 
-        # Determine the graph_id to use (first 8 chars of session)
-        graph_id = graph_prefix
-
         rows = []
         for company in companies:
             node_id = f"{graph_prefix}_company_{company.id}"
-            label = company.company_name
+            title = company.company_name
             props = json.dumps(
                 {
                     "company_id": company.id,
@@ -434,13 +431,13 @@ class SupplyChainBuilder:
                 },
                 ensure_ascii=False,
             )
-            rows.append((node_id, graph_id, "Company", label, props))
+            rows.append((node_id, session_id, "Company", title, props))
 
         async with get_db() as db:
             await db.executemany(
                 """
                 INSERT OR IGNORE INTO kg_nodes
-                    (id, graph_id, entity_type, label, properties)
+                    (id, session_id, entity_type, title, properties)
                 VALUES (?, ?, ?, ?, ?)
                 """,
                 rows,
@@ -460,7 +457,7 @@ class SupplyChainBuilder:
             (
                 f"{graph_prefix}_company_{e.source_company_id}",
                 f"{graph_prefix}_company_{e.target_company_id}",
-                graph_prefix,
+                session_id,
                 e.relation_type,
                 e.weight,
             )
@@ -471,7 +468,7 @@ class SupplyChainBuilder:
             await db.executemany(
                 """
                 INSERT OR IGNORE INTO kg_edges
-                    (source_id, target_id, graph_id, relation_type, weight)
+                    (source_id, target_id, session_id, relation_type, weight)
                 VALUES (?, ?, ?, ?, ?)
                 """,
                 rows,

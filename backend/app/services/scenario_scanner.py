@@ -233,7 +233,7 @@ class ScenarioScanner:
             lhs[:, j] = (perm + rng.random(n_samples)) / n_samples
 
         # Scale each column to [min_val, max_val] of the candidate list
-        combos: list[dict[str, float]] = []
+        raw_combos: list[dict[str, float]] = []
         for row in lhs:
             combo: dict[str, float] = {}
             for j, key in enumerate(keys):
@@ -243,7 +243,16 @@ class ScenarioScanner:
                 # Snap to nearest candidate value
                 best = min(candidates, key=lambda c: abs(c - raw))
                 combo[key] = best
-            combos.append(combo)
+            raw_combos.append(combo)
+
+        # Deduplicate: snapping to nearest candidate can produce identical combos
+        seen: set[tuple] = set()
+        combos: list[dict[str, float]] = []
+        for combo in raw_combos:
+            key = tuple(sorted(combo.items()))
+            if key not in seen:
+                seen.add(key)
+                combos.append(combo)
 
         return combos
 
@@ -252,6 +261,56 @@ class ScenarioScanner:
         """Human-readable branch label."""
         parts = [f"{k}={v}" for k, v in combo.items()]
         return f"{prefix}-{index + 1} [{', '.join(parts)}]"
+
+    async def _migrate_scenario_branches(self, db: Any) -> None:
+        """One-time idempotent migration: upgrade scenario_branches to scanner schema.
+
+        The original schema used INTEGER AUTOINCREMENT id, NOT NULL branch_session_id,
+        and NOT NULL scenario_variant — incompatible with scanner's UUID ids and stub
+        branches.  This method recreates the table when the old schema is detected.
+        """
+        cursor = await db.execute("PRAGMA table_info(scenario_branches)")
+        cols = {r[1] for r in await cursor.fetchall()}
+        if not cols:
+            return  # Table doesn't exist; schema.sql will create correct version
+
+        if "config_overrides" in cols:
+            return  # Already on the new schema
+
+        logger.info("Migrating scenario_branches to scanner-compatible schema")
+        await db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS scenario_branches_v2 (
+                id               TEXT PRIMARY KEY,
+                parent_session_id TEXT NOT NULL,
+                branch_session_id TEXT,
+                scenario_variant  TEXT,
+                label             TEXT NOT NULL DEFAULT '',
+                fork_round        INTEGER,
+                config_overrides  TEXT,
+                created_at        TEXT DEFAULT (datetime('now'))
+            )
+            """
+        )
+        await db.execute(
+            """
+            INSERT OR IGNORE INTO scenario_branches_v2
+                (id, parent_session_id, branch_session_id, scenario_variant,
+                 label, fork_round, created_at)
+            SELECT CAST(id AS TEXT), parent_session_id, branch_session_id,
+                   scenario_variant, label, fork_round, created_at
+            FROM scenario_branches
+            """
+        )
+        await db.execute("DROP TABLE scenario_branches")
+        await db.execute(
+            "ALTER TABLE scenario_branches_v2 RENAME TO scenario_branches"
+        )
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_branch_parent "
+            "ON scenario_branches(parent_session_id)"
+        )
+        logger.info("scenario_branches migration complete")
 
     async def _create_branch(
         self,
@@ -267,20 +326,7 @@ class ScenarioScanner:
         overrides_json = json.dumps(parameter_overrides)
 
         async with get_db() as db:
-            # Ensure scenario_branches table exists (may not be in original schema)
-            await db.execute(
-                """
-                CREATE TABLE IF NOT EXISTS scenario_branches (
-                    id               TEXT PRIMARY KEY,
-                    parent_session_id TEXT NOT NULL,
-                    branch_session_id TEXT,
-                    label            TEXT NOT NULL DEFAULT '',
-                    fork_round       INTEGER,
-                    config_overrides TEXT,
-                    created_at       TEXT DEFAULT (datetime('now'))
-                )
-                """
-            )
+            await self._migrate_scenario_branches(db)
             await db.execute(
                 """
                 INSERT INTO scenario_branches

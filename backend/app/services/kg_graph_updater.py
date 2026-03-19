@@ -1,12 +1,12 @@
 """Zep-style dynamic knowledge graph evolution from agent activities.
 
-Inspired by MiroFish's ZepGraphMemoryUpdater, this service:
+This service:
 1. Converts agent actions (posts, likes, follows, decisions) into
    natural-language activity descriptions.
 2. Batches descriptions and extracts new entities + relationships via LLM.
 3. Injects discovered entities/edges into the local kg_nodes/kg_edges tables.
 
-Unlike MiroFish (which delegates to Zep Cloud), we do everything locally:
+All processing is done locally (no external graph memory cloud):
 - Entity extraction via LLM (same provider as other services)
 - Storage in SQLite (kg_nodes, kg_edges)
 - Deduplication via node title matching + edge UPSERT

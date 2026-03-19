@@ -42,6 +42,7 @@ const session = reactive({
   graphId: null,
   graphData: null,
   sessionId: null,
+  simulationComplete: false,
   reportId: null,
   scenarioQuestion: '',           // passed through to Step 4 report
   preset: { name: 'standard', agents: 300, rounds: 20 },
@@ -57,7 +58,7 @@ const session = reactive({
 const stepConfig = {
   1: { leftWidth: 70 },
   2: { leftWidth: 50 },
-  3: { leftWidth: 65 },
+  3: { leftWidth: 40 },
   4: { leftWidth: 75 },
   5: { leftWidth: 45 },
 }
@@ -80,10 +81,18 @@ const currentComponent = computed(() => {
 function canGoToStep(step) {
   if (step <= 1) return true
   if (step === 2) return session.graphId !== null
-  if (step === 3) return session.graphId !== null
-  if (step === 4) return session.sessionId !== null
+  if (step === 3) return session.sessionId !== null
+  if (step === 4) return session.simulationComplete === true
   if (step === 5) return session.reportId !== null
   return false
+}
+
+function stepLockedReason(step) {
+  if (step === 2) return '請先完成圖譜構建'
+  if (step === 3) return '請先完成環境設置並啟動模擬'
+  if (step === 4) return '模擬完成後才可生成報告'
+  if (step === 5) return '請先生成報告'
+  return ''
 }
 
 function goToStep(step) {
@@ -115,6 +124,7 @@ function onSimulationCreated(data) {
 
 function onSimulationComplete(data) {
   session.sessionId = data.sessionId
+  session.simulationComplete = true
   nextStep()
 }
 
@@ -149,6 +159,8 @@ onMounted(async () => {
     graphId: expressGraphId.value,
     sessionId: expressSessionId.value,
     scenarioQuestion: expressScenarioQuestion.value,
+    // Express mode: simulation already started — unlock step 3 nav immediately
+    // simulationComplete is set to true by Step3 when WS 'complete' event fires
   })
 
   // Auto-advance: briefly show each step as "auto-completed" before landing on Step 3
@@ -175,7 +187,7 @@ watch(
 <template>
   <div class="process-root">
     <nav class="app-nav">
-      <span class="nav-brand" @click="router.push('/')">HKSIMENGINE</span>
+      <span class="nav-brand" @click="router.push('/')">MORAI</span>
       <span class="step-indicator">
         <span class="step-num">{{ currentStep }}</span>
         <span class="step-label">{{ steps[currentStep - 1]?.label }}</span>
@@ -188,6 +200,7 @@ watch(
           class="view-switch-btn"
           :class="{ active: currentStep === step.key, done: canGoToStep(step.key) && step.key < currentStep }"
           :disabled="!canGoToStep(step.key)"
+          :title="!canGoToStep(step.key) ? stepLockedReason(step.key) : step.label"
           @click="goToStep(step.key)"
         >
           {{ step.navLabel }}
