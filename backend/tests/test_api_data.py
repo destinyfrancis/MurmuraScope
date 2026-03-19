@@ -140,3 +140,37 @@ async def test_dashboard_latest_update_reflects_newest_period(client_with_db):
     assert resp.status_code == 200
     data = resp.json()["data"]
     assert data["latest_update"] == "2026-03-01"
+
+
+# ---------------------------------------------------------------------------
+# Snapshot endpoint tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_snapshots_returns_db_rows(client_with_db):
+    """Snapshots endpoint must return real DB rows, most-recent first."""
+    test_client, test_db = client_with_db
+    for date, val in [("2026-03-01", 152.3), ("2026-02-01", 153.1), ("2026-01-01", 154.0)]:
+        await test_db.execute(
+            "INSERT INTO hk_data_snapshots (category, metric, value, unit, period, source) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            ("property_market", "ccl_index", val, "points", date, "test"),
+        )
+    await test_db.commit()
+
+    resp = await test_client.get("/api/data/snapshots?metric=ccl_index&limit=2")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["meta"]["count"] == 2
+    assert body["data"][0]["value"] == 152.3   # most recent first
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_snapshots_invalid_metric_returns_400(client_with_db):
+    """Unknown metric values must be rejected with HTTP 400."""
+    test_client, _ = client_with_db
+    resp = await test_client.get("/api/data/snapshots?metric=DROP_TABLE")
+    assert resp.status_code == 400

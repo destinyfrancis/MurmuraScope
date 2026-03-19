@@ -1,11 +1,23 @@
 """HK data dashboard endpoints."""
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 
 from backend.app.models.response import APIResponse
 from backend.app.utils.db import get_db
 
 router = APIRouter(prefix="/data", tags=["data"])
+
+_ALLOWED_SNAPSHOT_METRICS = frozenset({
+    "ccl_index",
+    "hsi_level",
+    "gdp_growth",
+    "unemployment_rate",
+    "consumer_confidence",
+    "inflation_rate",
+    "median_income",
+    "avg_price_psf",
+    "rental_yield",
+})
 
 # Metrics to surface per category.  Extend this dict as new metrics are stored.
 _DASHBOARD_METRICS: dict[str, list[str]] = {
@@ -45,27 +57,46 @@ async def get_dashboard() -> APIResponse:
 
 
 @router.get("/snapshots", response_model=APIResponse)
-async def query_snapshots(
-    metric: str = Query(default="cci_index", description="Metric name to query"),
+async def get_snapshots(
+    metric: str = Query(default="ccl_index", description="Metric name to query"),
     start_date: str | None = Query(default=None, description="Start date (ISO 8601)"),
     end_date: str | None = Query(default=None, description="End date (ISO 8601)"),
     limit: int = Query(default=30, ge=1, le=365, description="Max records to return"),
 ) -> APIResponse:
     """Query hk_data_snapshots for time-series macro data."""
-    # TODO: Replace with real data service call
-    # snapshots = await data_service.query_snapshots(metric, start_date, end_date, limit)
-    mock_snapshots = [
-        {"date": "2026-03-01", "metric": metric, "value": 152.3},
-        {"date": "2026-02-01", "metric": metric, "value": 153.1},
-        {"date": "2026-01-01", "metric": metric, "value": 154.0},
-    ]
+    if metric not in _ALLOWED_SNAPSHOT_METRICS:
+        raise HTTPException(status_code=400, detail=f"Unknown metric: {metric!r}")
+
+    conditions = ["metric = ?"]
+    params: list = [metric]
+    if start_date:
+        conditions.append("period >= ?")
+        params.append(start_date)
+    if end_date:
+        conditions.append("period <= ?")
+        params.append(end_date)
+    params.append(limit)
+
+    sql = (
+        "SELECT period AS date, value FROM hk_data_snapshots "
+        "WHERE " + " AND ".join(conditions) + " "
+        "ORDER BY period DESC LIMIT ?"
+    )
+    try:
+        async with get_db() as db:
+            cursor = await db.execute(sql, params)
+            rows = await cursor.fetchall()
+    except Exception as e:
+        return APIResponse(success=False, data=None, error=str(e))
+
+    snapshots = [{"date": r["date"], "value": r["value"]} for r in rows]
     return APIResponse(
         success=True,
-        data=mock_snapshots,
+        data=snapshots,
         meta={
             "metric": metric,
             "start_date": start_date,
             "end_date": end_date,
-            "count": len(mock_snapshots),
+            "count": len(snapshots),
         },
     )
