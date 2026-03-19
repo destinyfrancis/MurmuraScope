@@ -92,6 +92,47 @@ def test_tipping_point_compares_3_rounds_back():
     assert tipping is not None  # must detect vs 3-round-ago baseline
 
 
+@pytest.mark.unit
+def test_faction_mapping_is_deterministic():
+    """FactionMapper.compute() must produce identical partitions on identical inputs."""
+    try:
+        import networkx as nx
+    except ImportError:
+        pytest.skip("networkx not installed")
+
+    G = nx.karate_club_graph()  # 34 nodes, 78 edges — rich community structure
+
+    agent_beliefs = {str(n): {"metric_a": 0.5} for n in G.nodes()}
+    interaction_graph = {str(n): [str(nb) for nb in G.neighbors(n)] for n in G.nodes()}
+
+    mapper = FactionMapper()
+
+    result1 = mapper.compute(
+        simulation_id="sim_det_test",
+        round_number=1,
+        agent_beliefs=agent_beliefs,
+        interaction_graph=interaction_graph,
+    )
+    result2 = mapper.compute(
+        simulation_id="sim_det_test",
+        round_number=1,
+        agent_beliefs=agent_beliefs,
+        interaction_graph=interaction_graph,
+    )
+
+    def _partition_map(snapshot):
+        return {
+            agent_id: faction.faction_id
+            for faction in snapshot.factions
+            for agent_id in faction.member_agent_ids
+        }
+
+    assert _partition_map(result1) == _partition_map(result2), (
+        "Faction mapping must be deterministic for identical inputs"
+    )
+
+
+@pytest.mark.unit
 def test_narrative_entry_creation():
     """NarrativeEntry must be creatable and frozen."""
     import dataclasses

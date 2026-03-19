@@ -142,7 +142,7 @@ class FactionMapper:
         try:
             import igraph as ig  # noqa: PLC0415
             ig_graph = ig.Graph.from_networkx(G)
-            leiden = ig_graph.community_leiden(objective_function="modularity", n_iterations=10)
+            leiden = ig_graph.community_leiden(objective_function="modularity", n_iterations=10, seed=42)
             return {
                 node: membership
                 for node, membership in zip(G.nodes(), leiden.membership)
@@ -152,7 +152,7 @@ class FactionMapper:
         # Fall back to python-louvain
         try:
             from community import best_partition  # noqa: PLC0415
-            return best_partition(G)
+            return best_partition(G, random_state=42)
         except Exception:
             logger.warning(
                 "FactionMapper: neither igraph nor community available — single faction"
