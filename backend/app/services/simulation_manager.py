@@ -42,6 +42,15 @@ logger = get_logger("simulation_manager")
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
+# Module-level singleton — prevents duplicate SimulationRunner instances across
+# concurrent API requests.  Access via get_simulation_manager().
+_MANAGER_SINGLETON: "SimulationManager | None" = None
+
+# Module-level per-session start locks — shared across ALL SimulationManager
+# instances so concurrent POST /simulation/start requests for the same session
+# are serialised even when each handler creates a fresh SimulationManager().
+_SESSION_START_LOCKS: dict[str, asyncio.Lock] = {}
+
 _VALID_TRANSITIONS: dict[SessionStatus, set[SessionStatus]] = {
     SessionStatus.CREATED: {SessionStatus.RUNNING, SessionStatus.FAILED},
     SessionStatus.RUNNING: {SessionStatus.COMPLETED, SessionStatus.FAILED},
@@ -177,94 +186,102 @@ class SimulationManager:
         to running, then launches the runner asynchronously so the HTTP
         response returns immediately.
 
+        A per-session asyncio.Lock serialises concurrent calls so two
+        simultaneous POST /simulation/start requests for the same session
+        cannot both pass the idempotency check and spawn duplicate runners.
+
         Args:
             session_id: UUID of the session to start.
 
         Raises:
             ValueError: If session not found or invalid state transition.
         """
-        session = await _load_session(session_id)
+        if session_id not in _SESSION_START_LOCKS:
+            _SESSION_START_LOCKS[session_id] = asyncio.Lock()
 
-        # Idempotent: if already running, just let the client reconnect via WS
-        if session.status == SessionStatus.RUNNING:
-            logger.info("Session %s already running — skipping restart", session_id)
-            return
+        async with _SESSION_START_LOCKS[session_id]:
+            session = await _load_session(session_id)
 
-        _validate_transition(session.status, SessionStatus.RUNNING)
+            # Idempotent: if already running, just let the client reconnect via WS
+            if session.status == SessionStatus.RUNNING:
+                logger.info("Session %s already running — skipping restart", session_id)
+                return
 
-        updated = session.with_status(SessionStatus.RUNNING)
-        await _update_session_status(updated, started_at=datetime.utcnow().isoformat())
+            _validate_transition(session.status, SessionStatus.RUNNING)
 
-        config = await _build_runner_config(session)
+            updated = session.with_status(SessionStatus.RUNNING)
+            await _update_session_status(updated, started_at=datetime.utcnow().isoformat())
 
-        logger.info("Starting session %s in background", session_id)
+            config = await _build_runner_config(session)
 
-        async def _run_and_finalize() -> None:
-            async def on_progress(update: dict[str, Any]) -> None:
-                data = update.get("data", update)
-                current_round = data.get("round", 0)
-                if current_round:
-                    await _update_session_round(session_id, current_round)
+            logger.info("Starting session %s in background", session_id)
 
-            try:
-                await self._runner.run(
-                    session_id=session_id,
-                    config=config,
-                    progress_callback=on_progress,
-                )
-                completed = updated.with_status(SessionStatus.COMPLETED)
-                await _update_session_status(
-                    completed,
-                    completed_at=datetime.utcnow().isoformat(),
-                )
-                logger.info("Session %s completed", session_id)
-            except Exception as exc:
-                failed = updated.with_status(
-                    SessionStatus.FAILED, error_message=str(exc)
-                )
-                await _update_session_status(failed)
-                logger.error("Session %s failed: %s", session_id, exc)
+            async def _run_and_finalize() -> None:
+                async def on_progress(update: dict[str, Any]) -> None:
+                    data = update.get("data", update)
+                    current_round = data.get("round", 0)
+                    if current_round:
+                        await _update_session_round(session_id, current_round)
 
-                # Push an error event so WebSocket clients know it failed.
                 try:
-                    from backend.app.api.ws import push_progress  # noqa: PLC0415
-                    await push_progress(
-                        session_id,
-                        {"type": "error", "data": {"message": str(exc)}},
+                    await self._runner.run(
+                        session_id=session_id,
+                        config=config,
+                        progress_callback=on_progress,
                     )
-                except Exception:
-                    logger.warning(
-                        "Failed to push error event for session %s",
-                        session_id,
-                        exc_info=True,
+                    completed = updated.with_status(SessionStatus.COMPLETED)
+                    await _update_session_status(
+                        completed,
+                        completed_at=datetime.utcnow().isoformat(),
                     )
-            finally:
-                # Release buffered progress memory to prevent unbounded growth.
-                try:
-                    from backend.app.api.ws import clear_progress  # noqa: PLC0415
-                    clear_progress(session_id)
-                except Exception:
-                    logger.warning(
-                        "Failed to clear progress for session %s",
+                    logger.info("Session %s completed", session_id)
+                except Exception as exc:
+                    failed = updated.with_status(
+                        SessionStatus.FAILED, error_message=str(exc)
+                    )
+                    await _update_session_status(failed)
+                    logger.error("Session %s failed: %s", session_id, exc)
+
+                    # Push an error event so WebSocket clients know it failed.
+                    try:
+                        from backend.app.api.ws import push_progress  # noqa: PLC0415
+                        await push_progress(
+                            session_id,
+                            {"type": "error", "data": {"message": str(exc)}},
+                        )
+                    except Exception:
+                        logger.warning(
+                            "Failed to push error event for session %s",
+                            session_id,
+                            exc_info=True,
+                        )
+                finally:
+                    # Release buffered progress memory to prevent unbounded growth.
+                    try:
+                        from backend.app.api.ws import clear_progress  # noqa: PLC0415
+                        clear_progress(session_id)
+                    except Exception:
+                        logger.warning(
+                            "Failed to clear progress for session %s",
+                            session_id,
+                            exc_info=True,
+                        )
+
+            def _on_task_done(task: asyncio.Task) -> None:
+                self._session_tasks.pop(session_id, None)
+                if task.cancelled():
+                    logger.info("Session %s task was cancelled", session_id)
+                elif task.exception():
+                    logger.error(
+                        "Session %s task raised unhandled exception: %s",
                         session_id,
-                        exc_info=True,
+                        task.exception(),
+                        exc_info=task.exception(),
                     )
 
-        def _on_task_done(task: asyncio.Task) -> None:
-            self._session_tasks.pop(session_id, None)
-            if task.cancelled():
-                logger.info("Session %s task was cancelled", session_id)
-            elif task.exception():
-                logger.error(
-                    "Session %s task raised unhandled exception: %s",
-                    session_id,
-                    task.exception(),
-                    exc_info=task.exception(),
-                )
-
-        task = asyncio.create_task(_run_and_finalize(), name=f"sim-{session_id}")
-        self._session_tasks[session_id] = task
-        task.add_done_callback(_on_task_done)
+            task = asyncio.create_task(_run_and_finalize(), name=f"sim-{session_id}")
+            self._session_tasks[session_id] = task
+            task.add_done_callback(_on_task_done)
 
     async def stop_session(self, session_id: str) -> None:
         """Stop a running simulation.
@@ -322,6 +339,18 @@ class SimulationManager:
             rows = await cursor.fetchall()
 
         return [dict(row) for row in rows]
+
+
+def get_simulation_manager() -> "SimulationManager":
+    """Return the process-wide SimulationManager singleton.
+
+    Using a singleton ensures all API handlers share the same SimulationRunner,
+    preventing duplicate simulation spawns from concurrent requests.
+    """
+    global _MANAGER_SINGLETON
+    if _MANAGER_SINGLETON is None:
+        _MANAGER_SINGLETON = SimulationManager()
+    return _MANAGER_SINGLETON
 
 
 async def generate_agents(

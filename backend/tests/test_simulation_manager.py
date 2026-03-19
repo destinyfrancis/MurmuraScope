@@ -39,6 +39,28 @@ from backend.app.services.simulation_manager import (
 
 
 # ---------------------------------------------------------------------------
+# Singleton tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_get_simulation_manager_returns_singleton():
+    """Two calls to get_simulation_manager() must return the same object."""
+    import backend.app.services.simulation_manager as mgr_module
+    # Reset singleton for test isolation
+    original = mgr_module._MANAGER_SINGLETON
+    mgr_module._MANAGER_SINGLETON = None
+
+    from backend.app.services.simulation_manager import get_simulation_manager
+    m1 = get_simulation_manager()
+    m2 = get_simulation_manager()
+    assert m1 is m2, "get_simulation_manager() must return the same singleton instance"
+
+    # Cleanup
+    mgr_module._MANAGER_SINGLETON = original
+
+
+# ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 
