@@ -1,19 +1,21 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { getEchoChambers } from '../api/simulation.js'
+import { FACTION_PALETTE } from '../utils/colours.js'
 
 const props = defineProps({
   sessionId: { type: String, default: '' },
   posts: { type: Array, default: () => [] },
-  factionColours: { type: Object, default: () => ({}) },
 })
 
 const echoData = ref([])
 
 async function loadFactions() {
   if (!props.sessionId) return
+  const capturedId = props.sessionId
   try {
     const res = await getEchoChambers(props.sessionId)
+    if (props.sessionId !== capturedId) return
     const data = res.data?.data || res.data || []
     echoData.value = (Array.isArray(data) ? data : data.communities || []).slice(0, 4)
   } catch (err) {
@@ -39,13 +41,13 @@ const factionPosts = computed(() => {
 })
 
 const columns = computed(() => {
-  const cols = echoData.value.map(f => ({
+  const cols = echoData.value.map((f, idx) => ({
     id: f.id ?? f.cluster_id,
     name: f.name || f.label || `陣營 ${f.id ?? f.cluster_id}`,
     count: (f.member_agent_ids || []).length,
     sentiment: f.sentiment_breakdown || null,
     posts: factionPosts.value[f.id ?? f.cluster_id] || [],
-    colour: props.factionColours[f.id ?? f.cluster_id] || '#64748b',
+    colour: FACTION_PALETTE[idx % FACTION_PALETTE.length],
   }))
   const other = factionPosts.value['__other__'] || []
   if (other.length > 0) {

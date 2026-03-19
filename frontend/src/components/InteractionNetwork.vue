@@ -2,10 +2,10 @@
 import { ref, watch, onUnmounted, nextTick } from 'vue'
 import * as d3 from 'd3'
 import { getSessionActions } from '../api/simulation.js'
+import { factionColour } from '../utils/colours.js'
 
 const props = defineProps({
   sessionId: { type: String, default: '' },
-  factionColours: { type: Object, default: () => ({}) },
 })
 
 const svgRef = ref(null)
@@ -17,6 +17,7 @@ let simulation = null
 let tooltip = null
 
 function teardown() {
+  if (svgRef.value) d3.select(svgRef.value).on('.zoom', null)
   if (simulation) { simulation.stop(); simulation = null }
   if (tooltip) { tooltip.remove(); tooltip = null }
 }
@@ -42,10 +43,10 @@ async function loadData() {
       }
     }
 
-    const nodes = Object.keys(agentPostCount).map(id => ({
+    const nodes = Object.keys(agentPostCount).map((id, i) => ({
       id,
       posts: agentPostCount[id] || 1,
-      colour: props.factionColours[id] || '#64748b',
+      colour: factionColour(i),
     }))
     const edges = Object.entries(edgeCounts).map(([key, count]) => {
       const [from, to] = key.split('→')

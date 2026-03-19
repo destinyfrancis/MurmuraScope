@@ -49,20 +49,7 @@ function getInteractCount(post, type) {
 const mergedFeedItems = computed(() => {
   const posts = props.posts.map(p => ({ ...p, _type: 'post', _key: `p-${p.id || Math.random()}`, _round: p.round || 0 }))
   const events = props.worldEvents.map(e => ({ ...e, _type: 'world_event', _key: `we-${e.id}`, _round: e.round_number || 0 }))
-  return [...posts, ...events].sort((a, b) => a._round - b._round)
-})
-
-// Build username → colour map for InteractionNetwork
-// factionColours is keyed by agent_id (int), but D3 graph uses oasis_username
-const usernameColourMap = computed(() => {
-  const map = {}
-  for (const agent of props.agents) {
-    const colour = props.factionColours?.[agent.id]
-    if (agent.oasis_username && colour) {
-      map[agent.oasis_username] = colour
-    }
-  }
-  return map
+  return [...posts, ...events].sort((a, b) => b._round - a._round)
 })
 
 watch(() => props.sessionId, () => {
@@ -113,7 +100,6 @@ watch(() => props.sessionId, () => {
         <FactionColumns
           :session-id="sessionId"
           :posts="posts"
-          :faction-colours="factionColours"
         />
       </div>
 
@@ -121,7 +107,6 @@ watch(() => props.sessionId, () => {
       <div v-else-if="activeView === 'network'" class="view-network">
         <InteractionNetwork
           :session-id="sessionId"
-          :faction-colours="usernameColourMap"
         />
       </div>
     </div>
