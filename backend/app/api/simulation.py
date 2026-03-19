@@ -36,6 +36,7 @@ from backend.app.services.simulation_manager import (
 from backend.app.services.supply_chain_builder import SupplyChainBuilder
 from backend.app.utils.db import get_db
 from backend.app.utils.logger import get_logger
+from backend.app.utils.prompt_security import sanitize_scenario_description
 
 # Default company count when scenario_type triggers auto-B2B generation
 _DEFAULT_B2B_COMPANY_COUNT = 30
@@ -372,7 +373,8 @@ async def quick_start(req: dict) -> APIResponse:
         seed_text = (req.get("seed_text") or "").strip()
         if not seed_text:
             raise HTTPException(status_code=400, detail="seed_text is required")
-        scenario_question = (req.get("scenario_question") or "").strip()
+        scenario_question_raw = (req.get("scenario_question") or "").strip()
+        scenario_question = sanitize_scenario_description(scenario_question_raw) if scenario_question_raw else ""
         preset = (req.get("preset") or "fast").strip()
         return await _run_quick_start(seed_text, scenario_question, preset)
     except HTTPException:
@@ -430,7 +432,8 @@ async def quick_start_upload(
         if not seed_text:
             raise HTTPException(status_code=422, detail="Could not extract text from file")
 
-        scenario_question = (scenario_question or "").strip()
+        scenario_question_raw = (scenario_question or "").strip()
+        scenario_question = sanitize_scenario_description(scenario_question_raw) if scenario_question_raw else ""
         return await _run_quick_start(seed_text, scenario_question, preset)
     except HTTPException:
         raise
