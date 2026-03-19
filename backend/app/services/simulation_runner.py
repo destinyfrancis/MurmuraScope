@@ -14,11 +14,13 @@ Hook methods are organised into four mixin classes:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from collections import defaultdict
 import json
 import os
 import random
 import sys
+import time as _time
 from pathlib import Path
 from typing import Any, Callable, Coroutine
 
@@ -41,6 +43,24 @@ def _clear_ws_progress(session_id: str) -> None:
         pass  # WS module not loaded — no buffer to clear
 
 logger = get_logger("simulation_runner")
+
+
+@contextlib.contextmanager
+def _timed_block(hook_name: str, session_id: str, round_num: int = 0):
+    """Context manager that logs execution time of a simulation hook at DEBUG level."""
+    t0 = _time.monotonic()
+    try:
+        yield
+    finally:
+        ms = round((_time.monotonic() - t0) * 1000)
+        logger.debug(
+            "hook=%s session=%s round=%d duration=%dms",
+            hook_name,
+            session_id[:8],
+            round_num,
+            ms,
+        )
+
 
 # Paths computed relative to this file's location — portable across deployments.
 # This file lives at: backend/app/services/simulation_runner.py
@@ -526,7 +546,8 @@ class SimulationRunner(
         # kg_driven + emergence: update multi-dimensional relationship states
         if self._kg_mode.get(session_id) and hc.emergence_enabled:
             critical.append(self._process_relationship_states(session_id, round_num))
-        results = await asyncio.gather(*critical, return_exceptions=True)
+        with _timed_block("group1_parallel", session_id, round_num=round_num):
+            results = await asyncio.gather(*critical, return_exceptions=True)
         if self._profiler:
             self._profiler.end_hook("group_1", round_num, _t_g1)
         for r in results:
@@ -539,20 +560,26 @@ class SimulationRunner(
         # Group 2: Depends on memories being stored
         if self._profiler:
             _t_g2 = self._profiler.start_hook("group_2", round_num)
-        await self._process_round_decisions(session_id, round_num)
-        await self._apply_decision_side_effects(session_id, round_num)
-        if hc.emergence_enabled:
-            await self._process_belief_update(session_id, round_num)
-        await self._process_round_consumption(session_id, round_num)
-        # kg_driven: strategic planning + Tier 1 cognitive deliberation + belief propagation
-        if self._kg_mode.get(session_id):
-            await self._kg_strategic_planning(session_id, round_num)
-            await self._kg_tier1_deliberation(session_id, round_num)
-            await self._kg_belief_propagation(session_id, round_num)
+        with _timed_block("group2_sequential", session_id, round_num=round_num):
+            await self._process_round_decisions(session_id, round_num)
+            await self._apply_decision_side_effects(session_id, round_num)
+            if hc.emergence_enabled:
+                await self._process_belief_update(session_id, round_num)
+            await self._process_round_consumption(session_id, round_num)
+            # kg_driven: strategic planning + Tier 1 cognitive deliberation + belief propagation
+            if self._kg_mode.get(session_id):
+                await self._kg_strategic_planning(session_id, round_num)
+                await self._kg_tier1_deliberation(session_id, round_num)
+                await self._kg_belief_propagation(session_id, round_num)
         if self._profiler:
             self._profiler.end_hook("group_2", round_num, _t_g2)
 
         # Group 3: Periodic hooks (fire-and-forget, tracked for cleanup)
+        logger.debug(
+            "hook=group3_fired session=%s round=%d",
+            session_id[:8],
+            round_num,
+        )
         if round_num > 0 and round_num % hc.company_decision_interval == 0:
             self._create_tracked_task(
                 session_id,
