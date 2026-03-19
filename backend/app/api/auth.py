@@ -7,8 +7,10 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordBearer
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel, ConfigDict, field_validator
@@ -26,6 +28,8 @@ import secrets
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = get_logger("api.auth")
+
+_limiter = Limiter(key_func=get_remote_address)
 
 _raw_secret = os.environ.get("AUTH_SECRET_KEY")
 if not _raw_secret:
@@ -186,7 +190,8 @@ async def get_current_user(
 
 
 @router.post("/register", response_model=APIResponse)
-async def register(req: RegisterRequest) -> APIResponse:
+@_limiter.limit("3/minute")
+async def register(request: Request, req: RegisterRequest) -> APIResponse:
     """Create a new user account.
 
     Returns 409 if the email is already registered.
@@ -230,7 +235,8 @@ async def register(req: RegisterRequest) -> APIResponse:
 
 
 @router.post("/login", response_model=APIResponse)
-async def login(req: LoginRequest) -> APIResponse:
+@_limiter.limit("5/minute")
+async def login(request: Request, req: LoginRequest) -> APIResponse:
     """Authenticate with email + password, return JWT token.
 
     Returns 401 for invalid credentials.
