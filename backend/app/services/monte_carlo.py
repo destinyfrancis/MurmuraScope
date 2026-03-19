@@ -29,6 +29,156 @@ _CALIBRATION_PATH = (
 
 logger = get_logger("monte_carlo")
 
+
+# ---------------------------------------------------------------------------
+# Module-level trial worker — picklable for ProcessPoolExecutor
+# ---------------------------------------------------------------------------
+
+
+def _mc_trial_worker(
+    args: tuple,
+) -> dict[str, float]:
+    """Execute a single Monte Carlo trial and return its outcome dict.
+
+    Module-level function so it can be pickled for ``ProcessPoolExecutor``.
+
+    Args:
+        args: Tuple of (trial_idx, base_data, lhs_samples, cov_matrix_diag_sd,
+              has_cov, ci_multiplier, coefficients_dict, pair_std_errs).
+    """
+    (
+        trial_idx,
+        base_data,
+        lhs_samples,
+        cov_matrix_diag_sd,  # 1-D array of std-devs for the 4 correlated vars
+        has_cov,
+        ci_multiplier,
+        coefficients_dict,   # plain dict extracted from CalibratedCoefficients
+        pair_std_errs,
+    ) = args
+
+    # Each trial gets its own RNG seeded deterministically from trial_idx so
+    # results are reproducible per-trial while being independent across trials.
+    trial_rng = np.random.default_rng(trial_idx)
+
+    correlated_deltas: dict[str, float] = {}
+    if has_cov:
+        for i, var in enumerate(_CORRELATED_VARS):
+            u = np.clip(lhs_samples[trial_idx, i], 1e-8, 1 - 1e-8)
+            z = scipy_stats.norm.ppf(u)
+            correlated_deltas[var] = float(z * cov_matrix_diag_sd[i] * ci_multiplier)
+
+    # Build a lightweight coefficient proxy that mimics CalibratedCoefficients.get()
+    def _get_coef(indicator: str, sentiment_metric: str) -> float | None:
+        cal_key = _CALIBRATION_KEY_MAP.get(indicator, indicator)
+        val = coefficients_dict.get(cal_key, {}).get(sentiment_metric)
+        if val is not None and val != 0.0:
+            return float(val)
+        return None
+
+    def _coef(indicator: str, metric: str, default: float) -> float:
+        v = _get_coef(indicator, metric)
+        return v if v is not None else default
+
+    def _pair_se(indicator: str, metric: str) -> float:
+        cal_key = _CALIBRATION_KEY_MAP.get(indicator, indicator)
+        return float(pair_std_errs.get(cal_key, {}).get(metric, 0.0))
+
+    # -- Perturb confidences --------------------------------------------------
+    def perturb_conf(v: float) -> float:
+        noisy = v + trial_rng.normal(0, _CONFIDENCE_NOISE_SIGMA * ci_multiplier)
+        return float(np.clip(noisy, 0.0, 1.0))
+
+    buy_conf = perturb_conf(base_data.get("buy_property_confidence", 0.5))
+    emigrate_conf = perturb_conf(base_data.get("emigrate_confidence", 0.5))
+
+    # -- Perturb macro params -------------------------------------------------
+    def perturb_macro(v: float, var_name: str | None = None) -> float:
+        if var_name and var_name in correlated_deltas:
+            return float(v + correlated_deltas[var_name])
+        frac = _MACRO_PERTURBATION_FRACTION * ci_multiplier
+        factor = 1.0 + trial_rng.uniform(-frac, frac)
+        return float(v * factor)
+
+    gdp_growth = perturb_macro(base_data.get("gdp_growth", 0.02), "gdp_growth")
+    unemployment = perturb_macro(base_data.get("unemployment_rate", 0.05), "unemployment_rate")
+    ccl_base = perturb_macro(base_data.get("ccl_index", 160.0))  # noqa: F841
+    hsi_base = perturb_macro(base_data.get("hsi_level", 18000.0), "hsi_level")
+    conf_base = perturb_macro(base_data.get("consumer_confidence", 50.0), "consumer_confidence")  # noqa: F841
+    net_mig_base = float(base_data.get("net_migration", -50000.0))  # noqa: F841
+    interest = perturb_macro(base_data.get("interest_rate", 0.055))
+    geo_risk = perturb_macro(base_data.get("taiwan_strait_risk", 0.3))
+    neg_ratio = perturb_macro(base_data.get("negative_ratio", 0.3))
+    pos_ratio = perturb_macro(base_data.get("positive_ratio", 0.4))
+
+    def _perturbed_coef(indicator: str, metric: str, default: float) -> float:
+        slope = _coef(indicator, metric, default)
+        se = _pair_se(indicator, metric)
+        if se > 0:
+            noise = trial_rng.normal(0, se * ci_multiplier)
+            return slope + noise
+        return slope
+
+    # -- Derive outcome metrics -----------------------------------------------
+    buy_property_rate = float(np.clip(
+        buy_conf * 0.6
+        - interest * _perturbed_coef("ccl_index", "negative_ratio", 3.0)
+        - geo_risk * 0.2,
+        0.0, 1.0,
+    ))
+
+    emigrate_rate = float(np.clip(
+        emigrate_conf * 0.5
+        + geo_risk * 0.3,
+        0.0, 1.0,
+    ))
+
+    ccl_index_change = float(
+        buy_property_rate * 5.0
+        - interest * 80.0
+        + neg_ratio * _perturbed_coef("price_index_all_classes", "negative_ratio", -3.0)
+    )
+
+    unemployment_change = float(
+        -gdp_growth * 0.8
+        + emigrate_rate * 0.02
+        + neg_ratio * _perturbed_coef("unemployment_rate", "negative_ratio", 0.01)
+    )
+
+    net_migration_change = float(
+        -emigrate_rate * 250.0
+        - geo_risk * 50.0
+        + gdp_growth * 100.0
+        + neg_ratio * _perturbed_coef("net_migration", "negative_ratio", -10.0)
+    )
+
+    hsi_pos_coef = _perturbed_coef("hsi_level", "positive_ratio", 0.15)
+    hsi_neg_coef = abs(_perturbed_coef("hsi_level", "stock_market_positive", 0.10))
+    hsi_change = float(
+        gdp_growth * 0.6 * hsi_base
+        + pos_ratio * hsi_pos_coef * hsi_base
+        - neg_ratio * hsi_neg_coef * hsi_base
+    )
+
+    cc_neg = _perturbed_coef("consumer_confidence", "negative_ratio", -8.0)
+    cc_pos = _perturbed_coef("consumer_confidence", "positive_ratio", 5.0)
+    consumer_confidence_change = float(
+        gdp_growth * 40.0
+        - unemployment * 20.0
+        + pos_ratio * cc_pos
+        + neg_ratio * cc_neg
+    )
+
+    return {
+        "buy_property_rate": buy_property_rate,
+        "emigrate_rate": emigrate_rate,
+        "ccl_index_change": ccl_index_change,
+        "unemployment_change": unemployment_change,
+        "net_migration_change": net_migration_change,
+        "hsi_change": hsi_change,
+        "consumer_confidence_change": consumer_confidence_change,
+    }
+
 # Correlated macro variables for Cholesky decomposition.
 # Order matters — must match row/column order in covariance matrix.
 _CORRELATED_VARS = ("gdp_growth", "unemployment_rate", "consumer_confidence", "hsi_level")
@@ -277,36 +427,51 @@ class MonteCarloEngine:
             # Replace first n_correlated columns with copula-transformed samples
             lhs_samples = np.column_stack([copula_samples, lhs_samples[:, n_correlated:]])
 
-        def _trial_worker(trial_idx: int) -> dict[str, float]:
-            """Execute a single MC trial and return its outcome dict."""
-            trial_rng = np.random.default_rng(rng.integers(0, 2**31) + trial_idx)
-            correlated_deltas_local: dict[str, float] = {}
-            if cov_matrix is not None:
-                sd = np.sqrt(np.diag(cov_matrix))
-                for i, var in enumerate(_CORRELATED_VARS):
-                    z = scipy_stats.norm.ppf(np.clip(lhs_samples[trial_idx, i], 1e-8, 1 - 1e-8))
-                    correlated_deltas_local[var] = float(z * sd[i] * ci_multiplier)
+        # Extract coefficients dict for pickling (avoids passing the full
+        # CalibratedCoefficients object which contains a Path and lazy state).
+        coef_dict: dict[str, dict[str, float]] = (
+            calibrated_coefs.to_dict()
+            if calibrated_coefs is not None
+            else {}
+        )
 
-            return MonteCarloEngine._run_single_trial(
-                base_data, trial_rng, ci_multiplier, calibrated_coefs,
-                correlated_deltas=correlated_deltas_local,
-                pair_std_errs=pair_std_errs,
+        # Compute per-variable std-devs once; passed as a plain 1-D ndarray.
+        cov_diag_sd = (
+            np.sqrt(np.diag(cov_matrix)).tolist()
+            if cov_matrix is not None
+            else [0.0] * len(_CORRELATED_VARS)
+        )
+
+        # Build args list — every element must be picklable.
+        args_list = [
+            (
+                trial_idx,
+                base_data,
+                lhs_samples,
+                cov_diag_sd,
+                cov_matrix is not None,
+                ci_multiplier,
+                coef_dict,
+                pair_std_errs,
             )
+            for trial_idx in range(n_trials)
+        ]
 
-        # Parallelize trials for large runs
+        # Parallelize trials for large runs using ProcessPoolExecutor for true
+        # CPU parallelism. _mc_trial_worker is module-level and fully picklable.
         if n_trials >= 30:
             loop = asyncio.get_event_loop()
             with concurrent.futures.ProcessPoolExecutor(max_workers=4) as pool:
                 outcomes = await loop.run_in_executor(
                     None,
-                    lambda: list(pool.map(_trial_worker, range(n_trials))),
+                    lambda: list(pool.map(_mc_trial_worker, args_list)),
                 )
             for outcome in outcomes:
                 for metric in metrics:
                     trial_results[metric].append(outcome.get(metric, 0.0))
         else:
-            for trial_idx in range(n_trials):
-                outcome = _trial_worker(trial_idx)
+            for args in args_list:
+                outcome = _mc_trial_worker(args)
                 for metric in metrics:
                     trial_results[metric].append(outcome.get(metric, 0.0))
 
