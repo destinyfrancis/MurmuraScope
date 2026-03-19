@@ -46,8 +46,48 @@
       </span>
     </div>
 
+    <!-- Tab Bar -->
+    <div class="gv-tabs">
+      <button
+        v-for="tab in tabs"
+        :key="tab.id"
+        class="gv-tab"
+        :class="{ active: activeTab === tab.id }"
+        @click="activeTab = tab.id"
+      >
+        {{ tab.label }}
+      </button>
+    </div>
+
+    <!-- Ensemble Tab -->
+    <div v-if="activeTab === 'ensemble' && selectedSessionId" class="gv-tab-content">
+      <div v-if="ensembleLoading" class="loading-msg">Loading ensemble data...</div>
+      <EnsembleChart
+        v-else
+        :distributions="ensembleDistributions"
+        :probability-statements="ensembleProbabilityStatements"
+        :trial-metadata="ensembleTrialMetadata"
+        :n-trials="ensembleNTrials"
+      />
+    </div>
+
+    <!-- Scenarios Tab -->
+    <div v-if="activeTab === 'scenarios' && selectedSessionId" class="gv-tab-content">
+      <ScenarioComparison
+        :session-a="selectedSessionId"
+        session-b=""
+      />
+    </div>
+
+    <!-- Sentiment Heatmap Tab -->
+    <div v-if="activeTab === 'sentiment' && selectedSessionId" class="gv-tab-content">
+      <SentimentHeatmap
+        :sentiment-by-round="sentimentByRound"
+      />
+    </div>
+
     <!-- Main Grid -->
-    <div class="gv-body" v-if="selectedSessionId">
+    <div class="gv-body" v-if="activeTab === 'main' && selectedSessionId">
       <!-- Left: Contracts Panel -->
       <div class="gv-panel contracts-panel">
         <div class="panel-header">
@@ -199,14 +239,14 @@
     </div>
 
     <!-- Empty State -->
-    <div v-else class="gv-empty">
+    <div v-if="!selectedSessionId" class="gv-empty">
       <div class="ge-icon">⬡</div>
       <div class="ge-msg">Select a simulation session to begin</div>
       <div class="ge-sub">The God View Terminal shows real-time Polymarket trading signals derived from agent consensus</div>
     </div>
 
-    <!-- Bottom: Live Agent Feed -->
-    <div class="gv-feed" v-if="selectedSessionId">
+    <!-- Bottom: Live Agent Feed (main tab only) -->
+    <div class="gv-feed" v-if="selectedSessionId && activeTab === 'main'">
       <div class="feed-header">
         <span class="feed-title">LIVE AGENT FEED</span>
         <span class="feed-count">{{ feedItems.length }} posts</span>
@@ -229,11 +269,14 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { listSessions, getSessionActions, getSessionDecisions } from '../api/simulation.js'
+import { listSessions, getSessionActions, getSessionDecisions, getMultiRun } from '../api/simulation.js'
 import {
   getMatchedContracts,
   getTradingSignals,
 } from '../api/prediction_market.js'
+import EnsembleChart from '../components/EnsembleChart.vue'
+import ScenarioComparison from '../components/ScenarioComparison.vue'
+import SentimentHeatmap from '../components/SentimentHeatmap.vue'
 
 // ── State ───────────────────────────────────────────────────────────────────
 const sessions = ref([])
@@ -253,6 +296,22 @@ const lastRefreshed = ref('')
 const currentTime = ref('')
 const feedScrollEl = ref(null)
 
+// ── Tab state ────────────────────────────────────────────────────────────────
+const activeTab = ref('main')
+const tabs = [
+  { id: 'main',     label: '市場訊號' },
+  { id: 'ensemble', label: '集成預測' },
+  { id: 'scenarios', label: '情景比較' },
+  { id: 'sentiment', label: '情緒熱圖' },
+]
+
+// ── Ensemble data ────────────────────────────────────────────────────────────
+const ensembleDistributions = ref([])
+const ensembleProbabilityStatements = ref([])
+const ensembleTrialMetadata = ref([])
+const ensembleNTrials = ref(0)
+const ensembleLoading = ref(false)
+
 let refreshTimer = null
 let clockTimer = null
 
@@ -270,6 +329,20 @@ const signalBadgeClass = computed(() => {
   if (buyYesCount.value > buyNoCount.value) return 'badge-green'
   if (buyNoCount.value > buyYesCount.value) return 'badge-red'
   return 'badge-amber'
+})
+
+// sentimentByRound for SentimentHeatmap — derived from sentimentData
+const sentimentByRound = computed(() => {
+  const map = {}
+  for (const row of sentimentData.value) {
+    const avg = row.avg_sentiment || 0
+    map[String(row.round)] = {
+      positive: avg > 0 ? Math.round(avg * 100) : 0,
+      neutral: Math.round((1 - Math.abs(avg)) * 100),
+      negative: avg < 0 ? Math.round(Math.abs(avg) * 100) : 0,
+    }
+  }
+  return map
 })
 
 // ── Methods ─────────────────────────────────────────────────────────────────
@@ -449,11 +522,31 @@ async function loadDecisions() {
   }
 }
 
+async function loadEnsemble() {
+  if (!selectedSessionId.value) return
+  ensembleLoading.value = true
+  try {
+    const res = await getMultiRun(selectedSessionId.value)
+    const payload = res.data?.data || res.data || {}
+    ensembleDistributions.value = payload.distributions || []
+    ensembleProbabilityStatements.value = payload.probability_statements || []
+    ensembleTrialMetadata.value = payload.trial_metadata || []
+    ensembleNTrials.value = payload.n_trials || 0
+  } catch {
+    ensembleDistributions.value = []
+    ensembleProbabilityStatements.value = []
+    ensembleTrialMetadata.value = []
+    ensembleNTrials.value = 0
+  } finally {
+    ensembleLoading.value = false
+  }
+}
+
 async function refresh() {
   if (!selectedSessionId.value || loading.value) return
   loading.value = true
   try {
-    await Promise.all([loadContracts(), loadSignals(), loadFeed(), loadDecisions()])
+    await Promise.all([loadContracts(), loadSignals(), loadFeed(), loadDecisions(), loadEnsemble()])
     lastRefreshed.value = new Date().toLocaleTimeString('en-HK', { hour12: false })
   } finally {
     loading.value = false
@@ -477,6 +570,10 @@ function onSessionChange() {
   feedItems.value = []
   sentimentData.value = []
   selectedContractId.value = null
+  ensembleDistributions.value = []
+  ensembleProbabilityStatements.value = []
+  ensembleTrialMetadata.value = []
+  ensembleNTrials.value = 0
   if (selectedSessionId.value) refresh()
 }
 
@@ -1046,4 +1143,47 @@ onUnmounted(() => {
 .green { color: #00c97a; }
 .red { color: #e05050; }
 .amber { color: #f0a030; }
+
+/* ── Tabs ─────────────────────────────────────────────────────────────────── */
+.gv-tabs {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 0 16px;
+  background: #0d1117;
+  border-bottom: 1px solid #1c2a3a;
+  flex-shrink: 0;
+}
+
+.gv-tab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #4a6080;
+  padding: 6px 14px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  margin-bottom: -1px;
+}
+
+.gv-tab:hover {
+  color: #7a9ab8;
+}
+
+.gv-tab.active {
+  color: #00d4aa;
+  border-bottom-color: #00d4aa;
+}
+
+/* ── Tab content wrapper ─────────────────────────────────────────────────── */
+.gv-tab-content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: #0d1117;
+}
 </style>
