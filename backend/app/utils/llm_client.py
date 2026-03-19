@@ -1,7 +1,17 @@
-"""Unified async LLM client wrapper for DeepSeek, Claude (Anthropic), and Qwen.
+"""Unified async LLM client wrapper for DeepSeek, Claude (Anthropic), Qwen, and Google.
 
-Supports OpenAI-compatible APIs via httpx and the Anthropic SDK.
+Supports OpenAI-compatible APIs via httpx, the Anthropic SDK, and Google Generative AI REST.
 All API keys are loaded from environment variables.
+
+Provider selection env vars:
+  LLM_PROVIDER           — report/default provider (default: openrouter)
+  AGENT_LLM_PROVIDER     — agent-decision provider (falls back to LLM_PROVIDER)
+  AGENT_LLM_MODEL        — agent-decision model override (e.g. google/gemini-3.1-flash-lite-preview)
+
+Google provider env vars:
+  GOOGLE_API_KEY         — required for provider="google"
+  GOOGLE_AGENT_MODEL     — model for agent decisions when AGENT_LLM_PROVIDER=google
+  GOOGLE_REPORT_MODEL    — model for report generation (default: gemini-3.1-pro-preview)
 """
 
 from __future__ import annotations
@@ -9,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -73,6 +84,13 @@ _PROVIDERS: dict[str, dict[str, Any]] = {
         "cost_per_1k_output": 0.00110,
         "env_key": "OPENROUTER_API_KEY",
     },
+    "google": {
+        "base_url": "https://generativelanguage.googleapis.com/v1beta",
+        "default_model": "gemini-3-flash-preview",  # override with GOOGLE_AGENT_MODEL
+        "cost_per_1k_input": 0.0,   # preview pricing TBD
+        "cost_per_1k_output": 0.0,
+        "env_key": "GOOGLE_API_KEY",
+    },
     # Local inference providers — no API key required
     "vllm": {
         "base_url": "http://localhost:8000/v1",
@@ -104,6 +122,46 @@ def _calculate_cost(
     input_cost = (prompt_tokens / 1000) * provider_cfg["cost_per_1k_input"]
     output_cost = (completion_tokens / 1000) * provider_cfg["cost_per_1k_output"]
     return round(input_cost + output_cost, 8)
+
+
+# ---------------------------------------------------------------------------
+# Public helpers — read env vars so callers don't need to import os
+# ---------------------------------------------------------------------------
+
+
+def get_default_provider() -> str:
+    """Return the active LLM provider from LLM_PROVIDER env var (default: openrouter)."""
+    return os.environ.get("LLM_PROVIDER", "openrouter")
+
+
+def get_agent_provider_model() -> tuple[str, str]:
+    """Return (provider, model) for agent decision tasks.
+
+    Reads AGENT_LLM_PROVIDER (falls back to LLM_PROVIDER) and AGENT_LLM_MODEL.
+    When provider is google, also checks GOOGLE_AGENT_MODEL for the model.
+    """
+    provider = os.environ.get("AGENT_LLM_PROVIDER") or get_default_provider()
+    if os.environ.get("AGENT_LLM_MODEL"):
+        model = os.environ["AGENT_LLM_MODEL"]
+    elif provider == "google":
+        model = os.environ.get("GOOGLE_AGENT_MODEL", _PROVIDERS["google"]["default_model"])
+    else:
+        model = _PROVIDERS.get(provider, _PROVIDERS["openrouter"])["default_model"]
+    return provider, model
+
+
+def get_report_provider_model() -> tuple[str, str]:
+    """Return (provider, model) for report generation tasks.
+
+    When LLM_PROVIDER=google, uses GOOGLE_REPORT_MODEL env var.
+    Otherwise returns the provider's default model.
+    """
+    provider = get_default_provider()
+    if provider == "google":
+        model = os.environ.get("GOOGLE_REPORT_MODEL", "gemini-3.1-pro-preview")
+    else:
+        model = _PROVIDERS.get(provider, _PROVIDERS["openrouter"])["default_model"]
+    return provider, model
 
 
 # ---------------------------------------------------------------------------
@@ -210,6 +268,11 @@ class LLMClient:
                 messages, resolved_model, temperature, max_tokens, cfg
             )
 
+        if provider == "google":
+            return await self._chat_google(
+                messages, resolved_model, temperature, max_tokens, cfg
+            )
+
         return await self._chat_openai_compat(
             messages, resolved_model, temperature, max_tokens, cfg
         )
@@ -276,6 +339,10 @@ class LLMClient:
                 cfg = {**cfg, "base_url": os.environ.get("VLLM_BASE_URL", cfg["base_url"])}
             elif provider == "ollama":
                 cfg = {**cfg, "base_url": os.environ.get("OLLAMA_BASE_URL", cfg["base_url"])}
+        # Google: allow GOOGLE_AGENT_MODEL to override default_model for agent decisions
+        if provider == "google":
+            agent_model = os.environ.get("GOOGLE_AGENT_MODEL", cfg["default_model"])
+            cfg = {**cfg, "default_model": agent_model}
         return {**cfg, "api_key": api_key}
 
     async def chat_batch(
@@ -350,7 +417,9 @@ class LLMClient:
         }
 
         client = self._get_http_client()
+        _t0 = time.monotonic()
         resp = await client.post(url, json=payload, headers=headers)
+        _latency_ms = round((time.monotonic() - _t0) * 1000)
         resp.raise_for_status()
         data = resp.json()
 
@@ -365,11 +434,22 @@ class LLMClient:
             "total_tokens": prompt_tokens + completion_tokens,
         }
 
+        cost = _calculate_cost(cfg, prompt_tokens, completion_tokens)
+        logger.info(
+            "LLM %s | %d tokens (in=%d out=%d) | $%.6f | %dms",
+            model,
+            prompt_tokens + completion_tokens,
+            prompt_tokens,
+            completion_tokens,
+            cost,
+            _latency_ms,
+        )
+
         return LLMResponse(
             content=choice["message"]["content"],
             model=data.get("model", model),
             usage=usage,
-            cost_usd=_calculate_cost(cfg, prompt_tokens, completion_tokens),
+            cost_usd=cost,
         )
 
     async def _chat_anthropic(
@@ -401,7 +481,9 @@ class LLMClient:
         if system_text:
             kwargs["system"] = system_text
 
+        _t0 = time.monotonic()
         response = await client.messages.create(**kwargs)
+        _latency_ms = round((time.monotonic() - _t0) * 1000)
 
         content_text = ""
         for block in response.content:
@@ -417,9 +499,95 @@ class LLMClient:
             "total_tokens": prompt_tokens + completion_tokens,
         }
 
+        cost = _calculate_cost(cfg, prompt_tokens, completion_tokens)
+        logger.info(
+            "LLM %s | %d tokens (in=%d out=%d) | $%.6f | %dms",
+            model,
+            prompt_tokens + completion_tokens,
+            prompt_tokens,
+            completion_tokens,
+            cost,
+            _latency_ms,
+        )
+
         return LLMResponse(
             content=content_text,
             model=response.model,
             usage=usage,
-            cost_usd=_calculate_cost(cfg, prompt_tokens, completion_tokens),
+            cost_usd=cost,
+        )
+
+    async def _chat_google(
+        self,
+        messages: list[dict[str, str]],
+        model: str,
+        temperature: float,
+        max_tokens: int,
+        cfg: dict[str, Any],
+    ) -> LLMResponse:
+        """Call Google Generative AI REST API (generateContent)."""
+        api_key = cfg["api_key"]
+        base_url = cfg["base_url"]
+        url = f"{base_url}/models/{model}:generateContent?key={api_key}"
+
+        # Separate system message; convert "assistant" role → "model" for Google
+        system_text = ""
+        contents: list[dict[str, Any]] = []
+        for msg in messages:
+            role = msg["role"]
+            text = msg["content"]
+            if role == "system":
+                system_text = text
+            else:
+                google_role = "model" if role == "assistant" else "user"
+                contents.append({"role": google_role, "parts": [{"text": text}]})
+
+        payload: dict[str, Any] = {
+            "contents": contents,
+            "generationConfig": {
+                "temperature": temperature,
+                "maxOutputTokens": max_tokens,
+            },
+        }
+        if system_text:
+            payload["system_instruction"] = {"parts": [{"text": system_text}]}
+
+        client = self._get_http_client()
+        _t0 = time.monotonic()
+        resp = await client.post(url, json=payload, headers={"Content-Type": "application/json"})
+        _latency_ms = round((time.monotonic() - _t0) * 1000)
+        resp.raise_for_status()
+        data = resp.json()
+
+        candidates = data.get("candidates", [])
+        content_text = ""
+        if candidates:
+            parts = candidates[0].get("content", {}).get("parts", [])
+            content_text = "".join(p.get("text", "") for p in parts)
+
+        usage_meta = data.get("usageMetadata", {})
+        prompt_tokens = usage_meta.get("promptTokenCount", 0)
+        completion_tokens = usage_meta.get("candidatesTokenCount", 0)
+        usage = {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": prompt_tokens + completion_tokens,
+        }
+
+        cost = _calculate_cost(cfg, prompt_tokens, completion_tokens)
+        logger.info(
+            "LLM %s | %d tokens (in=%d out=%d) | $%.6f | %dms",
+            model,
+            prompt_tokens + completion_tokens,
+            prompt_tokens,
+            completion_tokens,
+            cost,
+            _latency_ms,
+        )
+
+        return LLMResponse(
+            content=content_text,
+            model=model,
+            usage=usage,
+            cost_usd=cost,
         )
