@@ -29,16 +29,27 @@
 
 ---
 
-## 🆕 Latest Improvements (2026-03-19)
+## 🆕 Latest Improvements (2026-03-20)
+
+- **Docker Deployment:** `cp .env.example .env && docker compose up -d` — single command starts frontend (`:8080`) + backend (`:5001`). `docker compose --profile observability up -d` adds Jaeger trace UI at `:16686`
+- **OpenTelemetry Observability:** Per-LLM-call spans (model, tokens, cost, latency) + per-hook spans; opt-in via `OTEL_ENABLED=true`; session cost budget alerting via `SESSION_COST_BUDGET_USD`
+- **Temporal KG Facts (Graphiti pattern):** `kg_edges` gains `valid_from`/`valid_until` validity windows — query any round's graph state with `GET /graph/{id}/temporal?round=N`, no snapshots needed
+- **Interview-Grounded Agent Init:** Upload CSV/JSON persona profiles at Step 1 (`POST /graph/{id}/personas`) — real interview data initialises agents instead of LLM-generated synthetic profiles
+- **PIANO-Style Intra-Round Parallelism:** Tier 1 LLM deliberation runs as `asyncio.gather` with semaphore; configurable via `SIMULATION_CONCURRENCY_LIMIT` env var; target <30s/round at 1,000 agents
+- **Memory Compression:** Agents with >200 memories auto-compress oldest batch → summary node; prevents unbounded growth and vector search slowdown
+- **Importance Pre-Scoring:** LLM assigns importance 1–10 at memory write time; hybrid retrieval `semantic×0.4 + salience×0.3 + importance×0.3` improves context quality
+- **Reflection Loop:** Tier 1 agents synthesise accumulated memories into abstract `thought` nodes every 7 rounds (Generative Agents-inspired)
+- **Relationship-Depth Disclosure:** High-intimacy peers (>0.6) share goals + faction in deliberation context (Sotopia-inspired)
+
+<details>
+<summary>2026-03-19 improvements</summary>
 
 - **Universal Mode UX:** Non-HK simulations no longer show HK district map or HK-specific filters
-- **Abort Button:** Real-time `■ 中止` button in simulation header — stops simulation immediately with `POST /{session_id}/stop`
-- **Token Cost Display:** Header shows live `$X.XXXX USD` spent + model name being used
-- **GraphRAG Real-time:** Knowledge graph now updates every round (was every 5 rounds)
-- **Agent Interaction Fix:** Fixed `sqlite3.Row.get()` crash in `/report/interview` — agent chat now works reliably for both HK and kg_driven simulations
-- **Generic Interview Questions:** Agent interview questions no longer hardcoded to HK scenarios
-- **Landing Page Redesign:** Clean dark UI inspired by modern prediction tools — universal, not HK-specific
-- **Demo Scenarios Removed:** Home page simplified — drop-zone quick start is now the primary entry point
+- **Abort Button:** Real-time `■ 中止` button stops simulation immediately
+- **Token Cost Display:** Live `$X.XXXX USD` spent + model name in header
+- **GraphRAG Real-time:** KG now updates every round (was every 5 rounds)
+- **Landing Page Redesign:** Clean dark UI — universal, not HK-specific
+</details>
 
 ---
 
@@ -581,6 +592,30 @@ POST /simulation/{session_id}/branch
 ---
 
 ## 🛠 安裝 / Installation & Setup
+
+### 🐳 Docker（推薦 / Recommended）
+
+最簡單的方式。只需 Docker Desktop。
+
+```bash
+git clone https://github.com/destinyfrancis/Moirai.git
+cd Moirai
+cp .env.example .env         # Fill in OPENROUTER_API_KEY + GOOGLE_API_KEY
+docker compose up -d
+
+# Frontend → http://localhost:8080
+# Backend  → http://localhost:5001
+
+# Optional: Jaeger trace UI at http://localhost:16686
+docker compose --profile observability up -d
+
+# Development (hot-reload)
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+```
+
+---
+
+### 💻 本地安裝 / Local Setup
 
 ### 先決條件 / Prerequisites
 
