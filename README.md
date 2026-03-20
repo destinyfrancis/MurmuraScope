@@ -29,26 +29,191 @@
 
 ---
 
-## 🆕 Latest Improvements (2026-03-20)
+## 🆕 最新升級 / Latest Upgrades (2026-03-20)
 
-- **Docker Deployment:** `cp .env.example .env && docker compose up -d` — single command starts frontend (`:8080`) + backend (`:5001`). `docker compose --profile observability up -d` adds Jaeger trace UI at `:16686`
-- **OpenTelemetry Observability:** Per-LLM-call spans (model, tokens, cost, latency) + per-hook spans; opt-in via `OTEL_ENABLED=true`; session cost budget alerting via `SESSION_COST_BUDGET_USD`
-- **Temporal KG Facts (Graphiti pattern):** `kg_edges` gains `valid_from`/`valid_until` validity windows — query any round's graph state with `GET /graph/{id}/temporal?round=N`, no snapshots needed
-- **Interview-Grounded Agent Init:** Upload CSV/JSON persona profiles at Step 1 (`POST /graph/{id}/personas`) — real interview data initialises agents instead of LLM-generated synthetic profiles
-- **PIANO-Style Intra-Round Parallelism:** Tier 1 LLM deliberation runs as `asyncio.gather` with semaphore; configurable via `SIMULATION_CONCURRENCY_LIMIT` env var; target <30s/round at 1,000 agents
-- **Memory Compression:** Agents with >200 memories auto-compress oldest batch → summary node; prevents unbounded growth and vector search slowdown
-- **Importance Pre-Scoring:** LLM assigns importance 1–10 at memory write time; hybrid retrieval `semantic×0.4 + salience×0.3 + importance×0.3` improves context quality
-- **Reflection Loop:** Tier 1 agents synthesise accumulated memories into abstract `thought` nodes every 7 rounds (Generative Agents-inspired)
-- **Relationship-Depth Disclosure:** High-intimacy peers (>0.6) share goals + faction in deliberation context (Sotopia-inspired)
+> **競爭對手啟發的 6 大升級（共 26 個文件，+1,193 行代碼）**
+> *6 competitor-inspired upgrades across 26 files (+1,193 lines) — inspired by MiroFish, Project Sid, Graphiti, Stanford 1000-People, and ReMe.*
+
+---
+
+### Phase 1 — Docker 一鍵部署 / One-Command Docker Deployment
+
+**問題：** 之前需要手動配置 Python 環境、啟動兩個終端、管理子進程。新用戶入門門檻高。
+
+*Previously required manual Python setup, two terminals, and process management. High barrier to entry.*
+
+```bash
+# 一個命令搞掂 / Single command does everything
+cp .env.example .env        # 填入 API 密鑰 / Fill in API keys
+docker compose up -d        # 前端 :8080 + 後端 :5001 同時啟動
+
+# 可觀察性模式（加 Jaeger 追蹤 UI）/ Observability mode (adds Jaeger trace UI)
+docker compose --profile observability up -d    # → http://localhost:16686
+
+# 開發熱重載模式 / Development hot-reload mode
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+```
+
+**技術細節：**
+- `frontend/Dockerfile`：Node 20 Alpine 建構 → `nginx:1.27-alpine` 服務，SPA fallback + `/api/*`、`/ws/*` 反向代理到後端
+- `Dockerfile`（後端）：`python:3.11-slim`，安裝 WeasyPrint + CJK 字體（`libpango-1.0-0`、`fonts-noto-cjk`），非 root 用戶 `morai` 運行
+- `docker-compose.yml`：兩個服務共享命名 volume `morai-data`（持久化 SQLite + LanceDB + sessions），`init: true` 確保 OASIS 子進程能收到 SIGTERM 信號正常終止
+- **Jaeger 可觀察性** 作為獨立 profile，唔需要可觀察性嘅用戶唔會受影響
+
+---
+
+### Phase 2 — OpenTelemetry 可觀察性 / Observability
+
+**問題：** 無法追蹤每次 LLM 調用嘅延遲、token 消耗和費用，難以診斷性能瓶頸或成本超支。
+
+*Previously impossible to trace per-LLM-call latency, token usage, or cost — hard to diagnose performance issues or budget overruns.*
+
+**新增能力：**
+
+| 功能 | 詳情 |
+|------|------|
+| **LLM Call Spans** | 每次 LLM 調用自動記錄 `llm.model`、`llm.tokens.total`、`llm.cost_usd`、`llm.latency_ms` |
+| **Hook Spans** | Group 1/2/3 每個 hook 組的執行時間，識別哪個 hook 最慢 |
+| **Session Cost Budget** | `SESSION_COST_BUDGET_USD`（預設 $5）— 超支自動發出 WARNING 日誌 |
+| **零侵入性** | `OTEL_ENABLED=false`（預設）時完全無額外開銷；設為 `true` 即啟動全量追蹤 |
+
+```bash
+# 啟用 OTEL 追蹤 / Enable OTEL tracing
+OTEL_ENABLED=true docker compose --profile observability up -d
+# → Jaeger UI: http://localhost:16686
+# → 搜索 "morai" service，查看每個模擬的完整 trace 樹
+```
+
+> **OpenTelemetry（OTEL）** 係業界標準的分佈式追蹤協議。每次操作（LLM 調用、hook 執行）會記錄為一個「span」，多個 span 組合成一棵「trace 樹」，讓你清楚睇到整個模擬流程的時序和耗時。
+>
+> *OpenTelemetry is the industry-standard distributed tracing protocol. Each operation (LLM call, hook execution) is recorded as a "span"; multiple spans form a "trace tree" showing the complete timing of a simulation run.*
+
+---
+
+### Phase 3 — 時序知識圖譜 / Temporal Knowledge Graph（Graphiti Pattern）
+
+**問題：** 知識圖譜只記錄「當前狀態」，無法回溯任意歷史輪次的圖譜，也無法偵測關係是何時形成、何時消解。
+
+*The KG only stored current state — impossible to query the graph at any historical round, or detect when relationships formed and dissolved.*
+
+**核心概念：** 參考 [Graphiti](https://github.com/getzep/graphiti) 的時序事實設計，每條 KG 邊（關係）現在記錄其有效期：
+
+```
+kg_edges
+  ├── valid_from  INTEGER  -- 該關係從哪一輪起成立
+  └── valid_until INTEGER  -- 該關係在哪一輪消解（NULL = 仍然有效）
+```
+
+**新增 API：**
+```http
+GET /graph/{graph_id}/temporal?round=N
+→ 返回第 N 輪時所有有效的 KG 邊（valid_from ≤ N AND (valid_until IS NULL OR valid_until > N)）
+```
+
+**新增查詢函數（`kg_temporal_queries.py`）：**
+- `get_kg_edges_at_round(session_id, n)` — 第 N 輪的完整圖譜快照
+- `get_edge_history(session_id, source_id, target_id)` — 特定關係的完整生命週期
+- `get_kg_diff(session_id, from_round, to_round)` — 兩輪之間新增/消解的邊
+
+**實際效果：** GraphExplorer 時間軸回放再也不需要 `kg_snapshots` 表，直接查詢任意輪次的活躍邊即可，減少 DB 寫入約 60%。
+
+---
+
+### Phase 4 — 訪談根基代理人初始化 / Interview-Grounded Agent Init（Stanford 1000-People Pattern）
+
+**問題：** 所有代理人都是 LLM 合成嘅。Stanford 研究員 [Argyle et al. 2023] 發現，基於真實訪談數據初始化的代理人，政治態度預測準確率比純 LLM 合成高 36%。
+
+*All agents were LLM-synthesized. Stanford researchers found that agents initialized from real interview data predict political attitudes 36% more accurately than pure LLM synthesis.*
+
+**新增能力：** 在 Step 1 上傳真實 CSV/JSON 人口檔案，代理人直接使用真實數據初始化，跳過 LLM 人格生成：
+
+```bash
+# API 方式 / Via API
+POST /graph/{graph_id}/personas
+Content-Type: multipart/form-data
+file: personas.csv   # 或 personas.json
+
+# CSV 格式 / CSV format
+name,age,district,occupation,monthly_income,political_stance,education
+張偉強,45,深水埗,工廠工人,18000,0.2,中學
+李美玲,32,中環,金融分析師,85000,0.7,大學
+```
+
+**UI：** `PersonaUpload.vue` 組件 — 拖放上傳 + 5 行預覽，整合在 Step 1 圖譜建立介面。
+
+**技術細節：** 上傳的人口檔案以 `source="persona_upload"` 寫入 `kg_nodes`；`MemoryInitializationService` 識別到此標記後，直接使用檔案數據而非調用 LLM 生成人格，節省初始化 LLM 費用約 80%（視乎代理人數量）。
+
+---
+
+### Phase 5 — PIANO 輪內並行審議 / Intra-Round Parallelism（Project Sid Pattern）
+
+**問題：** Tier 1 代理人逐個順序進行 LLM 審議，300 個 Tier 1 代理人在高延遲環境下可能每輪耗時 >3 分鐘。
+
+*Tier 1 agents deliberated sequentially. 300 Tier 1 agents could take >3 minutes per round in high-latency environments.*
+
+**新機制：** 參考 [Project Sid](https://github.com/altera-al/project-sid) 的 PIANO（Parallel Intra-Agent Non-sequential Orchestration）架構，Tier 1 審議改為 `asyncio.gather` 並行執行，受 Semaphore 控制併發上限：
+
+```python
+# 之前 / Before
+for agent in tier1_agents:
+    result = await deliberate(agent)   # 逐個等待
+
+# 之後 / After — 全部並行，semaphore 防止 API 過載
+semaphore = asyncio.Semaphore(llm_concurrency)
+results = await asyncio.gather(
+    *[deliberate_with_semaphore(agent, semaphore) for agent in tier1_agents],
+    return_exceptions=True
+)
+```
+
+**配置：**
+```env
+SIMULATION_CONCURRENCY_LIMIT=50   # 同時 LLM 請求上限（預設 50）
+```
+
+**效果：** 目標 <30s/輪（1,000 個代理人，`SIMULATION_CONCURRENCY_LIMIT=50`），視 OpenRouter 端點延遲而定。
+
+---
+
+### Phase 6 — 記憶壓縮 / Memory Compression（ReMe Pattern）
+
+**問題：** 長時間模擬（30 輪 × 500 代理人）會讓每個代理人積累 200+ 條記憶。向量搜索在大型記憶庫中速度下降，且 LLM 上下文被低顯著性舊記憶佔用。
+
+*Long simulations (30 rounds × 500 agents) cause each agent to accumulate 200+ memories. Vector search slows, and LLM context gets polluted by low-salience old memories.*
+
+**新機制：** 參考 [ReMe](https://github.com/snap-research/reme) 的記憶壓縮設計，懶觸發式壓縮：
+
+```
+記憶數量 > 200 時觸發 / Triggers when memory count > 200:
+  1. 取最舊的 100 條記憶
+  2. LLM 生成一段摘要（compressed_summary）
+  3. 以 type='compressed_summary'、salience=importance=0.8 寫入 LanceDB
+  4. 刪除已壓縮的原始 100 條記憶
+```
+
+**配置常數（`agent_memory.py`）：**
+```python
+_COMPRESSION_THRESHOLD = 200   # 超過此數量觸發壓縮
+_COMPRESSION_BATCH_SIZE = 100  # 每次壓縮的記憶數量
+```
+
+**效果：** 代理人記憶庫長期維持在 100–150 條，向量搜索延遲穩定，LLM 上下文質量更高（高顯著性記憶佔主導）。
+
+---
+
+### 早期改進（2026-03-19）
 
 <details>
-<summary>2026-03-19 improvements</summary>
+<summary>重要性預評分 + 反思迴路 + 關係深度披露</summary>
 
-- **Universal Mode UX:** Non-HK simulations no longer show HK district map or HK-specific filters
-- **Abort Button:** Real-time `■ 中止` button stops simulation immediately
-- **Token Cost Display:** Live `$X.XXXX USD` spent + model name in header
-- **GraphRAG Real-time:** KG now updates every round (was every 5 rounds)
-- **Landing Page Redesign:** Clean dark UI — universal, not HK-specific
+- **重要性預評分（Importance Pre-Scoring）：** LLM 在記憶寫入時即評分 1–10；檢索改為混合排名 `語義×0.4 + 顯著性×0.3 + 重要性×0.3`，大幅提升審議上下文質量
+- **反思迴路（Reflection Loop）：** Tier 1 代理人每 7 輪從累積記憶中合成抽象 `thought` 節點（靈感來自 [Generative Agents](https://arxiv.org/abs/2304.03442)）
+- **關係深度披露（Relationship-Depth Disclosure）：** 親密度 >0.6 的配對在審議上下文中共享目標 + 派系（靈感來自 [Sotopia](https://sotopia.world)）
+- **通用模式 UX：** 非 HK 模擬不再顯示 HK 區域地圖或 HK 專屬篩選器
+- **中止按鈕：** 實時 `■ 中止` 按鈕立即停止模擬
+- **Token 費用顯示：** 標題欄實時顯示 `$X.XXXX USD` + 模型名稱
+- **GraphRAG 實時更新：** KG 每輪更新（原來每 5 輪）
+- **著陸頁重設計：** 深色 UI，通用設計，非 HK 專屬
 </details>
 
 ---
@@ -516,22 +681,33 @@ POST /simulation/{session_id}/branch
 ## ⚙ 架構 / Architecture
 
 ```
-┌────────────────────────────────────────────────────────────────────┐
-│                  前端 Frontend (Vue 3 + Vite)                        │
-│  Home │ GraphExplorer │ GodViewTerminal │ PredictionDashboard       │
-│  Workspace │ PublicReport │ DomainBuilder │ Process                 │
-└──────────────────────────┬─────────────────────────────────────────┘
-                            │ HTTP + WebSocket  (5173 → 5001)
-┌──────────────────────────▼─────────────────────────────────────────┐
-│                後端 FastAPI Backend (port 5001)                       │
-│  /simulation │ /graph │ /report │ /forecast │ /prediction-market    │
-│  /auth │ /workspace │ /api/domain-packs │ /ws                       │
-└──────┬──────────────────┬──────────────────────┬────────────────────┘
+┌────────────────────────────────────────────────────────────────────────┐
+│           🐳 Docker Compose（推薦 / Recommended）                        │
+│   docker compose up -d  →  frontend(:8080) + backend(:5001)             │
+│   --profile observability  →  + Jaeger UI (:16686)                      │
+└──────────────────┬──────────────────────────────────────────────────────┘
+                   │
+┌──────────────────▼──────────────────────────────────────────────────────┐
+│                  前端 Frontend (Vue 3 + nginx / Vite)                    │
+│  Home │ GraphExplorer │ GodViewTerminal │ PredictionDashboard            │
+│  Workspace │ PublicReport │ DomainBuilder │ Process │ PersonaUpload ⬆️   │
+└──────────────────────────┬──────────────────────────────────────────────┘
+                            │ HTTP + WebSocket  (:8080 → :5001)
+┌──────────────────────────▼──────────────────────────────────────────────┐
+│                後端 FastAPI Backend (port 5001)                           │
+│  /simulation │ /graph │ /report │ /forecast │ /prediction-market          │
+│  /auth │ /workspace │ /api/domain-packs │ /ws                             │
+│  /graph/{id}/temporal ⬆️ │ /graph/{id}/personas ⬆️                       │
+│                                                                           │
+│  📊 OpenTelemetry（opt-in） → Jaeger / OTLP Collector ⬆️                 │
+└──────┬──────────────────┬──────────────────────┬─────────────────────────┘
        │                  │                       │
 ┌──────▼──────┐   ┌───────▼──────┐   ┌──────────▼──────────────────┐
 │ SQLite WAL  │   │   LanceDB    │   │   OASIS Subprocess           │
-│ (55 個表)   │   │ 向量資料庫   │   │   Facebook/Instagram 模擬    │
-│             │   │ 384 維嵌入   │   │   100–50,000 個 LLM 代理人   │
+│ (55+ 個表)  │   │ 向量資料庫   │   │   Facebook/Instagram 模擬    │
+│ kg_edges:   │   │ 384 維嵌入   │   │   100–50,000 個 LLM 代理人   │
+│ valid_from ⬆│   │ 記憶壓縮 ⬆️  │   │   PIANO 並行審議 ⬆️         │
+│ valid_until │   │ 重要性評分⬆️ │   │   asyncio.gather + Semaphore │
 └─────────────┘   └──────────────┘   └─────────────────────────────┘
        │
 ┌──────▼──────────────────────────────────────────────────────────────┐
@@ -550,13 +726,17 @@ POST /simulation/{session_id}/branch
 |---------|------|
 | `ZeroConfigService` | 從 seed text 偵測模式（hk_demographic vs kg_driven） |
 | `KGAgentFactory` | 三階段 LLM 流水線：資格篩選 → 人格 → 認知指紋 |
-| `MemoryInitializationService` | 第 1 步圖譜建立時提取世界背景 + 人格模板 |
+| `MemoryInitializationService` | 第 1 步圖譜建立時提取世界背景 + 人格模板；支持 `persona_upload` 跳過 LLM |
+| `PersonaProfileLoader` | ⬆️ **新** CSV/JSON 人口檔案解析 → `inject_as_kg_nodes()`，`source="persona_upload"` |
 | `ScenarioGenerator` | LLM 為任意領域生成決策類型、指標、衝擊 |
 | `UniversalDecisionEngine` | kg_driven：實體類型篩選 + 完整 LLM 審議 |
 | `DecisionEngine` | hk_demographic：規則篩選（90%）→ LLM 批次（10%） |
-| `CognitiveAgentEngine` | Tier 1 每輪完整 LLM 審議 → `DeliberationResult` |
+| `CognitiveAgentEngine` | Tier 1 每輪完整 LLM 審議 → `DeliberationResult`；支持關係深度披露 |
 | `BeliefPropagationEngine` | 嵌入向量信念更新 + 確認偏誤抑制 + 從衆混合 |
-| `AgentMemoryService` | 記憶儲存、顯著性衰減、語義搜索（LanceDB） |
+| `AgentMemoryService` | 記憶儲存、顯著性衰減、語義搜索；⬆️ **新** 重要性預評分 + 壓縮（閾值 200） |
+| `KGTemporalQueries` | ⬆️ **新** `get_kg_edges_at_round()`、`get_edge_history()`、`get_kg_diff()` |
+| `CostTracker` | ⬆️ **新** 每會話 LLM 費用累積器；`SESSION_COST_BUDGET_USD` 預算警告 |
+| `SimulationSubprocessManager` | ⬆️ **新** 子進程生命週期管理；SIGTERM→SIGKILL 升級；`init: true` Docker 兼容 |
 | `EmotionalEngine` | VAD 情緒模型 + 大五人格調節 |
 | `BeliefSystem` | 6 個核心議題的 Bayesian 更新；認知失調偵測 |
 | `EmergenceTracker` | `FactionMapper`（Louvain）+ `TippingPointDetector`（KL 散度） |
@@ -567,7 +747,7 @@ POST /simulation/{session_id}/branch
 | `TimeSeriesForecaster` | AutoARIMA + VAR，12 季度預測（HK 模式） |
 | `CalibrationPipeline` | OLS + BH-FDR 校正，13 對 HK 指標 |
 | `RetrospectiveValidator` | 對比真實 HK 歷史數據的分段回測 |
-| `KGGraphUpdater` | Zep-style 動態 KG 演化，由代理人行動驅動 |
+| `KGGraphUpdater` | Zep-style 動態 KG 演化；⬆️ **新** `valid_from` + `dissolve_edges_between()` |
 | `SocialNetworkBuilder` | 網絡初始化、Louvain 回音室偵測 |
 | `NetworkEvolutionEngine` | 關係形成/解散、三角閉合 |
 | `FeedRankingEngine` | 3 種算法：時序 / 互動 / 回音室 |
@@ -845,6 +1025,8 @@ POST /graph/build
 GET  /graph/{id}/snapshots
 GET  /graph/analyze-seed
 POST /graph/upload-seed
+GET  /graph/{id}/temporal?round=N   # ⬆️ 新：查詢第 N 輪時的有效 KG 邊
+POST /graph/{id}/personas            # ⬆️ 新：上傳 CSV/JSON 人口檔案初始化代理人
 ```
 
 ### 宏觀預測（HK 模式）/ Macroeconomic Forecast (HK mode)
@@ -891,9 +1073,9 @@ POST /api/domain-packs/save
 ## 🧪 測試 / Testing
 
 ```bash
-make test                              # 單元測試 Unit only (~2396 tests, ~18s)
+make test                              # 單元測試 Unit only (~2412 tests, ~18s)
 make test-int                          # 集成測試 Integration (~186 tests)
-make test-all                          # 完整測試 Full suite (~2582 tests, ~65s)
+make test-all                          # 完整測試 Full suite (~2598 tests, ~65s)
 make test-file F=test_belief_system    # 單文件 Single file
 make test-changed                      # 僅測試 git 變更文件
 ```

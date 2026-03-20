@@ -45,6 +45,7 @@ oasis_output/
 
 # Claude / Personal (never commit these)
 .claude/
+CLAUDE.md
 NEXT_PHASES.md
 SYSTEM_ASSESSMENT.md
 academic_evaluation_report.md
