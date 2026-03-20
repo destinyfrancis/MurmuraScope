@@ -10,6 +10,11 @@ Phase 3 additions:
 - bootstrap_ci(): non-parametric 95% CI for directional accuracy via 1000-sample bootstrap
 - kfold_validate(): temporal k-fold cross-validation (walk-forward, no data leakage)
 
+Phase 3+ fix (2026-03-20):
+- kfold_validate() now computes fold-scoped drift coefficients from training data only,
+  preventing look-ahead bias from globally-calibrated coefficients.
+- validate() accepts optional `coefficients` parameter for coefficient injection.
+
 Usage::
 
     validator = RetrospectiveValidator()
@@ -81,6 +86,46 @@ _DEFAULT_DRIFT: dict[str, float] = {
 _PERIOD_PATTERN = re.compile(r"^\d{4}-Q[1-4]$")
 
 MIN_METRICS_REQUIRED = 4
+
+
+# ---------------------------------------------------------------------------
+# Fold-scoped coefficient adapter (prevents look-ahead bias)
+# ---------------------------------------------------------------------------
+
+
+class _FoldScopedCoefficients:
+    """Coefficient adapter that computes per-quarter drift from training data.
+
+    Instead of using globally-calibrated OLS coefficients (which may include
+    future data), this adapter estimates drift directly from the training
+    portion of the historical series.  Drift is the mean quarter-over-quarter
+    proportional change observed in the training window.
+
+    Implements the same ``get_all(metric)`` interface as CalibratedCoefficients
+    so it can be injected into ``_generate_trajectory()`` transparently.
+    """
+
+    def __init__(
+        self, training_series: dict[str, list[tuple[str, float]]]
+    ) -> None:
+        self._drifts: dict[str, dict[str, float]] = {}
+        for metric, series in training_series.items():
+            if len(series) < 2:
+                continue
+            values = [v for _, v in series]
+            # Compute mean proportional change per quarter
+            changes: list[float] = []
+            for i in range(1, len(values)):
+                if abs(values[i - 1]) > 1e-12:
+                    changes.append((values[i] - values[i - 1]) / values[i - 1])
+            if changes:
+                self._drifts[metric] = {
+                    "_training_drift": float(np.mean(changes)),
+                }
+
+    def get_all(self, indicator: str) -> dict[str, float]:
+        """Return drift computed from training data only."""
+        return dict(self._drifts.get(indicator, {}))
 
 
 # ---------------------------------------------------------------------------
@@ -196,6 +241,7 @@ class RetrospectiveValidator:
         period_start: str,
         period_end: str,
         metrics: list[str] | None = None,
+        coefficients: Any | None = None,
     ) -> list[ValidationResult]:
         """Run retrospective validation for a date range.
 
@@ -204,6 +250,10 @@ class RetrospectiveValidator:
             period_end: End period (e.g. '2020-Q4').
             metrics: Optional list of metrics to validate. If None, all
                 available metrics are used.
+            coefficients: Optional pre-loaded coefficient object (must implement
+                ``get_all(metric) -> dict``).  When provided, skips loading
+                global calibration coefficients — used by ``kfold_validate()``
+                to inject fold-scoped coefficients and prevent look-ahead bias.
 
         Returns:
             List of ValidationResult, one per successfully validated metric.
@@ -247,13 +297,16 @@ class RetrospectiveValidator:
             )
             return []
 
-        # Load calibrated coefficients for drift adjustment
-        from backend.app.services.calibrated_coefficients import (  # noqa: PLC0415
-            CalibratedCoefficients,
-        )
+        # Load calibrated coefficients for drift adjustment.
+        # If caller injected fold-scoped coefficients (e.g. from kfold_validate),
+        # use those to prevent look-ahead bias.
+        if coefficients is None:
+            from backend.app.services.calibrated_coefficients import (  # noqa: PLC0415
+                CalibratedCoefficients,
+            )
 
-        coefficients = CalibratedCoefficients()
-        await coefficients.load()
+            coefficients = CalibratedCoefficients()
+            await coefficients.load()
 
         await self._ensure_table()
 
@@ -405,11 +458,20 @@ class RetrospectiveValidator:
             val_start = all_periods[fold_start]
             val_end = all_periods[fold_end - 1]
 
+            # Compute fold-scoped coefficients from training data only
+            # (all periods BEFORE the validation fold) to prevent look-ahead.
+            train_end = all_periods[fold_start - 1]
+            training_series = await self._load_historical_series(
+                all_periods[0], train_end,
+            )
+            fold_coefficients = _FoldScopedCoefficients(training_series)
+
             try:
                 fold_validation = await self.validate(
                     period_start=val_start,
                     period_end=val_end,
                     metrics=target_metrics,
+                    coefficients=fold_coefficients,
                 )
             except Exception as exc:
                 logger.debug("kfold fold %d failed: %s", fold_idx, exc)

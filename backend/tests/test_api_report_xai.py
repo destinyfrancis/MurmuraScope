@@ -70,7 +70,9 @@ async def test_invoke_xai_tool_handler_exception_returns_success_false(test_clie
     assert resp.status_code == 200
     body = resp.json()
     assert body["success"] is False
-    assert "db unavailable" in body.get("error", "")
+    # Error message must NOT leak internal exception details (T13 security fix).
+    # Production returns generic "Internal server error"; details logged server-side.
+    assert body.get("error") == "Internal server error"
 
 
 @pytest.mark.asyncio

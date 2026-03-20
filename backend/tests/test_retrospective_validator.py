@@ -23,6 +23,7 @@ from backend.app.services.retrospective_validator import (
     VALIDATABLE_METRICS,
     RetrospectiveValidator,
     ValidationResult,
+    _FoldScopedCoefficients,
     _enumerate_periods,
     _find_best_timing_offset,
     _parse_period,
@@ -548,3 +549,158 @@ class TestHelperFunctions:
     def test_find_best_timing_offset_short(self):
         """Very short series should return 0."""
         assert _find_best_timing_offset([1.0, 2.0], [1.0, 2.0]) == 0
+
+
+# ---------------------------------------------------------------------------
+# _FoldScopedCoefficients tests
+# ---------------------------------------------------------------------------
+
+
+class TestFoldScopedCoefficients:
+    """Tests for the fold-scoped coefficient adapter (anti-leakage)."""
+
+    def test_drift_from_training_data(self):
+        """Should compute mean proportional change from training series."""
+        # 100 → 110 → 121: two changes of +10% each → mean drift = 0.10
+        training = {
+            "hsi_level": [
+                ("2020-Q1", 100.0),
+                ("2020-Q2", 110.0),
+                ("2020-Q3", 121.0),
+            ],
+        }
+        coefs = _FoldScopedCoefficients(training)
+        drifts = coefs.get_all("hsi_level")
+        assert len(drifts) == 1
+        assert abs(drifts["_training_drift"] - 0.10) < 0.01
+
+    def test_empty_metric_returns_empty(self):
+        """Unknown metric returns empty dict (falls back to default drift 0)."""
+        coefs = _FoldScopedCoefficients({})
+        assert coefs.get_all("unknown_metric") == {}
+
+    def test_single_point_skipped(self):
+        """Series with < 2 points cannot compute drift — should be skipped."""
+        training = {"ccl_index": [("2020-Q1", 150.0)]}
+        coefs = _FoldScopedCoefficients(training)
+        assert coefs.get_all("ccl_index") == {}
+
+    def test_negative_drift(self):
+        """Should correctly compute negative drift (declining series)."""
+        training = {
+            "unemployment_rate": [
+                ("2020-Q1", 10.0),
+                ("2020-Q2", 9.0),
+                ("2020-Q3", 8.1),
+            ],
+        }
+        coefs = _FoldScopedCoefficients(training)
+        drift = coefs.get_all("unemployment_rate")["_training_drift"]
+        assert drift < 0
+
+    def test_zero_base_value_skipped(self):
+        """Division by near-zero base should be skipped gracefully."""
+        training = {
+            "gdp_growth": [
+                ("2020-Q1", 0.0),
+                ("2020-Q2", 5.0),
+                ("2020-Q3", 10.0),
+            ],
+        }
+        coefs = _FoldScopedCoefficients(training)
+        drifts = coefs.get_all("gdp_growth")
+        # First change skipped (base=0), second change = (10-5)/5 = 1.0
+        assert abs(drifts["_training_drift"] - 1.0) < 0.01
+
+
+# ---------------------------------------------------------------------------
+# kfold look-ahead bias prevention tests
+# ---------------------------------------------------------------------------
+
+
+class TestKfoldNoLookahead:
+    """Regression tests ensuring kfold_validate uses fold-scoped coefficients."""
+
+    @pytest.mark.asyncio
+    async def test_kfold_injects_fold_scoped_coefficients(self):
+        """kfold_validate() must pass fold-scoped coefficients, not global ones.
+
+        We patch validate() and inspect whether `coefficients` arg is a
+        _FoldScopedCoefficients instance (not None, which would trigger
+        global coefficient loading and look-ahead bias).
+        """
+        captured_calls: list[dict] = []
+
+        original_validate = RetrospectiveValidator.validate
+
+        async def _tracking_validate(self, **kwargs):
+            captured_calls.append(kwargs)
+            # Return empty to skip downstream logic
+            return []
+
+        rows = [
+            {"period": f"{2018 + i // 4}-Q{(i % 4) + 1}", "value": 100.0 + i * 2}
+            for i in range(24)  # 2018-Q1 to 2023-Q4
+        ]
+
+        mock_db = _make_mock_db([rows] * 200)
+
+        with (
+            patch(
+                "backend.app.services.retrospective_validator.get_db",
+                side_effect=lambda: mock_db(),
+            ),
+            patch.object(
+                RetrospectiveValidator, "validate", _tracking_validate,
+            ),
+        ):
+            v = RetrospectiveValidator()
+            await v.kfold_validate("2018-Q1", "2023-Q4", k=4)
+
+        # At least some folds should have been called
+        assert len(captured_calls) > 0, "No folds were validated"
+
+        for call in captured_calls:
+            coefs = call.get("coefficients")
+            assert coefs is not None, (
+                "kfold passed coefficients=None — would load global coefficients "
+                "and cause look-ahead data leakage"
+            )
+            assert isinstance(coefs, _FoldScopedCoefficients), (
+                f"Expected _FoldScopedCoefficients, got {type(coefs).__name__}"
+            )
+
+    @pytest.mark.asyncio
+    async def test_validate_uses_injected_coefficients(self):
+        """validate() with injected coefficients should NOT load global ones."""
+        rows = [
+            {"period": "2020-Q1", "value": 100.0},
+            {"period": "2020-Q2", "value": 105.0},
+            {"period": "2020-Q3", "value": 110.0},
+            {"period": "2020-Q4", "value": 108.0},
+        ]
+
+        all_rows = [rows] * (len(VALIDATABLE_METRICS) + 10)
+        mock_db = _make_mock_db(all_rows)
+
+        injected = _FoldScopedCoefficients({
+            "hsi_level": [("2019-Q1", 100.0), ("2019-Q2", 110.0)],
+        })
+
+        with (
+            patch(
+                "backend.app.services.retrospective_validator.get_db",
+                side_effect=lambda: mock_db(),
+            ),
+            patch(
+                "backend.app.services.calibrated_coefficients.CalibratedCoefficients.load",
+                side_effect=RuntimeError(
+                    "Global coefficients should NOT be loaded when injected"
+                ),
+            ),
+        ):
+            v = RetrospectiveValidator()
+            # Should NOT raise — injected coefficients skip global loading
+            results = await v.validate(
+                "2020-Q1", "2020-Q4", coefficients=injected,
+            )

@@ -864,11 +864,12 @@ class TimeSeriesForecaster:
         from backend.app.services.naive_forecaster import NaiveForecaster  # noqa: PLC0415
 
         values = [v for _, v in history] if history else []
-        if not values:
+        if len(values) < 8:
+            dq = "no_data" if not values else "insufficient"
             return ForecastResult(
                 metric=metric, horizon=horizon, points=[],
                 model_used="naive_fallback", fit_quality=0.0,
-                data_quality="no_data",
+                data_quality=dq,
             )
 
         forecaster = NaiveForecaster()

@@ -556,8 +556,10 @@ def create_app() -> FastAPI:
     from slowapi.middleware import SlowAPIMiddleware
     from backend.app.api.auth import _limiter
 
-    # Apply default rate limit to all POST endpoints (10/minute per IP)
-    _limiter._application_limits = ["10/minute"]
+    # Apply default rate limit (120/minute per IP).
+    # Auth endpoints have tighter per-endpoint limits (3-5/min).
+    # Previous value of 10/min was too restrictive for dashboard GET polling.
+    _limiter._application_limits = ["120/minute"]
     app.state.limiter = _limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
     app.add_middleware(SlowAPIMiddleware)
