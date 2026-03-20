@@ -76,7 +76,7 @@ class EntityExtractor:
                 messages,
                 provider=self._provider,
                 temperature=0.3,
-                max_tokens=4096,
+                max_tokens=8192,
             )
             raw_nodes = result.get("nodes", [])
             raw_edges = result.get("edges", [])

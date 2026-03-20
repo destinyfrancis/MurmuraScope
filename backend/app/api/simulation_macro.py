@@ -339,6 +339,53 @@ async def list_validation_domains() -> APIResponse:
 
 
 # ---------------------------------------------------------------------------
+# Validation Report (A-F grade summary via ValidationReporter)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/validation/report", response_model=APIResponse)
+async def get_validation_report(
+    period_start: str = "2021-Q1",
+    period_end: str = "2023-Q4",
+    metrics: str | None = None,
+) -> APIResponse:
+    """Return an A-F graded validation report via ValidationReporter.
+
+    Wraps RetrospectiveValidator with composite scoring:
+      30% directional accuracy + 30% |Pearson r| + 20% (1-MAPE) + 20% Brier skill.
+
+    Query params:
+        period_start: Start period in YYYY-QN format (default 2021-Q1).
+        period_end: End period in YYYY-QN format (default 2023-Q4).
+        metrics: Comma-separated list of metrics (optional; all if omitted).
+    """
+    try:
+        from backend.app.services.validation_reporter import ValidationReporter  # noqa: PLC0415
+
+        reporter = ValidationReporter()
+        metric_list = [m.strip() for m in metrics.split(",")] if metrics else None
+        report = await reporter.generate(
+            period_start=period_start,
+            period_end=period_end,
+            metrics=metric_list,
+        )
+        return APIResponse(
+            success=True,
+            data=report,
+            meta={
+                "period_start": period_start,
+                "period_end": period_end,
+                "overall_grade": report.get("overall_grade", "N/A"),
+            },
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Bad request") from exc
+    except Exception as exc:
+        logger.exception("get_validation_report failed")
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
+
+
+# ---------------------------------------------------------------------------
 # Retrospective Validation Pipeline
 # ---------------------------------------------------------------------------
 

@@ -30,6 +30,15 @@ Your task is to examine a list of knowledge graph nodes and determine which node
 represent concrete, autonomous actors that can meaningfully participate in a simulation \
 as independent agents.
 
+KNOWLEDGE FIREWALL — CRITICAL:
+You must reason ONLY from the provided seed text and knowledge graph data.
+Do NOT use your training knowledge about events, outcomes, or plot developments \
+that occur AFTER the time horizon described in the seed text.
+If the seed text covers a novel's first three books, do NOT reference or use \
+knowledge of subsequent books. If it describes events up to a specific date, \
+do NOT use knowledge of what happened after that date. Predictions and agent \
+characterisation must emerge from the provided data, not from foreknowledge.
+
 INCLUDE as agents:
 - Individual persons (politicians, executives, activists, historical figures)
 - Nation-states or governments acting as unified actors
@@ -39,6 +48,9 @@ INCLUDE as agents:
 - Political parties or movements
 - Non-governmental organisations (NGOs)
 - Religious or cultural institutions when they act as decision-making bodies
+- Fictional factions, secret societies, magical organisations, family clans
+- Criminal networks, underground movements, resistance groups
+- Supernatural or non-human entities when they act as autonomous decision-makers
 - Any entity that has goals, makes decisions, and can take actions
 
 EXCLUDE from agents (these are context nodes, not actors):
@@ -58,7 +70,8 @@ Output schema:
       "node_id": "<original KG node id>",
       "label": "<node label>",
       "entity_type": "<one of: Person | Country | Military | Organization | \
-MediaOutlet | PoliticalFigure | Company | NGO | Institution>",
+MediaOutlet | PoliticalFigure | Company | NGO | Institution | Faction | \
+Family | SecretSociety | Creature | Supernatural>",
       "reason": "<one sentence explaining why this node is an eligible agent>"
     }
   ],
@@ -92,6 +105,15 @@ knowledge graph entities and their relationships.  Each profile will directly dr
 an autonomous agent in the simulation — the persona text becomes the agent's \
 "character" that governs how it communicates, reasons, and makes decisions.
 
+KNOWLEDGE FIREWALL — CRITICAL:
+You must reason ONLY from the provided seed text and knowledge graph data.
+Do NOT use your training knowledge about events, outcomes, or plot developments \
+that occur AFTER the time horizon described in the seed text.
+If the seed text covers a novel's first three books, do NOT reference or use \
+knowledge of subsequent books. If it describes events up to a specific date, \
+do NOT use knowledge of what happened after that date. Agent personas, goals, \
+and stances must be grounded solely in the provided seed material.
+
 PROFILE REQUIREMENTS
 --------------------
 1. id
@@ -108,7 +130,8 @@ PROFILE REQUIREMENTS
 
 4. entity_type
    - One of: Person | Country | Military | Organization | MediaOutlet |
-     PoliticalFigure | Company | NGO | Institution
+     PoliticalFigure | Company | NGO | Institution | Faction | Family |
+     SecretSociety | Creature | Supernatural
 
 5. persona (CRITICAL — 2–4 sentences)
    - Captures the agent's worldview, typical communication style, and \

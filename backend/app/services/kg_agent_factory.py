@@ -48,6 +48,12 @@ _AGENT_ELIGIBLE_TYPES: frozenset[str] = frozenset(
         "NGO",
         "Institution",
         "Inferred",
+        # Universal types for fiction, fantasy, interpersonal scenarios
+        "Faction",
+        "Family",
+        "SecretSociety",
+        "Creature",
+        "Supernatural",
     }
 )
 

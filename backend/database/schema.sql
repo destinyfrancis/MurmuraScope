@@ -819,6 +819,41 @@ CREATE TABLE IF NOT EXISTS multi_run_results (
 );
 
 -- ============================================================
+-- debate_rounds: Multi-agent structured debate exchanges
+-- ============================================================
+CREATE TABLE IF NOT EXISTS debate_rounds (
+    id                    TEXT PRIMARY KEY NOT NULL,
+    session_id            TEXT NOT NULL,
+    round_number          INTEGER NOT NULL,
+    topic                 TEXT NOT NULL,
+    agent_a_id            TEXT NOT NULL,
+    agent_b_id            TEXT NOT NULL,
+    agent_a_delta         REAL NOT NULL DEFAULT 0.0,
+    agent_b_delta         REAL NOT NULL DEFAULT 0.0,
+    agent_a_response_type TEXT NOT NULL DEFAULT 'rebut',
+    agent_b_response_type TEXT NOT NULL DEFAULT 'rebut',
+    agent_a_argument      TEXT NOT NULL DEFAULT '',
+    agent_b_argument      TEXT NOT NULL DEFAULT '',
+    created_at            TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_debate_rounds_session
+    ON debate_rounds(session_id, round_number);
+
+-- ============================================================
+-- consensus_scores: Per-topic consensus measurement per round
+-- ============================================================
+CREATE TABLE IF NOT EXISTS consensus_scores (
+    id           TEXT PRIMARY KEY NOT NULL,
+    session_id   TEXT NOT NULL,
+    round_number INTEGER NOT NULL,
+    topic        TEXT NOT NULL,
+    score        REAL NOT NULL DEFAULT 0.0,
+    created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_consensus_scores_session
+    ON consensus_scores(session_id, round_number);
+
+-- ============================================================
 -- seed_world_context: 群體記憶 / 宏觀背景（Step 1 注入）
 -- ============================================================
 CREATE TABLE IF NOT EXISTS seed_world_context (
@@ -901,3 +936,23 @@ CREATE TABLE IF NOT EXISTS attachment_styles (
     UNIQUE(session_id, agent_id) ON CONFLICT REPLACE
 );
 CREATE INDEX IF NOT EXISTS idx_as_session ON attachment_styles(session_id);
+
+-- ---------------------------------------------------------------------------
+-- emergence_metrics: Time-Delayed Mutual Information (TDMI) per session/round
+-- Quantifies temporal information flow between agent belief stances.
+-- TDMI > 0 with mean > 0.01 nats signals quantifiable emergent dynamics.
+-- Added in: Phase 3 emergence measurement upgrade (2026-03-20)
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS emergence_metrics (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id  TEXT    NOT NULL,
+    round_number INTEGER NOT NULL,
+    topic       TEXT    NOT NULL,
+    lag         INTEGER NOT NULL,  -- rounds of temporal offset (1, 3, or 5)
+    tdmi_score  REAL    NOT NULL,  -- mutual information in nats (≥ 0)
+    n_samples   INTEGER NOT NULL,  -- number of (x_t, y_{t+lag}) pairs used
+    created_at  TEXT    DEFAULT (datetime('now')),
+    UNIQUE(session_id, round_number, topic, lag) ON CONFLICT REPLACE
+);
+CREATE INDEX IF NOT EXISTS idx_em_session_round
+    ON emergence_metrics(session_id, round_number);

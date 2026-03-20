@@ -74,7 +74,15 @@ class BeliefSystem:
 
     CONFIRMATION_BIAS_BOOST: float = 1.3    # Weight multiplier when evidence matches prior
     CONFIRMATION_BIAS_RESIST: float = 0.6   # Weight multiplier when evidence contradicts prior
-    CONFIDENCE_INCREMENT: float = 0.05      # Confidence gain per evidence unit
+    # Confidence gain per confirming evidence unit.
+    # Calibrated to Anderson (1981) Information Integration Theory:
+    # social media posts are weak-weight stimuli (~0.05–0.10 on a 0–1 scale).
+    # With effective_weight ≈ 0.5 (average openness × bias), each post shifts
+    # confidence by ~0.025, so ~40 congruent posts reach max confidence —
+    # consistent with Festinger (1957) attitude crystallisation timescales.
+    CONFIDENCE_INCREMENT: float = 0.05
+    CONFIDENCE_DECREMENT_FACTOR: float = 0.7  # Reduction multiplier when evidence contradicts prior
+    _CONFIDENCE_FLOOR: float = 0.1          # Minimum confidence (beliefs never vanish entirely)
 
     def initialize_beliefs(
         self,
@@ -227,7 +235,14 @@ class BeliefSystem:
             return belief
 
         new_stance = (belief.confidence * belief.stance + effective_weight * evidence_stance) / denom
-        new_confidence = min(1.0, belief.confidence + self.CONFIDENCE_INCREMENT * effective_weight)
+        # Confirming evidence builds confidence; contradictory evidence erodes it.
+        # Without a decrease path, long simulations produce agents with rock-solid
+        # certainty that no amount of counter-evidence can shift (runaway rigidity).
+        if same_direction:
+            new_confidence = min(1.0, belief.confidence + self.CONFIDENCE_INCREMENT * effective_weight)
+        else:
+            reduction = self.CONFIDENCE_INCREMENT * effective_weight * self.CONFIDENCE_DECREMENT_FACTOR
+            new_confidence = max(self._CONFIDENCE_FLOOR, belief.confidence - reduction)
 
         return replace(
             belief,

@@ -226,6 +226,40 @@ def test_confidence_capped_at_one():
     assert belief.confidence <= 1.0
 
 
+def test_contradictory_evidence_reduces_confidence():
+    """Contradictory evidence should reduce confidence (not increase it).
+
+    Without a decrease path, confidence grows monotonically throughout a long
+    simulation — agents become irrationally certain and stop updating their
+    beliefs.  This test guards against that regression.
+    """
+    system = BeliefSystem()
+    belief = Belief(topic="economy_outlook", stance=0.5, confidence=0.6)
+    # Negative evidence contradicts positive prior (stance > 0)
+    updated = system.update_belief(belief, -1.0, 0.5, openness=0.5)
+    assert updated.confidence < belief.confidence, (
+        "Contradictory evidence must reduce confidence; "
+        f"was {belief.confidence}, got {updated.confidence}"
+    )
+
+
+def test_confidence_floor_on_contradiction():
+    """Confidence should not fall below _CONFIDENCE_FLOOR even after many contradictions."""
+    system = BeliefSystem()
+    belief = Belief(topic="economy_outlook", stance=0.5, confidence=0.6)
+    for _ in range(100):
+        belief = system.update_belief(belief, -1.0, 1.0, openness=0.5)
+    assert belief.confidence >= system._CONFIDENCE_FLOOR
+
+
+def test_confirming_evidence_still_increases_confidence():
+    """Same-direction evidence must still increase confidence (regression guard)."""
+    system = BeliefSystem()
+    belief = Belief(topic="economy_outlook", stance=0.5, confidence=0.5)
+    updated = system.update_belief(belief, 1.0, 0.5, openness=0.5)
+    assert updated.confidence > belief.confidence
+
+
 def test_evidence_count_increments():
     """Evidence count should increment with each update."""
     system = BeliefSystem()

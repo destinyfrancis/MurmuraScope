@@ -630,7 +630,8 @@ async def analyze_seed(request: Request, req: GraphBuildRequest) -> APIResponse:
                 "sentiment": result.sentiment,
                 "key_claims": list(result.key_claims),
                 "suggested_scenario": result.suggested_scenario,
-                "suggested_districts": list(result.suggested_districts),
+                "suggested_regions": list(result.suggested_regions),
+                "suggested_districts": list(result.suggested_regions),  # backward compat
                 "confidence": result.confidence,
                 "agent_suggestions": suggestions,
             },

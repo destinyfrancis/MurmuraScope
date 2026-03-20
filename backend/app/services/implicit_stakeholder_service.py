@@ -32,7 +32,7 @@ from backend.prompts.implicit_stakeholder_prompts import (
 logger = get_logger("implicit_stakeholder_service")
 
 _SLUG_RE = re.compile(r"^[a-z0-9_]+$")
-_MAX_IMPLICIT = 12
+_MAX_IMPLICIT = 50
 
 
 # ---------------------------------------------------------------------------
@@ -172,7 +172,7 @@ class ImplicitStakeholderService:
             {"role": "system", "content": IMPLICIT_STAKEHOLDER_SYSTEM},
             {"role": "user", "content": user_content},
         ]
-        raw = await self._llm.chat_json(messages, max_tokens=2048, temperature=0.3)
+        raw = await self._llm.chat_json(messages, max_tokens=4096, temperature=0.3)
         return raw.get("implied_actors", [])
 
     async def _load_kg_nodes(self, graph_id: str) -> list[dict[str, Any]]:

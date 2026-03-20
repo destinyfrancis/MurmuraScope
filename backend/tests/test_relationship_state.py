@@ -233,7 +233,11 @@ class TestRelationshipEngine:
         assert updated.trust <= rs.trust
 
     def test_passion_decays_faster_than_intimacy(self):
-        """Passion decays at 0.93/round, intimacy at 0.97/round — no interaction."""
+        """Passion decays faster than intimacy per round (no interaction).
+
+        Literature-calibrated weekly rates: passion 0.991 (18-month half-life),
+        intimacy 0.997 (5-year half-life) — Sprecher & Regan 1998.
+        """
         rs = RelationshipState(
             agent_a_id="alice", agent_b_id="bob",
             intimacy=0.8, passion=0.8,
@@ -285,6 +289,36 @@ class TestRelationshipEngine:
         )
         # Anxious attachment amplifies negative interaction effect on trust
         assert updated_anxious.trust <= updated_secure.trust
+
+    def test_gottman_contempt_outweighs_stonewalling(self):
+        """Contempt score must exceed stonewalling at equal input signals.
+
+        Gottman & Levenson (2000): contempt has uniquely higher predictive
+        validity (effect size d ≈ 1.3) than stonewalling (d ≈ 0.8).
+        Equal input signals → contempt output > stonewalling output.
+        """
+        score = self.engine.compute_gottman_score(
+            interaction_valence=0.0,
+            contempt_signal=0.5,
+            defensiveness_signal=0.0,
+            stonewalling_signal=0.5,
+        )
+        assert score["contempt"] > score["stonewalling"]
+
+    def test_gottman_stonewalling_outweighs_defensiveness(self):
+        """Stonewalling score must exceed defensiveness at equal input signals.
+
+        Gottman & Levenson (2000): stonewalling predicts late-stage dissolution;
+        defensiveness is mostly reactive and least independently predictive.
+        Equal input signals → stonewalling output > defensiveness output.
+        """
+        score = self.engine.compute_gottman_score(
+            interaction_valence=0.0,
+            contempt_signal=0.0,
+            defensiveness_signal=0.5,
+            stonewalling_signal=0.5,
+        )
+        assert score["stonewalling"] > score["defensiveness"]
 
     def test_compute_gottman_score_returns_dict(self):
         score = self.engine.compute_gottman_score(
@@ -346,3 +380,48 @@ class TestRelationshipEngine:
             attachment_styles={},
         )
         assert states[("alice", "bob")].intimacy == pytest.approx(0.3)
+
+
+# ---------------------------------------------------------------------------
+# Audit fix (2026-03-20): Commitment decay half-life regression guards
+# ---------------------------------------------------------------------------
+
+
+import math as _math
+
+
+class TestCommitmentDecayHalfLife:
+    """Verify _BASE_COMMITMENT_DECAY_PER_WEEK produces ~10-year half-life.
+
+    Phase 2 audit found 0.999/week gives t½ ≈ 13.3 years (too slow).
+    Corrected to 0.9987: t½ = ln(0.5)/ln(0.9987) ≈ 533 weeks ≈ 10.2 years.
+    """
+
+    def test_commitment_half_life_near_10_years(self) -> None:
+        """0.9987/week gives half-life within ±1 year of 10 years."""
+        from backend.app.services.relationship_engine import _BASE_COMMITMENT_DECAY_PER_WEEK
+
+        weeks_per_year = 52.0
+        half_life_weeks = _math.log(0.5) / _math.log(_BASE_COMMITMENT_DECAY_PER_WEEK)
+        half_life_years = half_life_weeks / weeks_per_year
+
+        assert 9.0 <= half_life_years <= 11.0, (
+            f"Commitment half-life {half_life_years:.1f} years is outside 9–11 year range. "
+            f"Decay rate: {_BASE_COMMITMENT_DECAY_PER_WEEK}"
+        )
+
+    def test_commitment_decays_slower_than_trust(self) -> None:
+        """Commitment must be the most stable dimension (slowest decay)."""
+        from backend.app.services.relationship_engine import (
+            _BASE_COMMITMENT_DECAY_PER_WEEK,
+            _BASE_TRUST_DECAY_PER_WEEK,
+        )
+        assert _BASE_COMMITMENT_DECAY_PER_WEEK > _BASE_TRUST_DECAY_PER_WEEK
+
+    def test_commitment_not_equal_old_value(self) -> None:
+        """Regression: ensure old 0.999 value is not restored."""
+        from backend.app.services.relationship_engine import _BASE_COMMITMENT_DECAY_PER_WEEK
+
+        assert _BASE_COMMITMENT_DECAY_PER_WEEK != 0.999, (
+            "Old decay rate 0.999 detected — should be 0.9987 (10-year half-life)"
+        )

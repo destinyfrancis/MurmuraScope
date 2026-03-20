@@ -15,6 +15,15 @@ UNIVERSAL_DELIBERATION_SYSTEM = """You are a universal agent decision analysis e
 Your task is to analyse each agent's profile and the current scenario state to determine
 the most likely decision each agent would make.
 
+KNOWLEDGE FIREWALL — CRITICAL:
+You must reason ONLY from the provided agent profiles, scenario metrics, and recent events.
+Do NOT use your training knowledge about events, outcomes, or plot developments
+that occur AFTER the time horizon described in the scenario context.
+If the scenario is based on a novel's first three books, do NOT use knowledge of
+subsequent books. If it describes events up to a specific date, do NOT use knowledge
+of what happened after that date. Decisions must emerge from agent dynamics and
+scenario logic, not from foreknowledge of real or fictional outcomes.
+
 Rules:
 1. Think from the perspective of each agent — consider their persona, goals, and capabilities
 2. Each agent's decision must be evaluated independently, but you may note relationships

@@ -20,13 +20,15 @@ from backend.prompts.text_processor_prompts import (
 
 logger = get_logger("text_processor")
 
-_VALID_SCENARIOS = frozenset([
+_HK_SCENARIOS = frozenset([
     "property", "emigration", "fertility", "career",
     "education", "b2b", "macro",
 ])
 
 _VALID_ENTITY_TYPES = frozenset([
     "person", "org", "location", "policy", "economic", "event",
+    "faction", "creature", "artifact", "magical", "military",
+    "media", "institution", "family", "technology",
 ])
 
 _VALID_SENTIMENTS = frozenset(["positive", "negative", "neutral", "mixed"])
@@ -75,25 +77,26 @@ class ProcessedSeed:
     sentiment: str
     key_claims: tuple[str, ...]
     suggested_scenario: str
-    suggested_districts: tuple[str, ...]
+    suggested_regions: tuple[str, ...]
     confidence: float
 
     def to_summary(self) -> str:
         """Return a short text summary of the analysis."""
-        entity_names = ", ".join(e.name for e in self.entities[:5])
-        claims = "; ".join(self.key_claims[:3])
+        entity_names = ", ".join(e.name for e in self.entities[:8])
+        claims = "; ".join(self.key_claims[:5])
         return (
-            f"情景：{self.suggested_scenario} | "
-            f"情感：{self.sentiment} | "
-            f"關鍵實體：{entity_names} | "
-            f"核心論點：{claims}"
+            f"Scenario: {self.suggested_scenario} | "
+            f"Sentiment: {self.sentiment} | "
+            f"Key entities: {entity_names} | "
+            f"Key claims: {claims}"
         )
 
 
 def _validate_scenario(raw: str) -> str:
-    if raw in _VALID_SCENARIOS:
-        return raw
-    return "property"
+    """Accept any non-empty scenario string. HK scenarios kept for backward compat."""
+    if not raw or not raw.strip():
+        return "general"
+    return raw.strip().lower()
 
 
 def _validate_sentiment(raw: str) -> str:
@@ -102,10 +105,11 @@ def _validate_sentiment(raw: str) -> str:
     return "neutral"
 
 
-def _validate_districts(raw: list) -> tuple[str, ...]:
+def _validate_regions(raw: list) -> tuple[str, ...]:
+    """Accept any region/location strings. HK districts validated when detected."""
     if not isinstance(raw, list):
         return ()
-    return tuple(d for d in raw if d in _HK_DISTRICTS)[:6]
+    return tuple(str(d).strip() for d in raw if d and str(d).strip())[:20]
 
 
 def _parse_processed_seed(data: dict) -> ProcessedSeed:
@@ -116,7 +120,7 @@ def _parse_processed_seed(data: dict) -> ProcessedSeed:
             type=e.get("type", "event") if e.get("type") in _VALID_ENTITY_TYPES else "event",
             relevance=float(e.get("relevance", 1.0)),
         )
-        for e in (data.get("entities") or [])[:10]
+        for e in (data.get("entities") or [])[:40]
         if e.get("name")
     )
     timeline = tuple(
@@ -124,7 +128,7 @@ def _parse_processed_seed(data: dict) -> ProcessedSeed:
             date_hint=str(t.get("date_hint", "")),
             event=str(t.get("event", "")),
         )
-        for t in (data.get("timeline") or [])[:5]
+        for t in (data.get("timeline") or [])[:15]
         if t.get("event")
     )
     stakeholders = tuple(
@@ -133,11 +137,11 @@ def _parse_processed_seed(data: dict) -> ProcessedSeed:
             impact=str(s.get("impact", "中性")),
             description=str(s.get("description", "")),
         )
-        for s in (data.get("stakeholders") or [])[:6]
+        for s in (data.get("stakeholders") or [])[:20]
         if s.get("group")
     )
     key_claims = tuple(
-        str(c) for c in (data.get("key_claims") or [])[:5] if c
+        str(c) for c in (data.get("key_claims") or [])[:15] if c
     )
 
     return ProcessedSeed(
@@ -147,8 +151,10 @@ def _parse_processed_seed(data: dict) -> ProcessedSeed:
         stakeholders=stakeholders,
         sentiment=_validate_sentiment(data.get("sentiment", "neutral")),
         key_claims=key_claims,
-        suggested_scenario=_validate_scenario(data.get("suggested_scenario", "property")),
-        suggested_districts=_validate_districts(data.get("suggested_districts", [])),
+        suggested_scenario=_validate_scenario(data.get("suggested_scenario", "general")),
+        suggested_regions=_validate_regions(
+            data.get("suggested_regions") or data.get("suggested_districts") or []
+        ),
         confidence=float(min(1.0, max(0.0, data.get("confidence", 0.7)))),
     )
 
@@ -174,7 +180,7 @@ class TextProcessor:
         if not seed_text or not seed_text.strip():
             raise ValueError("seed_text cannot be empty")
 
-        truncated = sanitize_seed_text(seed_text[:3000])
+        truncated = sanitize_seed_text(seed_text[:12000])
 
         messages = [
             {"role": "system", "content": ANALYZE_SEED_SYSTEM},
@@ -193,14 +199,14 @@ class TextProcessor:
             logger.exception("TextProcessor.process failed, returning fallback")
             # Return a minimal fallback rather than crashing
             return ProcessedSeed(
-                language="zh-HK",
+                language="auto",
                 entities=(),
                 timeline=(),
                 stakeholders=(),
                 sentiment="neutral",
                 key_claims=(seed_text[:100],),
-                suggested_scenario="property",
-                suggested_districts=(),
+                suggested_scenario="general",
+                suggested_regions=(),
                 confidence=0.1,
             )
 
@@ -216,7 +222,7 @@ class TextProcessor:
         stakeholders_text = "; ".join(
             f"{s.group}（{s.impact}）" for s in seed.stakeholders
         )
-        districts_text = ", ".join(seed.suggested_districts) or "全港"
+        districts_text = ", ".join(seed.suggested_regions) or "全域"
 
         messages = [
             {"role": "system", "content": SUGGEST_AGENTS_SYSTEM},

@@ -11,6 +11,15 @@ Phase 3: persona template extraction (individual memory)
 WORLD_CONTEXT_SYSTEM = """\
 You are an expert social analyst. Extract macro-level world context from the
 provided text that will serve as background knowledge for a social simulation.
+
+KNOWLEDGE FIREWALL — CRITICAL:
+You must extract context ONLY from the provided text below.
+Do NOT inject your training knowledge about events, outcomes, or developments
+that occur AFTER the time horizon described in the text.
+If the text covers a novel's first three books, do NOT reference later books.
+If it describes events up to a specific date, do NOT reference later events.
+Every piece of context you output must be directly grounded in the provided text.
+
 Output ONLY valid JSON — no markdown, no explanation.
 """
 
@@ -43,6 +52,15 @@ TEXT:
 PERSONA_TEMPLATE_SYSTEM = """\
 You are an expert sociologist and simulation designer.
 Extract distinct stakeholder personas from the provided text.
+
+KNOWLEDGE FIREWALL — CRITICAL:
+You must derive personas ONLY from the provided text below.
+Do NOT use your training knowledge about characters, people, or organisations
+beyond what is explicitly described in the text. If the text describes
+fictional characters up to a certain point in their story, do NOT incorporate
+knowledge of their later development. Personas must be grounded solely in
+the provided material.
+
 Output ONLY valid JSON — no markdown, no explanation.
 """
 

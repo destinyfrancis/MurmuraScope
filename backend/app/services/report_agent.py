@@ -56,19 +56,22 @@ TOOLS: dict[str, str] = {
         "Get sentiment distribution across agent demographics"
     ),
     "get_demographic_breakdown": (
-        "Get action breakdown by age/sex/district/income"
+        "Get action breakdown by agent demographics (age, role, region, group). "
+        "Returns empty result if demographic data is not available for this scenario"
     ),
     "interview_agents": (
         "Interview sample agents about their decisions"
     ),
     "get_macro_context": (
-        "Get current macro-economic context"
+        "Get current macro-economic or scenario-level context indicators. "
+        "Returns empty result if macro data is not available for this scenario"
     ),
     "calculate_cashflow": (
-        "Calculate cashflow projection for property/life decisions"
+        "Calculate cashflow or resource projection for scenario-relevant decisions. "
+        "Returns empty result if not applicable to this scenario domain"
     ),
     "get_decision_summary": (
-        "Get aggregate agent decision statistics (emigration rate, property purchase rate, etc.)"
+        "Get aggregate agent decision statistics across all decision types"
     ),
     "get_sentiment_timeline": (
         "Get per-round sentiment evolution from simulation actions"
@@ -83,16 +86,30 @@ TOOLS: dict[str, str] = {
         "Get prediction confidence score, backtest results, and historical accuracy rate"
     ),
     "insight_forge": (
-        "深度洞察查詢 — LLM拆解為子查詢，並行搜索memories/KG/actions，標記可引用原文"
+        "Deep insight query — LLM decomposes into sub-queries, parallel search "
+        "across memories/KG/actions, with source citations"
     ),
     "get_topic_evolution": (
-        "追蹤議題在模擬輪次中的遷移（如：個案 → 程序正義 → 制度信任）"
+        "Track topic migration across simulation rounds "
+        "(e.g. individual case → procedural justice → institutional trust)"
     ),
     "get_platform_breakdown": (
-        "比較不同社交平台上Agent行為和情緒的差異"
+        "Compare agent behaviour and sentiment across different social platforms"
     ),
     "get_agent_story_arcs": (
-        "追蹤代表性Agent的跨輪次立場演化故事（kg_driven only）"
+        "Track representative agents' stance evolution stories across rounds "
+        "(kg_driven mode only)"
+    ),
+    "get_debate_summary": (
+        "Get structured debate summary showing cross-faction argumentation, "
+        "consensus scores per topic, and belief shifts from agent debates "
+        "(kg_driven mode only)"
+    ),
+    "get_emergence_score": (
+        "Get Time-Delayed Mutual Information (TDMI) temporal belief persistence metrics — "
+        "quantifies whether agent belief stances at time t are predictive of "
+        "future stances (emergence_detected=true means sustained temporal belief persistence, "
+        "a precondition for but not proof of collective emergence)"
     ),
 }
 
@@ -100,7 +117,10 @@ _TOOL_DESCRIPTIONS = "\n".join(
     f"- {name}: {desc}" for name, desc in TOOLS.items()
 )
 
-_SYSTEM_PROMPT = f"""You are an expert analyst generating reports from Hong Kong social simulation data.
+_SYSTEM_PROMPT = f"""You are an expert analyst generating reports from multi-agent social simulation data.
+The simulation may cover ANY domain: geopolitics, economics, fiction, social dynamics, \
+corporate competition, interpersonal scenarios, or any other scenario. Adapt your \
+analysis language and framework to the specific domain of the simulation.
 
 You have access to the following tools:
 {_TOOL_DESCRIPTIONS}
@@ -746,6 +766,128 @@ async def _handle_get_agent_story_arcs(
     )
 
 
+async def _handle_get_debate_summary(
+    session_id: str, params: dict[str, Any], _ipc: SimulationIPC
+) -> str:
+    """Get structured debate summary with consensus scores and belief shifts."""
+    try:
+        async with get_db() as db:
+            # Get consensus scores across rounds
+            cursor = await db.execute(
+                """SELECT round_number, topic, score
+                   FROM consensus_scores
+                   WHERE session_id = ?
+                   ORDER BY round_number, topic""",
+                (session_id,),
+            )
+            consensus_rows = await cursor.fetchall()
+
+            # Get debate exchange stats
+            cursor = await db.execute(
+                """SELECT round_number, topic,
+                          COUNT(*) as pair_count,
+                          AVG(agent_a_delta) as avg_a_delta,
+                          AVG(agent_b_delta) as avg_b_delta,
+                          SUM(CASE WHEN agent_a_response_type = 'concede' THEN 1 ELSE 0 END) as a_concessions,
+                          SUM(CASE WHEN agent_b_response_type = 'concede' THEN 1 ELSE 0 END) as b_concessions
+                   FROM debate_rounds
+                   WHERE session_id = ?
+                   GROUP BY round_number, topic
+                   ORDER BY round_number""",
+                (session_id,),
+            )
+            debate_rows = await cursor.fetchall()
+
+        if not consensus_rows and not debate_rows:
+            return json.dumps({"note": "No debate data available for this session."})
+
+        result = {
+            "consensus_evolution": [
+                {"round": r[0], "topic": r[1], "consensus_score": round(r[2], 3)}
+                for r in consensus_rows
+            ],
+            "debate_statistics": [
+                {
+                    "round": r[0],
+                    "topic": r[1],
+                    "pairs": r[2],
+                    "avg_belief_shift_a": round(r[3], 4),
+                    "avg_belief_shift_b": round(r[4], 4),
+                    "concessions_a": r[5],
+                    "concessions_b": r[6],
+                }
+                for r in debate_rows
+            ],
+        }
+        return json.dumps(result, indent=2, ensure_ascii=False)
+    except Exception:
+        return json.dumps({"note": "Debate summary unavailable."})
+
+
+async def _handle_get_emergence_score(
+    session_id: str, params: dict[str, Any], _ipc: SimulationIPC
+) -> str:
+    """Get TDMI emergence metrics: temporal information flow between agent beliefs."""
+    try:
+        round_number = params.get("round_number")
+        async with get_db() as db:
+            if round_number is not None:
+                cursor = await db.execute(
+                    """SELECT topic, lag, tdmi_score, n_samples, round_number
+                       FROM emergence_metrics
+                       WHERE session_id = ? AND round_number = ?
+                       ORDER BY topic, lag""",
+                    (session_id, round_number),
+                )
+            else:
+                cursor = await db.execute(
+                    """SELECT topic, lag, tdmi_score, n_samples, round_number
+                       FROM emergence_metrics
+                       WHERE session_id = ?
+                       ORDER BY round_number DESC, topic, lag
+                       LIMIT 100""",
+                    (session_id,),
+                )
+            rows = await cursor.fetchall()
+
+        if not rows:
+            return json.dumps({"note": "No TDMI emergence data yet. Data is computed every 5 rounds."})
+
+        scores = [r["tdmi_score"] for r in rows]
+        mean_tdmi = sum(scores) / len(scores)
+        result = {
+            "mean_tdmi_nats": round(mean_tdmi, 6),
+            "max_tdmi_nats": round(max(scores), 6),
+            "emergence_detected": mean_tdmi > 0.02,
+            "threshold_nats": 0.02,
+            "n_measurements": len(rows),
+            "interpretation": (
+                "Sustained temporal belief persistence detected: "
+                "agent belief stances at time t are significantly informative about "
+                "future stances (necessary precondition for collective emergence)."
+                if mean_tdmi > 0.02 else
+                "No significant temporal belief persistence detected yet."
+            ),
+            "top_topics": sorted(
+                [
+                    {
+                        "topic": r["topic"],
+                        "lag": r["lag"],
+                        "tdmi": round(r["tdmi_score"], 6),
+                        "n_samples": r["n_samples"],
+                        "round": r["round_number"],
+                    }
+                    for r in rows
+                ],
+                key=lambda x: x["tdmi"],
+                reverse=True,
+            )[:10],
+        }
+        return json.dumps(result, indent=2, ensure_ascii=False)
+    except Exception:
+        return json.dumps({"note": "Emergence score unavailable."})
+
+
 _TOOL_HANDLERS: dict[str, Any] = {
     "query_graph": _handle_query_graph,
     "get_global_narrative": _handle_global_narrative,
@@ -763,6 +905,8 @@ _TOOL_HANDLERS: dict[str, Any] = {
     "get_topic_evolution": _handle_get_topic_evolution,
     "get_platform_breakdown": _handle_get_platform_breakdown,
     "get_agent_story_arcs": _handle_get_agent_story_arcs,
+    "get_debate_summary": _handle_get_debate_summary,
+    "get_emergence_score": _handle_get_emergence_score,
 }
 
 

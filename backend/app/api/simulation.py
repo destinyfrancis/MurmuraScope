@@ -402,8 +402,8 @@ async def quick_start(req: dict) -> APIResponse:
         seed_text = (req.get("seed_text") or "").strip()
         if not seed_text:
             raise HTTPException(status_code=400, detail="seed_text is required")
-        if len(seed_text) > 50_000:
-            raise HTTPException(status_code=400, detail="seed_text exceeds 50,000 character limit")
+        if len(seed_text) > 500_000:
+            raise HTTPException(status_code=400, detail="seed_text exceeds 500,000 character limit")
         scenario_question_raw = (req.get("scenario_question") or "").strip()
         scenario_question = sanitize_scenario_description(scenario_question_raw) if scenario_question_raw else ""
         preset = (req.get("preset") or "fast").strip()
@@ -2128,3 +2128,97 @@ async def get_relationship_validation(
     except Exception as exc:
         logger.exception("relationship-validation failed for session %s", session_id)
         raise HTTPException(status_code=500, detail="Internal server error") from exc
+
+
+# ---------------------------------------------------------------------------
+# Emergence metrics: TDMI quantification
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{session_id}/emergence-metrics", response_model=APIResponse)
+async def get_emergence_metrics(
+    session_id: str,
+    round_number: int | None = None,
+) -> APIResponse:
+    """Return Time-Delayed Mutual Information (TDMI) emergence metrics.
+
+    Query params:
+        round_number: Optional round filter. Returns all rounds when omitted.
+
+    Returns per-topic TDMI scores and an aggregate summary.  A
+    ``emergence_detected=true`` flag indicates quantifiable emergent
+    information flow (mean TDMI > 0.02 nats).
+    """
+    async with get_db() as db:
+        if round_number is not None:
+            cursor = await db.execute(
+                """SELECT topic, lag, tdmi_score, n_samples, round_number
+                   FROM emergence_metrics
+                   WHERE session_id = ? AND round_number = ?
+                   ORDER BY topic, lag""",
+                (session_id, round_number),
+            )
+        else:
+            cursor = await db.execute(
+                """SELECT topic, lag, tdmi_score, n_samples, round_number
+                   FROM emergence_metrics
+                   WHERE session_id = ?
+                   ORDER BY round_number, topic, lag""",
+                (session_id,),
+            )
+        rows = await cursor.fetchall()
+
+    if not rows:
+        return APIResponse(
+            success=True,
+            data={"results": [], "summary": {"n_topics": 0, "emergence_detected": False}},
+            meta={"session_id": session_id, "round_number": round_number},
+        )
+
+    # Build per-round summaries
+    from collections import defaultdict  # noqa: PLC0415
+    rounds: dict[int, list[dict]] = defaultdict(list)
+    for r in rows:
+        rounds[r["round_number"]].append({
+            "topic": r["topic"],
+            "lag": r["lag"],
+            "tdmi_score": r["tdmi_score"],
+            "n_samples": r["n_samples"],
+        })
+
+    summaries = []
+    all_scores: list[float] = []
+    for rnum, entries in sorted(rounds.items()):
+        scores = [e["tdmi_score"] for e in entries]
+        all_scores.extend(scores)
+        mean_tdmi = sum(scores) / len(scores)
+        summaries.append({
+            "round_number": rnum,
+            "mean_tdmi": round(mean_tdmi, 6),
+            "max_tdmi": round(max(scores), 6),
+            "emergence_detected": mean_tdmi > 0.02,
+            "n_entries": len(entries),
+            "entries": entries,
+        })
+
+    overall_mean = round(sum(all_scores) / len(all_scores), 6) if all_scores else 0.0
+    return APIResponse(
+        success=True,
+        data={
+            "rounds": summaries,
+            "summary": {
+                "overall_mean_tdmi": overall_mean,
+                "emergence_detected": overall_mean > 0.01,
+                "n_rounds_measured": len(summaries),
+                "n_topics": len({r["topic"] for r in rows}),
+                "threshold_nats": 0.02,
+                "interpretation": (
+                    "Emergent information flow detected: agent stances at time t "
+                    "are informative about stances at future rounds."
+                    if overall_mean > 0.01 else
+                    "No significant temporal information dependency detected yet."
+                ),
+            },
+        },
+        meta={"session_id": session_id, "round_number": round_number},
+    )

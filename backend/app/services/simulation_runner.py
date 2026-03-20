@@ -148,6 +148,8 @@ class SimulationRunner(
         self._relationship_memory: Any | None = None
         # Phase 4: strategic planner for Tier 1 multi-round planning
         self._strategic_planner: Any | None = None
+        # Consensus debate engine for structured multi-agent argumentation
+        self._consensus_debate: Any | None = None
         # Reflection loop: periodic insight synthesis for Tier 1 agents
         self._reflection_service: Any | None = None
         # Phase 4A: per-session RoundCache for in-memory agent profile lookups
@@ -699,10 +701,11 @@ class SimulationRunner(
             if hc.emergence_enabled:
                 await self._process_belief_update(session_id, round_num)
             await self._process_round_consumption(session_id, round_num)
-            # kg_driven: strategic planning + Tier 1 cognitive deliberation + belief propagation
+            # kg_driven: strategic planning + Tier 1 cognitive deliberation + consensus debate + belief propagation
             if self._kg_mode.get(session_id):
                 await self._kg_strategic_planning(session_id, round_num)
                 await self._kg_tier1_deliberation(session_id, round_num)
+                await self._kg_consensus_debate(session_id, round_num)
                 await self._kg_belief_propagation(session_id, round_num)
         if self._profiler:
             self._profiler.end_hook("group_2", round_num, _t_g2)
@@ -831,6 +834,14 @@ class SimulationRunner(
             self._create_tracked_task(
                 session_id,
                 self._process_relationship_lifecycle(session_id, round_num),
+            )
+
+        # TDMI emergence measurement (every 5 rounds, both modes)
+        if round_num > 0 and round_num % 5 == 0:
+            self._create_tracked_task(
+                session_id,
+                self._compute_tdmi(session_id, round_num),
+                timeout_s=30.0,
             )
 
         # Round-level wall-clock summary (Groups 1+2 synchronous work only;
@@ -1298,6 +1309,9 @@ class SimulationRunner(
         if self._belief_propagation is None:
             from backend.app.services.belief_propagation import BeliefPropagationEngine  # noqa: PLC0415
             self._belief_propagation = BeliefPropagationEngine()
+        if self._consensus_debate is None:
+            from backend.app.services.consensus_debate_engine import ConsensusDebateEngine  # noqa: PLC0415
+            self._consensus_debate = ConsensusDebateEngine()
         if self._faction_mapper is None:
             from backend.app.services.emergence_tracker import FactionMapper  # noqa: PLC0415
             self._faction_mapper = FactionMapper()
@@ -1754,6 +1768,79 @@ class SimulationRunner(
         except Exception:
             logger.debug("_kg_strategic_planning: planner failed session=%s round=%d", session_id, round_num)
 
+    async def _kg_consensus_debate(
+        self, session_id: str, round_num: int
+    ) -> None:
+        """Group 2: structured multi-agent debate on divergent topics.
+
+        Runs every N rounds (default 3). Pairs Tier 1 agents with opposing
+        stances on high-divergence topics for pairwise LLM debate.
+        Debate deltas feed into agent_beliefs before belief_propagation.
+        """
+        if self._consensus_debate is None:
+            return
+        if not self._consensus_debate.should_trigger(round_num):
+            return
+        kg_state = self._kg_sessions.get(session_id)
+        if kg_state is None or not kg_state.agent_beliefs or not kg_state.tier1_agents:
+            return
+
+        try:
+            # Build agent_profiles lookup for enrichment
+            agent_profiles: dict[str, dict] = {}
+            for agent in kg_state.tier1_agents:
+                aid = agent["id"]
+                profile: dict = {"persona": "", "recent_memories": ""}
+                # Enrich with strategy context if available
+                strategy = kg_state.agent_strategies.get(aid)
+                if strategy:
+                    profile["persona"] = strategy.get("plan", "")
+                agent_profiles[aid] = profile
+
+            result = await self._consensus_debate.run_debate(
+                session_id=session_id,
+                round_num=round_num,
+                tier1_agents=kg_state.tier1_agents,
+                agent_beliefs=kg_state.agent_beliefs,
+                scenario_description=kg_state.scenario_description,
+                agent_profiles=agent_profiles,
+            )
+
+            # Apply debate belief deltas to agent_beliefs
+            if result.exchanges:
+                deltas = self._consensus_debate.get_belief_deltas(result)
+                updated = {
+                    aid: dict(b) for aid, b in kg_state.agent_beliefs.items()
+                }
+                for agent_id, topic_deltas in deltas.items():
+                    if agent_id not in updated:
+                        continue
+                    for topic, delta in topic_deltas.items():
+                        if topic in updated[agent_id]:
+                            updated[agent_id][topic] = max(
+                                0.0, min(1.0, updated[agent_id][topic] + delta)
+                            )
+                kg_state.agent_beliefs = updated
+
+                logger.info(
+                    "consensus_debate session=%s round=%d pairs=%d topics=%d avg_consensus=%.2f",
+                    session_id[:8],
+                    round_num,
+                    result.pairs_debated,
+                    result.topics_debated,
+                    (
+                        sum(result.consensus_scores.values()) / len(result.consensus_scores)
+                        if result.consensus_scores
+                        else 0.0
+                    ),
+                )
+        except Exception:
+            logger.exception(
+                "_kg_consensus_debate failed session=%s round=%d",
+                session_id[:8],
+                round_num,
+            )
+
     async def _kg_belief_propagation(
         self, session_id: str, round_num: int
     ) -> None:
@@ -2175,6 +2262,22 @@ class SimulationRunner(
             logger.exception(
                 "Failed to persist tipping point sim=%s round=%d",
                 tipping.simulation_id, tipping.round_number,
+            )
+
+    async def _compute_tdmi(self, session_id: str, round_num: int) -> None:
+        """Group 3 periodic: TDMI emergence measurement (every 5 rounds, both modes).
+
+        Reads belief_states table, computes Time-Delayed Mutual Information for
+        each topic × lag, and persists results to emergence_metrics table.
+        Logged at INFO level; failures are non-fatal.
+        """
+        try:
+            from backend.app.services.emergence_metrics import EmergenceMetricsCalculator  # noqa: PLC0415
+            calculator = EmergenceMetricsCalculator()
+            await calculator.compute_and_persist(session_id, round_num)
+        except Exception:
+            logger.exception(
+                "_compute_tdmi failed session=%s round=%d", session_id, round_num,
             )
 
 

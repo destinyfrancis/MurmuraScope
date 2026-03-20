@@ -43,11 +43,11 @@ logger = get_logger(__name__)
 # ---------------------------------------------------------------------------
 
 _SLUG_RE = re.compile(r"^[a-z0-9_]+$")
-_MAX_DECISION_TYPES = 12
+_MAX_DECISION_TYPES = 20
 _MIN_DECISION_TYPES = 1
-_MAX_METRICS = 8
+_MAX_METRICS = 15
 _MIN_METRICS = 1
-_MAX_SHOCK_TYPES = 8
+_MAX_SHOCK_TYPES = 15
 
 
 # ---------------------------------------------------------------------------
@@ -430,7 +430,7 @@ def _parse_impact_rules(items: list[Any]) -> list[UniversalImpactRule]:
 def _parse_implied_actors(raw_list: list[Any]) -> list[ImpliedActor]:
     """Parse implied_actors list from LLM response. Returns [] on any error."""
     result: list[ImpliedActor] = []
-    for item in raw_list[:8]:  # cap at 8
+    for item in raw_list[:30]:  # cap at 30
         try:
             actor_id = _validate_slug(
                 item.get("id", ""), f"implied_actor[{item.get('name', '?')}]"

@@ -47,7 +47,7 @@ class _ProcessedSeed:
     sentiment: str
     key_claims: tuple
     suggested_scenario: str
-    suggested_districts: tuple
+    suggested_regions: tuple
     confidence: float
 
 
@@ -72,7 +72,7 @@ def _make_seed(
         sentiment=sentiment,
         key_claims=tuple(key_claims),
         suggested_scenario="property",
-        suggested_districts=("沙田",),
+        suggested_regions=("沙田",),
         confidence=confidence,
     )
 
