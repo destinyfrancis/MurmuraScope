@@ -268,6 +268,22 @@ _US_MACRO_IMPACT_DELTAS = MacroImpactDeltas(
 )
 
 # ---------------------------------------------------------------------------
+# Macro baselines — US-adapted defaults
+# ---------------------------------------------------------------------------
+
+_US_MACRO_BASELINES: dict[str, float] = {
+    "consumer_confidence": 55.0,      # Conference Board CCI (neutral ~50-60)
+    "unemployment_rate": 0.040,        # ~4% US unemployment
+    "gdp_growth": 0.025,               # ~2.5% US GDP growth
+    "cpi_yoy": 0.030,                  # ~3% CPI
+    "supply_chain_disruption": 0.20,  # Low baseline disruption
+    "import_tariff_rate": 0.025,      # ~2.5% average US tariff
+    "credit_growth_yoy": 0.06,        # ~6% credit growth
+    "interbank_spread": 0.005,        # Low spread baseline
+    "mortgage_delinquency": 0.02,     # ~2% delinquency
+}
+
+# ---------------------------------------------------------------------------
 # Pack construction + registration
 # ---------------------------------------------------------------------------
 
@@ -282,6 +298,7 @@ US_MARKETS_PACK = DomainPack(
     default_forecast_metrics=tuple(m.name for m in _US_METRICS),
     correlated_vars=("spx_close", "us_10y_yield", "fed_funds_rate", "vix_close"),
     mc_default_metrics=("spx_close", "ndx_close", "vix_close", "us_unemployment"),
+    macro_baselines=_US_MACRO_BASELINES,
     decision_thresholds=_US_DECISION_THRESHOLDS,
     macro_impact_deltas=_US_MACRO_IMPACT_DELTAS,
     demographics=US_DEMOGRAPHICS,

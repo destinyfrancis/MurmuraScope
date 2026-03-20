@@ -58,6 +58,17 @@ _PN_MC_DEFAULT_METRICS: tuple[str, ...] = (
 )
 
 # ---------------------------------------------------------------------------
+# Macro baselines — public narrative defaults
+# ---------------------------------------------------------------------------
+
+_NARRATIVE_MACRO_BASELINES: dict[str, float] = {
+    "consumer_confidence": 50.0,
+    "gdp_growth": 0.020,
+    "cpi_yoy": 0.030,
+    "supply_chain_disruption": 0.25,
+}
+
+# ---------------------------------------------------------------------------
 # Pack construction + registration
 # ---------------------------------------------------------------------------
 
@@ -66,6 +77,7 @@ PUBLIC_NARRATIVE_PACK = DomainPack(
     name_zh="公共輿論",
     name_en="Public Narrative",
     locale="zh-HK",
+    macro_baselines=_NARRATIVE_MACRO_BASELINES,
     valid_shock_types=_PN_VALID_SHOCK_TYPES,
     shock_specs=_PN_SHOCK_SPECS,
     metrics=_PN_METRICS,

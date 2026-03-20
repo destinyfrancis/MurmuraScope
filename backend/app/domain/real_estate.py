@@ -110,6 +110,20 @@ _RE_MACRO_IMPACT_DELTAS = MacroImpactDeltas(
 )
 
 # ---------------------------------------------------------------------------
+# Macro baselines — real estate defaults
+# ---------------------------------------------------------------------------
+
+_REAL_ESTATE_MACRO_BASELINES: dict[str, float] = {
+    "consumer_confidence": 55.0,
+    "unemployment_rate": 0.040,
+    "gdp_growth": 0.020,
+    "cpi_yoy": 0.030,
+    "credit_growth_yoy": 0.05,
+    "mortgage_delinquency": 0.020,
+    "bank_ltv_cap": 0.60,
+}
+
+# ---------------------------------------------------------------------------
 # Pack construction + registration
 # ---------------------------------------------------------------------------
 
@@ -124,6 +138,7 @@ REAL_ESTATE_PACK = DomainPack(
     default_forecast_metrics=_RE_DEFAULT_FORECAST_METRICS,
     correlated_vars=_RE_CORRELATED_VARS,
     mc_default_metrics=_RE_MC_DEFAULT_METRICS,
+    macro_baselines=_REAL_ESTATE_MACRO_BASELINES,
     decision_thresholds=_RE_DECISION_THRESHOLDS,
     macro_impact_deltas=_RE_MACRO_IMPACT_DELTAS,
     keywords=(

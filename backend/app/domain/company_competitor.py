@@ -215,6 +215,19 @@ _CC_MACRO_IMPACT_DELTAS = MacroImpactDeltas(
 )
 
 # ---------------------------------------------------------------------------
+# Macro baselines — company/competitor defaults
+# ---------------------------------------------------------------------------
+
+_COMPANY_MACRO_BASELINES: dict[str, float] = {
+    "consumer_confidence": 60.0,
+    "unemployment_rate": 0.040,
+    "gdp_growth": 0.020,
+    "cpi_yoy": 0.025,
+    "credit_growth_yoy": 0.04,
+    "interbank_spread": 0.006,
+}
+
+# ---------------------------------------------------------------------------
 # Pack construction + registration
 # ---------------------------------------------------------------------------
 
@@ -233,6 +246,7 @@ COMPANY_COMPETITOR_PACK = DomainPack(
     mc_default_metrics=(
         "market_share", "revenue_growth", "customer_churn", "cost_efficiency",
     ),
+    macro_baselines=_COMPANY_MACRO_BASELINES,
     decision_thresholds=_CC_DECISION_THRESHOLDS,
     macro_impact_deltas=_CC_MACRO_IMPACT_DELTAS,
     demographics=CC_DEMOGRAPHICS,

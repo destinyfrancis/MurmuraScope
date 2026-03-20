@@ -254,6 +254,23 @@ _GLOBAL_MACRO_IMPACT_DELTAS = MacroImpactDeltas(
 )
 
 # ---------------------------------------------------------------------------
+# Macro baselines — global defaults
+# ---------------------------------------------------------------------------
+
+_GLOBAL_MACRO_BASELINES: dict[str, float] = {
+    "consumer_confidence": 50.0,
+    "unemployment_rate": 0.055,
+    "gdp_growth": 0.030,
+    "cpi_yoy": 0.040,
+    "supply_chain_disruption": 0.30,
+    "import_tariff_rate": 0.035,
+    "credit_growth_yoy": 0.05,
+    "interbank_spread": 0.008,
+    "mortgage_delinquency": 0.025,
+    "taiwan_strait_risk": 0.25,
+}
+
+# ---------------------------------------------------------------------------
 # Pack construction + registration
 # ---------------------------------------------------------------------------
 
@@ -268,6 +285,7 @@ GLOBAL_MACRO_PACK = DomainPack(
     default_forecast_metrics=("oil_price", "gold_price", "usd_index", "global_pmi"),
     correlated_vars=("oil_price", "gold_price", "usd_index", "global_pmi"),
     mc_default_metrics=("oil_price", "gold_price", "usd_index", "g7_avg_gdp"),
+    macro_baselines=_GLOBAL_MACRO_BASELINES,
     decision_thresholds=_GLOBAL_DECISION_THRESHOLDS,
     macro_impact_deltas=_GLOBAL_MACRO_IMPACT_DELTAS,
     demographics=GLOBAL_DEMOGRAPHICS,

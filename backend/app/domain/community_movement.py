@@ -220,6 +220,17 @@ _CM_MACRO_IMPACT_DELTAS = MacroImpactDeltas(
 )
 
 # ---------------------------------------------------------------------------
+# Macro baselines — community movement defaults
+# ---------------------------------------------------------------------------
+
+_COMMUNITY_MACRO_BASELINES: dict[str, float] = {
+    "consumer_confidence": 45.0,
+    "unemployment_rate": 0.060,
+    "gdp_growth": 0.015,
+    "cpi_yoy": 0.035,
+}
+
+# ---------------------------------------------------------------------------
 # Pack construction + registration
 # ---------------------------------------------------------------------------
 
@@ -239,6 +250,7 @@ COMMUNITY_MOVEMENT_PACK = DomainPack(
         "movement_size", "solidarity_index", "public_sympathy",
         "organizational_capacity",
     ),
+    macro_baselines=_COMMUNITY_MACRO_BASELINES,
     decision_thresholds=_CM_DECISION_THRESHOLDS,
     macro_impact_deltas=_CM_MACRO_IMPACT_DELTAS,
     demographics=CM_DEMOGRAPHICS,
