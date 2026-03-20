@@ -24,6 +24,9 @@ class MacroHooksMixin:
     ) -> None:
         """Update MacroState from agent sentiment/topics and persist a snapshot."""
         try:
+            if self._kg_mode.get(session_id):
+                return  # kg_driven: HK macro metrics not applicable
+
             from backend.app.services.macro_controller import MacroController  # noqa: PLC0415
             from backend.app.services.macro_history import MacroHistoryService  # noqa: PLC0415
 
@@ -162,6 +165,9 @@ class MacroHooksMixin:
     ) -> None:
         """Update banking credit cycle and apply macro feedback."""
         try:
+            if self._kg_mode.get(session_id):
+                return  # kg_driven: HK macro metrics not applicable
+
             from backend.app.services.bank_agent import BankAgent, BankState  # noqa: PLC0415
 
             if self._bank_agent is None:
