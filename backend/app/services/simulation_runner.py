@@ -1236,6 +1236,83 @@ class SimulationRunner(
                     })
                 self._kg_sessions[session_id].tier1_agents = tier1
 
+                # Generate scenario config (decision types, metrics, shocks) via LLM
+                # Only if active_metrics not already populated
+                if not self._kg_sessions[session_id].active_metrics:
+                    seed_desc = self._kg_sessions[session_id].scenario_description
+                    if seed_desc:
+                        try:
+                            from backend.app.services.scenario_generator import ScenarioGenerator  # noqa: PLC0415
+                            from backend.app.models.universal_agent_profile import UniversalAgentProfile  # noqa: PLC0415
+
+                            # Resolve graph_id for this session
+                            gcursor = await db.execute(
+                                "SELECT graph_id FROM simulation_sessions WHERE id = ?",
+                                (session_id,),
+                            )
+                            grow = await gcursor.fetchone()
+                            graph_id = grow["graph_id"] if grow else None
+
+                            kg_nodes: list[dict] = []
+                            kg_edges: list[dict] = []
+                            if graph_id:
+                                ncursor = await db.execute(
+                                    "SELECT id, entity_type, title, description"
+                                    " FROM kg_nodes WHERE session_id = ?",
+                                    (graph_id,),
+                                )
+                                kg_nodes = [
+                                    {"id": r["id"], "label": r["title"], "type": r["entity_type"]}
+                                    for r in await ncursor.fetchall()
+                                ]
+                                ecursor = await db.execute(
+                                    "SELECT source_id, target_id, relation_type"
+                                    " FROM kg_edges WHERE session_id = ?",
+                                    (graph_id,),
+                                )
+                                kg_edges = [
+                                    {"source": r["source_id"], "target": r["target_id"], "relation": r["relation_type"]}
+                                    for r in await ecursor.fetchall()
+                                ]
+
+                            # Build minimal UniversalAgentProfile stubs from tier-1 agents
+                            agent_profiles: list[UniversalAgentProfile] = [
+                                UniversalAgentProfile(
+                                    id=a["id"],
+                                    name=a["name"],
+                                    role=a["role"],
+                                    entity_type="Person",
+                                    persona="",
+                                    goals=(),
+                                    capabilities=(),
+                                    stance_axes=(),
+                                    relationships=(),
+                                    kg_node_id=a["id"],
+                                )
+                                for a in tier1
+                            ]
+
+                            gen = ScenarioGenerator()
+                            scenario_cfg = await gen.generate(
+                                seed_desc, kg_nodes, kg_edges, agent_profiles
+                            )
+                            if scenario_cfg and scenario_cfg.metrics:
+                                self._kg_sessions[session_id].active_metrics = [
+                                    m.id for m in scenario_cfg.metrics
+                                ]
+                                logger.info(
+                                    "ScenarioGenerator: %d metrics for session %s: %s",
+                                    len(self._kg_sessions[session_id].active_metrics),
+                                    session_id,
+                                    self._kg_sessions[session_id].active_metrics[:5],
+                                )
+                        except Exception:
+                            logger.warning(
+                                "ScenarioGenerator failed for session %s — using empty metrics",
+                                session_id,
+                                exc_info=True,
+                            )
+
         except Exception:
             logger.warning(
                 "Could not load kg_driven context for session %s",

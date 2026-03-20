@@ -278,15 +278,22 @@ async def build_graph(request: Request, req: GraphBuildRequest) -> APIResponse:
     """
     graph_id = str(uuid.uuid4())
 
-    # --- Step 1: base graph ---
-    try:
-        await _persist_graph(graph_id, _HK_PROPERTY_NODES, _HK_PROPERTY_EDGES)
-    except Exception:
-        logger.exception("Failed to persist base graph %s", graph_id)
-        raise HTTPException(status_code=500, detail="Graph persistence failed")
+    # Determine if scenario is HK-specific to gate base graph injection
+    _HK_SCENARIO_TYPES = {"property", "emigration", "fertility", "career", "education", "macro"}
+    _is_hk = req.scenario_type in _HK_SCENARIO_TYPES
 
-    base_node_count = len(_HK_PROPERTY_NODES)
-    base_edge_count = len(_HK_PROPERTY_EDGES)
+    # --- Step 1: base graph (HK-only) ---
+    base_node_count = 0
+    base_edge_count = 0
+    if _is_hk:
+        try:
+            await _persist_graph(graph_id, _HK_PROPERTY_NODES, _HK_PROPERTY_EDGES)
+        except Exception:
+            logger.exception("Failed to persist base graph %s", graph_id)
+            raise HTTPException(status_code=500, detail="Graph persistence failed")
+        base_node_count = len(_HK_PROPERTY_NODES)
+        base_edge_count = len(_HK_PROPERTY_EDGES)
+
     seed_nodes = 0
     seed_edges = 0
     implicit_nodes = 0
@@ -319,10 +326,12 @@ async def build_graph(request: Request, req: GraphBuildRequest) -> APIResponse:
         # --- Implicit stakeholder discovery (best-effort, Option A) ---
         try:
             implicit_svc = ImplicitStakeholderService()
-            existing_for_dedup = [
-                {"id": str(n.get("id", "")), "label": str(n.get("label") or n.get("title") or ""), "entity_type": str(n.get("type") or n.get("entity_type") or "")}
-                for n in (_HK_PROPERTY_NODES or [])
-            ]
+            existing_for_dedup: list[dict[str, str]] = []
+            if _is_hk:
+                existing_for_dedup = [
+                    {"id": str(n.get("id", "")), "label": str(n.get("label") or n.get("title") or ""), "entity_type": str(n.get("type") or n.get("entity_type") or "")}
+                    for n in _HK_PROPERTY_NODES
+                ]
             discovery = await implicit_svc.discover(graph_id, safe_seed, existing_for_dedup)
             implicit_nodes = discovery.nodes_added
             logger.info(
@@ -361,14 +370,15 @@ async def build_graph(request: Request, req: GraphBuildRequest) -> APIResponse:
         graph_id=graph_id,
         node_count=total_nodes,
         edge_count=total_edges,
-        entity_types=list({n["type"] for n in _HK_PROPERTY_NODES}),
-        relation_types=list({e["label"] for e in _HK_PROPERTY_EDGES}),
+        entity_types=list({n["type"] for n in _HK_PROPERTY_NODES}) if _is_hk else [],
+        relation_types=list({e["label"] for e in _HK_PROPERTY_EDGES}) if _is_hk else [],
     )
     return APIResponse(
         success=True,
         data=result.model_dump(),
         meta={
             "scenario_type": req.scenario_type,
+            "detected_mode": "hk_demographic" if _is_hk else "kg_driven",
             "base_nodes": base_node_count,
             "base_edges": base_edge_count,
             "seed_nodes": seed_nodes,
