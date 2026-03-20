@@ -71,6 +71,53 @@ async def get_forecast(
         raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
+@router.get("/forecast/{metric}/naive", response_model=APIResponse)
+async def get_naive_forecast(
+    metric: str,
+    horizon: int = 12,
+    method: str = "drift",
+) -> APIResponse:
+    """Get a naive baseline forecast (no ARIMA/statsforecast required).
+
+    Args:
+        metric: Metric key.
+        horizon: Number of periods ahead (1-24).
+        method: Naive method — one of 'last_value', 'drift', 'mean'.
+    """
+    from backend.app.services.naive_forecaster import NaiveForecaster  # noqa: PLC0415
+    from backend.app.services.time_series_forecaster import TimeSeriesForecaster  # noqa: PLC0415
+
+    try:
+        ts = TimeSeriesForecaster()
+        history = await ts._load_history(metric)
+        values = [v for _, v in history] if history else []
+        if not values:
+            raise HTTPException(status_code=404, detail="No historical data for metric")
+
+        forecaster = NaiveForecaster()
+        horizon = max(1, min(horizon, 24))
+        point_values = forecaster.forecast(values, horizon=horizon, method=method)
+        return APIResponse(
+            success=True,
+            data={
+                "metric": metric,
+                "method": method,
+                "horizon": horizon,
+                "forecasts": [round(v, 4) for v in point_values],
+                "last_observed": round(values[-1], 4),
+                "n_historical": len(values),
+            },
+            meta={"metric": metric, "method": method},
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Bad request") from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("get_naive_forecast failed for metric %s", metric)
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
+
+
 @router.get("/forecast/{metric}/backtest", response_model=APIResponse)
 async def get_forecast_backtest(
     metric: str,
@@ -126,9 +173,8 @@ async def get_hsi_decomposition(
     Args:
         n_quarters: Number of quarterly periods to include (default 20).
     """
-    from backend.app.services.hsi_decomposer import HSIDecomposer  # noqa: PLC0415
-
     try:
+        from backend.app.services.hsi_decomposer import HSIDecomposer  # noqa: PLC0415
         from backend.app.config import get_settings  # noqa: PLC0415
 
         settings = get_settings()
@@ -139,8 +185,156 @@ async def get_hsi_decomposition(
             data=result.to_dict(),
             meta={"n_quarters": n_quarters},
         )
+    except ImportError:
+        raise HTTPException(status_code=501, detail="HSI decomposition feature not available") from None
     except Exception as exc:
         logger.exception("get_hsi_decomposition failed")
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
+
+
+# ---------------------------------------------------------------------------
+# External Data Feed
+# ---------------------------------------------------------------------------
+
+
+@router.get("/data/external-feed", response_model=APIResponse)
+async def get_external_feed(force_refresh: bool = False) -> APIResponse:
+    """Fetch live FRED / World Bank / Taiwan Strait risk data."""
+    try:
+        from backend.app.services.external_data_feed import ExternalDataFeed  # noqa: PLC0415
+
+        feed = ExternalDataFeed()
+        data = await feed.fetch_with_db_fallback()
+        return APIResponse(success=True, data=data, meta={"source": "external_data_feed"})
+    except ImportError:
+        raise HTTPException(status_code=501, detail="External data feed not available") from None
+    except Exception as exc:
+        logger.exception("get_external_feed failed")
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
+
+
+# ---------------------------------------------------------------------------
+# Sensitivity Analysis
+# ---------------------------------------------------------------------------
+
+
+@router.post("/sensitivity-analysis", response_model=APIResponse)
+async def run_sensitivity_analysis(req: dict) -> APIResponse:
+    """Run parameter sensitivity sweep (+-25%) across calibrated coefficients."""
+    try:
+        from backend.app.services.sensitivity_analyzer import SensitivityAnalyzer  # noqa: PLC0415
+
+        analyzer = SensitivityAnalyzer()
+        period_start = req.get("period_start", "2021-Q1")
+        period_end = req.get("period_end", "2023-Q4")
+        result = await analyzer.run(period_start=period_start, period_end=period_end)
+        return APIResponse(success=True, data=result, meta={"type": "grid_sweep"})
+    except ImportError:
+        raise HTTPException(status_code=501, detail="Sensitivity analyzer not available") from None
+    except Exception as exc:
+        logger.exception("run_sensitivity_analysis failed")
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
+
+
+@router.post("/sensitivity-sobol", response_model=APIResponse)
+async def run_sensitivity_sobol(req: dict) -> APIResponse:
+    """Run Sobol global sensitivity analysis (requires SALib)."""
+    try:
+        from backend.app.services.sensitivity_analyzer import SensitivityAnalyzer  # noqa: PLC0415
+
+        analyzer = SensitivityAnalyzer()
+        period_start = req.get("period_start", "2021-Q1")
+        period_end = req.get("period_end", "2023-Q4")
+        n_samples = req.get("n_samples", 64)
+        result = await analyzer.run_sobol(
+            period_start=period_start, period_end=period_end, n_samples=n_samples,
+        )
+        import dataclasses  # noqa: PLC0415
+
+        return APIResponse(success=True, data=dataclasses.asdict(result), meta={"type": "sobol"})
+    except ImportError:
+        raise HTTPException(status_code=501, detail="Sobol analysis not available (SALib required)") from None
+    except Exception as exc:
+        logger.exception("run_sensitivity_sobol failed")
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
+
+
+@router.post("/{session_id}/surrogate-forecast", response_model=APIResponse)
+async def run_surrogate_forecast(
+    session_id: str,
+    req: dict | None = None,
+) -> APIResponse:
+    """Run Monte Carlo using a surrogate model trained from Phase A data.
+
+    For large trial counts (>200), uses a logistic regression surrogate
+    to approximate outcome distributions instead of full simulation.
+
+    Args:
+        session_id: Phase A simulation session ID.
+        req: Optional body with 'n_trials' (int) and 'metrics' (list[str]).
+    """
+    from backend.app.services.monte_carlo import MonteCarloEngine  # noqa: PLC0415
+
+    try:
+        body = req or {}
+        n_trials = int(body.get("n_trials", 500))
+        metrics = body.get("metrics")
+        n_trials = max(10, min(n_trials, 5000))
+
+        engine = MonteCarloEngine()
+        result = await engine.run_with_surrogate(
+            session_id=session_id,
+            n_trials=n_trials,
+            metrics=metrics,
+        )
+        return APIResponse(
+            success=True,
+            data=result,
+            meta={"session_id": session_id, "n_trials": n_trials},
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Bad request") from exc
+    except Exception as exc:
+        logger.exception("surrogate-forecast failed for session %s", session_id)
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
+
+
+# ---------------------------------------------------------------------------
+# Cross-Domain Validation
+# ---------------------------------------------------------------------------
+
+
+@router.get("/validation/cross-domain", response_model=APIResponse)
+async def get_cross_domain_validation(
+    period_start: str = "2021-Q1",
+    period_end: str = "2023-Q4",
+) -> APIResponse:
+    """Validate engine across 3 domains (HK macro, US markets, geopolitical)."""
+    try:
+        from backend.app.services.cross_domain_validator import CrossDomainValidator  # noqa: PLC0415
+
+        validator = CrossDomainValidator()
+        result = await validator.validate_all(period_start=period_start, period_end=period_end)
+        return APIResponse(success=True, data=result, meta={"type": "cross_domain"})
+    except ImportError:
+        raise HTTPException(status_code=501, detail="Cross-domain validator not available") from None
+    except Exception as exc:
+        logger.exception("get_cross_domain_validation failed")
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
+
+
+@router.get("/validation/domains", response_model=APIResponse)
+async def list_validation_domains() -> APIResponse:
+    """List available validation domains and their metric requirements."""
+    try:
+        from backend.app.services.cross_domain_validator import CrossDomainValidator  # noqa: PLC0415
+
+        domains = CrossDomainValidator.list_domains()
+        return APIResponse(success=True, data=domains, meta={})
+    except ImportError:
+        raise HTTPException(status_code=501, detail="Cross-domain validator not available") from None
+    except Exception as exc:
+        logger.exception("list_validation_domains failed")
         raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
@@ -286,9 +480,9 @@ async def get_global_narrative(
     round_number: int | None = None,
 ) -> APIResponse:
     """Generate and return a global narrative analysis across all communities."""
-    from backend.app.services.graph_rag import GraphRAGService  # noqa: PLC0415
-
     try:
+        from backend.app.services.graph_rag import GraphRAGService  # noqa: PLC0415
+
         service = GraphRAGService()
         narrative = await service.get_global_narrative(session_id, round_number)
 
@@ -314,10 +508,11 @@ async def get_triple_conflicts(
     min_agents: int = 3,
 ) -> APIResponse:
     """Get TKG triple conflicts (opposing predicate pairs across agents)."""
-    from backend.app.services.graph_rag import GraphRAGService  # noqa: PLC0415
     import dataclasses  # noqa: PLC0415
 
     try:
+        from backend.app.services.graph_rag import GraphRAGService  # noqa: PLC0415
+
         service = GraphRAGService()
         conflicts = await service.detect_triple_conflicts(session_id, min_agents)
 
@@ -992,4 +1187,105 @@ async def get_emotional_contagion(
         )
     except Exception as exc:
         logger.exception("get_emotional_contagion failed session=%s", session_id)
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
+
+
+@router.get("/{session_id}/narrative", response_model=APIResponse)
+async def get_trend_narrative(
+    session_id: str,
+    confidence_score: float = 0.5,
+    confidence_level: str = "medium",
+) -> APIResponse:
+    """Generate a natural language trend narrative from session simulation artifacts.
+
+    Collects macro history, decision summaries, and belief data as report_artifacts,
+    then calls NarrativeEngine to produce an LLM-generated trend report.
+    """
+    from backend.app.services.narrative_engine import NarrativeEngine  # noqa: PLC0415
+    from backend.app.utils.llm_client import get_default_client  # noqa: PLC0415
+    from backend.app.utils.db import get_db as _get_db  # noqa: PLC0415
+
+    try:
+        # Gather report artifacts from DB
+        artifacts: dict = {"session_id": session_id}
+        async with _get_db() as db:
+            # Macro history
+            cursor = await db.execute(
+                "SELECT * FROM macro_scenarios WHERE session_id = ? ORDER BY round_number",
+                (session_id,),
+            )
+            macro_rows = await cursor.fetchall()
+            artifacts["macro_history"] = [dict(r) for r in (macro_rows or [])]
+
+            # Decision summary
+            cursor = await db.execute(
+                "SELECT decision_type, COUNT(*) as cnt FROM simulation_actions "
+                "WHERE session_id = ? GROUP BY decision_type ORDER BY cnt DESC LIMIT 20",
+                (session_id,),
+            )
+            dec_rows = await cursor.fetchall()
+            artifacts["decision_summary"] = [dict(r) for r in (dec_rows or [])]
+
+        engine = NarrativeEngine(llm_client=get_default_client())
+        narrative = await engine.generate(
+            report_artifacts=artifacts,
+            confidence_score=confidence_score,
+            confidence_level=confidence_level,
+        )
+        return APIResponse(
+            success=True,
+            data={
+                "executive_summary": narrative.executive_summary,
+                "trends": [t.model_dump() for t in narrative.trends],
+                "deep_dive_summary": narrative.deep_dive_summary,
+                "methodology_note": narrative.methodology_note,
+                "generated_at": narrative.generated_at.isoformat() if narrative.generated_at else None,
+            },
+            meta={"session_id": session_id},
+        )
+    except Exception as exc:
+        logger.exception("get_trend_narrative failed for session %s", session_id)
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
+
+
+@router.post("/calibration/run", response_model=APIResponse)
+async def run_calibration(
+    method: str = "grid_search",
+    label: str = "auto",
+) -> APIResponse:
+    """Run parameter calibration against historical HK data.
+
+    Query params:
+        method: "grid_search" or "random_search" (default "grid_search").
+        label: Human-readable label for the calibration run (default "auto").
+    """
+    from backend.app.services.parameter_calibrator import ParameterCalibrator  # noqa: PLC0415
+
+    if method not in ("grid_search", "random_search"):
+        raise HTTPException(status_code=400, detail="method must be 'grid_search' or 'random_search'")
+
+    try:
+        calibrator = ParameterCalibrator()
+        data = await calibrator.load_historical_data()
+        best_params, rmse = await calibrator.calibrate(data, method=method)
+        row_id = await calibrator.save_calibration(
+            best_params,
+            label=label,
+            rmse=rmse,
+            data_period=f"{data[0].period}–{data[-1].period}" if data else "",
+        )
+        return APIResponse(
+            success=True,
+            data={
+                "calibration_id": row_id,
+                "method": method,
+                "label": label,
+                "rmse": round(rmse, 6),
+                "data_points": len(data),
+                "best_params": best_params.to_dict(),
+            },
+            meta={"method": method},
+        )
+    except Exception as exc:
+        logger.exception("run_calibration failed method=%s", method)
         raise HTTPException(status_code=500, detail="Internal server error") from exc

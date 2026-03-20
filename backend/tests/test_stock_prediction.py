@@ -1621,7 +1621,7 @@ class TestStockForecastAPI:
             response = await get_forecast(ticker="^HSI", horizon=12, session_id=None)
 
         assert response.success is False
-        assert "Test error" in response.error
+        assert "Forecast validation error" in response.error
 
     @pytest.mark.asyncio
     async def test_get_forecast_backtest_unknown_ticker_returns_error(self):
@@ -1692,7 +1692,7 @@ class TestStockForecastAPI:
             )
 
         assert response.success is False
-        assert "Train set too small" in response.error
+        assert "Backtest validation error" in response.error
 
     @pytest.mark.asyncio
     async def test_refresh_stock_data_returns_accepted(self):

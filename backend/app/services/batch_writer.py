@@ -45,7 +45,7 @@ _ALLOWED_TABLES: frozenset[str] = frozenset({
     "polarization_snapshots", "filter_bubble_snapshots", "news_headlines",
     "wealth_transfers", "collective_actions", "collective_action_participants",
     "kg_edges", "kg_nodes", "kg_snapshots", "world_events",
-    "faction_snapshots_v2", "tipping_points", "narrative_traces",
+    "faction_snapshots_v2", "tipping_points",
     "cognitive_fingerprints", "multi_run_results", "agent_relationships",
     "relationship_states", "attachment_styles", "consumption_records",
     "company_decisions", "macro_scenarios",

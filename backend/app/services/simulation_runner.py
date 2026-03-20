@@ -144,10 +144,85 @@ class SimulationRunner(
         self._kg_sessions: dict[str, KGSessionState] = {}
         # Phase 4: relationship lifecycle service (kg_driven + emergence)
         self._relationship_lifecycle: Any | None = None
+        # Phase 4: relationship memory service (dyadic memory storage)
+        self._relationship_memory: Any | None = None
         # Phase 4: strategic planner for Tier 1 multi-round planning
         self._strategic_planner: Any | None = None
         # Reflection loop: periodic insight synthesis for Tier 1 agents
         self._reflection_service: Any | None = None
+        # Phase 4A: per-session RoundCache for in-memory agent profile lookups
+        self._round_caches: dict[str, "RoundCache"] = {}
+        # Phase 4A: BatchWriter for high-throughput bulk inserts
+        self._batch_writer: Any | None = None
+        # Phase 4D: optional shard coordinator for large-scale subprocess sharding
+        # Activated only when DB_SHARDING_ENABLED=true env var is set.
+        self._shard_coordinators: dict[str, Any] = {}
+        self._init_batch_writer()
+
+    def _init_batch_writer(self) -> None:
+        """Lazily initialise the BatchWriter and register hot-path tables."""
+        try:
+            from backend.app.services.batch_writer import BatchWriter  # noqa: PLC0415
+            writer = BatchWriter(flush_threshold=500)
+            writer.register_table("belief_states", [
+                "session_id", "agent_id", "topic", "stance",
+                "confidence", "evidence_count", "round_number",
+            ])
+            writer.register_table("relationship_states", [
+                "session_id", "agent_a_id", "agent_b_id", "round_number",
+                "intimacy", "passion", "commitment", "satisfaction",
+                "alternatives", "investment", "trust",
+                "interaction_count", "rounds_since_change", "updated_at",
+            ])
+            writer.register_table("simulation_actions", [
+                "session_id", "oasis_username", "round_number",
+                "action_type", "content", "sentiment",
+                "target_agent_username",
+            ])
+            self._batch_writer = writer
+            logger.debug("BatchWriter initialised with 3 registered tables")
+        except Exception:
+            logger.warning("BatchWriter init failed — falling back to direct executemany", exc_info=True)
+            self._batch_writer = None
+
+    def _is_sharding_enabled(self) -> bool:
+        """Check if subprocess sharding is enabled via env var."""
+        return os.environ.get("DB_SHARDING_ENABLED", "").lower() == "true"
+
+    def _get_shard_coordinator(
+        self,
+        session_id: str,
+        python_bin: Path,
+        script_path: Path,
+    ) -> Any:
+        """Create or retrieve a ShardCoordinator for the given session.
+
+        Returns None if sharding is not enabled.
+        """
+        if not self._is_sharding_enabled():
+            return None
+
+        if session_id not in self._shard_coordinators:
+            from backend.app.services.shard_coordinator import ShardCoordinator  # noqa: PLC0415
+            coord = ShardCoordinator(
+                session_id=session_id,
+                python_bin=python_bin,
+                script_path=script_path,
+            )
+            self._shard_coordinators[session_id] = coord
+            logger.info("Created ShardCoordinator for session %s", session_id)
+
+        return self._shard_coordinators[session_id]
+
+    async def _cleanup_shard_coordinator(self, session_id: str) -> None:
+        """Shutdown and remove the shard coordinator for a session."""
+        coord = self._shard_coordinators.pop(session_id, None)
+        if coord is not None:
+            try:
+                await coord.shutdown_all()
+                logger.info("ShardCoordinator cleaned up for session %s", session_id)
+            except Exception:
+                logger.exception("ShardCoordinator cleanup failed for session %s", session_id)
 
     async def run(
         self,
@@ -411,11 +486,26 @@ class SimulationRunner(
             self._macro_state.pop(session_id, None)
             # Clean up round-level profile cache
             self._round_profiles.pop(session_id, None)
+            # Phase 4A: clean up RoundCache for this session
+            rc = self._round_caches.pop(session_id, None)
+            if rc is not None:
+                rc.clear()
+            # Phase 4A: flush and clear BatchWriter buffers
+            if self._batch_writer is not None:
+                try:
+                    from backend.app.utils.db import get_db as _get_db_cleanup  # noqa: PLC0415
+                    async with _get_db_cleanup() as db:
+                        await self._batch_writer.flush_all(db)
+                except Exception:
+                    logger.debug("BatchWriter final flush failed session=%s", session_id, exc_info=True)
+                self._batch_writer.clear()
             # Phase 1B: clean up temporal activation caches
             self._activity_profiles.pop(session_id, None)
             self._activation_rngs.pop(session_id, None)
             # Phase 3: clean up pending arousal deltas
             self._pending_arousal_deltas.pop(session_id, None)
+            # Phase 4D: clean up shard coordinator if sharding was active
+            await self._cleanup_shard_coordinator(session_id)
             # kg_driven mode: clean up per-session state
             self._kg_mode.pop(session_id, None)
             self._kg_sessions.pop(session_id, None)
@@ -514,6 +604,36 @@ class SimulationRunner(
             )
             rows = []
         self._round_profiles[session_id] = rows
+
+        # Populate RoundCache with agent data keyed by oasis_username for O(1) lookups
+        try:
+            from backend.app.services.round_cache import RoundCache  # noqa: PLC0415
+            cache = self._round_caches.get(session_id)
+            if cache is None:
+                cache = RoundCache()
+                self._round_caches[session_id] = cache
+            agents_dict: dict[str, dict] = {}
+            for r in rows:
+                uname = r["oasis_username"] if r["oasis_username"] else str(r["id"])
+                agents_dict[uname] = {
+                    "id": r["id"],
+                    "agent_type": r["agent_type"],
+                    "oasis_username": r["oasis_username"],
+                    "tier": r["tier"],
+                    "political_stance": r["political_stance"],
+                    "openness": r["openness"],
+                    "conscientiousness": r["conscientiousness"],
+                    "extraversion": r["extraversion"],
+                    "agreeableness": r["agreeableness"],
+                    "neuroticism": r["neuroticism"],
+                }
+            cache.bulk_load_agents(agents_dict)
+        except Exception:
+            logger.debug(
+                "_fetch_and_cache_profiles: RoundCache population failed session=%s",
+                session_id, exc_info=True,
+            )
+
         return rows
 
     async def _execute_round_hooks(self, session_id: str, round_num: int) -> None:
@@ -871,6 +991,11 @@ class SimulationRunner(
         self._posts_buffer.pop(session_id, None)
         self._macro_state.pop(session_id, None)
         self._round_profiles.pop(session_id, None)
+        rc = self._round_caches.pop(session_id, None)
+        if rc is not None:
+            rc.clear()
+        if self._batch_writer is not None:
+            self._batch_writer.clear()
         logger.info("dry_run complete for session %s (%d rounds)", session_id, mock_rounds)
 
     # ------------------------------------------------------------------
@@ -1182,6 +1307,9 @@ class SimulationRunner(
         if self._relationship_lifecycle is None:
             from backend.app.services.relationship_lifecycle import RelationshipLifecycleService  # noqa: PLC0415
             self._relationship_lifecycle = RelationshipLifecycleService()
+        if self._relationship_memory is None:
+            from backend.app.services.relationship_memory import RelationshipMemoryService  # noqa: PLC0415
+            self._relationship_memory = RelationshipMemoryService()
         if self._strategic_planner is None:
             from backend.app.services.strategic_planner import StrategicPlanner  # noqa: PLC0415
             self._strategic_planner = StrategicPlanner()
@@ -1701,6 +1829,43 @@ class SimulationRunner(
                         updated[agent_id][m] = max(0.0, min(1.0, updated[agent_id][m] + d))
 
         kg_state.agent_beliefs = updated
+
+        # --- Persist beliefs to belief_states table for multi-run ensemble ---
+        try:
+            import hashlib  # noqa: PLC0415
+
+            belief_rows = []
+            for aid, metric_dict in updated.items():
+                # Convert string agent_id (slug) to deterministic int for DB
+                agent_int = int(hashlib.md5(aid.encode()).hexdigest()[:12], 16)
+                for metric_name, stance_val in metric_dict.items():
+                    belief_rows.append((
+                        session_id, agent_int, metric_name,
+                        stance_val, 0.5, 0, round_num,
+                    ))
+            if belief_rows:
+                # Route through BatchWriter if available for reduced DB round-trips
+                if self._batch_writer is not None:
+                    for row in belief_rows:
+                        self._batch_writer.queue("belief_states", row)
+                    async with get_db() as db:
+                        await self._batch_writer.flush("belief_states", db)
+                else:
+                    async with get_db() as db:
+                        await db.executemany(
+                            """INSERT OR REPLACE INTO belief_states
+                               (session_id, agent_id, topic, stance,
+                                confidence, evidence_count, round_number)
+                               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                            belief_rows,
+                        )
+                        await db.commit()
+        except Exception:
+            logger.debug(
+                "_kg_belief_propagation: persist to belief_states failed session=%s",
+                session_id, exc_info=True,
+            )
+
         logger.debug(
             "_kg_belief_propagation session=%s round=%d agents=%d cascades=%d",
             session_id, round_num, len(all_deltas), len(cascade_deltas),
@@ -1775,31 +1940,58 @@ class SimulationRunner(
                 new_states[(state.agent_a_id, state.agent_b_id)] = state
             kg_state.relationship_states = new_states
 
-            # Persist updated states to DB
-            if updated:
-                async with __import__("backend.app.utils.db", fromlist=["get_db"]).get_db() as db:
-                    await db.executemany(
-                        """
-                        INSERT OR REPLACE INTO relationship_states
-                            (session_id, agent_a_id, agent_b_id, round_number,
-                             intimacy, passion, commitment, satisfaction,
-                             alternatives, investment, trust,
-                             interaction_count, rounds_since_change,
-                             updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-                        """,
-                        [
-                            (
-                                session_id,
-                                s.agent_a_id, s.agent_b_id, round_num,
-                                s.intimacy, s.passion, s.commitment,
-                                s.satisfaction, s.alternatives, s.investment,
-                                s.trust, s.interaction_count, s.rounds_since_change,
-                            )
-                            for s in updated
-                        ],
+            # Validate relationship coherence (best-effort, never blocks simulation)
+            try:
+                from backend.app.services.relationship_validator import RelationshipValidator  # noqa: PLC0415
+                validator = RelationshipValidator()
+                validation = await validator.validate(session_id)
+                if validation.dunbar_violation:
+                    logger.warning(
+                        "Dunbar violation session=%s round=%d avg_degree=%.2f",
+                        session_id, round_num, validation.avg_meaningful_degree,
                     )
-                    await db.commit()
+            except Exception:
+                logger.debug(
+                    "Relationship validation skipped session=%s round=%d",
+                    session_id, round_num,
+                )
+
+            # Persist updated states to DB via BatchWriter or direct executemany
+            if updated:
+                from datetime import datetime as _rel_dt  # noqa: PLC0415
+                from datetime import timezone as _rel_tz  # noqa: PLC0415
+                _now_str = _rel_dt.now(_rel_tz.utc).strftime("%Y-%m-%d %H:%M:%S")
+                rel_rows = [
+                    (
+                        session_id,
+                        s.agent_a_id, s.agent_b_id, round_num,
+                        s.intimacy, s.passion, s.commitment,
+                        s.satisfaction, s.alternatives, s.investment,
+                        s.trust, s.interaction_count, s.rounds_since_change,
+                        _now_str,
+                    )
+                    for s in updated
+                ]
+                if self._batch_writer is not None:
+                    for row in rel_rows:
+                        self._batch_writer.queue("relationship_states", row)
+                    async with __import__("backend.app.utils.db", fromlist=["get_db"]).get_db() as db:
+                        await self._batch_writer.flush("relationship_states", db)
+                else:
+                    async with __import__("backend.app.utils.db", fromlist=["get_db"]).get_db() as db:
+                        await db.executemany(
+                            """
+                            INSERT OR REPLACE INTO relationship_states
+                                (session_id, agent_a_id, agent_b_id, round_number,
+                                 intimacy, passion, commitment, satisfaction,
+                                 alternatives, investment, trust,
+                                 interaction_count, rounds_since_change,
+                                 updated_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """,
+                            rel_rows,
+                        )
+                        await db.commit()
 
         except Exception:
             logger.exception(
@@ -1831,6 +2023,23 @@ class SimulationRunner(
             if events:
                 async with __import__("backend.app.utils.db", fromlist=["get_db"]).get_db() as db:
                     await self._relationship_lifecycle.persist_events(events, db)
+                # Store lifecycle events as dyadic relationship memories
+                if self._relationship_memory is not None:
+                    for evt in events:
+                        agent_a = getattr(evt, "agent_id", None) or getattr(evt, "source_id", "")
+                        agent_b = getattr(evt, "related_agent_id", None) or getattr(evt, "target_id", "")
+                        evt_type = getattr(evt, "event_type", "interaction")
+                        if agent_a and agent_b:
+                            content = f"{evt_type}: relationship event between {agent_a} and {agent_b} at round {round_num}"
+                            salience = 0.7 if evt_type in ("CRISIS", "DISSOLVED") else 0.5
+                            await self._relationship_memory.store_interaction_memory(
+                                session_id=session_id,
+                                agent_id=str(agent_a),
+                                related_agent_id=str(agent_b),
+                                content=content,
+                                round_number=round_num,
+                                salience=salience,
+                            )
                 logger.debug(
                     "_process_relationship_lifecycle: %d events session=%s round=%d",
                     len(events), session_id, round_num,

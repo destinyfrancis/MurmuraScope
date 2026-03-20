@@ -3,9 +3,12 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import DomainBuilder from '../components/DomainBuilder.vue'
 import DataConnectorPanel from '../components/DataConnectorPanel.vue'
+import OnboardingTooltip from '../components/OnboardingTooltip.vue'
 import { quickStart, quickStartWithFile } from '../api/simulation.js'
+import { useOnboarding } from '../composables/useOnboarding.js'
 
 const router = useRouter()
+const { steps: onboardingSteps, currentStep, dismissed: onboardingDismissed, nextStep: onboardingNext, dismiss: onboardingDismiss } = useOnboarding()
 const quickStartText = ref('')
 const quickStartLoading = ref(false)
 const quickStartQuestion = ref('')
@@ -250,6 +253,15 @@ async function handleQuickStart() {
       <DataConnectorPanel />
     </div>
 
+    <OnboardingTooltip
+      v-if="!onboardingDismissed"
+      :title="onboardingSteps[currentStep].title"
+      :description="onboardingSteps[currentStep].description"
+      :step="currentStep"
+      :total-steps="onboardingSteps.length"
+      @next="onboardingNext"
+      @dismiss="onboardingDismiss"
+    />
   </div>
 </template>
 

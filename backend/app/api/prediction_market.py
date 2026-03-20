@@ -10,6 +10,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 
+from backend.app.models.response import APIResponse
 from backend.app.utils.logger import get_logger
 
 logger = get_logger("api.prediction_market")
@@ -17,18 +18,18 @@ logger = get_logger("api.prediction_market")
 router = APIRouter(prefix="/prediction-market", tags=["prediction-market"])
 
 
-@router.get("/contracts")
+@router.get("/contracts", response_model=APIResponse)
 async def list_contracts(
     category: str | None = None,
     limit: int = Query(default=50, le=200),
-) -> list[dict[str, Any]]:
+) -> APIResponse:
     """List active Polymarket prediction contracts."""
     from backend.app.services.polymarket_client import PolymarketClient
 
     client = PolymarketClient()
     contracts = await client.fetch_active_markets(category=category, limit=limit)
 
-    return [
+    return APIResponse(success=True, data=[
         {
             "id": c.id,
             "question": c.question,
@@ -42,21 +43,21 @@ async def list_contracts(
             "end_date": c.end_date,
         }
         for c in contracts
-    ]
+    ])
 
 
-@router.get("/contracts/search")
+@router.get("/contracts/search", response_model=APIResponse)
 async def search_contracts(
     q: str = Query(..., min_length=2),
     limit: int = Query(default=20, le=100),
-) -> list[dict[str, Any]]:
+) -> APIResponse:
     """Search Polymarket contracts by keyword."""
     from backend.app.services.polymarket_client import PolymarketClient
 
     client = PolymarketClient()
     results = await client.search_markets(q, limit=limit)
 
-    return [
+    return APIResponse(success=True, data=[
         {
             "id": c.id,
             "question": c.question,
@@ -66,14 +67,14 @@ async def search_contracts(
             "slug": c.slug,
         }
         for c in results
-    ]
+    ])
 
 
-@router.get("/contracts/matched")
+@router.get("/contracts/matched", response_model=APIResponse)
 async def get_matched_contracts(
     session_id: str = Query(...),
     limit: int = Query(default=20, le=50),
-) -> dict[str, Any]:
+) -> APIResponse:
     """Find Polymarket contracts relevant to a simulation session's seed text."""
     from backend.app.services.polymarket_client import PolymarketClient
     from backend.app.services.scenario_matcher import ScenarioMatcher
@@ -102,7 +103,7 @@ async def get_matched_contracts(
     matcher = ScenarioMatcher()
     matches = matcher.match_contracts(seed_text, contracts, max_results=limit)
 
-    return {
+    return APIResponse(success=True, data={
         "session_id": session_id,
         "seed_text_preview": seed_text[:200],
         "matched_count": len(matches),
@@ -122,14 +123,14 @@ async def get_matched_contracts(
             }
             for m in matches
         ],
-    }
+    })
 
 
-@router.get("/signals")
+@router.get("/signals", response_model=APIResponse)
 async def get_signals(
     session_id: str = Query(...),
     limit: int = Query(default=20, le=50),
-) -> dict[str, Any]:
+) -> APIResponse:
     """Generate trading signals for a simulation session.
 
     Matches session seed text to Polymarket contracts, estimates
@@ -165,12 +166,12 @@ async def get_signals(
     matches = matcher.match_contracts(seed_text, contracts, max_results=limit)
 
     if not matches:
-        return {
+        return APIResponse(success=True, data={
             "session_id": session_id,
             "signal_count": 0,
             "signals": [],
             "summary": "No matching Polymarket contracts found for this scenario.",
-        }
+        })
 
     generator = SignalGenerator()
     signals = await generator.generate_signals(session_id, matches)
@@ -179,7 +180,7 @@ async def get_signals(
     buy_no = sum(1 for s in signals if s.direction == "BUY_NO")
     hold = sum(1 for s in signals if s.direction == "HOLD")
 
-    return {
+    return APIResponse(success=True, data={
         "session_id": session_id,
         "signal_count": len(signals),
         "summary": f"{buy_yes} BUY_YES, {buy_no} BUY_NO, {hold} HOLD",
@@ -200,14 +201,14 @@ async def get_signals(
             }
             for s in signals
         ],
-    }
+    })
 
 
-@router.get("/signals/history")
+@router.get("/signals/history", response_model=APIResponse)
 async def get_signal_history(
     session_id: str = Query(...),
     limit: int = Query(default=50, le=200),
-) -> list[dict[str, Any]]:
+) -> APIResponse:
     """Retrieve persisted prediction signals for a session."""
     from backend.app.utils.db import get_db
 
@@ -226,9 +227,9 @@ async def get_signal_history(
             )
             rows = await cursor.fetchall()
     except Exception:
-        return []
+        return APIResponse(success=True, data=[])
 
-    return [
+    return APIResponse(success=True, data=[
         {
             "contract_id": r[0],
             "contract_question": r[1],
@@ -245,4 +246,4 @@ async def get_signal_history(
             "created_at": r[12],
         }
         for r in rows
-    ]
+    ])

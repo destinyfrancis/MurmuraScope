@@ -67,9 +67,9 @@ class RelationshipMemoryService:
                 await db.execute(
                     """
                     INSERT INTO agent_memories
-                        (session_id, agent_id, content, round_number,
-                         salience, metadata)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                        (session_id, agent_id, memory_text, round_number,
+                         salience_score, memory_type, metadata)
+                    VALUES (?, ?, ?, ?, ?, 'relationship', ?)
                     """,
                     (session_id, agent_id, content, round_number,
                      salience, metadata_json),

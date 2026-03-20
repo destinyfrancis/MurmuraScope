@@ -230,3 +230,25 @@ export function triggerMultiRun(sessionId) {
 export function stopSimulation(sessionId) {
   return api.post(`/simulation/${sessionId}/stop`)
 }
+
+// ── HSI Decomposition & Validation ────────────────────────────────────────────
+
+export function getHSIDecomposition(nQuarters = 20) {
+  return api.get('/simulation/forecast/hsi-decomposition', { params: { n_quarters: nQuarters } })
+}
+
+export function getSensitivityAnalysis(periodStart = '2021-Q1', periodEnd = '2023-Q4') {
+  return api.post('/simulation/sensitivity-analysis', { period_start: periodStart, period_end: periodEnd })
+}
+
+export function getCrossDomainValidation(periodStart = '2021-Q1', periodEnd = '2023-Q4') {
+  return api.get('/simulation/validation/cross-domain', { params: { period_start: periodStart, period_end: periodEnd } })
+}
+
+export function getExternalFeed(forceRefresh = false) {
+  return api.get('/simulation/data/external-feed', { params: { force_refresh: forceRefresh } })
+}
+
+export function getConfidenceScore(sessionId) {
+  return api.get(`/simulation/${sessionId}/confidence-score`)
+}

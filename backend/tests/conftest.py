@@ -37,6 +37,16 @@ _INTEGRATION_MODULES = frozenset({
 })
 
 
+@pytest.fixture(autouse=True)
+def _disable_rate_limiter():
+    """Globally disable slowapi rate limiter for all tests."""
+    from backend.app.api.auth import _limiter as _auth_limiter
+    prev = _auth_limiter.enabled
+    _auth_limiter.enabled = False
+    yield
+    _auth_limiter.enabled = prev
+
+
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
     """Auto-apply 'integration' marker to tests that use DB or are in known modules."""
     integration_marker = pytest.mark.integration

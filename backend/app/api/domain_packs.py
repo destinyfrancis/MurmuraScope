@@ -21,6 +21,7 @@ import backend.app.domain.community_movement  # noqa: F401
 
 from backend.app.domain.base import DomainPackRegistry
 from backend.app.models.domain import DraftDomainPack
+from backend.app.models.response import APIResponse
 from backend.app.services.domain_generator import DomainGenerator
 from backend.app.utils.db import get_db
 from backend.app.utils.llm_client import LLMClient
@@ -87,8 +88,8 @@ def _draft_pack_to_dict(pack: DraftDomainPack) -> dict[str, Any]:
 # Builtin pack endpoints (existing)
 # ---------------------------------------------------------------------------
 
-@router.get("")
-async def list_domain_packs() -> dict:
+@router.get("", response_model=APIResponse)
+async def list_domain_packs() -> APIResponse:
     """Return all registered domain packs (id + name).
 
     Includes both builtin packs from the DomainPackRegistry and custom
@@ -129,11 +130,11 @@ async def list_domain_packs() -> dict:
         # DB table may not exist yet on first boot; silently skip
         pass
 
-    return {"packs": packs}
+    return APIResponse(success=True, data={"packs": packs})
 
 
-@router.get("/{pack_id}")
-async def get_domain_pack(pack_id: str) -> dict:
+@router.get("/{pack_id}", response_model=APIResponse)
+async def get_domain_pack(pack_id: str) -> APIResponse:
     """Return full details for a specific domain pack.
 
     Checks the builtin registry first, then the custom_domain_packs DB table.
@@ -157,7 +158,7 @@ async def get_domain_pack(pack_id: str) -> dict:
                 "occupations": list(d.occupations.keys()),
             }
 
-        return {
+        return APIResponse(success=True, data={
             "id": pack.id,
             "name_zh": pack.name_zh,
             "name_en": pack.name_en,
@@ -183,7 +184,7 @@ async def get_domain_pack(pack_id: str) -> dict:
                 }
                 for f in pack.macro_fields
             ],
-        }
+        })
 
     # Fall back to custom DB packs
     try:
@@ -201,7 +202,7 @@ async def get_domain_pack(pack_id: str) -> dict:
         raise HTTPException(status_code=404, detail=f"Domain pack '{pack_id}' not found")
 
     r = row[0]
-    return {
+    return APIResponse(success=True, data={
         "id": r[0],
         "name": r[1],
         "description": r[2],
@@ -214,19 +215,19 @@ async def get_domain_pack(pack_id: str) -> dict:
         "sentiment_keywords": json.loads(r[9] or "[]"),
         "locale": r[10] or "en-US",
         "source": r[11] or "user_edited",
-    }
+    })
 
 
 # ---------------------------------------------------------------------------
 # Generation endpoint (Task 10)
 # ---------------------------------------------------------------------------
 
-@router.post("/generate")
-async def generate_domain_pack(req: GeneratePackRequest) -> dict:
+@router.post("/generate", response_model=APIResponse)
+async def generate_domain_pack(req: GeneratePackRequest) -> APIResponse:
     """Generate a domain pack from a natural language description via LLM.
 
     Uses DomainGenerator which makes up to 2 LLM calls with automatic retry.
-    The generated pack is NOT automatically saved — call POST /save to persist.
+    The generated pack is NOT automatically saved -- call POST /save to persist.
 
     Returns the generated DraftDomainPack as JSON.
     """
@@ -252,15 +253,15 @@ async def generate_domain_pack(req: GeneratePackRequest) -> dict:
         logger.error("Domain generation failed: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Domain generation failed. Please try again.") from exc
 
-    return {"pack": _draft_pack_to_dict(pack)}
+    return APIResponse(success=True, data={"pack": _draft_pack_to_dict(pack)})
 
 
 # ---------------------------------------------------------------------------
 # Save endpoint (Task 10)
 # ---------------------------------------------------------------------------
 
-@router.post("/save")
-async def save_custom_domain_pack(req: SavePackRequest) -> dict:
+@router.post("/save", response_model=APIResponse)
+async def save_custom_domain_pack(req: SavePackRequest) -> APIResponse:
     """Persist a custom domain pack to the database.
 
     Validates the pack fields via DraftDomainPack before saving.
@@ -268,7 +269,7 @@ async def save_custom_domain_pack(req: SavePackRequest) -> dict:
 
     Returns the saved pack id and a confirmation flag.
     """
-    # Validate via model — raises 422 on constraint violations
+    # Validate via model -- raises 422 on constraint violations
     try:
         validated = DraftDomainPack(
             id=req.id,
@@ -329,4 +330,35 @@ async def save_custom_domain_pack(req: SavePackRequest) -> dict:
         logger.error("Failed to save custom domain pack '%s': %s", req.id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to save domain pack to database") from exc
 
-    return {"saved": True, "id": validated.id}
+    # Also register into in-memory registry so it's immediately usable
+    try:
+        from backend.app.domain.base import DomainPackRegistry, DomainPack, ShockTypeSpec, MetricSpec  # noqa: PLC0415
+
+        shock_specs = tuple(
+            ShockTypeSpec(id=s, label_zh=s, label_en=s)
+            for s in validated.shocks
+        )
+        metric_specs = tuple(
+            MetricSpec(name=m, label=m)
+            for m in validated.metrics
+        )
+        pack = DomainPack(
+            id=validated.id,
+            name_zh=validated.name,
+            name_en=validated.name,
+            locale=validated.locale,
+            valid_shock_types=frozenset(s.id for s in shock_specs),
+            shock_specs=shock_specs,
+            metrics=metric_specs,
+            default_forecast_metrics=tuple(m.name for m in metric_specs),
+            correlated_vars=(),
+            mc_default_metrics=(),
+            macro_baselines={},
+            baseline_district_prices={},
+            baseline_stamp_duty={},
+        )
+        DomainPackRegistry.register(pack)
+    except Exception:
+        logger.debug("Failed to register saved pack in memory, will load on restart")
+
+    return APIResponse(success=True, data={"saved": True, "id": validated.id})

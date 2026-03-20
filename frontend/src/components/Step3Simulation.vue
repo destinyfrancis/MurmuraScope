@@ -778,13 +778,16 @@ const factionAgentColourMap = computed(() => {
   display: flex;
   gap: 12px;
   margin-top: 8px;
-  max-height: 300px;
+  min-height: 320px;
+  max-height: 50vh;
   overflow-y: auto;
 }
 
 .post-sim-panels > * {
   flex: 1;
   min-width: 0;
+  min-height: 280px;
+  overflow-y: auto;
 }
 
 .error-text {

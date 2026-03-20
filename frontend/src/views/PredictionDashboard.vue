@@ -2,6 +2,9 @@
 import { ref, onMounted, computed } from 'vue'
 import { getForecast, getBacktest, listSessions } from '../api/simulation.js'
 import { getStockTickers, getStockForecast, getStockBacktest, getStockSummary } from '../api/stock.js'
+import HSIDecompositionChart from '../components/HSIDecompositionChart.vue'
+import SensitivityPanel from '../components/SensitivityPanel.vue'
+import CrossDomainValidationPanel from '../components/CrossDomainValidationPanel.vue'
 
 // ── Backtest cache (5-min TTL) ────────────────────────────────────────────────
 const BACKTEST_CACHE_TTL = 5 * 60 * 1000
@@ -264,6 +267,18 @@ onMounted(() => {
         :class="['tab-btn', { active: activeTab === 'stock' }]"
         @click="activeTab = 'stock'"
       >股票 / 指數</button>
+      <button
+        :class="['tab-btn', { active: activeTab === 'hsi-decomp' }]"
+        @click="activeTab = 'hsi-decomp'"
+      >HSI 分解</button>
+      <button
+        :class="['tab-btn', { active: activeTab === 'sensitivity' }]"
+        @click="activeTab = 'sensitivity'"
+      >敏感度分析</button>
+      <button
+        :class="['tab-btn', { active: activeTab === 'cross-domain' }]"
+        @click="activeTab = 'cross-domain'"
+      >跨域驗證</button>
     </div>
 
     <!-- ── MACRO TAB ─────────────────────────────────────────────────────────── -->
@@ -560,6 +575,21 @@ onMounted(() => {
           </div>
         </div>
       </template>
+    </div>
+
+    <!-- ── HSI DECOMPOSITION TAB ──────────────────────────────────────────────── -->
+    <div v-show="activeTab === 'hsi-decomp'" class="dashboard-body">
+      <HSIDecompositionChart />
+    </div>
+
+    <!-- ── SENSITIVITY TAB ────────────────────────────────────────────────────── -->
+    <div v-show="activeTab === 'sensitivity'" class="dashboard-body">
+      <SensitivityPanel />
+    </div>
+
+    <!-- ── CROSS-DOMAIN VALIDATION TAB ────────────────────────────────────────── -->
+    <div v-show="activeTab === 'cross-domain'" class="dashboard-body">
+      <CrossDomainValidationPanel />
     </div>
   </div>
 </template>

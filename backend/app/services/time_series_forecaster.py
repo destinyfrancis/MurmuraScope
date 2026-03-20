@@ -180,20 +180,16 @@ class TimeSeriesForecaster:
             metric, horizon, n,
         )
 
-        # Minimum data threshold — refuse forecast with <_MIN_ARIMA_POINTS real data points
+        # Minimum data threshold — fall back to NaiveForecaster when insufficient data
         if n < _MIN_ARIMA_POINTS:
             dq = "no_data" if n == 0 else "insufficient"
             logger.warning(
-                "Refusing forecast for metric=%s — only %d data points (minimum %d required)",
+                "Insufficient data for ARIMA metric=%s — %d data points (minimum %d), "
+                "falling back to NaiveForecaster",
                 metric, n, _MIN_ARIMA_POINTS,
             )
-            return ForecastResult(
-                metric=metric,
-                horizon=horizon,
-                points=[],
-                model_used="none",
-                fit_quality=0.0,
-                data_quality=dq,
+            return self._fallback_naive_forecaster(
+                metric, history, horizon, data_quality=dq,
             )
 
         # Classify data quality
@@ -851,6 +847,67 @@ class TimeSeriesForecaster:
                 "AutoARIMA failed for metric=%s (%s), falling back to naive", metric, exc
             )
             return self._forecast_naive(metric, history, horizon)
+
+    def _fallback_naive_forecaster(
+        self,
+        metric: str,
+        history: list[tuple[str, float]],
+        horizon: int,
+        data_quality: str = "insufficient",
+    ) -> ForecastResult:
+        """Use NaiveForecaster (drift method) when ARIMA/ETS are unavailable.
+
+        This provides a meaningful forecast even with very few data points,
+        instead of returning an empty result. Falls back to last_value if
+        drift fails.
+        """
+        from backend.app.services.naive_forecaster import NaiveForecaster  # noqa: PLC0415
+
+        values = [v for _, v in history] if history else []
+        if not values:
+            return ForecastResult(
+                metric=metric, horizon=horizon, points=[],
+                model_used="naive_fallback", fit_quality=0.0,
+                data_quality="no_data",
+            )
+
+        forecaster = NaiveForecaster()
+        try:
+            point_values = forecaster.forecast(values, horizon=horizon, method="drift")
+        except (ValueError, ZeroDivisionError):
+            point_values = forecaster.forecast(values, horizon=horizon, method="last_value")
+
+        # Build period labels
+        periods = [p for p, _ in history]
+        last_label = periods[-1] if periods else "2024-Q1"
+        next_labels = self._next_period_labels(last_label, horizon)
+
+        # Estimate spread from historical std (or 5% of last value)
+        if len(values) >= 2:
+            sigma = float(np.std(values, ddof=1))
+        else:
+            sigma = abs(values[-1]) * 0.05 if values[-1] != 0 else 0.01
+        sigma = max(sigma, 0.01)
+
+        points: list[ForecastPoint] = []
+        for h_idx, (label, pt_val) in enumerate(zip(next_labels, point_values)):
+            h = h_idx + 1
+            spread_80 = sigma * math.sqrt(h) * 1.28
+            spread_95 = sigma * math.sqrt(h) * 1.96
+            points.append(ForecastPoint(
+                period=label,
+                value=round(pt_val, 4),
+                lower_80=round(pt_val - spread_80, 4),
+                upper_80=round(pt_val + spread_80, 4),
+                lower_95=round(pt_val - spread_95, 4),
+                upper_95=round(pt_val + spread_95, 4),
+            ))
+
+        return ForecastResult(
+            metric=metric, horizon=horizon, points=points,
+            model_used="naive_fallback_drift", fit_quality=0.0,
+            data_quality=data_quality,
+        )
 
     def _forecast_naive(
         self,

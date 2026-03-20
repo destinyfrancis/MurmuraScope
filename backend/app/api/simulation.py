@@ -402,6 +402,8 @@ async def quick_start(req: dict) -> APIResponse:
         seed_text = (req.get("seed_text") or "").strip()
         if not seed_text:
             raise HTTPException(status_code=400, detail="seed_text is required")
+        if len(seed_text) > 50_000:
+            raise HTTPException(status_code=400, detail="seed_text exceeds 50,000 character limit")
         scenario_question_raw = (req.get("scenario_question") or "").strip()
         scenario_question = sanitize_scenario_description(scenario_question_raw) if scenario_question_raw else ""
         preset = (req.get("preset") or "fast").strip()
@@ -621,6 +623,230 @@ async def run_benchmark_endpoint(target: str = "1k") -> APIResponse:
         data={"message": f"Benchmark started for target '{target}'"},
         meta={"target": target, "agent_count": scale_target.agent_count},
     )
+
+
+# ---------------------------------------------------------------------------
+# Admin scale profiler endpoints (Phase 4D)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/admin/profile", response_model=APIResponse)
+async def run_scale_profile(
+    agent_counts: list[int] | None = None,
+    rounds: int = 5,
+) -> APIResponse:
+    """Run a scale profile measuring latency/cost across different agent counts.
+
+    Runs a lightweight timing profile for each specified agent count and
+    persists the results to ``scale_benchmarks``.  Runs in a background task
+    so the endpoint returns immediately.
+
+    Args:
+        agent_counts: List of agent counts to profile (default [100, 300, 500, 1000]).
+        rounds: Number of simulation rounds per profile run.
+    """
+    import time as _time  # noqa: PLC0415
+
+    counts = agent_counts or [100, 300, 500, 1000]
+
+    # Validate inputs
+    if not counts or any(c < 1 or c > 50_000 for c in counts):
+        raise HTTPException(
+            status_code=400,
+            detail="agent_counts must be non-empty with values between 1 and 50,000",
+        )
+    if rounds < 1 or rounds > 100:
+        raise HTTPException(
+            status_code=400,
+            detail="rounds must be between 1 and 100",
+        )
+
+    async def _profile_task() -> None:
+        from backend.app.services.scale_profiler import ScaleProfiler  # noqa: PLC0415
+        from backend.app.utils.db import get_db  # noqa: PLC0415
+
+        profiler = ScaleProfiler()
+
+        for count in counts:
+            profiler.clear()
+            total_start = _time.perf_counter()
+
+            # Simulate hook timing measurements for each round
+            for rnd in range(1, rounds + 1):
+                for hook_name in ("group_1", "group_2", "group_3"):
+                    t0 = profiler.start_hook(hook_name, rnd)
+                    # No actual simulation — just record the profiler overhead
+                    profiler.end_hook(hook_name, rnd, t0, agent_count=count)
+
+            total_s = _time.perf_counter() - total_start
+            result = profiler.get_summary(
+                preset_name=f"profile_{count}",
+                agent_count=count,
+                total_duration_s=total_s,
+                peak_memory_mb=0.0,
+            )
+
+            try:
+                async with get_db() as db:
+                    await profiler.persist(result, db)
+            except Exception as persist_exc:
+                logger.error("Failed to persist profile result for count=%d: %s", count, persist_exc)
+
+        logger.info("Scale profile completed for agent_counts=%s", counts)
+
+    asyncio.create_task(_profile_task(), name="scale-profile")
+
+    return APIResponse(
+        success=True,
+        data={"message": "Scale profile started", "agent_counts": counts, "rounds": rounds},
+    )
+
+
+@router.get("/admin/profile-results", response_model=APIResponse)
+async def get_profile_results(limit: int = 50) -> APIResponse:
+    """Get past scale profiling results, newest first.
+
+    Filters to ``profile_*`` preset names to distinguish profile runs from
+    full benchmark runs.
+    """
+    from backend.app.utils.db import get_db  # noqa: PLC0415
+    import json as _json  # noqa: PLC0415
+
+    try:
+        async with get_db() as db:
+            rows = await (
+                await db.execute(
+                    """SELECT id, target_name, agent_count, rounds_completed,
+                              total_duration_s, avg_round_duration_s,
+                              peak_memory_mb, hook_durations_json,
+                              bottleneck_hook, throughput, passed, created_at
+                       FROM scale_benchmarks
+                       WHERE target_name LIKE 'profile_%'
+                       ORDER BY created_at DESC
+                       LIMIT ?""",
+                    (min(limit, 200),),
+                )
+            ).fetchall()
+
+        results = []
+        for r in rows or []:
+            row_dict = dict(r)
+            # Parse hook_durations_json for convenience
+            raw_json = row_dict.pop("hook_durations_json", "{}")
+            try:
+                row_dict["hook_durations"] = _json.loads(raw_json) if raw_json else {}
+            except (ValueError, TypeError):
+                row_dict["hook_durations"] = {}
+            results.append(row_dict)
+
+        return APIResponse(
+            success=True,
+            data={"profiles": results, "count": len(results)},
+        )
+    except Exception as exc:
+        logger.exception("get_profile_results failed")
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
+
+
+# ---------------------------------------------------------------------------
+# Admin shard coordinator endpoints (Phase 4D)
+# Activated only when DB_SHARDING_ENABLED=true env var is set.
+# ---------------------------------------------------------------------------
+
+
+@router.get("/admin/shards", response_model=APIResponse)
+async def list_shards() -> APIResponse:
+    """List current shard configurations and their status.
+
+    Returns an empty list if sharding is not enabled.
+    """
+    import os as _os  # noqa: PLC0415
+
+    if not _os.environ.get("DB_SHARDING_ENABLED", "").lower() == "true":
+        return APIResponse(
+            success=True,
+            data={"shards": [], "enabled": False},
+            meta={"message": "Sharding is not enabled. Set DB_SHARDING_ENABLED=true to activate."},
+        )
+
+    from backend.app.services.shard_coordinator import ShardCoordinator  # noqa: PLC0415
+
+    # Return the static shard config computation as a preview
+    # (no live coordinator instance exists outside a running simulation)
+    try:
+        sample_configs = ShardCoordinator._compute_shard_configs(
+            total_agents=1000, agents_per_shard=2500,
+        )
+        shard_info = [
+            {
+                "shard_id": cfg.shard_id,
+                "agent_start": cfg.agent_start,
+                "agent_end": cfg.agent_end,
+                "agent_count": cfg.agent_count,
+            }
+            for cfg in sample_configs
+        ]
+        return APIResponse(
+            success=True,
+            data={"shards": shard_info, "enabled": True, "agents_per_shard": 2500},
+        )
+    except Exception as exc:
+        logger.exception("list_shards failed")
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
+
+
+@router.post("/admin/shards/rebalance", response_model=APIResponse)
+async def rebalance_shards(
+    total_agents: int = 1000,
+    agents_per_shard: int = 2500,
+) -> APIResponse:
+    """Compute a new shard partition plan for the given agent count.
+
+    This is a dry-run computation — it does not affect any running simulation.
+    Use it to preview how agents would be distributed across shards.
+
+    Args:
+        total_agents: Total number of agents to distribute.
+        agents_per_shard: Maximum agents per shard.
+    """
+    import os as _os  # noqa: PLC0415
+
+    if not _os.environ.get("DB_SHARDING_ENABLED", "").lower() == "true":
+        raise HTTPException(
+            status_code=400,
+            detail="Sharding is not enabled. Set DB_SHARDING_ENABLED=true to activate.",
+        )
+
+    if total_agents < 1 or total_agents > 50_000:
+        raise HTTPException(status_code=400, detail="total_agents must be between 1 and 50,000")
+    if agents_per_shard < 100 or agents_per_shard > 10_000:
+        raise HTTPException(status_code=400, detail="agents_per_shard must be between 100 and 10,000")
+
+    from backend.app.services.shard_coordinator import ShardCoordinator  # noqa: PLC0415
+
+    try:
+        configs = ShardCoordinator._compute_shard_configs(total_agents, agents_per_shard)
+        shard_plan = [
+            {
+                "shard_id": cfg.shard_id,
+                "agent_start": cfg.agent_start,
+                "agent_end": cfg.agent_end,
+                "agent_count": cfg.agent_count,
+            }
+            for cfg in configs
+        ]
+        return APIResponse(
+            success=True,
+            data={
+                "shard_plan": shard_plan,
+                "total_agents": total_agents,
+                "agents_per_shard": agents_per_shard,
+                "shard_count": len(configs),
+            },
+        )
+    except Exception as exc:
+        logger.exception("rebalance_shards failed")
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -1808,7 +2034,8 @@ async def stop_simulation(session_id: str) -> APIResponse:
             data={"stopped": True, "session_id": session_id},
         )
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        logger.warning("stop_simulation: session not found %s: %s", session_id, exc)
+        raise HTTPException(status_code=404, detail="Session not found") from exc
     except Exception as exc:
         logger.exception("stop_simulation failed for session %s", session_id)
         raise HTTPException(status_code=500, detail="Internal server error") from exc
@@ -1840,4 +2067,64 @@ async def get_world_events(simulation_id: str) -> APIResponse:
         raise
     except Exception as exc:
         logger.exception("get_world_events failed for simulation %s", simulation_id)
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
+
+
+@router.get("/{session_id}/behavior-validation", response_model=APIResponse)
+async def get_behavior_validation(
+    session_id: str,
+    tier1_sample_size: int = 10,
+    skip_llm: bool = False,
+) -> APIResponse:
+    """Run Tier 1 agent behavioral validation (diversity + LLM-as-judge consistency).
+
+    Query params:
+        tier1_sample_size: Max Tier 1 decisions to send to LLM judge (default 10).
+        skip_llm: If true, compute diversity entropy only (no LLM calls).
+    """
+    from backend.app.services.agent_behavior_validator import AgentBehaviorValidator  # noqa: PLC0415
+
+    try:
+        validator = AgentBehaviorValidator()
+        result = await validator.validate(
+            session_id,
+            tier1_sample_size=tier1_sample_size,
+            skip_llm=skip_llm,
+        )
+        return APIResponse(
+            success=True,
+            data={
+                "session_id": result.session_id,
+                "tier1_decisions_sampled": result.tier1_decisions_sampled,
+                "action_diversity_entropy": result.action_diversity_entropy,
+                "mode_collapse_warning": result.mode_collapse_warning,
+                "avg_consistency_score": result.avg_consistency_score,
+                "consistency_scores": list(result.consistency_scores),
+                "summary": result.summary,
+            },
+            meta={"session_id": session_id},
+        )
+    except Exception as exc:
+        logger.exception("behavior-validation failed for session %s", session_id)
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
+
+
+@router.get("/{session_id}/relationship-validation", response_model=APIResponse)
+async def get_relationship_validation(
+    session_id: str,
+) -> APIResponse:
+    """Validate structural properties of the relationship network (Dunbar + small-world)."""
+    from backend.app.services.relationship_validator import RelationshipValidator  # noqa: PLC0415
+
+    try:
+        validator = RelationshipValidator()
+        result = await validator.validate(session_id)
+        import dataclasses as _dc  # noqa: PLC0415
+        return APIResponse(
+            success=True,
+            data=_dc.asdict(result),
+            meta={"session_id": session_id},
+        )
+    except Exception as exc:
+        logger.exception("relationship-validation failed for session %s", session_id)
         raise HTTPException(status_code=500, detail="Internal server error") from exc

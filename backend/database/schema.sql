@@ -218,6 +218,7 @@ CREATE TABLE IF NOT EXISTS agent_memories (
     memory_text TEXT NOT NULL,
     salience_score REAL NOT NULL DEFAULT 1.0,
     memory_type TEXT NOT NULL DEFAULT 'observation',
+    metadata TEXT DEFAULT NULL,
     created_at TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_memory_session_agent ON agent_memories(session_id, agent_id);
@@ -503,21 +504,20 @@ CREATE INDEX IF NOT EXISTS idx_echo_session_round ON echo_chamber_snapshots(sess
 
 -- ============================================================
 -- community_summaries: GraphRAG 社群摘要（Phase 18）
--- Created at runtime via CREATE TABLE IF NOT EXISTS in graph_rag.py
 -- ============================================================
--- CREATE TABLE IF NOT EXISTS community_summaries (
---     id INTEGER PRIMARY KEY AUTOINCREMENT,
---     session_id TEXT NOT NULL,
---     round_number INTEGER NOT NULL,
---     cluster_id INTEGER NOT NULL,
---     core_narrative TEXT NOT NULL,
---     shared_anxieties TEXT NOT NULL DEFAULT '',
---     main_opposition TEXT NOT NULL DEFAULT '',
---     member_count INTEGER NOT NULL DEFAULT 0,
---     avg_trust REAL NOT NULL DEFAULT 0.0,
---     created_at TEXT DEFAULT (datetime('now')),
---     UNIQUE(session_id, round_number, cluster_id)
--- );
+CREATE TABLE IF NOT EXISTS community_summaries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    round_number INTEGER NOT NULL,
+    cluster_id INTEGER NOT NULL,
+    core_narrative TEXT NOT NULL,
+    shared_anxieties TEXT NOT NULL DEFAULT '',
+    main_opposition TEXT NOT NULL DEFAULT '',
+    member_count INTEGER NOT NULL DEFAULT 0,
+    avg_trust REAL NOT NULL DEFAULT 0.0,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(session_id, round_number, cluster_id)
+);
 -- LanceDB: cs_{session_id[:12]} table stores community summary embeddings (384-dim)
 
 -- ============================================================
@@ -804,19 +804,6 @@ CREATE TABLE IF NOT EXISTS tipping_points (
     change_direction       TEXT NOT NULL,
     affected_factions_json TEXT NOT NULL,
     created_at             TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
-CREATE TABLE IF NOT EXISTS narrative_traces (
-    id                   TEXT PRIMARY KEY,
-    simulation_id        TEXT NOT NULL,
-    agent_id             TEXT NOT NULL,
-    round_number         INTEGER NOT NULL,
-    received_events_json TEXT NOT NULL,
-    belief_delta_json    TEXT NOT NULL,
-    decision             TEXT,
-    llm_reasoning        TEXT,
-    faction_changed      INTEGER NOT NULL DEFAULT 0,
-    created_at           TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS multi_run_results (

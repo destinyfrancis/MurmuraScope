@@ -86,6 +86,7 @@ async def apply_migrations() -> None:
         "ALTER TABLE agent_decisions ADD COLUMN topic_tags TEXT",
         "ALTER TABLE agent_decisions ADD COLUMN emotional_reaction TEXT",
         "ALTER TABLE agent_memories ADD COLUMN importance_score REAL DEFAULT 0.5",
+        "ALTER TABLE agent_memories ADD COLUMN metadata TEXT DEFAULT NULL",
     ]
     # Idempotent index creation — CREATE INDEX IF NOT EXISTS is always safe
     index_migrations = [

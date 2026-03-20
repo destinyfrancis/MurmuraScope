@@ -4,6 +4,9 @@ from fastapi import APIRouter, HTTPException, Query
 
 from backend.app.models.response import APIResponse
 from backend.app.utils.db import get_db
+from backend.app.utils.logger import get_logger
+
+logger = get_logger("api.data")
 
 router = APIRouter(prefix="/data", tags=["data"])
 
@@ -48,7 +51,8 @@ async def get_dashboard() -> APIResponse:
                     if row and row["period"] > latest_update:
                         latest_update = row["period"]
     except Exception as e:
-        return APIResponse(success=False, data=None, error=str(e))
+        logger.exception("Failed to fetch dashboard data")
+        return APIResponse(success=False, data=None, error="Failed to fetch dashboard data")
 
     return APIResponse(
         success=True,
@@ -87,7 +91,8 @@ async def get_snapshots(
             cursor = await db.execute(sql, params)
             rows = await cursor.fetchall()
     except Exception as e:
-        return APIResponse(success=False, data=None, error=str(e))
+        logger.exception("Failed to fetch snapshots for metric=%s", metric)
+        return APIResponse(success=False, data=None, error="Failed to fetch snapshot data")
 
     snapshots = [{"date": r["date"], "value": r["value"]} for r in rows]
     return APIResponse(

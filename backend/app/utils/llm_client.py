@@ -120,6 +120,14 @@ _PROVIDERS: dict[str, dict[str, Any]] = {
         "cost_per_1k_output": 0.0,
         "env_key": "",  # No key needed
     },
+    # Auto-detecting local inference with OpenRouter fallback
+    "local": {
+        "base_url": "",  # Determined by LocalInferenceAdapter
+        "default_model": "",  # Determined by LocalInferenceAdapter
+        "cost_per_1k_input": 0.0,
+        "cost_per_1k_output": 0.0,
+        "env_key": "",  # No key needed for local; adapter handles fallback
+    },
 }
 
 
@@ -202,6 +210,8 @@ class LLMClient:
         # Cached Anthropic client — recreated only when api_key changes
         self._anthropic_client: Any | None = None
         self._anthropic_api_key: str | None = None
+        # Lazy-init local inference adapter (vLLM/Ollama with OpenRouter fallback)
+        self._local_adapter: Any | None = None
 
     def _get_http_client(self) -> httpx.AsyncClient:
         """Return the shared httpx client, creating it lazily if needed."""
@@ -278,7 +288,11 @@ class LLMClient:
         if base_url:
             cfg = {**cfg, "base_url": base_url}
 
-        if provider == "anthropic":
+        if provider == "local":
+            response = await self._chat_local(
+                messages, temperature, max_tokens
+            )
+        elif provider == "anthropic":
             response = await self._chat_anthropic(
                 messages, resolved_model, temperature, max_tokens, cfg
             )
@@ -333,6 +347,69 @@ class LLMClient:
             cleaned = cleaned[: -3]
 
         return json.loads(cleaned.strip())
+
+    # ------------------------------------------------------------------
+    # Local inference (vLLM / Ollama with OpenRouter fallback)
+    # ------------------------------------------------------------------
+
+    def _get_local_adapter(self) -> Any:
+        """Return the lazily-initialised LocalInferenceAdapter singleton."""
+        if self._local_adapter is None:
+            from backend.app.services.local_inference import LocalInferenceAdapter  # noqa: PLC0415
+            self._local_adapter = LocalInferenceAdapter()
+        return self._local_adapter
+
+    async def _chat_local(
+        self,
+        messages: list[dict[str, str]],
+        temperature: float,
+        max_tokens: int,
+    ) -> LLMResponse:
+        """Route chat through LocalInferenceAdapter with auto-fallback.
+
+        The adapter returns a plain string; we wrap it in an LLMResponse with
+        zero cost (local GPU) and estimated token counts.
+        """
+        adapter = self._get_local_adapter()
+        _t0 = time.monotonic()
+        content = await adapter.chat(
+            messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        _latency_ms = round((time.monotonic() - _t0) * 1000)
+
+        # Rough token estimates (no usage data from local endpoints)
+        prompt_chars = sum(len(m.get("content", "")) for m in messages)
+        est_prompt_tokens = max(1, prompt_chars // 4)
+        est_completion_tokens = max(1, len(content) // 4)
+        usage = {
+            "prompt_tokens": est_prompt_tokens,
+            "completion_tokens": est_completion_tokens,
+            "total_tokens": est_prompt_tokens + est_completion_tokens,
+        }
+
+        backend_name = adapter._backend.name
+        model_name = adapter._backend.model
+        logger.info(
+            "LLM local/%s/%s | ~%d tokens | $0.00 | %dms",
+            backend_name, model_name,
+            est_prompt_tokens + est_completion_tokens,
+            _latency_ms,
+        )
+        with _llm_tracer.start_as_current_span("llm.chat") as _span:
+            _span.set_attribute("llm.provider", f"local/{backend_name}")
+            _span.set_attribute("llm.model", str(model_name))
+            _span.set_attribute("llm.tokens.total", int(est_prompt_tokens + est_completion_tokens))
+            _span.set_attribute("llm.cost_usd", 0.0)
+            _span.set_attribute("llm.latency_ms", float(_latency_ms))
+
+        return LLMResponse(
+            content=content,
+            model=f"local/{model_name}",
+            usage=usage,
+            cost_usd=0.0,
+        )
 
     # ------------------------------------------------------------------
     # Private helpers

@@ -381,4 +381,4 @@ async def invoke_xai_tool(session_id: str, req: XAIToolRequest) -> APIResponse:
         raise
     except Exception as exc:
         logger.exception("invoke_xai_tool failed: tool=%s session=%s", req.tool_name, session_id)
-        return APIResponse(success=False, data=None, error=str(exc))
+        return APIResponse(success=False, data=None, error="Internal server error")

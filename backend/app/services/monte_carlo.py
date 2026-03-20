@@ -1090,3 +1090,83 @@ class MonteCarloEngine:
             )
         except Exception:
             logger.exception("_persist_results failed session=%s", session_id)
+
+    async def run_with_surrogate(
+        self,
+        session_id: str,
+        n_trials: int = 500,
+        metrics: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Run Monte Carlo using a surrogate model trained from Phase A data.
+
+        When n_trials > 200, trains a logistic regression surrogate from
+        Phase A simulation_actions and uses it to approximate outcome
+        distributions. Falls back to standard MC run if surrogate training
+        fails or produces low accuracy.
+
+        Args:
+            session_id: Phase A simulation session ID.
+            n_trials: Number of trials to approximate.
+            metrics: Metric names (inferred from session if None).
+
+        Returns:
+            Dict with surrogate predictions, training accuracy, and
+            distribution summary.
+        """
+        from backend.app.services.surrogate_model import SurrogateModel  # noqa: PLC0415
+
+        surrogate = SurrogateModel()
+        result = await surrogate.train_from_session(session_id, metrics=metrics)
+
+        if not result.is_fitted or result.train_accuracy < 0.4:
+            logger.info(
+                "Surrogate not viable (fitted=%s acc=%.3f) — falling back to standard MC",
+                result.is_fitted, result.train_accuracy,
+            )
+            ensemble = await self.run(session_id, n_trials=min(n_trials, 200), metrics=metrics)
+            return {
+                "method": "standard_mc_fallback",
+                "session_id": session_id,
+                "n_trials": ensemble.n_trials,
+                "distributions": [
+                    {
+                        "metric": b.metric_name,
+                        "p10": b.p10, "p25": b.p25, "p50": b.p50,
+                        "p75": b.p75, "p90": b.p90,
+                    }
+                    for b in ensemble.distributions
+                ],
+                "surrogate_accuracy": result.train_accuracy,
+            }
+
+        # Generate n_trials synthetic belief vectors via uniform sampling
+        rng = np.random.default_rng(seed=42)
+        predictions: dict[str, int] = {}
+        for _ in range(n_trials):
+            belief_vec = {m: float(rng.uniform(0.0, 1.0)) for m in result.metrics_used}
+            pred = result.predict(belief_vec)
+            predictions[pred] = predictions.get(pred, 0) + 1
+
+        # Compute distribution over outcomes
+        total = sum(predictions.values())
+        distribution = {
+            k: round(v / total, 4) for k, v in sorted(
+                predictions.items(), key=lambda x: -x[1]
+            )
+        }
+
+        logger.info(
+            "Surrogate MC completed session=%s trials=%d accuracy=%.3f classes=%d",
+            session_id, n_trials, result.train_accuracy, result.n_classes,
+        )
+
+        return {
+            "method": "surrogate_logistic",
+            "session_id": session_id,
+            "n_trials": n_trials,
+            "surrogate_accuracy": result.train_accuracy,
+            "n_classes": result.n_classes,
+            "classes": result.classes,
+            "outcome_distribution": distribution,
+            "metrics_used": result.metrics_used,
+        }

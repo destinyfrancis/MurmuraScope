@@ -54,3 +54,11 @@ export function getNodeNeighborhood(graphId, nodeId, hops = 2) {
 export function getRelationshipStates(sessionId, roundNumber = -1) {
   return api.get(`/graph/${sessionId}/relationships`, { params: { round_number: roundNumber } })
 }
+
+export function uploadPersonas(graphId, file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return api.post(`/graph/${graphId}/personas`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}

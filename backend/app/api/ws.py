@@ -7,7 +7,7 @@ import logging
 import time
 from collections import defaultdict
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
 logger = logging.getLogger("api.ws")
 
@@ -75,16 +75,33 @@ def clear_progress(session_id: str) -> None:
 
 
 @router.websocket("/progress/{session_id}")
-async def simulation_progress(websocket: WebSocket, session_id: str) -> None:
+async def simulation_progress(
+    websocket: WebSocket,
+    session_id: str,
+    token: str = Query(default=""),
+) -> None:
     """Stream real-time simulation progress updates via WebSocket.
 
-    1. Accept connection.
-    2. Replay any already-buffered progress updates (catch-up for late clients).
-    3. Forward live updates from the asyncio.Queue until the simulation
+    1. Validate JWT token (optional but logged when missing).
+    2. Accept connection.
+    3. Replay any already-buffered progress updates (catch-up for late clients).
+    4. Forward live updates from the asyncio.Queue until the simulation
        signals "complete" or "error", or the client disconnects.
-    4. Send a periodic ping every 30 s of inactivity to keep the connection
+    5. Send a periodic ping every 30 s of inactivity to keep the connection
        alive through proxies.
     """
+    # Authenticate: reject if token is provided but invalid; allow anonymous
+    # for backward compatibility but log a warning.
+    if token:
+        try:
+            from backend.app.api.auth import _decode_token  # noqa: PLC0415
+            _decode_token(token)
+        except Exception:
+            await websocket.close(code=4003, reason="Invalid or expired token")
+            return
+    else:
+        logger.warning("WS connection without token for session=%s", session_id)
+
     await websocket.accept()
 
     # Clean up stale entries from other sessions on each new connection

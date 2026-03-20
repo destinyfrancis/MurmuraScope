@@ -120,7 +120,11 @@ class GraphRAGService:
         llm_client: LLMClient | None = None,
     ) -> None:
         self._vector_store = vector_store
-        self._llm = llm_client or LLMClient()
+        if llm_client is not None:
+            self._llm = llm_client
+        else:
+            from backend.app.utils.llm_client import get_default_client  # noqa: PLC0415
+            self._llm = get_default_client()
 
     # ------------------------------------------------------------------
     # Runtime table creation

@@ -492,6 +492,15 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     except Exception:
         logger.warning("DataScheduler not started (APScheduler may not be installed)")
 
+    # Load custom domain packs from DB into in-memory registry
+    try:
+        from backend.app.domain.base import DomainPackRegistry
+        loaded = await DomainPackRegistry.load_custom_from_db()
+        if loaded:
+            logger.info("Loaded %d custom domain pack(s) into registry", loaded)
+    except Exception:
+        logger.warning("Custom domain pack loading failed", exc_info=True)
+
     yield
 
     # Kill simulation subprocesses before server exit
@@ -547,6 +556,8 @@ def create_app() -> FastAPI:
     from slowapi.middleware import SlowAPIMiddleware
     from backend.app.api.auth import _limiter
 
+    # Apply default rate limit to all POST endpoints (10/minute per IP)
+    _limiter._application_limits = ["10/minute"]
     app.state.limiter = _limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
     app.add_middleware(SlowAPIMiddleware)

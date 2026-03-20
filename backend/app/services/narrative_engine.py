@@ -62,7 +62,11 @@ class NarrativeEngine:
         )
 
         try:
-            raw = await self._llm.chat_json(system=NARRATIVE_SYSTEM, user=prompt)
+            messages = [
+                {"role": "system", "content": NARRATIVE_SYSTEM},
+                {"role": "user", "content": prompt},
+            ]
+            raw = await self._llm.chat_json(messages)
         except Exception as exc:
             logger.error("NarrativeEngine LLM call failed: %s", exc)
             return _empty_narrative()

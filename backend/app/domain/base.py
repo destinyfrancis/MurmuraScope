@@ -238,6 +238,7 @@ class DomainPackRegistry:
     """Global registry of available domain packs."""
 
     _packs: dict[str, DomainPack] = {}
+    _custom_loaded: bool = False
 
     @classmethod
     def register(cls, pack: DomainPack) -> None:
@@ -258,3 +259,85 @@ class DomainPackRegistry:
     def list_packs(cls) -> list[str]:
         """Return sorted list of registered pack IDs."""
         return sorted(cls._packs)
+
+    @classmethod
+    async def load_custom_from_db(cls) -> int:
+        """Load custom domain packs from DB into the in-memory registry.
+
+        Called once at startup. Returns the number of packs loaded.
+        Safe to call multiple times (idempotent).
+        """
+        if cls._custom_loaded:
+            return 0
+
+        import json as _json  # noqa: PLC0415
+        import logging as _logging  # noqa: PLC0415
+
+        _logger = _logging.getLogger("domain_pack_registry")
+
+        try:
+            from backend.app.utils.db import get_db  # noqa: PLC0415
+
+            async with get_db() as db:
+                cursor = await db.execute(
+                    "SELECT id, name, description, regions, occupations, "
+                    "income_brackets, shocks, metrics, persona_template, "
+                    "sentiment_keywords, locale, source FROM custom_domain_packs"
+                )
+                rows = await cursor.fetchall()
+        except Exception:
+            _logger.debug("load_custom_from_db: DB not available yet, skipping")
+            return 0
+
+        loaded = 0
+        for row in rows:
+            pack_id = row[0]
+            if pack_id in cls._packs:
+                continue  # builtin takes precedence
+
+            try:
+                shocks_raw = _json.loads(row[6]) if row[6] else []
+                metrics_raw = _json.loads(row[7]) if row[7] else []
+
+                shock_specs = tuple(
+                    ShockTypeSpec(
+                        id=s.get("id", s.get("name", "")),
+                        label_zh=s.get("label_zh", s.get("name", "")),
+                        label_en=s.get("label_en", s.get("name", "")),
+                    )
+                    for s in shocks_raw
+                    if isinstance(s, dict)
+                )
+                metric_specs = tuple(
+                    MetricSpec(
+                        name=m.get("name", m.get("id", "")),
+                        label=m.get("label", m.get("name", "")),
+                    )
+                    for m in metrics_raw
+                    if isinstance(m, dict)
+                )
+
+                pack = DomainPack(
+                    id=pack_id,
+                    name_zh=row[1] or pack_id,
+                    name_en=row[1] or pack_id,
+                    locale=row[10] or "en-US",
+                    valid_shock_types=frozenset(s.id for s in shock_specs),
+                    shock_specs=shock_specs,
+                    metrics=metric_specs,
+                    default_forecast_metrics=tuple(m.name for m in metric_specs),
+                    correlated_vars=(),
+                    mc_default_metrics=(),
+                    macro_baselines={},
+                    baseline_district_prices={},
+                    baseline_stamp_duty={},
+                )
+                cls.register(pack)
+                loaded += 1
+            except Exception:
+                _logger.warning("Failed to load custom domain pack '%s'", pack_id, exc_info=True)
+
+        cls._custom_loaded = True
+        if loaded:
+            _logger.info("Loaded %d custom domain pack(s) from DB", loaded)
+        return loaded

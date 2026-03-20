@@ -65,7 +65,7 @@ async def list_tickers(
         )
     except Exception as exc:
         logger.exception("list_tickers failed")
-        return APIResponse(success=False, error=str(exc))
+        return APIResponse(success=False, error="Failed to list tickers")
 
 
 # ---------------------------------------------------------------------------
@@ -113,7 +113,7 @@ async def get_summary(
                     "directional_accuracy": None,
                     "rmse": None,
                     "n_obs": 0,
-                    "error": str(exc),
+                    "error": "Backtest failed for ticker",
                 }
 
     rows = await asyncio.gather(*[_safe_backtest(t) for t in tickers])
@@ -143,10 +143,10 @@ async def get_forecast_backtest(
         return APIResponse(success=True, data=result.to_dict())
     except ValueError as exc:
         logger.warning("Backtest validation error for %s: %s", ticker, exc)
-        return APIResponse(success=False, error=str(exc))
+        return APIResponse(success=False, error="Backtest validation error")
     except Exception as exc:
         logger.exception("Backtest failed for %s", ticker)
-        return APIResponse(success=False, error=f"Backtest failed: {exc}")
+        return APIResponse(success=False, error="Backtest failed")
 
 
 # ---------------------------------------------------------------------------
@@ -189,10 +189,10 @@ async def get_forecast(
         )
     except ValueError as exc:
         logger.warning("Forecast validation error for %s: %s", ticker, exc)
-        return APIResponse(success=False, error=str(exc))
+        return APIResponse(success=False, error="Forecast validation error")
     except Exception as exc:
         logger.exception("Forecast failed for %s", ticker)
-        return APIResponse(success=False, error=f"Forecast failed: {exc}")
+        return APIResponse(success=False, error="Forecast failed")
 
 
 # ---------------------------------------------------------------------------
@@ -230,4 +230,4 @@ async def refresh_stock_data(background_tasks: BackgroundTasks) -> APIResponse:
         )
     except Exception as exc:
         logger.exception("Failed to schedule stock refresh")
-        return APIResponse(success=False, error=str(exc))
+        return APIResponse(success=False, error="Failed to schedule stock refresh")

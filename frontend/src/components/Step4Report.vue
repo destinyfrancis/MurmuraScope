@@ -1,7 +1,9 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { marked } from 'marked'
-import { generateReport, getReportStatus, invokeXaiTool } from '../api/report.js'
+import { generateReport, getReportStatus, invokeXaiTool, shareReport } from '../api/report.js'
+import { getConfidenceScore } from '../api/simulation.js'
+import ConfidenceBadge from './ConfidenceBadge.vue'
 
 const props = defineProps({
   session: { type: Object, required: true },
@@ -9,6 +11,32 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['report-generated', 'update:session'])
+
+const sharing = ref(false)
+const shareStatus = ref('')
+async function handleShare() {
+  const reportId = props.session.reportId
+  if (!reportId) return
+  sharing.value = true
+  shareStatus.value = ''
+  try {
+    const res = await shareReport(reportId)
+    const token = res.data?.data?.token || res.data?.token
+    if (token) {
+      const url = `${window.location.origin}/report/public/${token}`
+      await navigator.clipboard.writeText(url)
+      shareStatus.value = '分享連結已複製到剪貼板'
+    } else {
+      shareStatus.value = '分享成功'
+    }
+  } catch (e) {
+    console.error('Share error:', e)
+    shareStatus.value = '分享失敗，請稍後再試'
+  } finally {
+    sharing.value = false
+    setTimeout(() => { shareStatus.value = '' }, 4000)
+  }
+}
 
 const exporting = ref(false)
 async function exportPDF() {
@@ -189,6 +217,7 @@ async function pollReportStatus(reportId) {
       clearInterval(pollTimer)
       pollTimer = null
       emit('report-generated', { reportId })
+      fetchConfidenceScore()
       return
     }
 
@@ -239,6 +268,7 @@ async function startGeneration() {
       completed.value = true
       generating.value = false
       emit('report-generated', { reportId })
+      fetchConfidenceScore()
       return
     }
 
@@ -297,6 +327,20 @@ const XAI_TOOLS = [
   { name: 'get_platform_breakdown',     label: '平台行為拆解' },
   { name: 'get_agent_story_arcs',       label: 'Agent 故事弧線' },
 ]
+
+const confidenceScore = ref(null)
+
+async function fetchConfidenceScore() {
+  const sessionId = props.session?.sessionId
+  if (!sessionId) return
+  try {
+    const res = await getConfidenceScore(sessionId)
+    const score = res.data?.data?.score ?? res.data?.score ?? null
+    confidenceScore.value = score
+  } catch {
+    confidenceScore.value = null
+  }
+}
 
 const xaiResults = ref({})
 const xaiLoading = ref(null)
@@ -408,15 +452,32 @@ async function runXaiTool(toolName) {
     <div class="step4-right">
       <div class="report-panel">
         <div class="report-panel-header">
-          <h3 class="panel-heading">分析報告</h3>
-          <button
-            v-if="completed"
-            class="pdf-btn"
-            @click="exportPDF"
-            :disabled="exporting"
-          >
-            {{ exporting ? '生成中...' : '匯出 PDF' }}
-          </button>
+          <h3 class="panel-heading">
+            分析報告
+            <ConfidenceBadge
+              v-if="confidenceScore != null"
+              :score="confidenceScore"
+              size="lg"
+              class="confidence-inline"
+            />
+          </h3>
+          <div v-if="completed" class="report-actions">
+            <button
+              class="pdf-btn"
+              @click="handleShare"
+              :disabled="sharing"
+            >
+              {{ sharing ? '分享中...' : '分享報告' }}
+            </button>
+            <button
+              class="pdf-btn"
+              @click="exportPDF"
+              :disabled="exporting"
+            >
+              {{ exporting ? '生成中...' : '匯出 PDF' }}
+            </button>
+          </div>
+          <span v-if="shareStatus" class="share-status">{{ shareStatus }}</span>
         </div>
 
         <div v-if="!completed && !error" class="report-loading">
@@ -699,6 +760,11 @@ async function runXaiTool(toolName) {
   30%      { transform: translateY(-8px); }
 }
 
+.confidence-inline {
+  margin-left: 10px;
+  vertical-align: middle;
+}
+
 .report-panel-header {
   display: flex;
   align-items: center;
@@ -728,6 +794,17 @@ async function runXaiTool(toolName) {
 .pdf-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.report-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.share-status {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 
 /* Report panel */

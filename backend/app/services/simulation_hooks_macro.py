@@ -25,7 +25,8 @@ class MacroHooksMixin:
         """Update MacroState from agent sentiment/topics and persist a snapshot."""
         try:
             if self._kg_mode.get(session_id):
-                return  # kg_driven: HK macro metrics not applicable
+                await self._process_generic_macro_feedback(session_id, round_number)
+                return
 
             from backend.app.services.macro_controller import MacroController  # noqa: PLC0415
             from backend.app.services.macro_history import MacroHistoryService  # noqa: PLC0415
@@ -68,6 +69,93 @@ class MacroHooksMixin:
                 session_id,
                 round_number,
             )
+
+    async def _process_generic_macro_feedback(
+        self,
+        session_id: str,
+        round_number: int,
+    ) -> None:
+        """GenericMacroState feedback loop for kg_driven (non-HK) mode.
+
+        Reads agent sentiment from simulation_actions and adjusts each metric
+        in the GenericMacroState proportionally to net sentiment polarity.
+        """
+        from backend.app.services.generic_macro import GenericMacroState  # noqa: PLC0415
+        from backend.app.utils.db import get_db  # noqa: PLC0415
+
+        kg_state = self._kg_sessions.get(session_id)
+        if kg_state is None:
+            return
+
+        async with self._macro_locks[session_id]:
+            # Initialize GenericMacroState from active_metrics if not yet cached
+            if session_id not in self._macro_state:
+                fields = {k: float(v) for k, v in kg_state.active_metrics.items()}
+                self._macro_state[session_id] = GenericMacroState(
+                    fields=fields, round_number=round_number,
+                )
+
+            current_state = self._macro_state[session_id]
+            if not isinstance(current_state, GenericMacroState):
+                return
+
+            # Read recent sentiment from simulation_actions
+            lookback = max(0, round_number - 4)
+            try:
+                async with get_db() as db:
+                    cursor = await db.execute(
+                        """
+                        SELECT sentiment FROM simulation_actions
+                        WHERE session_id = ? AND round_number BETWEEN ? AND ?
+                        """,
+                        (session_id, lookback, round_number),
+                    )
+                    rows = await cursor.fetchall()
+            except Exception:
+                logger.debug(
+                    "_process_generic_macro_feedback: DB read failed session=%s",
+                    session_id,
+                )
+                return
+
+            if not rows:
+                return
+
+            # Compute net sentiment polarity (-1 to +1)
+            sentiment_map = {"positive": 1.0, "negative": -1.0, "neutral": 0.0}
+            total = sum(sentiment_map.get(str(r[0] or "neutral"), 0.0) for r in rows)
+            net_polarity = total / len(rows) if rows else 0.0
+
+            # Apply small adjustments to each field based on sentiment
+            _FEEDBACK_RATE = 0.02
+            updates = {
+                k: v + net_polarity * _FEEDBACK_RATE * max(abs(v), 0.01)
+                for k, v in current_state.fields.items()
+            }
+            updated_state = GenericMacroState(
+                fields=updates, round_number=round_number,
+            )
+            self._macro_state[session_id] = updated_state
+
+        # Persist as macro snapshot (best-effort)
+        try:
+            from backend.app.services.macro_history import MacroHistoryService  # noqa: PLC0415
+            if self._macro_history is None:
+                self._macro_history = MacroHistoryService()
+            await self._macro_history.save_snapshot(
+                session_id, round_number, updated_state.to_dict(),
+            )
+        except Exception:
+            logger.debug(
+                "_process_generic_macro_feedback: persist failed session=%s round=%d",
+                session_id, round_number,
+            )
+
+        logger.info(
+            "Generic macro feedback applied session=%s round=%d "
+            "net_polarity=%.3f fields=%d",
+            session_id, round_number, net_polarity, len(updates),
+        )
 
     async def _persist_macro_state(
         self,

@@ -1,7 +1,8 @@
 <script setup>
 import { ref, computed } from 'vue'
-import { buildGraph, getGraph, uploadScenarioFile, getGraphStatus, analyzeSeed, uploadSeedFile } from '../api/graph.js'
+import { buildGraph, getGraph, uploadScenarioFile, getGraphStatus, analyzeSeed, uploadSeedFile, uploadPersonas } from '../api/graph.js'
 import GraphPanel from './GraphPanel.vue'
+import PersonaUpload from './PersonaUpload.vue'
 
 const props = defineProps({
   session: { type: Object, required: true },
@@ -18,6 +19,12 @@ const progressMsg = ref('')
 const error = ref(null)
 const graphData = ref(null)
 const stats = ref(null)
+
+// Persona upload state
+const personaFile = ref(null)
+const personaUploading = ref(false)
+const personaStatus = ref(null)
+const personaError = ref(null)
 
 const analyzing = ref(false)
 const analysisResult = ref(null)
@@ -207,6 +214,22 @@ async function startBuild() {
       graphId,
       graphData: graphFull,
     })
+
+    // Upload persona file if selected
+    if (personaFile.value) {
+      personaUploading.value = true
+      personaStatus.value = null
+      personaError.value = null
+      try {
+        const pRes = await uploadPersonas(graphId, personaFile.value)
+        const pData = pRes.data?.data || pRes.data
+        personaStatus.value = `已注入 ${pData.injected_count ?? '?'} 個受訪者角色`
+      } catch (pErr) {
+        personaError.value = pErr.response?.data?.detail || pErr.message || '角色上傳失敗'
+      } finally {
+        personaUploading.value = false
+      }
+    }
   } catch (err) {
     error.value = err.response?.data?.detail || err.message || '構建失敗'
     console.error('Graph build failed:', err)
@@ -281,6 +304,12 @@ async function startBuild() {
       </div>
       <p v-if="seedUploadError" class="seed-error">{{ seedUploadError }}</p>
       <p v-if="seedUploadSuccess" class="seed-success">{{ seedUploadSuccess }}</p>
+
+      <!-- Persona upload -->
+      <PersonaUpload v-model="personaFile" />
+      <p v-if="personaUploading" class="persona-status">上傳角色數據中...</p>
+      <p v-if="personaStatus" class="seed-success">{{ personaStatus }}</p>
+      <p v-if="personaError" class="seed-error">{{ personaError }}</p>
 
       <div class="input-mode-tabs">
         <button
@@ -886,5 +915,11 @@ async function startBuild() {
   color: var(--accent-green, #4caf7d);
   font-size: 12px;
   margin: -8px 0 10px;
+}
+
+.persona-status {
+  font-size: 12px;
+  color: var(--accent-blue);
+  margin: 4px 0 10px;
 }
 </style>

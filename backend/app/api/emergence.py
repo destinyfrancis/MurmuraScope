@@ -8,6 +8,7 @@ from __future__ import annotations
 import aiosqlite
 from fastapi import APIRouter, HTTPException
 
+from backend.app.models.response import APIResponse
 from backend.app.utils.db import get_db
 from backend.app.utils.logger import get_logger
 
@@ -15,8 +16,8 @@ router = APIRouter(prefix="/simulation", tags=["emergence"])
 logger = get_logger("api.emergence")
 
 
-@router.get("/{session_id}/emergence/bias-probe")
-async def get_bias_probe(session_id: str) -> list[dict]:
+@router.get("/{session_id}/emergence/bias-probe", response_model=APIResponse)
+async def get_bias_probe(session_id: str) -> APIResponse:
     """Get BiasProbe results for a session.
 
     Returns a list of bias probe results (may be empty if no probe
@@ -33,14 +34,14 @@ async def get_bias_probe(session_id: str) -> list[dict]:
             (session_id,),
         )
         rows = await cursor.fetchall()
-        return [dict(r) for r in rows]
+        return APIResponse(success=True, data=[dict(r) for r in rows])
 
 
-@router.get("/{session_id}/emergence/alerts")
+@router.get("/{session_id}/emergence/alerts", response_model=APIResponse)
 async def get_emergence_alerts(
     session_id: str,
     severity: str | None = None,
-) -> list[dict]:
+) -> APIResponse:
     """Get phase transition alerts, optionally filtered by severity.
 
     Args:
@@ -67,11 +68,11 @@ async def get_emergence_alerts(
                 (session_id,),
             )
         rows = await cursor.fetchall()
-        return [dict(r) for r in rows]
+        return APIResponse(success=True, data=[dict(r) for r in rows])
 
 
-@router.get("/{session_id}/emergence/scorecard")
-async def get_emergence_scorecard(session_id: str) -> dict:
+@router.get("/{session_id}/emergence/scorecard", response_model=APIResponse)
+async def get_emergence_scorecard(session_id: str) -> APIResponse:
     """Get emergence scorecard for a completed simulation.
 
     Returns 404 if no scorecard exists for the given session.
@@ -94,11 +95,11 @@ async def get_emergence_scorecard(session_id: str) -> dict:
                 status_code=404,
                 detail=f"No emergence scorecard found for session {session_id}",
             )
-        return dict(row)
+        return APIResponse(success=True, data=dict(row))
 
 
-@router.post("/{session_id}/emergence/run-bias-probe")
-async def run_bias_probe(session_id: str, sample_size: int = 30) -> dict:
+@router.post("/{session_id}/emergence/run-bias-probe", response_model=APIResponse)
+async def run_bias_probe(session_id: str, sample_size: int = 30) -> APIResponse:
     """Trigger a manual bias probe run.
 
     Runs a BiasProbe against the specified session's agents and returns
@@ -113,11 +114,11 @@ async def run_bias_probe(session_id: str, sample_size: int = 30) -> dict:
 
     probe = BiasProbe()
     result = await probe.probe(session_id, sample_size=sample_size)
-    return {
+    return APIResponse(success=True, data={
         "session_id": result.session_id,
         "scenario": result.scenario,
         "agreement_rate": result.agreement_rate,
         "persona_compliance": result.persona_compliance,
         "bias_detected": result.bias_detected,
         "diversity_index": result.diversity_index,
-    }
+    })
