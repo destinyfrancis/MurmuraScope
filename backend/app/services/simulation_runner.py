@@ -450,14 +450,7 @@ class SimulationRunner(
             await self._subprocess_mgr.keep_alive_for_report(session_id)
 
         finally:
-            # --- 1. Cancel all tracked background tasks for this session ---
-            pending = list(self._pending_tasks.pop(session_id, set()))
-            if pending:
-                for t in pending:
-                    t.cancel()
-                await asyncio.gather(*pending, return_exceptions=True)
-
-            # --- 2. Ensure subprocess is not still running (orphan prevention) ---
+            # --- 1. Ensure subprocess is not still running (orphan prevention) ---
             # process is None only if subprocess creation itself failed.
             # Skip killing if report generation is pending — the subprocess must
             # stay alive so the report agent can interview agents.
@@ -481,18 +474,7 @@ class SimulationRunner(
                 except OSError:
                     pass  # Process already exited between check and kill
 
-            await self._subprocess_mgr.cleanup(session_id)
-            # Clean up posts buffer to prevent memory leak
-            self._posts_buffer.pop(session_id, None)
-            # Clean up macro state cache
-            self._macro_state.pop(session_id, None)
-            # Clean up round-level profile cache
-            self._round_profiles.pop(session_id, None)
-            # Phase 4A: clean up RoundCache for this session
-            rc = self._round_caches.pop(session_id, None)
-            if rc is not None:
-                rc.clear()
-            # Phase 4A: flush and clear BatchWriter buffers
+            # --- 2. Flush BatchWriter before general cleanup ---
             if self._batch_writer is not None:
                 try:
                     from backend.app.utils.db import get_db as _get_db_cleanup  # noqa: PLC0415
@@ -501,30 +483,18 @@ class SimulationRunner(
                 except Exception:
                     logger.debug("BatchWriter final flush failed session=%s", session_id, exc_info=True)
                 self._batch_writer.clear()
-            # Phase 1B: clean up temporal activation caches
-            self._activity_profiles.pop(session_id, None)
-            self._activation_rngs.pop(session_id, None)
-            # Phase 3: clean up pending arousal deltas
-            self._pending_arousal_deltas.pop(session_id, None)
-            # Phase 4D: clean up shard coordinator if sharding was active
-            await self._cleanup_shard_coordinator(session_id)
-            # kg_driven mode: clean up per-session state
-            self._kg_mode.pop(session_id, None)
-            self._kg_sessions.pop(session_id, None)
-            if self._relationship_lifecycle is not None:
-                self._relationship_lifecycle.cleanup_session(session_id)
-            # Close LanceDB connection to free resources
+
+            # --- 3. Close resources that are session-run-scoped (not in cleanup_session) ---
             if self._vector_store is not None:
                 try:
                     await self._vector_store.close()
                 except Exception:
                     logger.debug("VectorStore close failed session=%s", session_id)
-            # Close log file — guarded so it's safe if open() itself failed
             if log_file is not None:
                 log_file.close()
-            # Release WebSocket progress buffer (avoids unbounded memory growth
-            # when many simulations run without active WS clients)
-            _clear_ws_progress(session_id)
+
+            # --- 4. Delegate common cleanup (idempotent — safe even if stop() already called it) ---
+            await self.cleanup_session(session_id)
 
     def _create_tracked_task(
         self,
@@ -861,7 +831,7 @@ class SimulationRunner(
         """Stop a running simulation subprocess (SIGTERM → SIGKILL).
 
         Delegates to SimulationSubprocessManager.stop() which owns the
-        process lifecycle.
+        process lifecycle, then runs immediate resource cleanup.
 
         Args:
             session_id: UUID of the session to stop.
@@ -870,6 +840,58 @@ class SimulationRunner(
             ValueError: If the session is not currently running.
         """
         await self._subprocess_mgr.stop(session_id)
+        await self.cleanup_session(session_id)
+
+    async def cleanup_session(self, session_id: str) -> None:
+        """Release all in-memory resources held for *session_id*.
+
+        Safe to call multiple times or for sessions that have already been
+        cleaned up (all operations are idempotent pop/discard).
+
+        Called automatically by run() finally block on normal completion,
+        and explicitly by stop() for user-initiated cancellation so that
+        resources are freed immediately instead of waiting for asyncio
+        task timeouts.
+        """
+        # Cancel tracked background tasks (Group 3 fire-and-forget)
+        pending = list(self._pending_tasks.pop(session_id, set()))
+        if pending:
+            for t in pending:
+                t.cancel()
+            await asyncio.gather(*pending, return_exceptions=True)
+
+        # Subprocess tracking
+        await self._subprocess_mgr.cleanup(session_id)
+
+        # Memory caches
+        self._posts_buffer.pop(session_id, None)
+        self._macro_state.pop(session_id, None)
+        self._round_profiles.pop(session_id, None)
+        rc = self._round_caches.pop(session_id, None)
+        if rc is not None:
+            rc.clear()
+        self._activity_profiles.pop(session_id, None)
+        self._activation_rngs.pop(session_id, None)
+        self._pending_arousal_deltas.pop(session_id, None)
+
+        # kg_driven state
+        self._kg_mode.pop(session_id, None)
+        self._kg_sessions.pop(session_id, None)
+        if self._relationship_lifecycle is not None:
+            self._relationship_lifecycle.cleanup_session(session_id)
+
+        # Shard coordinator
+        await self._cleanup_shard_coordinator(session_id)
+
+        # Cost tracker
+        try:
+            from backend.app.services.cost_tracker import clear_session as _clear_cost  # noqa: PLC0415
+            _clear_cost(session_id)
+        except Exception:
+            pass
+
+        # WebSocket progress buffer
+        _clear_ws_progress(session_id)
 
     async def get_action_logs(
         self, session_id: str

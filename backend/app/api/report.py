@@ -14,9 +14,22 @@ from backend.app.models.request import (
 from backend.app.models.response import APIResponse
 from backend.app.services.report_agent import ReportAgent
 from backend.app.services.simulation_ipc import SimulationIPC
+from backend.app.services.simulation_manager import get_simulation_manager
 from backend.app.utils.db import get_db
 from backend.app.utils.logger import get_logger
 from backend.app.utils.prompt_security import sanitize_scenario_description
+
+
+async def _release_subprocess(session_id: str) -> None:
+    """Release the OASIS subprocess kept alive for report generation.
+
+    Best-effort — logs but never raises so callers are not disrupted.
+    """
+    try:
+        mgr = get_simulation_manager()
+        await mgr._runner._subprocess_mgr.release_after_report(session_id)
+    except Exception:
+        logger.debug("release_subprocess: no-op for session %s", session_id)
 
 _CHAT_AGENT_SYSTEM = """You are roleplaying as a simulation agent in a social simulation.
 Stay in character based on your demographic profile, personality, and memories.
@@ -308,6 +321,11 @@ async def export_report_pdf(report_id: str):
 
         pdf_bytes = HTML(string=html).write_pdf()
 
+        # PDF export is a terminal action — release the OASIS subprocess.
+        sid = report.get("session_id")
+        if sid:
+            await _release_subprocess(sid)
+
         from fastapi.responses import Response  # noqa: PLC0415
         return Response(
             content=pdf_bytes,
@@ -328,9 +346,10 @@ async def share_report(report_id: str) -> APIResponse:
     try:
         token = secrets.token_urlsafe(16)
         async with get_db() as db:
-            row = await (await db.execute("SELECT id FROM reports WHERE id = ?", (report_id,))).fetchone()
+            row = await (await db.execute("SELECT id, session_id FROM reports WHERE id = ?", (report_id,))).fetchone()
             if not row:
                 raise HTTPException(status_code=404, detail=f"Report {report_id} not found")
+            sid = row["session_id"] if row else None
             # Ensure share_token column exists (runtime migration)
             try:
                 await db.execute("ALTER TABLE reports ADD COLUMN share_token TEXT")
@@ -338,6 +357,11 @@ async def share_report(report_id: str) -> APIResponse:
                 pass  # Column already exists
             await db.execute("UPDATE reports SET share_token = ? WHERE id = ?", (token, report_id))
             await db.commit()
+
+        # Share is a terminal action — release the OASIS subprocess.
+        if sid:
+            await _release_subprocess(sid)
+
         return APIResponse(
             success=True,
             data={"token": token, "url": f"/public/report/{token}"},
@@ -347,6 +371,22 @@ async def share_report(report_id: str) -> APIResponse:
     except Exception as exc:
         logger.exception("share_report failed for report %s", report_id)
         raise HTTPException(status_code=500, detail="Internal server error") from exc
+
+
+# ---------------------------------------------------------------------------
+# Subprocess release endpoint
+# ---------------------------------------------------------------------------
+
+
+@router.post("/{session_id}/release", response_model=APIResponse)
+async def release_session_subprocess(session_id: str) -> APIResponse:
+    """Explicitly release the OASIS subprocess for a session.
+
+    Frontend should call this when user navigates away from Step 4/5,
+    or when agent interaction is complete.
+    """
+    await _release_subprocess(session_id)
+    return APIResponse(success=True, data={"session_id": session_id, "released": True})
 
 
 # ---------------------------------------------------------------------------

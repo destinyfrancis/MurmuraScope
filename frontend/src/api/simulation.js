@@ -231,6 +231,14 @@ export function stopSimulation(sessionId) {
   return api.post(`/simulation/${sessionId}/stop`)
 }
 
+/**
+ * Release all in-memory resources for a session (subprocess, caches, WS buffers).
+ * Safe to call for any session state. Frontend should call this on navigation away.
+ */
+export function cleanupSession(sessionId) {
+  return api.post(`/simulation/${sessionId}/cleanup`)
+}
+
 // ── HSI Decomposition & Validation ────────────────────────────────────────────
 
 export function getHSIDecomposition(nQuarters = 20) {

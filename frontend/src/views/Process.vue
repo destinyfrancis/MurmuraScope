@@ -1,6 +1,7 @@
 <script setup>
 import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { cleanupSession } from '../api/simulation.js'
 import PresetSelector from '../components/PresetSelector.vue'
 import Step1GraphBuild from '../components/Step1GraphBuild.vue'
 import Step2EnvSetup from '../components/Step2EnvSetup.vue'
@@ -144,8 +145,35 @@ const currentComponentProps = computed(() => {
 // Express mode: unmount-safe guard
 let _expressAdvanceCancelled = false
 
+// --- Resource cleanup on navigation away or browser close ---
+function _releaseSessionResources() {
+  if (session.sessionId) {
+    // Fire-and-forget — navigator.sendBeacon is unreliable for POST with body,
+    // so use a plain fetch with keepalive to survive page unload.
+    fetch(`/api/simulation/${session.sessionId}/cleanup`, {
+      method: 'POST',
+      keepalive: true,
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    }).catch(() => {})
+  }
+}
+
+function _onBeforeUnload() {
+  _releaseSessionResources()
+}
+
+onMounted(() => {
+  window.addEventListener('beforeunload', _onBeforeUnload)
+})
+
 onUnmounted(() => {
   _expressAdvanceCancelled = true
+  window.removeEventListener('beforeunload', _onBeforeUnload)
+  // Release resources when navigating away within the SPA
+  if (session.sessionId) {
+    cleanupSession(session.sessionId).catch(() => {})
+  }
 })
 
 onMounted(async () => {

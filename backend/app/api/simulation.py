@@ -2041,6 +2041,35 @@ async def stop_simulation(session_id: str) -> APIResponse:
         raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
+@router.post("/{session_id}/cleanup", response_model=APIResponse)
+async def cleanup_session(session_id: str) -> APIResponse:
+    """Release all in-memory resources for a session.
+
+    Safe to call for any session state (running, completed, failed).
+    For running sessions, stops the subprocess first.
+    Frontend should call this when user navigates away or closes the page.
+    """
+    try:
+        manager = get_simulation_manager()
+        # If still running, stop first
+        if manager._runner._subprocess_mgr.is_running(session_id):
+            await manager._runner.stop(session_id)
+        else:
+            await manager._runner.cleanup_session(session_id)
+        # Also release any report-pending subprocess
+        await manager._runner._subprocess_mgr.release_after_report(session_id)
+        return APIResponse(
+            success=True,
+            data={"session_id": session_id, "cleaned": True},
+        )
+    except Exception as exc:
+        logger.debug("cleanup_session: %s — %s", session_id, exc)
+        return APIResponse(
+            success=True,
+            data={"session_id": session_id, "cleaned": True},
+        )
+
+
 @router.get("/{simulation_id}/world-events", response_model=APIResponse)
 async def get_world_events(simulation_id: str) -> APIResponse:
     """Return all world events generated for a kg_driven simulation."""

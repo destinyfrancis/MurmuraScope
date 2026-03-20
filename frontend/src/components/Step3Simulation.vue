@@ -482,6 +482,10 @@ onUnmounted(() => {
     clearTimeout(reconnectTimer)
     reconnectTimer = null
   }
+  if (shockBannerTimer) {
+    clearTimeout(shockBannerTimer)
+    shockBannerTimer = null
+  }
   if (ws) {
     ws.close()
     ws = null
