@@ -44,8 +44,9 @@ _CONTEXT_ROUNDS_LOOKBACK = 5
 _MAX_CONTEXT_MEMORIES = 10
 
 # Hybrid re-ranking weights
-_WEIGHT_SEMANTIC = 0.6
-_WEIGHT_SALIENCE = 0.4
+_WEIGHT_SEMANTIC = 0.4
+_WEIGHT_SALIENCE = 0.3
+_WEIGHT_IMPORTANCE = 0.3
 
 # Memory summarization constants (Phase 17)
 _SUMMARIZE_INTERVAL: int = 10
@@ -116,6 +117,8 @@ class AgentMemoryService:
                 for m in memories[:_MAX_MEMORIES_PER_AGENT_PER_ROUND]:
                     if agent_id is None:
                         continue
+                    importance_raw = float(m.get("importance_score", 5))
+                    importance = max(0.0, min(1.0, importance_raw / 10.0))
                     rows.append((
                         session_id,
                         agent_id,
@@ -123,6 +126,7 @@ class AgentMemoryService:
                         m.get("memory_text", ""),
                         float(m.get("salience_score", 0.5)),
                         m.get("memory_type", "observation"),
+                        importance,
                     ))
 
                 if rows:
@@ -134,8 +138,9 @@ class AgentMemoryService:
                                     """
                                     INSERT INTO agent_memories
                                         (session_id, agent_id, round_number,
-                                         memory_text, salience_score, memory_type)
-                                    VALUES (?, ?, ?, ?, ?, ?)
+                                         memory_text, salience_score, memory_type,
+                                         importance_score)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?)
                                     """,
                                     row,
                                 )
@@ -150,7 +155,8 @@ class AgentMemoryService:
                                 if mem_id is None:
                                     continue
                                 # row_data: (session_id, agent_id, round_number,
-                                #            memory_text, salience_score, memory_type)
+                                #            memory_text, salience_score, memory_type,
+                                #            importance_score)
                                 mem_text = row_data[3]
                                 mem_type = row_data[5]
                                 triples = self._triple_extractor.extract_triples(
@@ -196,6 +202,7 @@ class AgentMemoryService:
                                     "memory_text": row_data[3],
                                     "salience_score": row_data[4],
                                     "memory_type": row_data[5],
+                                    "importance_score": row_data[6],
                                 })
                             try:
                                 await self._vector_store.add_memories(
@@ -251,12 +258,13 @@ class AgentMemoryService:
                     top_k=_MAX_CONTEXT_MEMORIES * 2,
                 )
                 if results:
-                    # Hybrid re-rank: final_score = semantic * 0.6 + salience * 0.4
+                    # Hybrid re-rank: semantic * 0.4 + salience * 0.3 + importance * 0.3
                     ranked = sorted(
                         results,
                         key=lambda r: (
                             _WEIGHT_SEMANTIC * r.similarity_score
                             + _WEIGHT_SALIENCE * r.salience_score
+                            + _WEIGHT_IMPORTANCE * r.importance_score
                         ),
                         reverse=True,
                     )[:_MAX_CONTEXT_MEMORIES]
@@ -706,8 +714,8 @@ class AgentMemoryService:
                 await db.execute(
                     """INSERT INTO agent_memories
                         (session_id, agent_id, round_number, memory_text,
-                         salience_score, memory_type)
-                    VALUES (?, ?, ?, ?, ?, 'summary')""",
+                         salience_score, memory_type, importance_score)
+                    VALUES (?, ?, ?, ?, ?, 'summary', 0.8)""",
                     (session_id, agent_id, current_round, summary.strip(), _SUMMARY_SALIENCE),
                 )
 
@@ -789,7 +797,8 @@ class AgentMemoryService:
         try:
             async with get_db() as db:
                 cursor = await db.execute(
-                    """SELECT id, round_number, memory_text, salience_score, memory_type
+                    """SELECT id, round_number, memory_text, salience_score, memory_type,
+                              importance_score
                        FROM agent_memories
                        WHERE session_id = ? AND agent_id = ?
                          AND round_number >= ? AND salience_score >= ?
@@ -805,6 +814,7 @@ class AgentMemoryService:
                         "memory_text": r[2],
                         "salience_score": float(r[3]),
                         "memory_type": r[4],
+                        "importance_score": float(r[5]),
                     }
                     for r in rows
                 ]

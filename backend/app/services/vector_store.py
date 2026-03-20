@@ -31,6 +31,7 @@ class VectorSearchResult:
     round_number: int
     salience_score: float
     memory_type: str
+    importance_score: float
 
 
 class VectorStore:
@@ -94,6 +95,7 @@ class VectorStore:
                 "memory_text": mem["memory_text"],
                 "memory_type": mem.get("memory_type", "observation"),
                 "salience_score": float(mem.get("salience_score", 0.5)),
+                "importance_score": float(mem.get("importance_score", 0.5)),
                 "vector": vec.tolist(),
             })
 
@@ -180,6 +182,7 @@ class VectorStore:
                     round_number=int(row["round_number"]),
                     salience_score=float(row["salience_score"]),
                     memory_type=str(row["memory_type"]),
+                    importance_score=float(row.get("importance_score", 0.5)),
                 ))
             return out
 

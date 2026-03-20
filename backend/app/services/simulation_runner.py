@@ -142,6 +142,8 @@ class SimulationRunner(
         self._relationship_lifecycle: Any | None = None
         # Phase 4: strategic planner for Tier 1 multi-round planning
         self._strategic_planner: Any | None = None
+        # Reflection loop: periodic insight synthesis for Tier 1 agents
+        self._reflection_service: Any | None = None
 
     async def run(
         self,
@@ -1169,6 +1171,9 @@ class SimulationRunner(
         if self._strategic_planner is None:
             from backend.app.services.strategic_planner import StrategicPlanner  # noqa: PLC0415
             self._strategic_planner = StrategicPlanner()
+        if self._reflection_service is None:
+            from backend.app.services.reflection_service import ReflectionService  # noqa: PLC0415
+            self._reflection_service = ReflectionService()
 
         # Initialise per-session state via KGSessionState
         self._kg_sessions[session_id] = KGSessionState()
@@ -1365,6 +1370,11 @@ class SimulationRunner(
         metrics = dict(kg_state.active_metrics)
         scenario = kg_state.scenario_description
 
+        # Build id→profile lookup for relationship-depth disclosure
+        tier1_agents_by_id: dict[str, dict] = {
+            a.get("id", ""): a for a in tier1 if a.get("id")
+        }
+
         for agent in tier1:
             try:
                 agent_id = agent.get("id", "")
@@ -1376,6 +1386,7 @@ class SimulationRunner(
                 key_relationships = _build_key_relationships(
                     agent_id=agent_id,
                     rel_states=rel_states,
+                    tier1_agents_by_id=tier1_agents_by_id,
                 )
 
                 # Task 2.6: retrieve salient memories to ground deliberation.
@@ -1452,6 +1463,30 @@ class SimulationRunner(
                     agent.get("id", "?"), session_id, exc_info=True,
                 )
         kg_state.active_metrics = metrics
+
+        # Reflection loop: synthesise 'thought' memories for Tier 1 agents
+        # every reflection_interval rounds (Generative Agents-inspired).
+        hook_cfg = self._preset.hook_config
+        if (
+            self._reflection_service is not None
+            and round_num > 0
+            and round_num % hook_cfg.reflection_interval == 0
+        ):
+            try:
+                n = await self._reflection_service.reflect_for_agents(
+                    session_id=session_id,
+                    round_number=round_num,
+                    tier1_agents=tier1,
+                    scenario_description=scenario,
+                )
+                logger.debug(
+                    "Reflection loop: %d thoughts generated session=%s round=%d",
+                    n, session_id, round_num,
+                )
+            except Exception:
+                logger.debug(
+                    "Reflection loop failed session=%s round=%d", session_id, round_num
+                )
 
     async def _kg_strategic_planning(
         self, session_id: str, round_num: int
@@ -1919,12 +1954,16 @@ def _compute_faction_peer_stance(
 def _build_key_relationships(
     agent_id: str,
     rel_states: dict,
+    tier1_agents_by_id: dict[str, dict] | None = None,
 ) -> list[dict]:
     """Extract top-5 key relationships for agent_id from relationship_states dict.
 
     Args:
         agent_id: The agent whose perspective we use.
         rel_states: Dict keyed by (agent_a_id, agent_b_id) → RelationshipState.
+        tier1_agents_by_id: Optional map of agent_id → agent profile dict.
+            When provided, high-intimacy peers (>0.6) reveal their goals and
+            faction — implementing Sotopia-style relationship-depth disclosure.
 
     Returns:
         List of relationship dicts suitable for CognitiveAgentEngine context.
@@ -1937,14 +1976,25 @@ def _build_key_relationships(
             continue
         if not isinstance(state, RelationshipState):
             continue
-        relationships.append({
+        entry: dict = {
             "other_id": bid,
             "rel_type": _infer_rel_type(state),
             "intimacy": state.intimacy,
             "trust": state.trust,
             "commitment": state.commitment,
             "passion": state.passion,
-        })
+        }
+        # Relationship-depth disclosure: high-intimacy peers share goals + faction
+        if state.intimacy > 0.6 and tier1_agents_by_id:
+            peer = tier1_agents_by_id.get(bid)
+            if peer:
+                peer_goals = peer.get("goals", [])
+                peer_faction = peer.get("faction", "")
+                if peer_goals:
+                    entry["peer_goals"] = list(peer_goals)
+                if peer_faction:
+                    entry["peer_faction"] = peer_faction
+        relationships.append(entry)
     # Sort by intimacy + |trust| (most salient relationships first)
     relationships.sort(
         key=lambda r: r["intimacy"] + abs(r["trust"]),

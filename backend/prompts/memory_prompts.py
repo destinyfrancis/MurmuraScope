@@ -20,12 +20,19 @@ MEMORY_SUMMARIZE_USER = """以下係模擬第 {round_number} 輪中，用戶「{
       "memory_text": "記憶描述（50字以內，用第一人稱「我」）",
       "memory_type": "observation|belief_update|emotional_reaction|social_interaction",
       "salience_score": 0.0-1.0,
+      "importance_score": 1-10,
       "triples": [
         {{"subject": "主體", "predicate": "關係動詞", "object": "客體"}}
       ]
     }}
   ]
 }}
+
+importance_score 代表記憶嘅永久重要性（唔受時間衰減影響）：
+- 1-3: 平凡日常，唔太重要
+- 4-6: 中等重要，有一定影響
+- 7-9: 重要事件，影響信念或關係
+- 10: 極端重要，關鍵轉折點
 
 記憶類型說明：
 - observation: 觀察到嘅事實或事件
