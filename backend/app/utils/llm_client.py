@@ -26,8 +26,10 @@ from typing import Any
 import httpx
 
 from backend.app.utils.logger import get_logger
+from backend.app.utils.telemetry import get_tracer
 
 logger = get_logger("llm_client")
+_llm_tracer = get_tracer("llm_client")
 
 # ---------------------------------------------------------------------------
 # Immutable response container
@@ -487,6 +489,12 @@ class LLMClient:
             cost,
             _latency_ms,
         )
+        with _llm_tracer.start_as_current_span("llm.chat") as _span:
+            _span.set_attribute("llm.provider", str(cfg.get("base_url", "")))
+            _span.set_attribute("llm.model", str(model))
+            _span.set_attribute("llm.tokens.total", int(prompt_tokens + completion_tokens))
+            _span.set_attribute("llm.cost_usd", float(cost))
+            _span.set_attribute("llm.latency_ms", float(_latency_ms))
 
         return LLMResponse(
             content=choice["message"]["content"],
@@ -552,6 +560,12 @@ class LLMClient:
             cost,
             _latency_ms,
         )
+        with _llm_tracer.start_as_current_span("llm.chat") as _span:
+            _span.set_attribute("llm.provider", "anthropic")
+            _span.set_attribute("llm.model", str(model))
+            _span.set_attribute("llm.tokens.total", int(prompt_tokens + completion_tokens))
+            _span.set_attribute("llm.cost_usd", float(cost))
+            _span.set_attribute("llm.latency_ms", float(_latency_ms))
 
         return LLMResponse(
             content=content_text,
@@ -627,6 +641,12 @@ class LLMClient:
             cost,
             _latency_ms,
         )
+        with _llm_tracer.start_as_current_span("llm.chat") as _span:
+            _span.set_attribute("llm.provider", "google")
+            _span.set_attribute("llm.model", str(model))
+            _span.set_attribute("llm.tokens.total", int(prompt_tokens + completion_tokens))
+            _span.set_attribute("llm.cost_usd", float(cost))
+            _span.set_attribute("llm.latency_ms", float(_latency_ms))
 
         return LLMResponse(
             content=content_text,

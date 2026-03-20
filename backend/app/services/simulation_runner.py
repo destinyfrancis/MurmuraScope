@@ -31,6 +31,9 @@ from backend.app.services.simulation_hooks_macro import MacroHooksMixin
 from backend.app.services.simulation_hooks_social import SocialHooksMixin
 from backend.app.services.simulation_subprocess_manager import SimulationSubprocessManager
 from backend.app.utils.logger import get_logger
+from backend.app.utils.telemetry import get_tracer as _get_tracer
+
+_sim_tracer = _get_tracer("simulation")
 
 # Imported lazily-by-name to avoid circular import at module load time;
 # resolved once at first call via _clear_ws_progress().
@@ -49,17 +52,18 @@ logger = get_logger("simulation_runner")
 def _timed_block(hook_name: str, session_id: str, round_num: int = 0):
     """Context manager that logs execution time of a simulation hook at DEBUG level."""
     t0 = _time.monotonic()
-    try:
-        yield
-    finally:
-        ms = round((_time.monotonic() - t0) * 1000)
-        logger.debug(
-            "hook=%s session=%s round=%d duration=%dms",
-            hook_name,
-            session_id[:8],
-            round_num,
-            ms,
-        )
+    with _sim_tracer.start_as_current_span(f"hook.{hook_name}"):
+        try:
+            yield
+        finally:
+            ms = round((_time.monotonic() - t0) * 1000)
+            logger.debug(
+                "hook=%s session=%s round=%d duration=%dms",
+                hook_name,
+                session_id[:8],
+                round_num,
+                ms,
+            )
 
 
 # Paths computed relative to this file's location — portable across deployments.
@@ -519,8 +523,10 @@ class SimulationRunner(
         Group 2 (sequential after G1): decisions → side effects (+ belief if emergence) → consumption
         Group 3 (periodic, fire-and-forget): all interval-driven hooks
         """
+        _round_t0 = _time.monotonic()
         # Populate per-round profile cache (shared by all hooks this round via self._round_profiles)
         await self._fetch_and_cache_profiles(session_id)
+        agent_count = len(self._round_profiles.get(session_id, []))
 
         hc = self._preset.hook_config
 
@@ -706,6 +712,14 @@ class SimulationRunner(
                 session_id,
                 self._process_relationship_lifecycle(session_id, round_num),
             )
+
+        # Round-level wall-clock summary (Groups 1+2 synchronous work only;
+        # Group 3 fire-and-forget tasks finish asynchronously after this point).
+        _round_total_ms = int((_time.monotonic() - _round_t0) * 1000)
+        logger.info(
+            "session=%s round=%d agents=%d total_round_ms=%d",
+            session_id, round_num, agent_count, _round_total_ms,
+        )
 
         # Clean up posts buffer for completed round to prevent memory growth
         session_buf = self._posts_buffer.get(session_id)
@@ -1375,11 +1389,24 @@ class SimulationRunner(
             a.get("id", ""): a for a in tier1 if a.get("id")
         }
 
-        for agent in tier1:
-            try:
+        # Snapshot metrics once — all agents deliberate against the same baseline.
+        # Belief updates are accumulated after all coroutines complete so that
+        # parallel execution is equivalent to sequential reads of round-start state.
+        baseline_metrics = dict(metrics)
+        active_metric_keys = tuple(baseline_metrics.keys())
+        recent_event_contents = [e.content for e in current_events]
+
+        concurrency = getattr(
+            getattr(self, "_preset", None), "hook_config", None
+        )
+        concurrency = getattr(concurrency, "llm_concurrency", 50) if concurrency else 50
+        semaphore = asyncio.Semaphore(concurrency)
+
+        async def _deliberate_one(agent: dict) -> "Any":
+            """Run deliberation for one Tier 1 agent under semaphore guard."""
+            async with semaphore:
+                import hashlib as _hashlib  # noqa: PLC0415
                 agent_id = agent.get("id", "")
-                # Phase 2: enrich context with persona, goals, relationships,
-                # emotional state, and attachment style when available.
                 emotional_state = kg_state.emotional_states.get(agent_id)
                 attachment = kg_state.attachment_styles.get(agent_id)
                 rel_states = kg_state.relationship_states
@@ -1393,7 +1420,6 @@ class SimulationRunner(
                 recent_memories = ""
                 if self._memory_service is not None:
                     try:
-                        import hashlib as _hashlib  # noqa: PLC0415
                         numeric_id = int(
                             _hashlib.md5(agent_id.encode()).hexdigest(), 16
                         ) % (2**31)
@@ -1426,8 +1452,8 @@ class SimulationRunner(
                     "role": agent.get("role", ""),
                     "persona": agent.get("persona", ""),
                     "goals": list(agent.get("goals", [])),
-                    "current_beliefs": metrics,
-                    "recent_events": [e.content for e in current_events],
+                    "current_beliefs": baseline_metrics,
+                    "recent_events": recent_event_contents,
                     "faction": faction_str,
                     "recent_memories": recent_memories,
                     "strategic_context": strategy_context,
@@ -1448,20 +1474,30 @@ class SimulationRunner(
                     ),
                     "key_relationships": key_relationships,
                 }
-                result = await self._cognitive_engine.deliberate(
+                return await self._cognitive_engine.deliberate(
                     agent_context=agent_context,
                     scenario_description=scenario,
-                    active_metrics=tuple(metrics.keys()),
+                    active_metrics=active_metric_keys,
                 )
-                # Apply belief updates
-                for metric_id, delta in result.belief_updates.items():
-                    if metric_id in metrics:
-                        metrics[metric_id] = max(0.0, min(1.0, metrics[metric_id] + delta))
-            except Exception:
+
+        # Fan out: deliberate all Tier 1 agents in parallel (bounded by semaphore)
+        results = await asyncio.gather(
+            *[_deliberate_one(agent) for agent in tier1],
+            return_exceptions=True,
+        )
+
+        # Accumulate belief updates from all agents sequentially after gathering
+        for agent, result in zip(tier1, results):
+            if isinstance(result, Exception):
                 logger.warning(
-                    "Tier 1 deliberation failed for agent %s session=%s",
-                    agent.get("id", "?"), session_id, exc_info=True,
+                    "Tier 1 deliberation failed for agent %s session=%s: %s",
+                    agent.get("id", "?"), session_id, result,
                 )
+                continue
+            for metric_id, delta in result.belief_updates.items():
+                if metric_id in metrics:
+                    metrics[metric_id] = max(0.0, min(1.0, metrics[metric_id] + delta))
+
         kg_state.active_metrics = metrics
 
         # Reflection loop: synthesise 'thought' memories for Tier 1 agents

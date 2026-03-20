@@ -1,50 +1,35 @@
-# =============================================================
-# Stage 1: Build Vue frontend
-# =============================================================
-FROM node:20-alpine AS frontend-builder
-
-WORKDIR /app/frontend
-
-COPY frontend/package.json frontend/package-lock.json* ./
-RUN npm install --frozen-lockfile || npm install
-
-COPY frontend/ ./
-RUN npm run build
-
-# =============================================================
-# Stage 2: Python backend + serve frontend static files
-# =============================================================
 FROM python:3.11-slim AS production
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
 
 WORKDIR /app
 
-# System dependencies for aiosqlite / WeasyPrint / etc.
+# System dependencies: WeasyPrint PDF (needs pango/cairo), procps (pkill), curl (healthcheck)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         build-essential \
         curl \
+        procps \
+        libpango-1.0-0 \
+        libpangocairo-1.0-0 \
+        libgdk-pixbuf2.0-0 \
+        libffi-dev \
+        fonts-noto-cjk \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
 COPY pyproject.toml ./
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir .
+RUN pip install --upgrade pip && pip install .
 
-# Copy backend source code
+# Copy source
 COPY backend/ ./backend/
 
-# Copy frontend build output into backend static directory
-COPY --from=frontend-builder /app/frontend/dist ./backend/static
-
-# Copy data directory (schemas, prompts, etc.)
-COPY data/ ./data/
-
-RUN adduser --disabled-password --gecos "" morai
+# Non-root user
+RUN adduser --disabled-password --gecos "" morai && \
+    mkdir -p /app/data && chown -R morai:morai /app/data
 USER morai
 
 EXPOSE 5001
-
 CMD ["uvicorn", "backend.run:app", "--host", "0.0.0.0", "--port", "5001"]

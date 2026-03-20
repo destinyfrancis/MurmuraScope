@@ -56,3 +56,4 @@ academic_evaluation_report.md
 # Playwright MCP
 .playwright-mcp/
 .worktrees/
+.venv311

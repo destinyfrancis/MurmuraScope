@@ -1,47 +1,50 @@
 services:
-  app:
+  backend:
     build:
       context: .
       dockerfile: Dockerfile
     ports:
       - "5001:5001"
     volumes:
-      - ./data:/app/data
+      - morai-data:/app/data
     env_file:
       - .env
     environment:
       - DATABASE_PATH=/app/data/hksimengine.db
     restart: unless-stopped
+    init: true
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5001/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 15s
+      start_period: 20s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
 
   # ---------------------------------------------------------------------------
-  # Development overrides — run with: docker compose --profile dev up app-dev
+  # Observability stack — run with: docker compose --profile observability up -d
   # ---------------------------------------------------------------------------
-  app-dev:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: production
+  jaeger:
+    image: jaegertracing/all-in-one:1.58
     ports:
-      - "5001:5001"
-    volumes:
-      - ./backend:/app/backend
-      - ./data:/app/data
-    env_file:
-      - .env
+      - "16686:16686"   # Jaeger UI
+      - "4317:4317"     # OTLP gRPC receiver
     environment:
-      - DATABASE_PATH=/app/data/hksimengine.db
-      - DEBUG=true
-    command: >
-      uvicorn backend.run:app
-      --host 0.0.0.0
-      --port 5001
-      --reload
-      --reload-dir /app/backend
+      - COLLECTOR_OTLP_ENABLED=true
     profiles:
-      - dev
+      - observability
+    restart: unless-stopped
+
+volumes:
+  morai-data:
+    driver: local

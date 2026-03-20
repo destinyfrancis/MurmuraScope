@@ -53,7 +53,9 @@ CREATE TABLE IF NOT EXISTS kg_edges (
     relation_type TEXT,
     description TEXT,
     weight REAL,
-    round_number INTEGER NOT NULL DEFAULT 0
+    round_number INTEGER NOT NULL DEFAULT 0,
+    valid_from INTEGER DEFAULT 0,
+    valid_until INTEGER
 )
 """
 

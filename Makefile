@@ -1,4 +1,4 @@
-.PHONY: stop test test-unit test-int test-all test-changed test-file dev frontend clean
+.PHONY: stop test test-unit test-int test-all test-changed test-file dev frontend clean docker-up docker-down docker-dev docker-logs docker-clean
 
 PYTEST = .venv311/bin/python -m pytest
 
@@ -54,3 +54,19 @@ frontend:
 
 clean: stop
 	find . -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+
+# ── Docker commands ────────────────────────────────────────────────────────────
+docker-up:
+	docker compose up -d --build
+
+docker-down:
+	docker compose down
+
+docker-dev:
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+
+docker-logs:
+	docker compose logs -f
+
+docker-clean:
+	docker compose down -v --rmi local

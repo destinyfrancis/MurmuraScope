@@ -662,7 +662,7 @@ class KGGraphUpdater:
             logger.exception("_persist_new_edges: failed to load node IDs")
             return 0
 
-        validated: list[tuple[str, str, str, str, str, float, int]] = []
+        validated: list[tuple[str, str, str, str, str, float, int, int]] = []
         for edge in new_edges:
             src = edge.get("source_id", "")
             tgt = edge.get("target_id", "")
@@ -680,7 +680,7 @@ class KGGraphUpdater:
 
             validated.append((
                 session_id, src, tgt, rel,
-                edge.get("description", ""), weight, round_number,
+                edge.get("description", ""), weight, round_number, round_number,
             ))
 
         if not validated:
@@ -690,8 +690,8 @@ class KGGraphUpdater:
             async with get_db() as db:
                 await db.executemany(
                     """INSERT INTO kg_edges
-                       (session_id, source_id, target_id, relation_type, description, weight, round_number)
-                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                       (session_id, source_id, target_id, relation_type, description, weight, round_number, valid_from)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
                     validated,
                 )
                 await db.commit()
@@ -739,3 +739,23 @@ class KGGraphUpdater:
             )
 
         return count
+
+    async def dissolve_edges_between(
+        self,
+        session_id: str,
+        source_id: str,
+        target_id: str,
+        round_number: int,
+    ) -> None:
+        """Mark all active edges between two nodes as dissolved at *round_number*."""
+        async with get_db() as db:
+            await db.execute(
+                """
+                UPDATE kg_edges
+                SET valid_until = ?
+                WHERE session_id = ? AND source_id = ? AND target_id = ?
+                  AND valid_until IS NULL
+                """,
+                (round_number, session_id, source_id, target_id),
+            )
+            await db.commit()

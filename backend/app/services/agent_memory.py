@@ -53,6 +53,11 @@ _SUMMARIZE_INTERVAL: int = 10
 _SUMMARIZE_MIN_MEMORIES: int = 5
 _SUMMARY_SALIENCE: float = 0.8
 
+# Memory compression constants (Phase 6 — ReMe-inspired lazy compression)
+_COMPRESSION_THRESHOLD: int = 200      # trigger when agent has >200 non-summary memories
+_COMPRESSION_BATCH_SIZE: int = 100     # compress oldest 100 memories per trigger
+_COMPRESSION_MIN_ROUND_AGE: int = 5    # only compress memories from ≥5 rounds ago
+
 
 @dataclass(frozen=True)
 class AgentMemory:
@@ -247,6 +252,9 @@ class AgentMemoryService:
         Returns:
             Formatted memory context string, or empty string if no memories.
         """
+        # Lazy memory compression: compact old memories when threshold exceeded
+        await self._compress_if_needed(session_id, agent_id, current_round)
+
         # Try semantic path first
         memory_context = ""
         if self._vector_store is not None and context_query:
@@ -751,6 +759,99 @@ class AgentMemoryService:
             logger.exception(
                 "summarize_old_memories failed session=%s agent=%d round=%d",
                 session_id, agent_id, current_round,
+            )
+            return False
+
+    async def _compress_if_needed(
+        self,
+        session_id: str,
+        agent_id: int,
+        current_round: int,
+    ) -> bool:
+        """Compress oldest memories into a summary node when count exceeds threshold.
+
+        Best-effort: returns False on any error. Only compresses memories from
+        rounds >= _COMPRESSION_MIN_ROUND_AGE ago to avoid destroying recent context.
+        """
+        try:
+            async with get_db() as db:
+                cursor = await db.execute(
+                    """
+                    SELECT COUNT(*) FROM agent_memories
+                    WHERE session_id = ? AND agent_id = ?
+                      AND memory_type NOT IN ('summary', 'compressed_summary', 'thought')
+                    """,
+                    (session_id, agent_id),
+                )
+                row = await cursor.fetchone()
+                count = row[0] if row else 0
+
+            if count <= _COMPRESSION_THRESHOLD:
+                return False
+
+            cutoff_round = max(0, current_round - _COMPRESSION_MIN_ROUND_AGE)
+            async with get_db() as db:
+                cursor = await db.execute(
+                    """
+                    SELECT id, memory_text FROM agent_memories
+                    WHERE session_id = ? AND agent_id = ?
+                      AND memory_type NOT IN ('summary', 'compressed_summary', 'thought')
+                      AND round_number <= ?
+                    ORDER BY round_number ASC
+                    LIMIT ?
+                    """,
+                    (session_id, agent_id, cutoff_round, _COMPRESSION_BATCH_SIZE),
+                )
+                rows = await cursor.fetchall()
+
+            if not rows:
+                return False
+
+            ids_to_delete = [r[0] for r in rows]
+            memory_texts = [r[1] for r in rows]
+
+            provider, model = get_agent_provider_model()
+            messages = [
+                {"role": "system", "content": MEMORY_COMPRESSION_SYSTEM},
+                {
+                    "role": "user",
+                    "content": MEMORY_COMPRESSION_USER.format(
+                        agent_id=agent_id,
+                        memory_count=len(memory_texts),
+                        memories="\n".join(f"- {t}" for t in memory_texts),
+                    ),
+                },
+            ]
+            response = await self._llm.chat(messages, provider=provider, model=model)
+            summary_text = response.content.strip()
+
+            async with get_db() as db:
+                await db.execute(
+                    """
+                    INSERT INTO agent_memories
+                      (session_id, agent_id, round_number, memory_text,
+                       salience_score, memory_type, importance_score)
+                    VALUES (?, ?, ?, ?, ?, 'compressed_summary', 0.8)
+                    """,
+                    (session_id, agent_id, current_round, summary_text, 0.8),
+                )
+                placeholders = ",".join("?" * len(ids_to_delete))
+                await db.execute(
+                    f"DELETE FROM agent_memories WHERE id IN ({placeholders})",
+                    ids_to_delete,
+                )
+                await db.commit()
+
+            logger.debug(
+                "Compressed %d memories → 1 summary for agent=%d session=%s",
+                len(ids_to_delete), agent_id, session_id,
+            )
+            return True
+
+        except Exception:
+            logger.debug(
+                "Memory compression skipped for agent=%d session=%s",
+                agent_id, session_id, exc_info=True,
             )
             return False
 

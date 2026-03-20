@@ -21,6 +21,9 @@ _ROUTER_MODULES = ("auth", "graph", "simulation_macro", "simulation_branches", "
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Application lifespan: initialise DB and data scheduler on startup."""
+    from backend.app.utils.telemetry import init_telemetry
+    init_telemetry()
+
     logger = logging.getLogger("morai")
     logger.info("Starting Morai backend")
 
@@ -377,6 +380,48 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("Phase 3 emotional/belief/dissonance tables ensured")
     except Exception:
         logger.warning("Phase 3 table migration failed", exc_info=True)
+
+    # Runtime migration: add valid_from / valid_until to kg_edges (Graphiti temporal pattern)
+    try:
+        from backend.app.utils.db import get_db
+        async with get_db() as db:
+            await db.execute("ALTER TABLE kg_edges ADD COLUMN valid_from INTEGER DEFAULT 0")
+            await db.commit()
+    except Exception as exc:
+        if "duplicate column" not in str(exc).lower():
+            logger.warning("kg_edges.valid_from migration error: %s", exc)
+
+    try:
+        from backend.app.utils.db import get_db
+        async with get_db() as db:
+            await db.execute("ALTER TABLE kg_edges ADD COLUMN valid_until INTEGER")
+            await db.commit()
+    except Exception as exc:
+        if "duplicate column" not in str(exc).lower():
+            logger.warning("kg_edges.valid_until migration error: %s", exc)
+
+    # Backfill valid_from from existing round_number values
+    try:
+        from backend.app.utils.db import get_db
+        async with get_db() as db:
+            await db.execute(
+                "UPDATE kg_edges SET valid_from = round_number WHERE valid_from = 0 AND round_number IS NOT NULL"
+            )
+            await db.commit()
+    except Exception as exc:
+        logger.warning("kg_edges valid_from backfill error: %s", exc)
+
+    # Index for temporal queries
+    try:
+        from backend.app.utils.db import get_db
+        async with get_db() as db:
+            await db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_kg_edge_temporal "
+                "ON kg_edges(session_id, valid_from, valid_until)"
+            )
+            await db.commit()
+    except Exception as exc:
+        logger.warning("idx_kg_edge_temporal index error: %s", exc)
 
     # 1. Seed static population/census data (legitimate reference data)
     try:
