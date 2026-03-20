@@ -251,6 +251,7 @@ class LLMClient:
         max_tokens: int = 4096,
         api_key: str | None = None,
         base_url: str | None = None,
+        session_id: str | None = None,
     ) -> LLMResponse:
         """Send a chat completion request and return an ``LLMResponse``.
 
@@ -278,18 +279,23 @@ class LLMClient:
             cfg = {**cfg, "base_url": base_url}
 
         if provider == "anthropic":
-            return await self._chat_anthropic(
+            response = await self._chat_anthropic(
+                messages, resolved_model, temperature, max_tokens, cfg
+            )
+        elif provider == "google":
+            response = await self._chat_google(
+                messages, resolved_model, temperature, max_tokens, cfg
+            )
+        else:
+            response = await self._chat_openai_compat(
                 messages, resolved_model, temperature, max_tokens, cfg
             )
 
-        if provider == "google":
-            return await self._chat_google(
-                messages, resolved_model, temperature, max_tokens, cfg
-            )
+        if session_id and response.cost_usd > 0:
+            from backend.app.services.cost_tracker import record_cost  # noqa: PLC0415
+            record_cost(session_id, response.cost_usd)
 
-        return await self._chat_openai_compat(
-            messages, resolved_model, temperature, max_tokens, cfg
-        )
+        return response
 
     async def chat_json(
         self,

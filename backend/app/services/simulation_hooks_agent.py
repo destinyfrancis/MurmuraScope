@@ -68,6 +68,8 @@ class AgentHooksMixin:
     ) -> None:
         """Apply employment and relocation side effects from decisions this round."""
         try:
+            if self._kg_mode.get(session_id):
+                return  # kg_driven: HK district/employment side effects not applicable
             from backend.app.utils.db import get_db  # noqa: PLC0415
 
             async with get_db() as db:
@@ -296,6 +298,8 @@ class AgentHooksMixin:
     ) -> None:
         """Run the Agent Decision Engine for a completed simulation round."""
         try:
+            if self._kg_mode.get(session_id):
+                return  # kg_driven: uses UniversalDecisionEngine via Tier 1 deliberation
             from backend.app.services.decision_engine import DecisionEngine  # noqa: PLC0415
             if self._decision_engine is None:
                 self._decision_engine = DecisionEngine()
@@ -618,6 +622,8 @@ class AgentHooksMixin:
     ) -> None:
         """Track household consumption for a completed simulation round."""
         try:
+            if self._kg_mode.get(session_id):
+                return  # kg_driven: HK consumption model not applicable
             from backend.app.services.consumption_model import ConsumptionTracker  # noqa: PLC0415
             if self._consumption_tracker is None:
                 self._consumption_tracker = ConsumptionTracker()

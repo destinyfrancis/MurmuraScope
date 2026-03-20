@@ -48,7 +48,7 @@ class RegimeState:
     confidence_level: float
 
 
-def detect_regime(macro_state: Any) -> RegimeState:
+def detect_regime(macro_state: Any, *, domain: str = "hk") -> RegimeState:
     """Detect the current economic regime from macro indicators.
 
     Rules:
@@ -58,16 +58,23 @@ def detect_regime(macro_state: Any) -> RegimeState:
 
     Args:
         macro_state: MacroState frozen dataclass instance.
+        domain: ``"hk"`` for HK-calibrated thresholds, anything else uses
+            confidence-only detection (no HSI dependency).
 
     Returns:
         Frozen ``RegimeState`` describing the detected regime.
     """
-    hsi = getattr(macro_state, "hsi_level", _HSI_MEAN)
     unemployment = getattr(macro_state, "unemployment_rate", 0.035)
     confidence = getattr(macro_state, "consumer_confidence", 55.0)
 
-    hsi_zscore = (hsi - _HSI_MEAN) / _HSI_STD if _HSI_STD > 0 else 0.0
-    unemployment_deviation = unemployment - 0.035  # long-run HK average
+    if domain == "hk":
+        hsi = getattr(macro_state, "hsi_level", _HSI_MEAN)
+        hsi_zscore = (hsi - _HSI_MEAN) / _HSI_STD if _HSI_STD > 0 else 0.0
+    else:
+        # Non-HK: HSI not available; neutral z-score
+        hsi_zscore = 0.0
+
+    unemployment_deviation = unemployment - 0.035
 
     # Crisis takes priority over boom when both conditions are met
     if hsi_zscore < -2.0 or unemployment > _UNEMPLOYMENT_CRISIS or confidence < _CONFIDENCE_CRISIS:

@@ -278,9 +278,17 @@ async def build_graph(request: Request, req: GraphBuildRequest) -> APIResponse:
     """
     graph_id = str(uuid.uuid4())
 
-    # Determine if scenario is HK-specific to gate base graph injection
-    _HK_SCENARIO_TYPES = {"property", "emigration", "fertility", "career", "education", "macro"}
-    _is_hk = req.scenario_type in _HK_SCENARIO_TYPES
+    # Determine if scenario is HK-specific to gate base graph injection.
+    # Use ZeroConfigService seed-text detection when seed_text is available;
+    # fall back to scenario_type hint only when no seed text is provided.
+    safe_seed_for_detect = sanitize_seed_text(req.seed_text) if req.seed_text else ""
+    if safe_seed_for_detect.strip():
+        from backend.app.services.zero_config import ZeroConfigService  # noqa: PLC0415
+        _detected_mode = await ZeroConfigService().detect_mode_async(safe_seed_for_detect)
+        _is_hk = _detected_mode == "hk_demographic"
+    else:
+        _HK_SCENARIO_TYPES = {"property", "emigration", "fertility", "career", "education", "macro"}
+        _is_hk = req.scenario_type in _HK_SCENARIO_TYPES
 
     # --- Step 1: base graph (HK-only) ---
     base_node_count = 0
@@ -300,7 +308,7 @@ async def build_graph(request: Request, req: GraphBuildRequest) -> APIResponse:
     mem_result = None
 
     # --- Step 2: seed injection (best-effort, never blocks the response) ---
-    safe_seed = sanitize_seed_text(req.seed_text) if req.seed_text else ""
+    safe_seed = safe_seed_for_detect  # already sanitized above
     if safe_seed and safe_seed.strip():
         try:
             from backend.app.services.text_processor import TextProcessor  # noqa: PLC0415
@@ -332,6 +340,20 @@ async def build_graph(request: Request, req: GraphBuildRequest) -> APIResponse:
                     {"id": str(n.get("id", "")), "label": str(n.get("label") or n.get("title") or ""), "entity_type": str(n.get("type") or n.get("entity_type") or "")}
                     for n in _HK_PROPERTY_NODES
                 ]
+            else:
+                # For kg_driven: query seed-injected nodes for dedup
+                try:
+                    async with get_db() as db:
+                        cursor = await db.execute(
+                            "SELECT id, label, entity_type FROM kg_nodes WHERE session_id = ?",
+                            (graph_id,),
+                        )
+                        existing_for_dedup = [
+                            {"id": str(r[0]), "label": str(r[1] or ""), "entity_type": str(r[2] or "")}
+                            for r in await cursor.fetchall()
+                        ]
+                except Exception:
+                    logger.warning("Failed to load existing nodes for dedup graph=%s", graph_id)
             discovery = await implicit_svc.discover(graph_id, safe_seed, existing_for_dedup)
             implicit_nodes = discovery.nodes_added
             logger.info(
@@ -366,12 +388,33 @@ async def build_graph(request: Request, req: GraphBuildRequest) -> APIResponse:
     total_nodes = base_node_count + seed_nodes
     total_edges = base_edge_count + seed_edges
 
+    # Build entity/relation type lists — for HK use base graph, for kg_driven query DB
+    if _is_hk:
+        _entity_types = list({n["type"] for n in _HK_PROPERTY_NODES})
+        _relation_types = list({e["label"] for e in _HK_PROPERTY_EDGES})
+    else:
+        try:
+            async with get_db() as db:
+                et_cursor = await db.execute(
+                    "SELECT DISTINCT entity_type FROM kg_nodes WHERE session_id = ? AND entity_type IS NOT NULL",
+                    (graph_id,),
+                )
+                _entity_types = [r[0] for r in await et_cursor.fetchall()]
+                rt_cursor = await db.execute(
+                    "SELECT DISTINCT relation_type FROM kg_edges WHERE session_id = ? AND relation_type IS NOT NULL",
+                    (graph_id,),
+                )
+                _relation_types = [r[0] for r in await rt_cursor.fetchall()]
+        except Exception:
+            _entity_types = []
+            _relation_types = []
+
     result = GraphBuildResponse(
         graph_id=graph_id,
         node_count=total_nodes,
         edge_count=total_edges,
-        entity_types=list({n["type"] for n in _HK_PROPERTY_NODES}) if _is_hk else [],
-        relation_types=list({e["label"] for e in _HK_PROPERTY_EDGES}) if _is_hk else [],
+        entity_types=_entity_types,
+        relation_types=_relation_types,
     )
     return APIResponse(
         success=True,
