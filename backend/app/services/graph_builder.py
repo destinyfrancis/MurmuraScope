@@ -661,6 +661,9 @@ class GraphBuilderService:
                     ],
                 }
 
+                # DEPRECATED: periodic full-graph snapshots are superseded by temporal kg_edges
+                # validity windows (valid_from / valid_until). This code is kept for backward
+                # compatibility with the GraphExplorer snapshot slider but will be removed in v0.3.
                 await db.execute(
                     """
                     INSERT INTO kg_snapshots

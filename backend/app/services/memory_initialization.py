@@ -295,16 +295,101 @@ class MemoryInitializationService:
         return len(written)
 
     async def _phase3_persona_templates(self, graph_id: str, seed_text: str) -> int:
-        """Phase 3: LLM → persona templates → SQLite."""
+        """Phase 3: LLM → persona templates → SQLite.
+
+        If persona_upload nodes already exist for this graph (injected via
+        POST /graph/{graph_id}/personas), converts them to persona templates
+        directly without an LLM call and merges with any LLM-generated ones.
+        """
+        upload_count = await self._inject_persona_upload_templates(graph_id)
+
         prompt = PERSONA_TEMPLATE_USER.format(seed_text=seed_text[:8000])
         raw = await self._llm_call_with_retry(PERSONA_TEMPLATE_SYSTEM, prompt)
         templates = self._parse_persona_response(raw)
 
         if not templates:
-            logger.warning("Phase 3: no persona templates parsed for graph %s", graph_id)
+            logger.warning(
+                "Phase 3: no LLM persona templates parsed for graph %s "
+                "(%d upload templates already written)",
+                graph_id, upload_count,
+            )
+            return upload_count
+
+        llm_count = await self._write_persona_templates(graph_id, templates)
+        return upload_count + llm_count
+
+    async def _inject_persona_upload_templates(self, graph_id: str) -> int:
+        """Convert persona_upload KG nodes into seed_persona_templates rows.
+
+        Reads kg_nodes for this graph where properties JSON contains
+        source='persona_upload', then writes a minimal persona template for
+        each unique role so that hydrate_session_bulk() can inject seed memories.
+
+        Returns the count of templates written (INSERT OR IGNORE, so 0 on
+        re-runs for an existing graph).
+        """
+        async with get_db() as db:
+            rows = await (
+                await db.execute(
+                    "SELECT title, entity_type, description, properties"
+                    " FROM kg_nodes WHERE session_id = ?",
+                    (graph_id,),
+                )
+            ).fetchall()
+
+        if not rows:
             return 0
 
-        return await self._write_persona_templates(graph_id, templates)
+        # Collect uploaded profiles grouped by role (entity_type)
+        role_memories: dict[str, list[str]] = {}
+        role_hints: dict[str, dict] = {}
+
+        for row in rows:
+            try:
+                props = json.loads(row["properties"] or "{}")
+            except (json.JSONDecodeError, ValueError):
+                props = {}
+
+            if props.get("source") != "persona_upload":
+                continue
+
+            role = str(row["entity_type"] or "unknown")
+            name = str(row["title"] or "")
+            description = str(row["description"] or "")
+
+            memory = f"{name} — {description}".strip(" —")
+            if memory:
+                role_memories.setdefault(role, []).append(memory)
+
+            # Collect personality hints from the first node of each role
+            if role not in role_hints and props.get("personality_traits"):
+                role_hints[role] = props["personality_traits"]
+
+        if not role_memories:
+            return 0
+
+        templates = [
+            {
+                "agent_type_key": role,
+                "display_name": role,
+                "age_min": None,
+                "age_max": None,
+                "region_hint": "any",
+                "population_ratio": round(1.0 / max(len(role_memories), 1), 4),
+                "initial_memories": memories[:10],  # cap at 10 seed memories per role
+                "personality_hints": role_hints.get(role, {}),
+            }
+            for role, memories in role_memories.items()
+        ]
+
+        count = await self._write_persona_templates(graph_id, templates)
+        if count:
+            logger.info(
+                "Phase 3 persona_upload: wrote %d templates from uploaded nodes "
+                "for graph %s",
+                count, graph_id,
+            )
+        return count
 
     # ------------------------------------------------------------------
     # Parse helpers (tested in isolation)

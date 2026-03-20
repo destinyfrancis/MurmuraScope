@@ -1,6 +1,7 @@
 """Simulation configuration: hook intervals and presets."""
 from __future__ import annotations
 
+import os as _os
 from dataclasses import dataclass, field, replace
 
 
@@ -44,10 +45,18 @@ class HookConfig:
 
         Adjusts decision_cap, llm_concurrency, and emergence_enabled
         based on agent count to maintain reasonable performance.
+
+        The computed llm_concurrency can be overridden at runtime via the
+        ``SIMULATION_CONCURRENCY_LIMIT`` environment variable (positive int).
         """
+        llm_concurrency = min(100, max(10, agent_count // 5))
+        # Allow operator override via env var (e.g. for rate-limit tuning)
+        _env_limit = int(_os.environ.get("SIMULATION_CONCURRENCY_LIMIT", "0") or "0")
+        if _env_limit > 0:
+            llm_concurrency = _env_limit
         return cls(
             decision_cap=max(25, agent_count // 20),
-            llm_concurrency=min(100, max(10, agent_count // 5)),
+            llm_concurrency=llm_concurrency,
             emergence_enabled=True,
             # Widen periodic intervals for large populations
             echo_chamber_interval=5 if agent_count <= 1000 else 10,

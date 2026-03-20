@@ -624,6 +624,59 @@ async def list_graph_snapshots(graph_id: str) -> APIResponse:
     )
 
 
+@router.post("/{graph_id}/personas", response_model=APIResponse)
+async def upload_persona_profiles(
+    graph_id: str,
+    file: UploadFile = File(...),
+) -> APIResponse:
+    """Upload CSV or JSON persona profiles to pre-seed KG agents.
+
+    Profiles are injected as kg_nodes with source='persona_upload' stored in
+    the properties JSON. KGAgentFactory will pick them up during Step 2 agent
+    generation as pre-seeded participant data.
+
+    Accepted formats:
+    - CSV with headers: name, role, age, occupation, beliefs, goals,
+                        political_stance, background
+    - JSON array of objects with the same fields
+
+    Limits: 500 profiles per upload, 10 MB file size.
+    """
+    from backend.app.services.persona_profile_loader import inject_as_kg_nodes, load_profiles  # noqa: PLC0415
+
+    content = await file.read()
+    if not content:
+        return APIResponse(
+            success=False,
+            data=None,
+            meta={"error": "Empty file"},
+        )
+
+    try:
+        profiles = load_profiles(content, file.filename or "upload.json")
+    except Exception as exc:
+        logger.exception("Persona profile parse error for graph %s", graph_id)
+        return APIResponse(
+            success=False,
+            data=None,
+            meta={"error": f"Parse error: {exc}"},
+        )
+
+    if not profiles:
+        return APIResponse(
+            success=False,
+            data=None,
+            meta={"error": "No valid profiles found in file"},
+        )
+
+    count = await inject_as_kg_nodes(graph_id, profiles)
+    return APIResponse(
+        success=True,
+        data={"injected": count},
+        meta={"graph_id": graph_id, "profiles_parsed": len(profiles)},
+    )
+
+
 @router.get("/{graph_id}/snapshot/{round_number}", response_model=APIResponse)
 async def get_graph_snapshot(graph_id: str, round_number: int) -> APIResponse:
     """Get a specific KG snapshot by round number."""
@@ -906,3 +959,24 @@ async def get_node_evidence(graph_id: str, node_id: str) -> APIResponse:
     except Exception as exc:
         logger.exception("get_node_evidence failed for graph %s node %s", graph_id, node_id)
         raise HTTPException(status_code=500, detail="Internal server error") from exc
+
+
+@router.get("/{graph_id}/temporal")
+async def get_graph_at_round(graph_id: str, round: int = 0) -> dict:
+    """Return KG edges active at a specific simulation round (temporal query).
+
+    Uses valid_from / valid_until columns — no snapshot table required.
+    """
+    from backend.app.services.kg_temporal_queries import get_kg_edges_at_round
+    # Need session_id: look up most recent session for this graph_id
+    async with get_db() as db:
+        cursor = await db.execute(
+            "SELECT id FROM simulation_sessions WHERE graph_id = ? ORDER BY created_at DESC LIMIT 1",
+            (graph_id,),
+        )
+        row = await cursor.fetchone()
+    if not row:
+        return {"success": True, "data": {"edges": [], "round": round}, "meta": {}}
+    session_id = row[0]
+    edges = await get_kg_edges_at_round(session_id, round)
+    return {"success": True, "data": {"edges": edges, "round": round}, "meta": {"count": len(edges)}}
