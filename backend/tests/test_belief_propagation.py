@@ -176,3 +176,91 @@ def test_cascade_deltas_bounded():
     if "target_agent" in result:
         for metric, delta in result["target_agent"].items():
             assert -1.0 <= delta <= 1.0, f"Cascade delta out of bounds: {metric}={delta}"
+
+
+@pytest.mark.asyncio
+async def test_sequential_events_produce_diminishing_returns():
+    """Two identical events must produce less-than-double the single-event delta.
+
+    Sequential Bayesian: second event's LR is computed against updated posterior,
+    not original prior. This means each successive confirming event contributes
+    less than the previous one (diminishing returns).
+
+    Bug: if prior is never updated, 2 events produce exactly 2× the single delta.
+    """
+    engine = BeliefPropagationEngine()
+    fp = _make_fingerprint(confirmation_bias=0.0, conformity=0.0)
+    # Two identical events, both pushing escalation_index up
+    event = _make_event({"escalation_index": 0.3})
+    active_metrics = ("escalation_index",)
+    current_beliefs = {"escalation_index": 0.5}
+
+    with patch(
+        "backend.app.services.belief_propagation.get_embedding",
+        MagicMock(return_value=[0.1] * 384),
+    ):
+        delta_one = await engine.propagate(
+            fingerprint=fp,
+            events=[event],
+            faction_peer_stance={},
+            active_metrics=active_metrics,
+            current_beliefs=current_beliefs,
+        )
+        delta_two = await engine.propagate(
+            fingerprint=fp,
+            events=[event, event],  # same event twice
+            faction_peer_stance={},
+            active_metrics=active_metrics,
+            current_beliefs=current_beliefs,
+        )
+
+    d1 = delta_one.get("escalation_index", 0.0)
+    d2 = delta_two.get("escalation_index", 0.0)
+
+    # Sequential Bayesian: two events must NOT produce exactly double
+    # (second event is computed against updated prior → diminishing returns)
+    assert d1 != 0.0, "Single event should produce non-zero delta"
+    assert d2 > d1, "Two events should produce larger delta than one"
+    assert d2 < 2 * d1, "Two events must NOT double the delta (sequential Bayesian)"
+
+
+@pytest.mark.asyncio
+async def test_conflicting_events_do_not_cancel_perfectly():
+    """Opposite-direction events must not cancel to exactly zero.
+
+    Sequential Bayesian: first event updates prior to p1, second computes LR
+    against p1 (not original 0.5). If both events are symmetric around the prior,
+    sequential update still converges toward the prior but doesn't return to it exactly.
+
+    Bug: if prior never updates, +0.3 event and -0.3 event produce deltas that
+    exactly cancel (d1 + d2 == 0.0), which is informationally wrong.
+    """
+    engine = BeliefPropagationEngine()
+    fp = _make_fingerprint(confirmation_bias=0.0, conformity=0.0)
+    up_event = _make_event({"escalation_index": 0.3})
+    down_event = _make_event({"escalation_index": -0.3})
+    active_metrics = ("escalation_index",)
+    current_beliefs = {"escalation_index": 0.5}
+
+    with patch(
+        "backend.app.services.belief_propagation.get_embedding",
+        MagicMock(return_value=[0.1] * 384),
+    ):
+        delta = await engine.propagate(
+            fingerprint=fp,
+            events=[up_event, down_event],
+            faction_peer_stance={},
+            active_metrics=active_metrics,
+            current_beliefs=current_beliefs,
+        )
+
+    d = delta.get("escalation_index", 0.0)
+    # Sequential: after up_event shifts prior to p1 > 0.5,
+    # down_event pulls from p1, not 0.5. Result is NOT exactly 0.
+    # The net delta should be small but non-zero (slightly positive since
+    # down_event has a smaller effect from the elevated prior).
+    # We only assert it's not exactly zero — the sign depends on LR math.
+    assert d != 0.0, (
+        "Opposite events must not cancel to exactly 0.0 in sequential Bayesian "
+        "(prior updates after first event change the effective range of second)"
+    )

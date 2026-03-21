@@ -79,6 +79,12 @@ class BeliefPropagationEngine:
         active_set = set(active_metrics)
         accumulated: dict[str, float] = {m: 0.0 for m in active_metrics}
 
+        # Sequential Bayesian: track running posterior per metric so each event
+        # is computed against the updated prior, not the original belief.
+        # This ensures diminishing returns for confirming evidence and prevents
+        # perfect cancellation of symmetric opposing evidence.
+        running_beliefs: dict[str, float] = dict(current_beliefs)
+
         for event in events:
             if not event.reaches_agent(fingerprint.info_diet):
                 continue
@@ -90,10 +96,11 @@ class BeliefPropagationEngine:
                 susceptibility = fingerprint.susceptibility.get(metric_id, 0.5)
                 raw_delta = impact * event.credibility * susceptibility
 
-                # Bayesian dampening via likelihood ratio.
-                # Convert current [0,1] belief to [-1,1] stance for LR computation,
-                # then compute LR that encodes confirmation bias properly.
-                current = current_beliefs.get(metric_id, 0.5)
+                # Sequential Bayesian: use running posterior as prior.
+                # After event 1 updates belief from p0 → p1, event 2 computes
+                # its LR against p1, not p0. This is the correct Bayesian update
+                # for multiple pieces of evidence.
+                current = running_beliefs.get(metric_id, 0.5)
                 credibility = event.credibility
                 lr = _bs.compute_likelihood_ratio(
                     evidence_stance=raw_delta,
@@ -101,10 +108,11 @@ class BeliefPropagationEngine:
                     belief_stance=current * 2.0 - 1.0,  # [0,1] -> [-1,1]
                     confirmation_bias=fingerprint.confirmation_bias,
                 )
-                # Convert LR to effective delta: Bayesian posterior - prior
                 bayesian_posterior = _bs._bayesian_core(current, lr)
                 effective_delta = bayesian_posterior - current
 
+                # Update running belief for next event in this round
+                running_beliefs[metric_id] = bayesian_posterior
                 accumulated[metric_id] = accumulated.get(metric_id, 0.0) + effective_delta
 
         # Blend with faction peer pressure via conformity.
