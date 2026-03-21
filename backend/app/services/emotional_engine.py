@@ -215,6 +215,7 @@ class EmotionalEngine:
         macro_valence: float,
         pending_deltas: dict[int, float],
         db: Any,
+        crisis_agents: frozenset[int] | None = None,
     ) -> list[EmotionalState]:
         """Update all agents' emotional states for one round.
 
@@ -227,11 +228,15 @@ class EmotionalEngine:
             macro_valence: Global macro shock valence signal.
             pending_deltas: Arousal deltas from previous dissonance denial.
             db: Open aiosqlite connection (for persist call).
+            crisis_agents: Set of agent IDs currently in a relationship crisis.
+                When provided, these agents receive a valence penalty and arousal
+                boost via ``update_state(relationship_crisis=True)``.
 
         Returns:
             List of updated :class:`EmotionalState` objects.
         """
         updated: list[EmotionalState] = []
+        _crisis_set: frozenset[int] = crisis_agents or frozenset()
 
         for agent_id, state in agent_states.items():
             profile = profiles.get(agent_id)
@@ -256,6 +261,7 @@ class EmotionalEngine:
                 personal_event_valence=personal_valence,
                 controversy_exposure=controversy,
                 pending_arousal_delta=pending_delta,
+                relationship_crisis=agent_id in _crisis_set,
             )
             updated.append(new_state)
 

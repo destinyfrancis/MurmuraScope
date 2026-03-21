@@ -132,6 +132,8 @@ class SimulationRunner(
         self._activation_rngs: dict[str, random.Random] = {}
         # Phase 3: pending arousal deltas from cognitive dissonance denial
         self._pending_arousal_deltas: dict[str, dict[int, float]] = defaultdict(dict)
+        # Phase 4: agents in relationship crisis (session_id → set of agent_id ints)
+        self._crisis_agents: dict[str, set[int]] = defaultdict(set)
         # Phase 4A: optional scale profiler (None = profiling disabled)
         self._profiler: Any | None = None
         # kg_driven mode services (initialised lazily per session in run())
@@ -1502,7 +1504,7 @@ class SimulationRunner(
                                     relationships=(),
                                     kg_node_id=a["id"],
                                 )
-                                for a in tier1
+                                for a in all_agents
                             ]
 
                             gen = ScenarioGenerator()
@@ -1518,6 +1520,34 @@ class SimulationRunner(
                                     len(self._kg_sessions[session_id].active_metrics),
                                     session_id,
                                     self._kg_sessions[session_id].active_metrics[:5],
+                                )
+
+                            # Mark stakeholders based on ScenarioGenerator output
+                            if scenario_cfg and scenario_cfg.stakeholder_entity_types:
+                                sht = scenario_cfg.stakeholder_entity_types
+                                sht_set = frozenset(sht)
+                                placeholders = ",".join("?" for _ in sht)
+                                await db.execute(
+                                    "UPDATE agent_profiles SET is_stakeholder = 1, "
+                                    "activity_level = MAX(COALESCE(activity_level, 0.5), 0.8) "
+                                    f"WHERE session_id = ? AND agent_type IN ({placeholders})",
+                                    (session_id, *sht),
+                                )
+                                await db.commit()
+                                # Refresh in-memory agent lists
+                                for a in all_agents:
+                                    entity_type = a.get("entity_type", "")
+                                    if entity_type in sht_set:
+                                        a["is_stakeholder"] = True
+                                        a["activity_level"] = max(a.get("activity_level", 0.5), 0.8)
+                                updated_stakeholders = [
+                                    a for a in all_agents if a.get("is_stakeholder")
+                                ]
+                                self._kg_sessions[session_id].stakeholder_agents = updated_stakeholders
+                                logger.info(
+                                    "mark_stakeholders via ScenarioGenerator: %d/%d agents for session %s (types=%s)",
+                                    len(updated_stakeholders), len(all_agents),
+                                    session_id, list(sht),
                                 )
                         except Exception:
                             logger.warning(
@@ -1874,10 +1904,17 @@ class SimulationRunner(
                     ),
                     "key_relationships": key_relationships,
                 }
+                # Route LLM model based on stakeholder status
+                from backend.app.utils.llm_client import get_agent_model  # noqa: PLC0415
+                agent_provider, agent_model = get_agent_model(
+                    agent.get("is_stakeholder", False)
+                )
                 return await self._cognitive_engine.deliberate(
                     agent_context=agent_context,
                     scenario_description=scenario,
                     active_metrics=active_metric_keys,
+                    provider=agent_provider,
+                    model=agent_model,
                 )
 
         # Fan out: deliberate all activated agents in parallel (bounded by semaphore)
@@ -2402,6 +2439,25 @@ class SimulationRunner(
                                 round_number=round_num,
                                 salience=salience,
                             )
+                # Feed CRISIS events back to the emotional engine
+                for evt in events:
+                    evt_type = getattr(evt, "event_type", "")
+                    if evt_type == "CRISIS":
+                        for aid_attr in ("agent_id", "source_id"):
+                            raw_aid = getattr(evt, aid_attr, None)
+                            if raw_aid is not None:
+                                try:
+                                    self._crisis_agents[session_id].add(int(raw_aid))
+                                except (ValueError, TypeError):
+                                    pass
+                        for aid_attr in ("related_agent_id", "target_id"):
+                            raw_aid = getattr(evt, aid_attr, None)
+                            if raw_aid is not None:
+                                try:
+                                    self._crisis_agents[session_id].add(int(raw_aid))
+                                except (ValueError, TypeError):
+                                    pass
+
                 logger.debug(
                     "_process_relationship_lifecycle: %d events session=%s round=%d",
                     len(events), session_id, round_num,

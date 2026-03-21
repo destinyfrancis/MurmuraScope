@@ -596,6 +596,13 @@ class AgentHooksMixin:
                 session_id, {}
             )
 
+            # Collect crisis agent IDs (set by _process_relationship_lifecycle)
+            crisis_set: frozenset[int] = frozenset()
+            if hasattr(self, "_crisis_agents"):
+                raw_crisis = self._crisis_agents.get(session_id, set())
+                if raw_crisis:
+                    crisis_set = frozenset(raw_crisis)
+
             async with _get_db() as db3:
                 await engine.batch_update(
                     session_id=session_id,
@@ -606,11 +613,15 @@ class AgentHooksMixin:
                     macro_valence=macro_valence,
                     pending_deltas=pending_deltas,
                     db=db3,
+                    crisis_agents=crisis_set,
                 )
 
             # Clear consumed pending deltas
             if hasattr(self, "_pending_arousal_deltas") and session_id in self._pending_arousal_deltas:
                 self._pending_arousal_deltas[session_id] = {}
+            # Clear consumed crisis agents
+            if hasattr(self, "_crisis_agents") and session_id in self._crisis_agents:
+                self._crisis_agents[session_id] = set()
 
             logger.debug(
                 "_process_emotional_state session=%s round=%d agents=%d",

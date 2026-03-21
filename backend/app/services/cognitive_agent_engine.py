@@ -71,6 +71,8 @@ class CognitiveAgentEngine:
         agent_context: dict[str, Any],
         scenario_description: str,
         active_metrics: tuple[str, ...],
+        provider: str | None = None,
+        model: str | None = None,
     ) -> DeliberationResult:
         """Run full LLM deliberation for one Tier 1 agent.
 
@@ -83,6 +85,8 @@ class CognitiveAgentEngine:
                   attachment_style (dict with style/anxiety/avoidance).
             scenario_description: Short scenario summary.
             active_metrics: Metric IDs from UniversalScenarioConfig.
+            provider: Optional LLM provider override (from get_agent_model).
+            model: Optional LLM model override (from get_agent_model).
 
         Returns:
             DeliberationResult. Never raises — returns safe default on failure.
@@ -98,8 +102,14 @@ class CognitiveAgentEngine:
             {"role": "user", "content": user_content},
         ]
 
+        llm_kwargs: dict[str, Any] = {"max_tokens": 1024, "temperature": 0.5}
+        if provider is not None:
+            llm_kwargs["provider"] = provider
+        if model is not None:
+            llm_kwargs["model"] = model
+
         try:
-            raw = await self._llm.chat_json(messages, max_tokens=1024, temperature=0.5)
+            raw = await self._llm.chat_json(messages, **llm_kwargs)
         except Exception as exc:
             logger.warning("CognitiveAgentEngine: LLM failed for %s: %s", agent_id, exc)
             return _default_result(agent_id)

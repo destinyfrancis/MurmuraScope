@@ -411,7 +411,7 @@ class EnsembleRunner:
                 ),
             )
 
-            # Copy agent profiles from parent
+            # Copy agent profiles from parent (includes stakeholder/activity columns)
             await db.execute(
                 """
                 INSERT INTO agent_profiles
@@ -419,17 +419,123 @@ class EnsembleRunner:
                     income_bracket, education_level, marital_status, housing_type,
                     openness, conscientiousness, extraversion, agreeableness,
                     neuroticism, monthly_income, savings, oasis_persona,
-                    oasis_username, created_at)
+                    oasis_username, created_at,
+                    activity_level, influence_weight, is_stakeholder)
                 SELECT
                     NULL, ?, agent_type, age, sex, district, occupation,
                     income_bracket, education_level, marital_status, housing_type,
                     openness, conscientiousness, extraversion, agreeableness,
                     neuroticism, monthly_income, savings, oasis_persona,
-                    oasis_username, datetime('now')
+                    oasis_username, datetime('now'),
+                    activity_level, influence_weight, is_stakeholder
                 FROM agent_profiles WHERE session_id = ?
                 """,
                 (branch_id, parent_session_id),
             )
+
+            # Copy belief states
+            try:
+                await db.execute(
+                    """INSERT INTO belief_states
+                       (session_id, agent_id, topic, stance,
+                        confidence, evidence_count, round_number)
+                       SELECT ?, agent_id, topic, stance,
+                              confidence, evidence_count, round_number
+                       FROM belief_states WHERE session_id = ?""",
+                    (branch_id, parent_session_id),
+                )
+            except Exception:
+                logger.debug("belief_states copy skipped (table may not exist)")
+
+            # Copy emotional states (latest snapshot only)
+            try:
+                await db.execute(
+                    """INSERT INTO emotional_states
+                       (session_id, agent_id, round_number,
+                        valence, arousal, dominance)
+                       SELECT ?, agent_id, round_number,
+                              valence, arousal, dominance
+                       FROM emotional_states
+                       WHERE session_id = ? AND round_number = (
+                           SELECT MAX(round_number) FROM emotional_states
+                           WHERE session_id = ?
+                       )""",
+                    (branch_id, parent_session_id, parent_session_id),
+                )
+            except Exception:
+                logger.debug("emotional_states copy skipped (table may not exist)")
+
+            # Copy agent relationships
+            try:
+                await db.execute(
+                    """INSERT OR IGNORE INTO agent_relationships
+                       (session_id, agent_a_id, agent_b_id, relationship_type,
+                        influence_weight, trust_score, created_at)
+                       SELECT ?, agent_a_id, agent_b_id, relationship_type,
+                              influence_weight, trust_score, datetime('now')
+                       FROM agent_relationships WHERE session_id = ?""",
+                    (branch_id, parent_session_id),
+                )
+            except Exception:
+                logger.debug("agent_relationships copy skipped (table may not exist)")
+
+            # Copy KG edges
+            try:
+                await db.execute(
+                    """INSERT OR IGNORE INTO kg_edges
+                       (session_id, source_id, target_id, relation_type,
+                        description, weight, round_number, created_at)
+                       SELECT ?, source_id, target_id, relation_type,
+                              description, weight, round_number, datetime('now')
+                       FROM kg_edges WHERE session_id = ?""",
+                    (branch_id, parent_session_id),
+                )
+            except Exception:
+                logger.debug("kg_edges copy skipped (table may not exist)")
+
+            # Copy cognitive dissonance
+            try:
+                await db.execute(
+                    """INSERT OR IGNORE INTO cognitive_dissonance
+                       (session_id, agent_id, round_number, dissonance_score,
+                        conflicting_pairs_json, action_belief_gap,
+                        resolution_strategy, created_at)
+                       SELECT ?, agent_id, round_number, dissonance_score,
+                              conflicting_pairs_json, action_belief_gap,
+                              resolution_strategy, datetime('now')
+                       FROM cognitive_dissonance WHERE session_id = ?""",
+                    (branch_id, parent_session_id),
+                )
+            except Exception:
+                logger.debug("cognitive_dissonance copy skipped (table may not exist)")
+
+            # Copy agent memories
+            try:
+                await db.execute(
+                    """INSERT INTO agent_memories
+                       (session_id, agent_id, round_number, memory_text,
+                        salience_score, memory_type, created_at)
+                       SELECT ?, agent_id, round_number, memory_text,
+                              salience_score, memory_type, datetime('now')
+                       FROM agent_memories WHERE session_id = ?""",
+                    (branch_id, parent_session_id),
+                )
+            except Exception:
+                logger.debug("agent_memories copy skipped (table may not exist)")
+
+            # Copy simulation actions
+            try:
+                await db.execute(
+                    """INSERT INTO simulation_actions
+                       (session_id, agent_id, round_number, action_type,
+                        content, platform, created_at)
+                       SELECT ?, agent_id, round_number, action_type,
+                              content, platform, datetime('now')
+                       FROM simulation_actions WHERE session_id = ?""",
+                    (branch_id, parent_session_id),
+                )
+            except Exception:
+                logger.debug("simulation_actions copy skipped (table may not exist)")
 
             # Register in scenario_branches
             branch_record_id = str(uuid.uuid4())
