@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 _initialized = False
 
 
-def init_telemetry(service_name: str = "morai") -> None:
+def init_telemetry(service_name: str = "murmuroscope") -> None:
     """Initialise OTEL SDK if OTEL_ENABLED=true.
 
     Safe to call multiple times — subsequent calls are no-ops.

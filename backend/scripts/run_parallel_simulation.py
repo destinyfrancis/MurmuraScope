@@ -1,5 +1,5 @@
 """
-HKSimEngine OASIS Parallel Simulation Runner
+MurmuraScope OASIS Parallel Simulation Runner
 
 Usage: python run_parallel_simulation.py --config /path/to/config.json
 
@@ -365,7 +365,7 @@ def run_parallel(config: dict[str, Any]) -> None:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="HKSimEngine Parallel Simulation Runner")
+    parser = argparse.ArgumentParser(description="MurmuraScope Parallel Simulation Runner")
     parser.add_argument(
         "--config",
         required=True,

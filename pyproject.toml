@@ -1,5 +1,5 @@
 [project]
-name = "hksimengine"
+name = "murmuroscope"
 version = "0.1.0"
 description = "Hong Kong Society Simulation Engine — multi-agent social simulation powered by OASIS"
 readme = "README.md"

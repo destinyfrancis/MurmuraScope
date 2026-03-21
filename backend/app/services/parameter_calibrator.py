@@ -1,4 +1,4 @@
-"""Parameter Calibration Pipeline for HKSimEngine.
+"""Parameter Calibration Pipeline for MurmuraScope.
 
 Loads historical HK data from ``hk_data_snapshots`` and ``social_sentiment``,
 then searches for the ``CalibrationParams`` configuration that minimises the

@@ -1,4 +1,4 @@
-"""B2C Consumer Model for HKSimEngine Phase 4.
+"""B2C Consumer Model for MurmuraScope Phase 4.
 
 Models individual household spending behaviour and aggregates to sector-level
 retail forecasts based on agent profiles and macro-economic conditions.

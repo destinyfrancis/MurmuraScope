@@ -1,6 +1,6 @@
 <div align="center">
 
-# ⚖️ Moirai
+# ⚖️ MurmuraScope
 
 ### 通用預測引擎 · Universal Prediction Engine
 
@@ -16,10 +16,10 @@
 <br/>
 
 > 命名自希臘神話掌管命運嘅三位女神——紡線、度量、剪斷。
-> Moirai 將代理人、知識同時間，編織成集體智能。
+> MurmuraScope 將代理人、知識同時間，編織成集體智能。
 >
 > *Named after the Greek Fates who weave, measure, and cut the threads of destiny —*
-> *Moirai weaves agents, knowledge, and time into collective intelligence.*
+> *MurmuraScope weaves agents, knowledge, and time into collective intelligence.*
 
 <br/>
 
@@ -39,20 +39,20 @@
 
 ---
 
-## 🌟 引擎特色 / What Makes Moirai Different
+## 🌟 引擎特色 / What Makes MurmuraScope Different
 
-大多數模擬工具只能處理固定領域。**Moirai 沒有這個限制。**
+大多數模擬工具只能處理固定領域。**MurmuraScope 沒有這個限制。**
 
-Most simulation tools are domain-locked. **Moirai is not.**
+Most simulation tools are domain-locked. **MurmuraScope is not.**
 
-貼入任何文字 — 新聞報道、地緣政治簡報、歷史事件、公司業績 — Moirai 自動推斷出所有角色、決策、指標同衝擊事件。數十秒內，數百個擁有獨特個性、記憶同信念的 AI 代理人開始互動。派系自然湧現。引爆點觸發。知識圖譜持續演化。宏觀預測實時更新。
+貼入任何文字 — 新聞報道、地緣政治簡報、歷史事件、公司業績 — MurmuraScope 自動推斷出所有角色、決策、指標同衝擊事件。數十秒內，數百個擁有獨特個性、記憶同信念的 AI 代理人開始互動。派系自然湧現。引爆點觸發。知識圖譜持續演化。宏觀預測實時更新。
 
-Paste any text — a news article, geopolitical briefing, historical event, or company filing — and Moirai automatically infers the actors, decisions, metrics, and shocks. Within seconds, hundreds to tens of thousands of AI agents with distinct personalities, memories, and beliefs begin interacting. Emergent factions form. Tipping points trigger. The knowledge graph evolves. Macro forecasts update.
+Paste any text — a news article, geopolitical briefing, historical event, or company filing — and MurmuraScope automatically infers the actors, decisions, metrics, and shocks. Within seconds, hundreds to tens of thousands of AI agents with distinct personalities, memories, and beliefs begin interacting. Emergent factions form. Tipping points trigger. The knowledge graph evolves. Macro forecasts update.
 
 **無需配置。無需領域專業知識。只需文字。**
 **No configuration. No domain expertise required. Just text.**
 
-| 你輸入什麼 / What you drop in | Moirai 建構什麼 / What Moirai builds |
+| 你輸入什麼 / What you drop in | MurmuraScope 建構什麼 / What MurmuraScope builds |
 |---|---|
 | `"港府宣布加息50個基點..."` | 300 個跨 18 區 HK 代理人，模擬加息衝擊 |
 | `"Archduke assassinated in Sarajevo, alliances mobilizing..."` | 1914 年七月危機 — 升級概率曲線，WWI 爆發模擬 |
@@ -122,9 +122,9 @@ Paste any text — a news article, geopolitical briefing, historical event, or c
 
 ### ⚡ 湧現行為 / Emergence Behaviors
 
-**湧現（Emergence）** 係指整體層面出現嘅現象，係無法單純從個體行為預測嘅。例如每隻螞蟻都很簡單，但蟻群卻能建造複雜巢穴。Moirai 追蹤多種社會層面嘅湧現現象：
+**湧現（Emergence）** 係指整體層面出現嘅現象，係無法單純從個體行為預測嘅。例如每隻螞蟻都很簡單，但蟻群卻能建造複雜巢穴。MurmuraScope 追蹤多種社會層面嘅湧現現象：
 
-*Emergence refers to phenomena that appear at the collective level and cannot be predicted from individual behavior alone. Just as individual ants are simple but ant colonies build complex structures, Moirai tracks multiple social-level emergent phenomena:*
+*Emergence refers to phenomena that appear at the collective level and cannot be predicted from individual behavior alone. Just as individual ants are simple but ant colonies build complex structures, MurmuraScope tracks multiple social-level emergent phenomena:*
 
 **回音室偵測（Echo Chamber Detection）**
 > 使用 **Louvain 社群偵測算法**將代理人自動分群，識別哪些人只跟相似觀點嘅人互動。Louvain 係一種圖分割算法，透過最大化「模塊度（Modularity）」找出社群邊界。
@@ -149,9 +149,9 @@ Paste any text — a news article, geopolitical briefing, historical event, or c
 
 ### 🔮 預測市場整合 / Prediction Market Integration
 
-**預測市場（Prediction Market）** 係一個讓人用真實金錢押注未來事件結果嘅市場，市場價格反映群眾對事件發生概率嘅集體估計。Moirai 整合 Polymarket（全球最大去中心化預測市場）。
+**預測市場（Prediction Market）** 係一個讓人用真實金錢押注未來事件結果嘅市場，市場價格反映群眾對事件發生概率嘅集體估計。MurmuraScope 整合 Polymarket（全球最大去中心化預測市場）。
 
-*A prediction market lets people bet real money on future event outcomes — the market price reflects the crowd's collective estimate of event probability. Moirai integrates Polymarket, the world's largest decentralized prediction market.*
+*A prediction market lets people bet real money on future event outcomes — the market price reflects the crowd's collective estimate of event probability. MurmuraScope integrates Polymarket, the world's largest decentralized prediction market.*
 
 - 自動匹配 seed text 主題 → 真實 Polymarket 合約（關鍵字 + 主題組重疊評分）
 - 計算引擎預測概率 vs 市場定價 → **套利信號（Alpha Signal）**：BUY_YES / BUY_NO / HOLD
@@ -190,8 +190,8 @@ Paste any text — a news article, geopolitical briefing, historical event, or c
 
 ## 🎬 Workflow Showcase
 
-> **五個真實例子，逐步展示 Moirai 實際做咩。**
-> **Five real examples showing what Moirai actually does — step by step.**
+> **五個真實例子，逐步展示 MurmuraScope 實際做咩。**
+> **Five real examples showing what MurmuraScope actually does — step by step.**
 
 ---
 
@@ -402,7 +402,7 @@ LLM 生成指標:
 
 ### Showcase 5 — 反事實分析：「如果美聯儲 2022 年降息？」/ What-If Branch
 
-**使用 Moirai 反事實分支功能 / Using Moirai's counterfactual branch:**
+**使用 MurmuraScope 反事實分支功能 / Using MurmuraScope's counterfactual branch:**
 
 ```bash
 POST /simulation/{session_id}/branch
@@ -599,8 +599,8 @@ POST /simulation/{session_id}/branch
 最簡單的方式。只需 Docker Desktop。
 
 ```bash
-git clone https://github.com/destinyfrancis/Moirai.git
-cd Moirai
+git clone https://github.com/destinyfrancis/MurmuraScope.git
+cd MurmuraScope
 cp .env.example .env         # Fill in OPENROUTER_API_KEY + GOOGLE_API_KEY
 docker compose up -d
 
@@ -629,8 +629,8 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 ### 1. 克隆倉庫 / Clone
 
 ```bash
-git clone https://github.com/destinyfrancis/Moirai.git
-cd Moirai
+git clone https://github.com/destinyfrancis/MurmuraScope.git
+cd MurmuraScope
 ```
 
 ### 2. Python 環境 / Python Environment
@@ -672,7 +672,7 @@ ANTHROPIC_API_KEY=sk-ant-your-key-here
 FRED_API_KEY=your-fred-key                   # HK 宏觀數據
 
 # 服務器 / Server
-DATABASE_PATH=data/hksimengine.db
+DATABASE_PATH=data/murmuroscope.db
 HOST=0.0.0.0
 PORT=5001
 LLM_PROVIDER=openrouter
@@ -936,7 +936,7 @@ API Keys: OpenRouter（必填）; FRED, Fireworks（選填）/ OpenRouter (requi
 
 ## 🤝 貢獻 / Contributing
 
-1. 開啟 [Issue](https://github.com/destinyfrancis/Moirai/issues)
+1. 開啟 [Issue](https://github.com/destinyfrancis/MurmuraScope/issues)
 2. Fork + Pull Request
 3. 代碼風格 / Code style: `ruff`，不可變 Pydantic 模型（`ConfigDict(frozen=True)`），async 優先，`dataclasses.replace()` 用於狀態變更，每個文件 200–400 行
 
@@ -951,7 +951,7 @@ All rights reserved. Contact the repository owner for licensing inquiries.
 
 <div align="center">
 
-**⚖️ Moirai** — *編織任何世界嘅未來 / Weaving the threads of any world's future*
+**⚖️ MurmuraScope** — *編織任何世界嘅未來 / Weaving the threads of any world's future*
 
 *多智能體模擬 · 知識圖譜 · 宏觀預測 · 湧現行為 · 預測市場*
 *Multi-agent simulation · Knowledge graphs · Macroeconomic forecasting · Emergent behavior · Prediction markets*

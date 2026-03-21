@@ -1,4 +1,4 @@
-"""Media influence model for HKSimEngine Phase 6.
+"""Media influence model for MurmuraScope Phase 6.
 
 Models how major HK media outlets (modelled as special agents) propagate
 political opinion shifts to simulation agents each round.

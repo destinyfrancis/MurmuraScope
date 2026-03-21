@@ -13,10 +13,10 @@ def test_setup_logging_creates_file_handler(tmp_path):
     import backend.app.utils.logger as lg
 
     # Force re-init by using a unique logger name
-    root = logging.getLogger("hksimengine_test")
+    root = logging.getLogger("murmuroscope_test")
     root.handlers.clear()
     with patch.dict(os.environ, {"LOG_FILE": str(log_path), "LOG_LEVEL": "DEBUG"}):
-        result = lg.setup_logging(logger_name="hksimengine_test")
+        result = lg.setup_logging(logger_name="murmuroscope_test")
     file_handlers = [
         h for h in result.handlers if isinstance(h, logging.handlers.RotatingFileHandler)
     ]
@@ -28,9 +28,9 @@ def test_setup_logging_default_level_info():
     """Default log level is INFO when LOG_LEVEL not set."""
     import backend.app.utils.logger as lg
 
-    root = logging.getLogger("hksimengine_default")
+    root = logging.getLogger("murmuroscope_default")
     root.handlers.clear()
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("LOG_LEVEL", None)
-        result = lg.setup_logging(logger_name="hksimengine_default")
+        result = lg.setup_logging(logger_name="murmuroscope_default")
     assert result.level == logging.INFO

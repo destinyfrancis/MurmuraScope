@@ -1,4 +1,4 @@
-"""Macro-economic state history storage for HKSimEngine.
+"""Macro-economic state history storage for MurmuraScope.
 
 Persists per-round MacroState snapshots in a lightweight SQLite table so
 the frontend can render indicator timelines across simulation rounds.

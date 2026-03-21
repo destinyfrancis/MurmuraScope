@@ -1,4 +1,4 @@
-"""Retrospective Validation Pipeline for HKSimEngine.
+"""Retrospective Validation Pipeline for MurmuraScope.
 
 Validates simulation macro predictions against historical HK data by:
 1. Loading actual data from hk_data_snapshots for a date range

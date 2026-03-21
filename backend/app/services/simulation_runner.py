@@ -1,4 +1,4 @@
-"""OASIS subprocess orchestration for HKSimEngine.
+"""OASIS subprocess orchestration for MurmuraScope.
 
 Launches and monitors the OASIS Twitter simulation as an external subprocess,
 reading JSONL progress updates from stdout, pushing them to the WebSocket

@@ -1,6 +1,6 @@
 """Prediction Market API endpoints.
 
-Connects HKSimEngine agent simulation output to Polymarket contracts,
+Connects MurmuraScope agent simulation output to Polymarket contracts,
 generating trading signals from agent consensus.
 """
 

@@ -1,4 +1,4 @@
-"""Global Macro DomainPack for HKSimEngine.
+"""Global Macro DomainPack for MurmuraScope.
 
 Covers multi-national macro indicators, commodity shocks, and central bank
 divergence scenarios. Designed for global investor and analyst personas.

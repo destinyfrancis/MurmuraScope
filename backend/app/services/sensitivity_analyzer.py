@@ -1,5 +1,5 @@
 # backend/app/services/sensitivity_analyzer.py
-"""Parameter sensitivity analysis for HKSimEngine calibration.
+"""Parameter sensitivity analysis for MurmuraScope calibration.
 
 Sweeps key delta_per_10 calibration parameters across ±50% of their baseline
 values and measures the resulting change in directional accuracy for each

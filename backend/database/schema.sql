@@ -1,4 +1,4 @@
--- HKSimEngine Database Schema
+-- MurmuraScope Database Schema
 -- SQLite with WAL mode for concurrent reads
 
 PRAGMA journal_mode=WAL;

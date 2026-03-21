@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# HKSimEngine Demo Script
+# MurmuraScope Demo Script
 # Usage: ./scripts/demo.sh
 
-echo "=== HKSimEngine Demo ==="
+echo "=== MurmuraScope Demo ==="
 
 # 1. Check API key
 if [ -z "${OPENROUTER_API_KEY:-}" ]; then

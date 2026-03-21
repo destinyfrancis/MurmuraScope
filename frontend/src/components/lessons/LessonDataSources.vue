@@ -11,7 +11,7 @@ function stars(count) {
 <template>
   <div class="lesson-content">
     <div class="lesson-text">
-      <p>HKSimEngine 整合咗多個公開數據源。點擊每個類別了解詳情：</p>
+      <p>MurmuraScope 整合咗多個公開數據源。點擊每個類別了解詳情：</p>
     </div>
     <div class="datasource-list">
       <div

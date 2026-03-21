@@ -1,4 +1,4 @@
-"""EnsembleRunner for HKSimEngine Phase A.
+"""EnsembleRunner for MurmuraScope Phase A.
 
 Runs N real simulation trials by:
 1. Reading the parent session's MacroState baseline.

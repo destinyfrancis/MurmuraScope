@@ -1,4 +1,4 @@
-"""US Markets DomainPack for HKSimEngine.
+"""US Markets DomainPack for MurmuraScope.
 
 Bundles all US-specific constants (shocks, metrics, demographics, data sources,
 macro field specs, and prompt locale) into a single frozen DomainPack.

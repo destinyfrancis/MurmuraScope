@@ -6,11 +6,11 @@ services:
     ports:
       - "5001:5001"
     volumes:
-      - morai-data:/app/data
+      - murmuroscope-data:/app/data
     env_file:
       - .env
     environment:
-      - DATABASE_PATH=/app/data/hksimengine.db
+      - DATABASE_PATH=/app/data/murmuroscope.db
     restart: unless-stopped
     init: true
     healthcheck:
@@ -46,5 +46,5 @@ services:
     restart: unless-stopped
 
 volumes:
-  morai-data:
+  murmuroscope-data:
     driver: local

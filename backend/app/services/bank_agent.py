@@ -1,4 +1,4 @@
-"""Bank & credit cycle agent for HKSimEngine.
+"""Bank & credit cycle agent for MurmuraScope.
 
 Models the Hong Kong banking system's credit cycle, including loan-to-deposit
 ratios, NPL dynamics, credit impulse, and HKMA prudential constraints (LTV

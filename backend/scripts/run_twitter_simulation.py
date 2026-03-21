@@ -1,5 +1,5 @@
 """
-HKSimEngine OASIS Twitter Simulation Runner
+MurmuraScope OASIS Twitter Simulation Runner
 
 Usage: python run_twitter_simulation.py --config /path/to/config.json
 
@@ -374,7 +374,7 @@ async def run_simulation(config: dict[str, Any]) -> None:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="HKSimEngine Twitter Simulation")
+    parser = argparse.ArgumentParser(description="MurmuraScope Twitter Simulation")
     parser.add_argument("--config", required=True, help="Config JSON path")
     args = parser.parse_args()
 

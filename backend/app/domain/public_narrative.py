@@ -1,4 +1,4 @@
-"""Public Narrative DomainPack for HKSimEngine."""
+"""Public Narrative DomainPack for MurmuraScope."""
 from __future__ import annotations
 
 from backend.app.domain.base import (

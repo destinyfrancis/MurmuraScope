@@ -99,7 +99,7 @@ onUnmounted(stopFlock)
       <canvas ref="flockCanvas" width="600" height="400" class="flock-canvas" />
     </div>
     <div class="lesson-text">
-      <p>HKSimEngine 同理 — 每個代理人只按自己嘅性格同記憶做決策，但整體會湧現出可預測嘅社會趨勢。</p>
+      <p>MurmuraScope 同理 — 每個代理人只按自己嘅性格同記憶做決策，但整體會湧現出可預測嘅社會趨勢。</p>
     </div>
   </div>
 </template>

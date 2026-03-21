@@ -1,5 +1,5 @@
 """
-HKSimEngine OASIS Facebook Simulation Runner
+MurmuraScope OASIS Facebook Simulation Runner
 
 Usage: python run_facebook_simulation.py --config /path/to/config.json
 
@@ -544,7 +544,7 @@ def load_config(config_path: str) -> dict[str, Any]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="HKSimEngine Facebook Simulation (OASIS Reddit backend)"
+        description="MurmuraScope Facebook Simulation (OASIS Reddit backend)"
     )
     parser.add_argument("--config", required=True, help="Path to config JSON file")
     args = parser.parse_args()

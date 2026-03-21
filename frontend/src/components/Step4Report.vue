@@ -49,7 +49,7 @@ async function exportPDF() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `morai-report-${reportId}.pdf`
+    a.download = `murmuroscope-report-${reportId}.pdf`
     a.click()
     URL.revokeObjectURL(url)
   } catch (e) {

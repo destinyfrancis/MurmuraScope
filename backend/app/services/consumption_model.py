@@ -1,4 +1,4 @@
-"""B2C Consumption Tracking for HKSimEngine Phase C.
+"""B2C Consumption Tracking for MurmuraScope Phase C.
 
 Wraps the existing ``ConsumerModel`` and adds per-round DB persistence so
 that consumption trends can be queried for analytics and reporting.

@@ -1,4 +1,4 @@
-"""Statistical validation framework for the HKSimEngine prediction engine.
+"""Statistical validation framework for the MurmuraScope prediction engine.
 
 Provides stationarity testing (ADF), Granger causality analysis,
 forecast accuracy metrics (MAPE, RMSE, Theil's U), and a full

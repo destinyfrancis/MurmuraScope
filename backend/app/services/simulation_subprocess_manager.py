@@ -1,4 +1,4 @@
-"""Subprocess lifecycle management for HKSimEngine simulations.
+"""Subprocess lifecycle management for MurmuraScope simulations.
 
 Owns the mapping of session_id → asyncio subprocess, and provides a clean
 interface for launching, monitoring, and terminating OASIS simulation

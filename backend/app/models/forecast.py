@@ -1,4 +1,4 @@
-"""Time series forecast result models for HKSimEngine.
+"""Time series forecast result models for MurmuraScope.
 
 All dataclasses are frozen (immutable) per project coding style.
 """

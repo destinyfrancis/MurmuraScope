@@ -18,7 +18,7 @@ function toggleUncertainty(idx) {
 <template>
   <div class="lesson-content">
     <div class="lesson-text">
-      <p>HKSimEngine 嘅預測不確定性來自四個主要來源。點擊每個來源了解更多：</p>
+      <p>MurmuraScope 嘅預測不確定性來自四個主要來源。點擊每個來源了解更多：</p>
     </div>
     <div class="uncertainty-chart glass-panel">
       <div
@@ -40,7 +40,7 @@ function toggleUncertainty(idx) {
       </div>
     </div>
     <div class="lesson-text">
-      <p>透明地呈現不確定性係負責任 AI 預測嘅核心原則。HKSimEngine 唔係「預言機」，而係幫助思考多個可能未來嘅工具。</p>
+      <p>透明地呈現不確定性係負責任 AI 預測嘅核心原則。MurmuraScope 唔係「預言機」，而係幫助思考多個可能未來嘅工具。</p>
     </div>
   </div>
 </template>

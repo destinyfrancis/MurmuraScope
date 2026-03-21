@@ -24,7 +24,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     from backend.app.utils.telemetry import init_telemetry
     init_telemetry()
 
-    logger = logging.getLogger("morai")
+    logger = logging.getLogger("murmuroscope")
     logger.info("Starting Morai backend")
 
     # Kill stale simulation subprocesses from previous server instance
@@ -533,7 +533,7 @@ def create_app() -> FastAPI:
 
     log_level = logging.DEBUG if settings.DEBUG else logging.INFO
     setup_logging(level=log_level)
-    logger = logging.getLogger("morai")
+    logger = logging.getLogger("murmuroscope")
 
     app = FastAPI(
         title="Morai API",

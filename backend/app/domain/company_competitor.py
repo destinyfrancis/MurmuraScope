@@ -1,4 +1,4 @@
-"""Company/Competitor Analysis DomainPack for HKSimEngine.
+"""Company/Competitor Analysis DomainPack for MurmuraScope.
 
 Bundles all company-competition-specific constants (shocks, metrics,
 demographics, macro fields, scenarios) into a single frozen DomainPack

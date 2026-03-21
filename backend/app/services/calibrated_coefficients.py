@@ -1,4 +1,4 @@
-"""Calibrated Coefficients loader for HKSimEngine.
+"""Calibrated Coefficients loader for MurmuraScope.
 
 Reads sentiment → indicator regression coefficients from
 ``data/calibration_coefficients.json`` (produced by CalibrationPipeline).

@@ -1,4 +1,4 @@
-"""VAR (Vector Autoregression) multi-variable forecaster for HKSimEngine.
+"""VAR (Vector Autoregression) multi-variable forecaster for MurmuraScope.
 
 Implements Task 2.2: cross-indicator relationships such as
   HIBOR↑ → CCL↓,  unemployment↑ → consumer_confidence↓,  etc.

@@ -1,4 +1,4 @@
-"""Time Series Forecaster for HKSimEngine.
+"""Time Series Forecaster for MurmuraScope.
 
 Produces point forecasts with 80%/95% CI for HK economic indicators.
 

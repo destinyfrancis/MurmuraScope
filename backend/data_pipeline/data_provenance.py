@@ -1,4 +1,4 @@
-"""Data provenance tracker for HKSimEngine data pipeline.
+"""Data provenance tracker for MurmuraScope data pipeline.
 
 Records the origin, freshness, and coverage of every data point ingested
 into the system. Enables auditing which metrics come from live APIs,

@@ -1,4 +1,4 @@
-"""Real Estate Market DomainPack for HKSimEngine."""
+"""Real Estate Market DomainPack for MurmuraScope."""
 from __future__ import annotations
 
 from backend.app.domain.base import (

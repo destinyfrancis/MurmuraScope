@@ -40,7 +40,7 @@ class Platform(str, Enum):
     INSTAGRAM = "instagram"
 
 
-# Maps HKSimEngine platforms to their OASIS backend platform type.
+# Maps MurmuraScope platforms to their OASIS backend platform type.
 # Facebook uses the Reddit (community/subreddit) backend.
 # Instagram uses the Twitter (feed/follower) backend.
 PLATFORM_OASIS_MAP: dict[Platform, str] = {

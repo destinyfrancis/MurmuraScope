@@ -1,7 +1,7 @@
 """LLM prompt templates for the Agent Decision Engine.
 
 All prompts are written in Traditional Chinese (繁體中文) to match the
-HKSimEngine language convention for agent-facing content.
+MurmuraScope language convention for agent-facing content.
 """
 
 from __future__ import annotations

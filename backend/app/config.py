@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     }
 
     # Database
-    DATABASE_PATH: str = "backend/database/hksimengine.db"
+    DATABASE_PATH: str = "backend/database/murmuroscope.db"
 
     # LLM API keys
     DEEPSEEK_API_KEY: str = ""

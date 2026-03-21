@@ -1,4 +1,4 @@
-"""Integration tests for HKSimEngine simulation pipeline.
+"""Integration tests for MurmuraScope simulation pipeline.
 
 Tasks covered:
   3.1  OASIS config building, CSV generation, platform-aware script selection.

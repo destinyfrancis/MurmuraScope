@@ -1,4 +1,4 @@
-"""Political spectrum model for HKSimEngine Phase 6.
+"""Political spectrum model for MurmuraScope Phase 6.
 
 Models political stance assignment, echo chamber detection, and
 spiral of silence theory for Hong Kong society simulation agents.

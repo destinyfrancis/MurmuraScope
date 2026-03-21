@@ -1,4 +1,4 @@
-"""Ensemble / Monte Carlo result models for HKSimEngine.
+"""Ensemble / Monte Carlo result models for MurmuraScope.
 
 All dataclasses are frozen (immutable) per project coding style.
 """

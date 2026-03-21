@@ -15,7 +15,7 @@ import asyncio
 import sqlite3
 from pathlib import Path
 
-DB_PATH = Path("data/hksimengine.db")
+DB_PATH = Path("data/murmuroscope.db")
 VECTOR_STORE_PATH = "data/vector_store"
 BATCH_SIZE = 100
 

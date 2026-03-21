@@ -1,5 +1,5 @@
 """
-HKSimEngine OASIS Instagram Simulation Runner
+MurmuraScope OASIS Instagram Simulation Runner
 
 Usage: python run_instagram_simulation.py --config /path/to/config.json
 
@@ -433,7 +433,7 @@ async def run_instagram_simulation(config: dict[str, Any]) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="HKSimEngine Instagram Simulation (OASIS Twitter backend)"
+        description="MurmuraScope Instagram Simulation (OASIS Twitter backend)"
     )
     parser.add_argument("--config", required=True, help="Config JSON path")
     args = parser.parse_args()

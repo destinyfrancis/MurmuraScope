@@ -1,4 +1,4 @@
-"""Data quality monitor for HKSimEngine data pipeline.
+"""Data quality monitor for MurmuraScope data pipeline.
 
 Reads from the hk_data_snapshots table and generates a structured
 quality report covering completeness, duplicates, outliers, and freshness.

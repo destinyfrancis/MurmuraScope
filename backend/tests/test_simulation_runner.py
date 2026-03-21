@@ -22,7 +22,7 @@ async def test_tracked_task_logs_at_error_level(caplog):
         raise ValueError("test failure in tracked task")
 
     # Capture both DEBUG and ERROR to see what level is actually logged
-    with caplog.at_level(logging.DEBUG, logger="morai.simulation_runner"):
+    with caplog.at_level(logging.DEBUG, logger="murmuroscope.simulation_runner"):
         runner._create_tracked_task("test-session", failing_coro())
         await asyncio.sleep(0.2)  # let the task run and fail
 

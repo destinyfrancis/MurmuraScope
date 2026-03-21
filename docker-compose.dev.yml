@@ -2,7 +2,7 @@ services:
   backend:
     volumes:
       - ./backend:/app/backend
-      - morai-data:/app/data
+      - murmuroscope-data:/app/data
     command: >
       uvicorn backend.run:app
       --host 0.0.0.0
@@ -10,7 +10,7 @@ services:
       --reload
       --reload-dir /app/backend
     environment:
-      - DATABASE_PATH=/app/data/hksimengine.db
+      - DATABASE_PATH=/app/data/murmuroscope.db
       - DEBUG=true
 
   frontend:

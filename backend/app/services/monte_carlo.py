@@ -1,4 +1,4 @@
-"""Monte Carlo Engine for HKSimEngine.
+"""Monte Carlo Engine for MurmuraScope.
 
 Runs N stochastic trials by perturbing decision confidence values and macro
 coefficients using Cholesky-decomposed correlated noise, then computes

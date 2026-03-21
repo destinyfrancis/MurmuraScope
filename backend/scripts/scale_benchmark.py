@@ -1,4 +1,4 @@
-"""CLI benchmark runner for HKSimEngine scale testing.
+"""CLI benchmark runner for MurmuraScope scale testing.
 
 Runs a dry-run simulation at a given scale target, collects timing and memory
 metrics, evaluates against SLA thresholds, and writes results to JSON.
@@ -218,7 +218,7 @@ def _write_result(result: BenchmarkResult, output_dir: Path) -> Path:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="HKSimEngine scale benchmark runner",
+        description="MurmuraScope scale benchmark runner",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )

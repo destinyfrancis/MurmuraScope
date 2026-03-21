@@ -1,6 +1,6 @@
-"""Extended action type taxonomy for HKSimEngine.
+"""Extended action type taxonomy for MurmuraScope.
 
-Decouples HKSimEngine's action tracking from OASIS internals, enabling
+Decouples MurmuraScope's action tracking from OASIS internals, enabling
 category-level analytics and action diversity scoring.
 """
 
@@ -20,7 +20,7 @@ class ActionCategory(str, Enum):
 
 
 class ExtendedActionType(str, Enum):
-    """Action types tracked by HKSimEngine.
+    """Action types tracked by MurmuraScope.
 
     Values match OASIS ActionType.value strings for zero-cost mapping.
     """

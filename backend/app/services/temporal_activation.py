@@ -1,4 +1,4 @@
-"""Temporal activation service for HKSimEngine agents.
+"""Temporal activation service for MurmuraScope agents.
 
 Maps simulation round numbers to clock hours and performs Bernoulli
 activation sampling based on each agent's 24-dim activity vector.

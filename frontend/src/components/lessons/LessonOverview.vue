@@ -15,7 +15,7 @@
         <div class="compare-verdict bad">有限</div>
       </div>
       <div class="compare-card glass-panel">
-        <h3>HKSimEngine</h3>
+        <h3>MurmuraScope</h3>
         <ul>
           <li>模擬 500 個 AI 代理人互動</li>
           <li>動態演化 — 30+ 輪模擬</li>
@@ -26,7 +26,7 @@
       </div>
     </div>
     <div class="lesson-text">
-      <p>HKSimEngine 唔係問人「你點諗」，而係用 AI 代理人模擬真實嘅社會互動過程。每個代理人有自己嘅性格、記憶、信任圈子，佢哋會互相影響，最終<strong>湧現</strong>出群體趨勢。</p>
+      <p>MurmuraScope 唔係問人「你點諗」，而係用 AI 代理人模擬真實嘅社會互動過程。每個代理人有自己嘅性格、記憶、信任圈子，佢哋會互相影響，最終<strong>湧現</strong>出群體趨勢。</p>
       <p>我哋追蹤嘅指標包括：樓價信心、移民意向、消費模式、政治極化度等。</p>
     </div>
   </div>

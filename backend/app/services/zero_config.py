@@ -1,4 +1,4 @@
-"""Zero-config quick-start service for HKSimEngine.
+"""Zero-config quick-start service for MurmuraScope.
 
 Enables paste-text-and-run: accepts seed text, infers domain,
 and returns a ready-to-run simulation configuration.

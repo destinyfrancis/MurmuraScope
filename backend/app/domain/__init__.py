@@ -1,4 +1,4 @@
-"""Domain pack abstractions for HKSimEngine."""
+"""Domain pack abstractions for MurmuraScope."""
 
 from backend.app.domain.base import (  # noqa: F401
     DomainPack,

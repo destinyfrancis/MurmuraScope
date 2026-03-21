@@ -104,7 +104,7 @@ onMounted(fetchReport)
 
       <!-- Footer -->
       <div class="report-footer">
-        <span>HKSimEngine</span>
+        <span>MurmuraScope</span>
         <span>Session: {{ report.session_id }}</span>
       </div>
     </div>

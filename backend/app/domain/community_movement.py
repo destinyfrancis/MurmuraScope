@@ -1,4 +1,4 @@
-"""Community/Social Movement DomainPack for HKSimEngine.
+"""Community/Social Movement DomainPack for MurmuraScope.
 
 Bundles all social-movement-specific constants (shocks, metrics,
 demographics, macro fields, scenarios) into a single frozen DomainPack

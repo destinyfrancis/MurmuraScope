@@ -1,4 +1,4 @@
-"""Walk-forward backtesting framework for HKSimEngine time series models.
+"""Walk-forward backtesting framework for MurmuraScope time series models.
 
 Implements walk-forward validation:
   - Train on data up to ``train_end`` (default 2022-Q4).
@@ -32,11 +32,11 @@ from backend.app.utils.logger import get_logger
 logger = get_logger("backtester")
 
 # ---------------------------------------------------------------------------
-# DB path (project root / data / hksimengine.db)
+# DB path (project root / data / murmuroscope.db)
 # ---------------------------------------------------------------------------
 
 _DB_PATH: Path = (
-    Path(__file__).resolve().parent.parent.parent.parent / "data" / "hksimengine.db"
+    Path(__file__).resolve().parent.parent.parent.parent / "data" / "murmuroscope.db"
 )
 
 # ---------------------------------------------------------------------------
