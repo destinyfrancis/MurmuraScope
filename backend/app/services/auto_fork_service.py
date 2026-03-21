@@ -210,6 +210,95 @@ async def fork_at_tipping_point(
                     (branch_id, session_id, round_num),
                 )
 
+            # --- Deep copy: additional dynamic state tables ---
+            # Copy belief_states up to fork round
+            for branch_id in (natural_id, nudged_id):
+                try:
+                    await db.execute(
+                        """INSERT OR IGNORE INTO belief_states
+                           (session_id, agent_id, topic, stance,
+                            confidence, evidence_count, round_number,
+                            created_at)
+                           SELECT ?, agent_id, topic, stance,
+                                  confidence, evidence_count, round_number,
+                                  datetime('now')
+                           FROM belief_states
+                           WHERE session_id = ? AND round_number <= ?""",
+                        (branch_id, session_id, round_num),
+                    )
+                except Exception:
+                    logger.debug("belief_states copy skipped (table may not exist)")
+
+            # Copy emotional_states up to fork round
+            for branch_id in (natural_id, nudged_id):
+                try:
+                    await db.execute(
+                        """INSERT OR IGNORE INTO emotional_states
+                           (session_id, agent_id, round_number,
+                            valence, arousal, dominance, created_at)
+                           SELECT ?, agent_id, round_number,
+                                  valence, arousal, dominance, datetime('now')
+                           FROM emotional_states
+                           WHERE session_id = ? AND round_number <= ?""",
+                        (branch_id, session_id, round_num),
+                    )
+                except Exception:
+                    logger.debug("emotional_states copy skipped (table may not exist)")
+
+            # Copy agent_relationships (no round_number — copy all)
+            for branch_id in (natural_id, nudged_id):
+                try:
+                    await db.execute(
+                        """INSERT OR IGNORE INTO agent_relationships
+                           (session_id, agent_a_id, agent_b_id,
+                            relationship_type, influence_weight,
+                            trust_score, created_at)
+                           SELECT ?, agent_a_id, agent_b_id,
+                                  relationship_type, influence_weight,
+                                  trust_score, datetime('now')
+                           FROM agent_relationships WHERE session_id = ?""",
+                        (branch_id, session_id),
+                    )
+                except Exception:
+                    logger.debug("agent_relationships copy skipped (table may not exist)")
+
+            # Copy kg_edges (has round_number — filter by fork round)
+            for branch_id in (natural_id, nudged_id):
+                try:
+                    await db.execute(
+                        """INSERT OR IGNORE INTO kg_edges
+                           (session_id, source_id, target_id, relation_type,
+                            description, weight, round_number, created_at)
+                           SELECT ?, source_id, target_id, relation_type,
+                                  description, weight, round_number,
+                                  datetime('now')
+                           FROM kg_edges
+                           WHERE session_id = ? AND round_number <= ?""",
+                        (branch_id, session_id, round_num),
+                    )
+                except Exception:
+                    logger.debug("kg_edges copy skipped (table may not exist)")
+
+            # Copy cognitive_dissonance (has round_number — filter by fork round)
+            for branch_id in (natural_id, nudged_id):
+                try:
+                    await db.execute(
+                        """INSERT OR IGNORE INTO cognitive_dissonance
+                           (session_id, agent_id, round_number,
+                            dissonance_score, conflicting_pairs_json,
+                            action_belief_gap, resolution_strategy,
+                            created_at)
+                           SELECT ?, agent_id, round_number,
+                                  dissonance_score, conflicting_pairs_json,
+                                  action_belief_gap, resolution_strategy,
+                                  datetime('now')
+                           FROM cognitive_dissonance
+                           WHERE session_id = ? AND round_number <= ?""",
+                        (branch_id, session_id, round_num),
+                    )
+                except Exception:
+                    logger.debug("cognitive_dissonance copy skipped (table may not exist)")
+
             # Persist nudged beliefs as round fork_round+1 belief_snapshot
             # so the nudged branch starts with altered beliefs
             for agent_id, beliefs in nudged_beliefs.items():

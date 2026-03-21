@@ -335,14 +335,64 @@ class SwarmEnsemble:
                 (branch_id, parent_session_id, fork_round),
             )
 
-            # Copy KG nodes and edges (static structure)
+            # Copy KG nodes (static structure)
             await db.execute(
                 """INSERT OR IGNORE INTO kg_nodes
-                   (session_id, title, node_type, description, source, created_at)
-                   SELECT ?, title, node_type, description, source, datetime('now')
+                   (id, session_id, entity_type, title, description,
+                    properties, created_at)
+                   SELECT
+                    ? || '_' || substr(id, instr(id, '_') + 1),
+                    ?, entity_type, title, description,
+                    properties, datetime('now')
                    FROM kg_nodes WHERE session_id = ?""",
-                (branch_id, parent_session_id),
+                (branch_id[:8], branch_id, parent_session_id),
             )
+
+            # Copy KG edges (has round_number — filter by fork_round)
+            try:
+                await db.execute(
+                    """INSERT OR IGNORE INTO kg_edges
+                       (session_id, source_id, target_id, relation_type,
+                        description, weight, round_number, created_at)
+                       SELECT ?, source_id, target_id, relation_type,
+                              description, weight, round_number, datetime('now')
+                       FROM kg_edges
+                       WHERE session_id = ? AND round_number <= ?""",
+                    (branch_id, parent_session_id, fork_round),
+                )
+            except Exception:
+                logger.debug("kg_edges copy skipped (table may not exist)")
+
+            # Copy agent relationships (no round_number — copy all)
+            try:
+                await db.execute(
+                    """INSERT OR IGNORE INTO agent_relationships
+                       (session_id, agent_a_id, agent_b_id, relationship_type,
+                        influence_weight, trust_score, created_at)
+                       SELECT ?, agent_a_id, agent_b_id, relationship_type,
+                              influence_weight, trust_score, datetime('now')
+                       FROM agent_relationships WHERE session_id = ?""",
+                    (branch_id, parent_session_id),
+                )
+            except Exception:
+                logger.debug("agent_relationships copy skipped (table may not exist)")
+
+            # Copy cognitive dissonance (has round_number — filter by fork_round)
+            try:
+                await db.execute(
+                    """INSERT OR IGNORE INTO cognitive_dissonance
+                       (session_id, agent_id, round_number, dissonance_score,
+                        conflicting_pairs_json, action_belief_gap,
+                        resolution_strategy, created_at)
+                       SELECT ?, agent_id, round_number, dissonance_score,
+                              conflicting_pairs_json, action_belief_gap,
+                              resolution_strategy, datetime('now')
+                       FROM cognitive_dissonance
+                       WHERE session_id = ? AND round_number <= ?""",
+                    (branch_id, parent_session_id, fork_round),
+                )
+            except Exception:
+                logger.debug("cognitive_dissonance copy skipped (table may not exist)")
 
             # Register as swarm replica
             await db.execute(
