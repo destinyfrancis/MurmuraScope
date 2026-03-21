@@ -34,6 +34,7 @@ _INTEGRATION_MODULES = frozenset({
     "test_data_integrity",
     "test_data_pipeline",
     "test_universal_engine_integration",
+    "test_pipeline_verification",
 })
 
 
