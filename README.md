@@ -29,20 +29,6 @@
 
 ---
 
-## 🆕 最新升級 / Latest Upgrades (2026-03-21)
-
-**項目正式更名為 MurmuraScope。全域 pipeline 驗證測試（15 個測試覆蓋 hk_demographic + kg_driven 完整流程）、全面技術規格文件（含 15+ Mermaid 架構圖）、專有軟件授權。**
-
-*Project renamed to MurmuraScope. Full pipeline verification tests (15 tests covering hk_demographic + kg_driven end-to-end), comprehensive technical specification with 15+ Mermaid architecture diagrams, and proprietary software license.*
-
-**上一版 (2026-03-20):** Docker 一鍵部署、OpenTelemetry 可觀察性、時序知識圖譜、記憶壓縮、共識辯論引擎、TDMI 信念持久性分析、GraphRAG 社群摘要、模擬資源釋放機制。
-
-*Previous (2026-03-20): One-command Docker, OpenTelemetry, temporal KG, memory compression, consensus debate engine, TDMI belief persistence, GraphRAG community summaries, simulation resource cleanup.*
-
-詳細升級記錄見 [git log](../../commits/main) · [技術規格 / Technical Spec](docs/TECHNICAL_SPEC.md)
-
----
-
 ## 🌟 引擎特色 / What Makes MurmuraScope Different
 
 ### 對所有人的解釋 / For Everyone — No Technical Background Needed
