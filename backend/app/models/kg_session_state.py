@@ -67,3 +67,10 @@ class KGSessionState:
     # agent_id → {"plan": str, "horizon": int, "created_round": int}
     # Multi-round strategic plans for Tier 1 agents (Phase 4)
     agent_strategies: dict[str, dict] = field(default_factory=dict)
+
+    # Auto-fork guards: count of forks created + rounds already forked
+    auto_fork_count: int = 0
+    auto_fork_rounds: list[int] = field(default_factory=list)
+
+    # Lite ensemble mode: use rule-based hooks instead of LLM
+    lite_ensemble: bool = False

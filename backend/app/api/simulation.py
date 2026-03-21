@@ -1989,8 +1989,21 @@ async def trigger_multi_run(simulation_id: str) -> APIResponse:
                 scenario_outcomes=scenario_outcomes,
                 round_count=round_count,
             )
+
+            # Auto-train surrogate for data-driven Phase B scoring
+            from backend.app.services.surrogate_integration import (  # noqa: PLC0415
+                auto_train_surrogate,
+            )
+            surrogate_result = await auto_train_surrogate(
+                simulation_id, metrics=list(metrics),
+            )
+
             orchestrator = MultiRunOrchestrator()
-            result = await orchestrator.run(canonical, trial_count=100)
+            result = await orchestrator.run(
+                canonical,
+                trial_count=500,
+                surrogate_model=surrogate_result if surrogate_result.is_fitted else None,
+            )
 
             async with get_db() as db:
                 await db.execute(

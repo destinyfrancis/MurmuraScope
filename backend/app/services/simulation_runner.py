@@ -955,7 +955,10 @@ class SimulationRunner(
                 pass
 
         round_count: int = int(config.get("round_count", 3))
-        mock_rounds = min(round_count, 3)
+        # lite_ensemble mode: run all requested rounds to allow emergence.
+        # Original dry_run test mode: cap at 3 for fast testing.
+        lite_ensemble: bool = config.get("lite_ensemble", False)
+        mock_rounds = round_count if lite_ensemble else min(round_count, 3)
 
         for rnd in range(1, mock_rounds + 1):
             # Emit 2 mock post events per round
@@ -1354,7 +1357,10 @@ class SimulationRunner(
             self._reflection_service = ReflectionService()
 
         # Initialise per-session state via KGSessionState
-        self._kg_sessions[session_id] = KGSessionState()
+        lite = config.get("lite_ensemble", False)
+        self._kg_sessions[session_id] = KGSessionState(lite_ensemble=lite)
+        if lite:
+            logger.info("lite_ensemble mode: rule-based hooks for session %s", session_id)
 
         # Load scenario description + active metrics from DB (if available)
         await self._load_kg_session_context(session_id, config)
@@ -1585,10 +1591,26 @@ class SimulationRunner(
         self, session_id: str, round_num: int
     ) -> None:
         """Pre-round: generate world events for kg_driven mode."""
-        if self._world_event_gen is None:
-            return
         kg_state = self._kg_sessions.get(session_id)
         if kg_state is None:
+            return
+
+        # Lite ensemble: rule-based event generation (no LLM)
+        if kg_state.lite_ensemble:
+            from backend.app.services.lite_hooks import generate_lite_events  # noqa: PLC0415
+            events = generate_lite_events(
+                round_number=round_num,
+                active_metrics=tuple(kg_state.active_metrics.keys()),
+                prev_dominant_stance=kg_state.prev_dominant_stance,
+                event_history=kg_state.event_content_history,
+            )
+            kg_state.current_round_events = events
+            kg_state.event_content_history = kg_state.event_content_history + [
+                e.content for e in events
+            ]
+            return
+
+        if self._world_event_gen is None:
             return
         try:
             events = await self._world_event_gen.generate(
@@ -1613,13 +1635,37 @@ class SimulationRunner(
         self, session_id: str, round_num: int
     ) -> None:
         """Group 2: Tier 1 cognitive deliberation for kg_driven mode."""
-        if self._cognitive_engine is None:
-            return
         kg_state = self._kg_sessions.get(session_id)
         if kg_state is None:
             return
         tier1 = kg_state.tier1_agents
         if not tier1:
+            return
+
+        # Lite ensemble: rule-based deliberation (no LLM)
+        if kg_state.lite_ensemble:
+            from backend.app.services.lite_hooks import deliberate_lite  # noqa: PLC0415
+            events = kg_state.current_round_events
+            for agent in tier1:
+                agent_id = agent.get("id", "")
+                beliefs = kg_state.agent_beliefs.get(agent_id, {})
+                emotional = kg_state.emotional_states.get(agent_id)
+                result = deliberate_lite(
+                    agent=agent,
+                    beliefs=beliefs,
+                    events=events,
+                    emotional_state=emotional,
+                )
+                # Apply belief updates
+                if agent_id in kg_state.agent_beliefs:
+                    updated = dict(kg_state.agent_beliefs[agent_id])
+                    for metric, delta in result.belief_updates.items():
+                        if metric in updated:
+                            updated[metric] = max(0.0, min(1.0, updated[metric] + delta))
+                    kg_state.agent_beliefs[agent_id] = updated
+            return
+
+        if self._cognitive_engine is None:
             return
         current_events = kg_state.current_round_events
         metrics = dict(kg_state.active_metrics)
@@ -1775,10 +1821,13 @@ class SimulationRunner(
         kg_state.agent_strategies and injected into the deliberation prompt
         for subsequent rounds so agents act with strategic consistency.
         """
-        if self._strategic_planner is None:
-            return
         kg_state = self._kg_sessions.get(session_id)
         if kg_state is None or not kg_state.tier1_agents:
+            return
+        # Lite ensemble: skip LLM strategic planning (deliberate_lite handles it)
+        if kg_state.lite_ensemble:
+            return
+        if self._strategic_planner is None:
             return
         try:
             await self._strategic_planner.update_plans(
@@ -1799,12 +1848,23 @@ class SimulationRunner(
         stances on high-divergence topics for pairwise LLM debate.
         Debate deltas feed into agent_beliefs before belief_propagation.
         """
+        kg_state = self._kg_sessions.get(session_id)
+        if kg_state is None or not kg_state.agent_beliefs or not kg_state.tier1_agents:
+            return
+
+        # Lite ensemble: rule-based debate (no LLM)
+        if kg_state.lite_ensemble:
+            from backend.app.services.lite_hooks import run_debate_round_lite  # noqa: PLC0415
+            kg_state.agent_beliefs = run_debate_round_lite(
+                tier1_agents=kg_state.tier1_agents,
+                agent_beliefs=kg_state.agent_beliefs,
+                round_num=round_num,
+            )
+            return
+
         if self._consensus_debate is None:
             return
         if not self._consensus_debate.should_trigger(round_num):
-            return
-        kg_state = self._kg_sessions.get(session_id)
-        if kg_state is None or not kg_state.agent_beliefs or not kg_state.tier1_agents:
             return
 
         try:
@@ -2211,6 +2271,18 @@ class SimulationRunner(
                 )
                 if tipping is not None:
                     await self._persist_tipping_point(tipping)
+                    # Auto-fork: create divergent branches at tipping point
+                    if (
+                        kg_state.auto_fork_count < 3
+                        and round_num not in kg_state.auto_fork_rounds
+                    ):
+                        self._create_tracked_task(
+                            session_id,
+                            self._auto_fork_at_tipping(
+                                session_id, round_num, tipping, kg_state,
+                            ),
+                            timeout_s=30.0,
+                        )
             except Exception:
                 logger.exception(
                     "Tipping point detection failed session=%s round=%d",
@@ -2220,6 +2292,45 @@ class SimulationRunner(
         # Snapshot beliefs for history
         belief_copy = {k: dict(v) for k, v in agent_beliefs.items()}
         kg_state.belief_history = kg_state.belief_history + [belief_copy]
+
+    async def _auto_fork_at_tipping(
+        self,
+        session_id: str,
+        round_num: int,
+        tipping: Any,
+        kg_state: Any,
+    ) -> None:
+        """Fire-and-forget: create divergent branches at a detected tipping point."""
+        from backend.app.services.auto_fork_service import fork_at_tipping_point  # noqa: PLC0415
+
+        result = await fork_at_tipping_point(
+            session_id=session_id,
+            tipping=tipping,
+            current_beliefs=kg_state.agent_beliefs,
+            auto_fork_count=kg_state.auto_fork_count,
+            round_count=self._preset.rounds,
+        )
+        if result is not None:
+            kg_state.auto_fork_count += 1
+            kg_state.auto_fork_rounds = kg_state.auto_fork_rounds + [round_num]
+            logger.info(
+                "Auto-fork #%d created session=%s round=%d: natural=%s nudged=%s",
+                kg_state.auto_fork_count, session_id, round_num,
+                result.natural_branch_id[:8], result.nudged_branch_id[:8],
+            )
+            # Notify frontend via WebSocket
+            try:
+                from backend.app.api.ws import push_progress  # noqa: PLC0415
+                await push_progress(session_id, {
+                    "type": "auto_fork",
+                    "round": round_num,
+                    "direction": result.tipping_direction,
+                    "natural_branch_id": result.natural_branch_id,
+                    "nudged_branch_id": result.nudged_branch_id,
+                    "description": result.nudge_description,
+                })
+            except Exception:
+                pass  # WS notification is best-effort
 
     async def _persist_faction_snapshot(self, snapshot: Any) -> None:
         """Persist FactionSnapshot to faction_snapshots_v2 table."""

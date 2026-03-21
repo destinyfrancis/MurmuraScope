@@ -94,6 +94,7 @@ class EnsembleRunner:
         session_id: str,
         n_trials: int = 20,
         perturbation_std: float = DEFAULT_PERTURBATION_STD,
+        dry_run: bool = False,
     ) -> EnsembleResult:
         """Run N real simulation trials with perturbed MacroState.
 
@@ -106,8 +107,10 @@ class EnsembleRunner:
 
         Args:
             session_id: Parent simulation session UUID.
-            n_trials: Number of trials to run (clamped to [1, 50]).
+            n_trials: Number of trials to run (clamped to [1, 200]).
             perturbation_std: Gaussian σ as fraction of each field's value.
+            dry_run: If True, use rule-based decisions (skip LLM) for
+                cheaper multi-trajectory exploration.
 
         Returns:
             EnsembleResult with DistributionBands for each perturbable field.
@@ -115,13 +118,19 @@ class EnsembleRunner:
         Raises:
             ValueError: If the parent session is not found.
         """
-        n_trials = max(1, min(n_trials, 50))
+        # Cap at 500.  For ±5% precision on binary outcomes at 95% CI,
+        # theory requires ~384 trials (σ/√n formula: (1.96×0.5/0.05)²).
+        # 500 provides ±4.4% — adequate for exploratory ensemble analysis.
+        # In dry_run mode this is cheap (no LLM); in full mode the batched
+        # _MAX_CONCURRENT_TRIALS=3 keeps resource usage bounded.
+        n_trials = max(1, min(n_trials, 500))
         perturbation_std = max(0.001, min(perturbation_std, 0.5))
 
         logger.info(
-            "EnsembleRunner.run_ensemble session=%s n_trials=%d std=%.3f",
-            session_id, n_trials, perturbation_std,
+            "EnsembleRunner.run_ensemble session=%s n_trials=%d std=%.3f dry_run=%s",
+            session_id, n_trials, perturbation_std, dry_run,
         )
+        self._dry_run = dry_run
 
         # Load parent session data
         parent_config, parent_macro = await self._load_parent_session(session_id)
@@ -493,7 +502,7 @@ class EnsembleRunner:
             await db.commit()
 
         try:
-            runner = SimulationRunner()
+            runner = SimulationRunner(dry_run=self._dry_run)
             await runner.run(session_id=branch_id, config=config)
 
             async with get_db() as db:

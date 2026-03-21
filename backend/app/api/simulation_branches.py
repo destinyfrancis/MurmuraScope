@@ -406,6 +406,179 @@ async def run_monte_carlo(session_id: str, body: dict | None = None) -> APIRespo
         raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
+@router.post("/{session_id}/swarm-ensemble", status_code=202)
+async def run_swarm_ensemble(
+    session_id: str,
+    body: dict | None = None,
+) -> APIResponse:
+    """Run a swarm ensemble — N genuine agent-interaction replicas.
+
+    Each replica runs the full simulation loop in lite mode (rule-based
+    decisions, no LLM) with all emergence hooks active.  Different random
+    seeds produce different faction structures, tipping points, and outcomes.
+    The aggregate forms a probability cloud of possible futures.
+
+    Request body (all optional):
+        n_replicas (int): Number of replicas (default 50, max 500).
+
+    Returns immediately (202). The ensemble runs in the background.
+    Poll ``GET /{session_id}/swarm-ensemble/results`` for results.
+    """
+    import asyncio as _asyncio  # noqa: PLC0415
+
+    body = body or {}
+    n_replicas: int = int(body.get("n_replicas", 50))
+    fork_round: int | None = body.get("fork_round")
+    if fork_round is not None:
+        fork_round = int(fork_round)
+
+    async def _run() -> None:
+        try:
+            from backend.app.services.swarm_ensemble import SwarmEnsemble  # noqa: PLC0415
+            import json as _json  # noqa: PLC0415
+
+            cloud = await SwarmEnsemble().run(
+                session_id, n_replicas=n_replicas, fork_round=fork_round,
+            )
+
+            # Persist result
+            async with get_db() as db:
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS swarm_ensemble_results (
+                        id TEXT PRIMARY KEY,
+                        session_id TEXT NOT NULL,
+                        n_replicas INTEGER,
+                        n_completed INTEGER,
+                        outcome_distribution_json TEXT,
+                        confidence_intervals_json TEXT,
+                        belief_cloud_json TEXT,
+                        avg_faction_count REAL,
+                        tipping_probability REAL,
+                        avg_polarization REAL,
+                        created_at TEXT DEFAULT (datetime('now'))
+                    )
+                """)
+                await db.execute(
+                    """INSERT OR REPLACE INTO swarm_ensemble_results
+                       (id, session_id, n_replicas, n_completed,
+                        outcome_distribution_json, confidence_intervals_json,
+                        belief_cloud_json, avg_faction_count, tipping_probability,
+                        avg_polarization)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        f"se_{session_id}",
+                        session_id,
+                        cloud.n_replicas,
+                        cloud.n_completed,
+                        _json.dumps(cloud.outcome_distribution),
+                        _json.dumps({
+                            k: list(v) for k, v in cloud.confidence_intervals.items()
+                        }),
+                        _json.dumps({
+                            k: list(v) for k, v in cloud.belief_cloud.items()
+                        }),
+                        cloud.avg_faction_count,
+                        cloud.tipping_probability,
+                        cloud.avg_polarization,
+                    ),
+                )
+                await db.commit()
+            logger.info("SwarmEnsemble complete session=%s", session_id)
+        except Exception:
+            logger.exception("SwarmEnsemble failed session=%s", session_id)
+
+    _asyncio.create_task(_run())
+    return APIResponse(
+        success=True,
+        data={"session_id": session_id, "n_replicas": n_replicas, "status": "queued"},
+        meta={"session_id": session_id},
+    )
+
+
+@router.get("/{session_id}/swarm-ensemble/results", response_model=APIResponse)
+async def get_swarm_ensemble_results(session_id: str) -> APIResponse:
+    """Retrieve swarm ensemble probability cloud results."""
+    import json as _json  # noqa: PLC0415
+
+    try:
+        async with get_db() as db:
+            row = await (
+                await db.execute(
+                    "SELECT * FROM swarm_ensemble_results WHERE session_id = ?",
+                    (session_id,),
+                )
+            ).fetchone()
+
+        if row is None:
+            return APIResponse(
+                success=True,
+                data=None,
+                meta={"message": "尚未有 swarm ensemble 結果。請先 POST /{id}/swarm-ensemble"},
+            )
+
+        return APIResponse(
+            success=True,
+            data={
+                "n_replicas": row["n_replicas"],
+                "n_completed": row["n_completed"],
+                "outcome_distribution": _json.loads(row["outcome_distribution_json"]),
+                "confidence_intervals": _json.loads(row["confidence_intervals_json"]),
+                "belief_cloud": _json.loads(row["belief_cloud_json"]),
+                "avg_faction_count": row["avg_faction_count"],
+                "tipping_probability": row["tipping_probability"],
+                "avg_polarization": row["avg_polarization"],
+            },
+            meta={"session_id": session_id},
+        )
+    except Exception as exc:
+        logger.exception("get_swarm_ensemble_results failed session=%s", session_id)
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
+
+
+@router.get("/{session_id}/auto-forks", response_model=APIResponse)
+async def get_auto_forks(session_id: str) -> APIResponse:
+    """List auto-fork branches created by tipping point detection."""
+    from backend.app.utils.db import get_db  # noqa: PLC0415
+    import json as _json  # noqa: PLC0415
+
+    try:
+        async with get_db() as db:
+            cursor = await db.execute(
+                """SELECT sb.branch_session_id, sb.label, sb.fork_round,
+                          sb.created_at, ss.config_json, ss.status
+                   FROM scenario_branches sb
+                   LEFT JOIN simulation_sessions ss
+                       ON ss.id = sb.branch_session_id
+                   WHERE sb.parent_session_id = ?
+                     AND sb.scenario_variant = 'auto_fork'
+                   ORDER BY sb.fork_round, sb.created_at""",
+                (session_id,),
+            )
+            rows = await cursor.fetchall()
+
+        forks = []
+        for row in rows:
+            cfg = _json.loads(row["config_json"]) if row["config_json"] else {}
+            forks.append({
+                "branch_session_id": row["branch_session_id"],
+                "label": row["label"],
+                "fork_round": row["fork_round"],
+                "variant": cfg.get("auto_fork_variant", "unknown"),
+                "nudge_direction": cfg.get("belief_nudge_direction"),
+                "status": row["status"],
+                "created_at": row["created_at"],
+            })
+
+        return APIResponse(
+            success=True,
+            data=forks,
+            meta={"session_id": session_id, "count": len(forks)},
+        )
+    except Exception as exc:
+        logger.exception("get_auto_forks failed for session %s", session_id)
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
+
+
 @router.get("/{session_id}/ensemble-results", response_model=APIResponse)
 async def get_ensemble_results(session_id: str) -> APIResponse:
     """Retrieve stored ensemble (Monte Carlo) results."""
@@ -449,8 +622,10 @@ async def run_real_ensemble(
     MacroState fields.
 
     Request body (all optional):
-        n_trials (int): Number of trials to run (default 20, max 50).
+        n_trials (int): Number of trials to run (default 20, max 500).
         perturbation_std (float): Gaussian σ as fraction of field value (default 0.05).
+        dry_run (bool): Use rule-based decisions (skip LLM) for cheaper
+            multi-trajectory exploration (default false).
 
     Returns:
         EnsembleResult with percentile bands for each perturbable macro field.
@@ -460,6 +635,7 @@ async def run_real_ensemble(
     body = body or {}
     n_trials: int = int(body.get("n_trials", 20))
     perturbation_std: float = float(body.get("perturbation_std", 0.05))
+    dry_run: bool = bool(body.get("dry_run", False))
 
     try:
         runner = EnsembleRunner()
@@ -467,6 +643,7 @@ async def run_real_ensemble(
             session_id=session_id,
             n_trials=n_trials,
             perturbation_std=perturbation_std,
+            dry_run=dry_run,
         )
         return APIResponse(
             success=True,
