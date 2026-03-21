@@ -19,6 +19,7 @@ from collections import defaultdict
 import json
 import os
 import random
+import random as _random
 import sys
 import time as _time
 from pathlib import Path
@@ -671,10 +672,10 @@ class SimulationRunner(
             if hc.emergence_enabled:
                 await self._process_belief_update(session_id, round_num)
             await self._process_round_consumption(session_id, round_num)
-            # kg_driven: strategic planning + Tier 1 cognitive deliberation + consensus debate + belief propagation
+            # kg_driven: strategic planning + stochastic cognitive deliberation + consensus debate + belief propagation
             if self._kg_mode.get(session_id):
                 await self._kg_strategic_planning(session_id, round_num)
-                await self._kg_tier1_deliberation(session_id, round_num)
+                await self._kg_deliberation(session_id, round_num)
                 await self._kg_consensus_debate(session_id, round_num)
                 await self._kg_belief_propagation(session_id, round_num)
         if self._profiler:
@@ -1292,6 +1293,33 @@ class SimulationRunner(
             await db.commit()
 
     # ------------------------------------------------------------------
+    # Stochastic activation
+    # ------------------------------------------------------------------
+
+    def get_active_agents_for_round(
+        self,
+        session_id: str,
+        round_num: int,
+        all_agents: list[dict[str, Any]],
+        seed: int | None = None,
+    ) -> list[dict[str, Any]]:
+        """Stochastic activation: each agent independently activated by activity_level.
+
+        Stakeholders have a floor of 0.8 to ensure they participate most rounds.
+        When *seed* is provided, activation is deterministic for the given
+        (seed, round_num) pair — enabling reproducible simulation runs.
+        """
+        rng = _random.Random(f"{seed}_{round_num}" if seed is not None else None)
+        active: list[dict[str, Any]] = []
+        for agent in all_agents:
+            level = agent.get("activity_level", 0.5)
+            if agent.get("is_stakeholder"):
+                level = max(level, 0.8)  # stakeholder floor
+            if rng.random() < level:
+                active.append(agent)
+        return active
+
+    # ------------------------------------------------------------------
     # kg_driven mode helpers
     # ------------------------------------------------------------------
 
@@ -1384,27 +1412,42 @@ class SimulationRunner(
                 if row and row["seed_text"]:
                     self._kg_sessions[session_id].scenario_description = row["seed_text"][:500]
 
-                # Load tier-1 agents (those with importance >= 0.7 or first 30)
+                # Load ALL agent profiles with stakeholder/activity metadata
                 cursor = await db.execute(
                     """SELECT id, oasis_username AS name,
                               json_extract(properties, '$.role') AS role,
-                              json_extract(properties, '$.faction') AS faction
+                              json_extract(properties, '$.faction') AS faction,
+                              is_stakeholder,
+                              activity_level
                        FROM agent_profiles
                        WHERE session_id = ?
-                       ORDER BY CAST(json_extract(properties, '$.importance') AS REAL) DESC
-                       LIMIT 30""",
+                       ORDER BY CAST(json_extract(properties, '$.importance') AS REAL) DESC""",
                     (session_id,),
                 )
                 rows = await cursor.fetchall()
-                tier1 = []
+                all_agents: list[dict[str, Any]] = []
+                stakeholders: list[dict[str, Any]] = []
                 for r in rows:
-                    tier1.append({
+                    agent_dict: dict[str, Any] = {
                         "id": r["id"],
                         "name": r["name"] or "",
                         "role": r["role"] or "",
                         "faction": r["faction"] or "none",
-                    })
-                self._kg_sessions[session_id].stakeholder_agents = tier1
+                        "is_stakeholder": bool(r["is_stakeholder"]) if r["is_stakeholder"] else False,
+                        "activity_level": float(r["activity_level"]) if r["activity_level"] else 0.5,
+                    }
+                    all_agents.append(agent_dict)
+                    if agent_dict["is_stakeholder"]:
+                        stakeholders.append(agent_dict)
+                self._kg_sessions[session_id].stakeholder_agents = stakeholders
+                self._kg_sessions[session_id].all_agent_dicts = all_agents
+
+                # Store activation seed from config or hook_config
+                hook_cfg = getattr(getattr(self, "_preset", None), "hook_config", None)
+                self._kg_sessions[session_id].activation_seed = (
+                    config.get("activation_seed")
+                    or getattr(hook_cfg, "activation_seed", None)
+                )
 
                 # Generate scenario config (decision types, metrics, shocks) via LLM
                 # Only if active_metrics not already populated
@@ -1631,22 +1674,39 @@ class SimulationRunner(
             )
             kg_state.current_round_events = []
 
-    async def _kg_tier1_deliberation(
+    async def _kg_deliberation(
         self, session_id: str, round_num: int
     ) -> None:
-        """Group 2: Tier 1 cognitive deliberation for kg_driven mode."""
+        """Group 2: stochastic cognitive deliberation for kg_driven mode.
+
+        Replaces the former Tier-1-only gate: every round a stochastic subset
+        of ALL agents is activated (probability = activity_level, stakeholder
+        floor = 0.8).  All activated agents receive full LLM deliberation.
+        """
         kg_state = self._kg_sessions.get(session_id)
         if kg_state is None:
             return
-        tier1 = kg_state.stakeholder_agents
-        if not tier1:
+
+        # Determine active agents for this round via stochastic activation
+        all_agents = kg_state.all_agent_dicts
+        if not all_agents:
+            # Fallback: use stakeholder list if all_agent_dicts not populated
+            all_agents = kg_state.stakeholder_agents
+        if not all_agents:
+            return
+
+        active = self.get_active_agents_for_round(
+            session_id, round_num, all_agents,
+            seed=kg_state.activation_seed,
+        )
+        if not active:
             return
 
         # Lite ensemble: rule-based deliberation (no LLM)
         if kg_state.lite_ensemble:
             from backend.app.services.lite_hooks import deliberate_lite  # noqa: PLC0415
             events = kg_state.current_round_events
-            for agent in tier1:
+            for agent in active:
                 agent_id = agent.get("id", "")
                 beliefs = kg_state.agent_beliefs.get(agent_id, {})
                 emotional = kg_state.emotional_states.get(agent_id)
@@ -1671,12 +1731,12 @@ class SimulationRunner(
         metrics = dict(kg_state.active_metrics)
         scenario = kg_state.scenario_description
 
-        # Build id→profile lookup for relationship-depth disclosure
-        stakeholder_agents_by_id: dict[str, dict] = {
-            a.get("id", ""): a for a in tier1 if a.get("id")
+        # Build id->profile lookup for relationship-depth disclosure
+        active_agents_by_id: dict[str, dict] = {
+            a.get("id", ""): a for a in active if a.get("id")
         }
 
-        # Snapshot metrics once — all agents deliberate against the same baseline.
+        # Snapshot metrics once -- all agents deliberate against the same baseline.
         # Belief updates are accumulated after all coroutines complete so that
         # parallel execution is equivalent to sequential reads of round-start state.
         baseline_metrics = dict(metrics)
@@ -1690,7 +1750,7 @@ class SimulationRunner(
         semaphore = asyncio.Semaphore(concurrency)
 
         async def _deliberate_one(agent: dict) -> "Any":
-            """Run deliberation for one Tier 1 agent under semaphore guard."""
+            """Run deliberation for one activated agent under semaphore guard."""
             async with semaphore:
                 import hashlib as _hashlib  # noqa: PLC0415
                 agent_id = agent.get("id", "")
@@ -1700,7 +1760,7 @@ class SimulationRunner(
                 key_relationships = _build_key_relationships(
                     agent_id=agent_id,
                     rel_states=rel_states,
-                    stakeholder_agents_by_id=stakeholder_agents_by_id,
+                    stakeholder_agents_by_id=active_agents_by_id,
                 )
 
                 # Task 2.6: retrieve salient memories to ground deliberation.
@@ -1717,7 +1777,7 @@ class SimulationRunner(
                             context_query=scenario,
                         )
                     except Exception:
-                        pass  # memory unavailable — degrade gracefully
+                        pass  # memory unavailable -- degrade gracefully
 
                 # Task 2.3: use dynamically detected faction (set every 3 rounds);
                 # fall back to static value from agent profile.
@@ -1767,17 +1827,17 @@ class SimulationRunner(
                     active_metrics=active_metric_keys,
                 )
 
-        # Fan out: deliberate all Tier 1 agents in parallel (bounded by semaphore)
+        # Fan out: deliberate all activated agents in parallel (bounded by semaphore)
         results = await asyncio.gather(
-            *[_deliberate_one(agent) for agent in tier1],
+            *[_deliberate_one(agent) for agent in active],
             return_exceptions=True,
         )
 
         # Accumulate belief updates from all agents sequentially after gathering
-        for agent, result in zip(tier1, results):
+        for agent, result in zip(active, results):
             if isinstance(result, Exception):
                 logger.warning(
-                    "Tier 1 deliberation failed for agent %s session=%s: %s",
+                    "Deliberation failed for agent %s session=%s: %s",
                     agent.get("id", "?"), session_id, result,
                 )
                 continue
@@ -1787,7 +1847,7 @@ class SimulationRunner(
 
         kg_state.active_metrics = metrics
 
-        # Reflection loop: synthesise 'thought' memories for Tier 1 agents
+        # Reflection loop: synthesise 'thought' memories for activated agents
         # every reflection_interval rounds (Generative Agents-inspired).
         hook_cfg = self._preset.hook_config
         if (
@@ -1799,7 +1859,7 @@ class SimulationRunner(
                 n = await self._reflection_service.reflect_for_agents(
                     session_id=session_id,
                     round_number=round_num,
-                    stakeholder_agents=tier1,
+                    stakeholder_agents=active,
                     scenario_description=scenario,
                 )
                 logger.debug(
@@ -1814,25 +1874,39 @@ class SimulationRunner(
     async def _kg_strategic_planning(
         self, session_id: str, round_num: int
     ) -> None:
-        """Group 2: refresh Tier 1 strategic plans every _PLAN_HORIZON rounds.
+        """Group 2: refresh strategic plans every _PLAN_HORIZON rounds.
 
-        Phase 4 — multi-round planning.  On plan rounds, each Tier 1 agent
+        Phase 4 -- multi-round planning.  On plan rounds, each activated agent
         produces a 3-round intent plan via LLM.  The plan is stored in
         kg_state.agent_strategies and injected into the deliberation prompt
         for subsequent rounds so agents act with strategic consistency.
+
+        Uses stochastic activation instead of a fixed Tier-1 gate.
         """
         kg_state = self._kg_sessions.get(session_id)
-        if kg_state is None or not kg_state.stakeholder_agents:
+        if kg_state is None:
             return
         # Lite ensemble: skip LLM strategic planning (deliberate_lite handles it)
         if kg_state.lite_ensemble:
             return
         if self._strategic_planner is None:
             return
+
+        all_agents = kg_state.all_agent_dicts or kg_state.stakeholder_agents
+        if not all_agents:
+            return
+
+        active = self.get_active_agents_for_round(
+            session_id, round_num, all_agents,
+            seed=kg_state.activation_seed,
+        )
+        if not active:
+            return
+
         try:
             await self._strategic_planner.update_plans(
                 kg_state=kg_state,
-                stakeholder_agents=kg_state.stakeholder_agents,
+                stakeholder_agents=active,
                 round_num=round_num,
                 scenario_description=kg_state.scenario_description,
             )
@@ -1844,19 +1918,30 @@ class SimulationRunner(
     ) -> None:
         """Group 2: structured multi-agent debate on divergent topics.
 
-        Runs every N rounds (default 3). Pairs Tier 1 agents with opposing
-        stances on high-divergence topics for pairwise LLM debate.
+        Runs every N rounds (default 3). Pairs stochastically activated agents
+        with opposing stances on high-divergence topics for pairwise LLM debate.
         Debate deltas feed into agent_beliefs before belief_propagation.
         """
         kg_state = self._kg_sessions.get(session_id)
-        if kg_state is None or not kg_state.agent_beliefs or not kg_state.stakeholder_agents:
+        if kg_state is None or not kg_state.agent_beliefs:
+            return
+
+        all_agents = kg_state.all_agent_dicts or kg_state.stakeholder_agents
+        if not all_agents:
+            return
+
+        active = self.get_active_agents_for_round(
+            session_id, round_num, all_agents,
+            seed=kg_state.activation_seed,
+        )
+        if not active:
             return
 
         # Lite ensemble: rule-based debate (no LLM)
         if kg_state.lite_ensemble:
             from backend.app.services.lite_hooks import run_debate_round_lite  # noqa: PLC0415
             kg_state.agent_beliefs = run_debate_round_lite(
-                stakeholder_agents=kg_state.stakeholder_agents,
+                stakeholder_agents=active,
                 agent_beliefs=kg_state.agent_beliefs,
                 round_num=round_num,
             )
@@ -1870,7 +1955,7 @@ class SimulationRunner(
         try:
             # Build agent_profiles lookup for enrichment
             agent_profiles: dict[str, dict] = {}
-            for agent in kg_state.stakeholder_agents:
+            for agent in active:
                 aid = agent["id"]
                 profile: dict = {"persona": "", "recent_memories": ""}
                 # Enrich with strategy context if available
@@ -1882,7 +1967,7 @@ class SimulationRunner(
             result = await self._consensus_debate.run_debate(
                 session_id=session_id,
                 round_num=round_num,
-                stakeholder_agents=kg_state.stakeholder_agents,
+                stakeholder_agents=active,
                 agent_beliefs=kg_state.agent_beliefs,
                 scenario_description=kg_state.scenario_description,
                 agent_profiles=agent_profiles,
@@ -2241,7 +2326,7 @@ class SimulationRunner(
                 )
                 await self._persist_faction_snapshot(snapshot)
                 # Task 2.3: feed detected factions back into KGSessionState so
-                # _kg_tier1_deliberation and _kg_belief_propagation can use them
+                # _kg_deliberation and _kg_belief_propagation can use them
                 # in subsequent rounds (data is 3 rounds old — intentional lag).
                 new_factions: dict[str, str] = {}
                 for record in snapshot.factions:

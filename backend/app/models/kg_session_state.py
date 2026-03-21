@@ -72,5 +72,12 @@ class KGSessionState:
     auto_fork_count: int = 0
     auto_fork_rounds: list[int] = field(default_factory=list)
 
+    # All agent dicts (id, name, role, faction, is_stakeholder, activity_level)
+    # loaded from DB — used by stochastic activation each round
+    all_agent_dicts: list[dict[str, Any]] = field(default_factory=list)
+
+    # Optional deterministic seed for stochastic activation RNG
+    activation_seed: int | None = None
+
     # Lite ensemble mode: use rule-based hooks instead of LLM
     lite_ensemble: bool = False
