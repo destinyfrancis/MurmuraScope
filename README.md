@@ -1,6 +1,6 @@
 <div align="center">
 
-# ⚖️ MurmuraScope
+# 🔭 MurmuraScope
 
 ### 通用預測引擎 · Universal Prediction Engine
 
@@ -15,27 +15,31 @@
 
 <br/>
 
-> 命名自希臘神話掌管命運嘅三位女神——紡線、度量、剪斷。
-> MurmuraScope 將代理人、知識同時間，編織成集體智能。
+> *Murmur* — 千萬個 AI 聲音交織成嘅集體低語。*Scope* — 洞察群體動態嘅透鏡。
+> MurmuraScope 將個體噪音轉化為可預測嘅集體信號。
 >
-> *Named after the Greek Fates who weave, measure, and cut the threads of destiny —*
-> *MurmuraScope weaves agents, knowledge, and time into collective intelligence.*
+> *Murmur — the collective whisper of thousands of AI voices interacting.*
+> *Scope — the lens that transforms that noise into predictable collective signal.*
 
 <br/>
 
-**[引擎特色](#-引擎特色--what-makes-moirai-different) · [核心能力](#-核心能力--core-capabilities) · [Workflow Showcase](#-workflow-showcase) · [5步工作流程](#-5步工作流程--5-step-workflow) · [架構](#-架構--architecture) · [安裝](#-安裝--installation--setup) · [用戶指南](#-用戶指南--user-guide) · [API 參考](#-api-參考--api-reference)**
+**[引擎特色](#-引擎特色--what-makes-murmuroscope-different) · [核心能力](#-核心能力--core-capabilities) · [Workflow Showcase](#-workflow-showcase) · [5步工作流程](#-5步工作流程--5-step-workflow) · [架構](#-架構--architecture) · [安裝](#-安裝--installation--setup) · [用戶指南](#-用戶指南--user-guide) · [API 參考](#-api-參考--api-reference)**
 
 </div>
 
 ---
 
-## 🆕 最新升級 / Latest Upgrades (2026-03-20)
+## 🆕 最新升級 / Latest Upgrades (2026-03-21)
 
-**Docker 一鍵部署、OpenTelemetry 可觀察性、時序知識圖譜、訪談根基代理人初始化、PIANO 輪內並行審議、記憶壓縮、共識辯論引擎、TDMI 信念持久性分析、GraphRAG 社群摘要、模擬資源釋放機制。**
+**項目正式更名為 MurmuraScope。全域 pipeline 驗證測試（15 個測試覆蓋 hk_demographic + kg_driven 完整流程）、全面技術規格文件（含 15+ Mermaid 架構圖）、專有軟件授權。**
 
-*One-command Docker deployment, OpenTelemetry observability, temporal KG, interview-grounded agent init, intra-round parallelism, memory compression, consensus debate engine, TDMI belief persistence, GraphRAG community summaries, and simulation resource cleanup.*
+*Project renamed to MurmuraScope. Full pipeline verification tests (15 tests covering hk_demographic + kg_driven end-to-end), comprehensive technical specification with 15+ Mermaid architecture diagrams, and proprietary software license.*
 
-詳細升級記錄見 [git log](../../commits/main)。
+**上一版 (2026-03-20):** Docker 一鍵部署、OpenTelemetry 可觀察性、時序知識圖譜、記憶壓縮、共識辯論引擎、TDMI 信念持久性分析、GraphRAG 社群摘要、模擬資源釋放機制。
+
+*Previous (2026-03-20): One-command Docker, OpenTelemetry, temporal KG, memory compression, consensus debate engine, TDMI belief persistence, GraphRAG community summaries, simulation resource cleanup.*
+
+詳細升級記錄見 [git log](../../commits/main) · [技術規格 / Technical Spec](docs/TECHNICAL_SPEC.md)
 
 ---
 
@@ -951,7 +955,7 @@ All rights reserved. Contact the repository owner for licensing inquiries.
 
 <div align="center">
 
-**⚖️ MurmuraScope** — *編織任何世界嘅未來 / Weaving the threads of any world's future*
+**🔭 MurmuraScope** — *聆聽集體低語，洞察任何世界嘅未來 / Listen to the collective murmur, see the future of any world*
 
 *多智能體模擬 · 知識圖譜 · 宏觀預測 · 湧現行為 · 預測市場*
 *Multi-agent simulation · Knowledge graphs · Macroeconomic forecasting · Emergent behavior · Prediction markets*
