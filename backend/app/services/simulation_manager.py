@@ -16,7 +16,8 @@ DB schema reference (backend/database/schema.sql):
     id, session_id, agent_type, age, sex, district, occupation,
     income_bracket, education_level, marital_status, housing_type,
     openness, conscientiousness, extraversion, agreeableness, neuroticism,
-    monthly_income, savings, oasis_persona, oasis_username, created_at
+    monthly_income, savings, oasis_persona, oasis_username, created_at,
+    activity_level, influence_weight, is_stakeholder
 """
 
 from __future__ import annotations
@@ -528,11 +529,21 @@ async def store_agent_profiles(
         profile_generator: ProfileGenerator instance for persona/username.
         macro_state: Optional MacroState for persona enrichment.
     """
+    from backend.app.services.agent_factory import _infer_behavioral_params  # noqa: PLC0415
+
     now = datetime.utcnow().isoformat()
     rows = []
     for profile in profiles:
         username = profile_generator._factory.generate_username(profile)
         persona = profile_generator.to_persona_string(profile, macro_state)
+        rng = getattr(profile_generator, "_factory", None)
+        rng = getattr(rng, "_rng", None) if rng else None
+        bp = _infer_behavioral_params(
+            age=profile.age,
+            income=float(profile.monthly_income),
+            occupation=profile.occupation,
+            rng=rng,
+        )
         # Note: id is excluded — let SQLite AUTOINCREMENT assign a globally
         # unique id so that multiple sessions (each starting agent IDs at 1)
         # do not conflict on the PRIMARY KEY.
@@ -557,6 +568,9 @@ async def store_agent_profiles(
             persona,
             username,
             now,
+            bp["activity_level"],
+            bp["influence_weight"],
+            bp["is_stakeholder"],
         ))
 
     async with get_db() as db:
@@ -568,8 +582,9 @@ async def store_agent_profiles(
                 openness, conscientiousness, extraversion,
                 agreeableness, neuroticism,
                 monthly_income, savings,
-                oasis_persona, oasis_username, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                oasis_persona, oasis_username, created_at,
+                activity_level, influence_weight, is_stakeholder)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             rows,
         )
         await db.commit()
@@ -591,8 +606,6 @@ async def store_universal_agent_profiles(
     - monthly_income=0, savings=0
     - oasis_persona = persona, oasis_username = to_oasis_row()["username"]
     """
-    import hashlib  # noqa: F811, PLC0415
-
     now = datetime.utcnow().isoformat()
     rows = []
     for p in profiles:
@@ -618,6 +631,9 @@ async def store_universal_agent_profiles(
             p.persona,              # oasis_persona
             oasis_row["username"],  # oasis_username
             now,
+            getattr(p, "activity_level", 0.5),
+            getattr(p, "influence_weight", 1.0),
+            int(getattr(p, "is_stakeholder", False)),
         ))
 
     async with get_db() as db:
@@ -629,8 +645,9 @@ async def store_universal_agent_profiles(
                 openness, conscientiousness, extraversion,
                 agreeableness, neuroticism,
                 monthly_income, savings,
-                oasis_persona, oasis_username, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                oasis_persona, oasis_username, created_at,
+                activity_level, influence_weight, is_stakeholder)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             rows,
         )
         await db.commit()

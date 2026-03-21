@@ -174,6 +174,9 @@ class ScenarioGenerator:
             shock_types = _parse_shock_types(raw.get("shock_types", []))
             impact_rules = _parse_impact_rules(raw.get("impact_rules", []))
             implied_actors = _parse_implied_actors(raw.get("implied_actors", []))
+            stakeholder_types = _parse_stakeholder_entity_types(
+                raw.get("stakeholder_entity_types", [])
+            )
 
             config = UniversalScenarioConfig(
                 scenario_id=str(uuid.uuid4()),
@@ -186,6 +189,7 @@ class ScenarioGenerator:
                 time_scale=raw.get("time_scale", "rounds"),
                 language_hint=raw.get("language_hint", "auto"),
                 implied_actors=tuple(implied_actors),
+                stakeholder_entity_types=tuple(stakeholder_types),
             )
         except (KeyError, TypeError, ValueError) as exc:
             raise RuntimeError(
@@ -194,12 +198,13 @@ class ScenarioGenerator:
 
         logger.info(
             "ScenarioGenerator: config created (decisions=%d, metrics=%d, "
-            "shocks=%d, rules=%d, implied_actors=%d)",
+            "shocks=%d, rules=%d, implied_actors=%d, stakeholder_types=%d)",
             len(config.decision_types),
             len(config.metrics),
             len(config.shock_types),
             len(config.impact_rules),
             len(config.implied_actors),
+            len(config.stakeholder_entity_types),
         )
         return config
 
@@ -424,6 +429,24 @@ def _parse_impact_rules(items: list[Any]) -> list[UniversalImpactRule]:
             )
         )
 
+    return result
+
+
+def _parse_stakeholder_entity_types(raw: list[Any]) -> list[str]:
+    """Parse stakeholder_entity_types list from LLM response.
+
+    Returns a deduplicated list of non-empty strings.  Silently discards
+    non-string entries.  Returns [] if input is not a list.
+    """
+    if not isinstance(raw, list):
+        return []
+    seen: set[str] = set()
+    result: list[str] = []
+    for item in raw:
+        val = str(item).strip() if item else ""
+        if val and val not in seen:
+            seen.add(val)
+            result.append(val)
     return result
 
 

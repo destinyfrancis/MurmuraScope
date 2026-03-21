@@ -172,6 +172,20 @@ market_aggression, regulatory_compliance, stakeholder_focus
     - Description should be a short phrase, e.g. "strategic rival", \
 "military ally", "media critic of"
 
+11. activity_level (float 0.0–1.0)
+    - How frequently this actor participates in public discourse each round
+    - High (0.7–1.0): heads of state, active military commanders, \
+media outlets, social media-savvy activists
+    - Medium (0.4–0.6): advisory bodies, mid-level officials, smaller companies
+    - Low (0.1–0.3): secretive organisations, behind-the-scenes power brokers, \
+passive observers
+
+12. influence_weight (float 0.0–3.0)
+    - How visible and impactful this actor's communications are when they do act
+    - 2.0–3.0: superpower nations, global media outlets, dominant market leaders
+    - 1.0–1.5: regional powers, mid-size companies, established NGOs
+    - 0.3–0.9: minor actors, local organisations, background characters
+
 ADDITIONAL AGENTS
 -----------------
 If the scenario context implies important actors that are NOT in the eligible \
@@ -199,7 +213,9 @@ Return ONLY valid JSON with no markdown, no code fences, no extra text.
       "extraversion": 0.5,
       "agreeableness": 0.5,
       "neuroticism": 0.5,
-      "kg_node_id": "..."
+      "kg_node_id": "...",
+      "activity_level": 0.5,
+      "influence_weight": 1.0
     }
   ]
 }"""

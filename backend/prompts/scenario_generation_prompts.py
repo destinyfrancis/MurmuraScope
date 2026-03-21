@@ -64,6 +64,13 @@ elsewhere in your response.
 possible_actions list.
 - severity_range values must satisfy: 0.0 ≤ min ≤ max ≤ 10.0.
 - delta_per_10 may be negative (e.g. ceasefires reduce tension).
+- Identify STAKEHOLDER ENTITY TYPES: which types of actors have direct \
+  decision-making power that materially affects the scenario outcome? These \
+  actors will receive deeper AI reasoning. List the entity_type strings \
+  (matching the types used in implied_actors and KG nodes). For example, in a \
+  geopolitical scenario: ["Country", "Military", "PoliticalFigure"]. In a \
+  corporate scenario: ["Company", "Person"]. Include only types whose \
+  decisions DIRECTLY alter the trajectory of the scenario.
 - Identify up to 30 IMPLIED ACTORS: important stakeholders that are clearly \
   relevant to the scenario dynamics but do NOT appear in the provided KG nodes \
   or agent list. These may include: nation-states, regional powers, international \
@@ -126,7 +133,8 @@ OUTPUT SCHEMA (return exactly this structure):
       "role": "<one sentence: their role in this scenario>",
       "relevance_reason": "<one sentence: why critically relevant but not in KG>"
     }
-  ]
+  ],
+  "stakeholder_entity_types": ["<list of entity_type strings whose decisions materially affect scenario outcomes — e.g. 'Country', 'Military', 'CEO'>"]
 }
 """
 

@@ -79,6 +79,23 @@ class UniversalAgentProfile:
     e.g. 'Facebook: 長文理性分析; Instagram: 短句情緒化+標籤'"""
 
     # ------------------------------------------------------------------
+    # Behavioral params (stakeholder identification + stochastic activation)
+    # ------------------------------------------------------------------
+
+    activity_level: float = 0.5
+    """How frequently this actor participates in public discourse (0.0–1.0).
+    Used by stochastic activation to determine per-round participation."""
+
+    influence_weight: float = 1.0
+    """How visible/impactful this actor's communications are (0.0–3.0).
+    Scales the effect of this agent's actions in the simulation."""
+
+    is_stakeholder: bool = False
+    """Whether this agent is a key decision-maker whose choices materially
+    affect simulation outcomes.  Stakeholders get deeper LLM reasoning and
+    a participation floor of 0.8 in stochastic activation."""
+
+    # ------------------------------------------------------------------
     # Big Five personality traits (OASIS emotional engine compatibility)
     # Default 0.5 = neutral / average population baseline
     # ------------------------------------------------------------------

@@ -195,6 +195,54 @@ class KGAgentFactory:
         logger.info("generate_from_kg complete: produced %d profiles", len(profiles))
         return profiles
 
+    @staticmethod
+    def mark_stakeholders(
+        profiles: list[UniversalAgentProfile],
+        stakeholder_entity_types: tuple[str, ...] | list[str],
+    ) -> list[UniversalAgentProfile]:
+        """Mark profiles whose entity_type is in stakeholder_entity_types.
+
+        Returns a new list with ``is_stakeholder=True`` set on matching
+        profiles.  Also boosts ``activity_level`` to at least 0.8 for
+        stakeholders.  Uses ``dataclasses.replace`` to preserve immutability.
+
+        Args:
+            profiles: Agent profiles to classify.
+            stakeholder_entity_types: Entity types that qualify as stakeholders.
+
+        Returns:
+            New list of ``UniversalAgentProfile`` with stakeholder flags set.
+        """
+        from dataclasses import replace as dc_replace  # noqa: PLC0415
+
+        stakeholder_set = frozenset(stakeholder_entity_types)
+        if not stakeholder_set:
+            return profiles
+
+        result: list[UniversalAgentProfile] = []
+        for profile in profiles:
+            entity_type = getattr(profile, "entity_type", "") or ""
+            is_stakeholder = entity_type in stakeholder_set
+            if is_stakeholder:
+                result.append(
+                    dc_replace(
+                        profile,
+                        is_stakeholder=True,
+                        activity_level=max(profile.activity_level, 0.8),
+                    )
+                )
+            else:
+                result.append(profile)
+
+        stakeholder_count = sum(1 for p in result if p.is_stakeholder)
+        logger.info(
+            "mark_stakeholders: %d/%d profiles marked as stakeholders (types=%s)",
+            stakeholder_count,
+            len(result),
+            list(stakeholder_set),
+        )
+        return result
+
     def infer_attachment_styles(
         self,
         profiles: list[UniversalAgentProfile],
@@ -667,6 +715,8 @@ class KGAgentFactory:
                 stance_axes=stance_axes,
                 relationships=relationships,
                 kg_node_id=str(raw.get("kg_node_id", raw["id"])),
+                activity_level=_clamp(float(raw.get("activity_level", 0.5))),
+                influence_weight=_clamp(float(raw.get("influence_weight", 1.0)), 0.0, 3.0),
                 openness=_clamp(float(raw.get("openness", 0.5))),
                 conscientiousness=_clamp(float(raw.get("conscientiousness", 0.5))),
                 extraversion=_clamp(float(raw.get("extraversion", 0.5))),

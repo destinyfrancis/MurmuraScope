@@ -210,6 +210,7 @@ class UniversalScenarioConfig:
     time_scale: str = "rounds"
     language_hint: str = "auto"
     implied_actors: tuple[ImpliedActor, ...] = ()
+    stakeholder_entity_types: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.decision_types:

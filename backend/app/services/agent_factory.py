@@ -292,6 +292,67 @@ class AgentProfile:
 
 
 # =========================================================================
+# Behavioral params inference (HK demographics)
+# =========================================================================
+
+# Occupations whose holders are classified as key decision-makers in HK mode
+_STAKEHOLDER_OCCUPATIONS: frozenset[str] = frozenset({
+    "政府官員", "議員", "地產商", "銀行家", "記者", "教授", "律師", "醫生",
+    # Census categories that map to these roles
+    "經理及行政人員", "專業人員",
+})
+
+
+def _infer_behavioral_params(
+    age: int,
+    income: float,
+    occupation: str,
+    rng: random.Random | None = None,
+) -> dict[str, float | int]:
+    """Infer activity_level, influence_weight, is_stakeholder from HK demographics.
+
+    Args:
+        age: Agent's age in years.
+        income: Monthly income in HKD.
+        occupation: Occupation string (HK Census categories).
+        rng: Optional seeded RNG for reproducibility.  Falls back to
+            ``random`` module if not provided.
+
+    Returns:
+        Dict with keys ``activity_level`` (float 0.0-1.0),
+        ``influence_weight`` (float 0.0-3.0), and ``is_stakeholder`` (int 0/1).
+    """
+    _rng = rng if isinstance(rng, random.Random) else random
+
+    # Activity level driven by age bracket
+    if age <= 35:
+        activity = 0.7 + _rng.random() * 0.2
+    elif age <= 55:
+        activity = 0.4 + _rng.random() * 0.2
+    else:
+        activity = 0.2 + _rng.random() * 0.2
+
+    # Influence weight starts at 1.0, boosted by income
+    influence = 1.0
+    if income and income > 50_000:
+        influence *= 1.3
+    if income and income > 100_000:
+        influence *= 1.2  # further boost for very high earners
+
+    # Stakeholder classification
+    is_stakeholder = occupation in _STAKEHOLDER_OCCUPATIONS
+    if is_stakeholder:
+        activity = max(activity, 0.8)
+        influence = max(influence, 1.5)
+
+    return {
+        "activity_level": round(min(1.0, activity), 2),
+        "influence_weight": round(min(3.0, influence), 2),
+        "is_stakeholder": int(is_stakeholder),
+    }
+
+
+# =========================================================================
 # AgentFactory
 # =========================================================================
 
