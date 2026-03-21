@@ -23,7 +23,7 @@
 
 <br/>
 
-**[引擎特色](#-引擎特色--what-makes-murmuroscope-different) · [核心能力](#-核心能力--core-capabilities) · [Workflow Showcase](#-workflow-showcase) · [5步工作流程](#-5步工作流程--5-step-workflow) · [架構](#-架構--architecture) · [安裝](#-安裝--installation--setup) · [用戶指南](#-用戶指南--user-guide) · [API 參考](#-api-參考--api-reference)**
+**[引擎特色](#-引擎特色--what-makes-murmuroscope-different) · [核心能力](#-核心能力--core-capabilities) · [5步工作流程](#-5步工作流程--5-step-workflow) · [架構](#-架構--architecture) · [安裝](#-安裝--installation--setup) · [用戶指南](#-用戶指南--user-guide) · [API 參考](#-api-參考--api-reference)**
 
 </div>
 
@@ -60,42 +60,53 @@
 ### 大多數模擬工具只能處理固定領域。MurmuraScope 沒有這個限制。
 ### Most simulation tools are domain-locked. MurmuraScope is not.
 
-以下是市面上同類工具嘅**真實比較**（全部係真實 GitHub 項目）：
+以下是市面上同類工具嘅**真實比較**（全部係真實 GitHub 項目，逐一查證）：
 
-*Here is a real comparison against existing tools — all real GitHub/research projects:*
+*Here is a real, verified comparison against existing tools — all real GitHub/research projects:*
 
-| 工具 / Tool | 能處理任意領域？ | 最大規模 | LLM 認知代理人？ | 動態知識圖譜？ | 量化預測？ | 零配置？ |
-|------------|--------------|--------|--------------|-------------|---------|--------|
-| **[Generative Agents](https://github.com/joonspk-research/generative_agents)**<br>Stanford Smallville (2023) | ❌ 固定小鎮 25 人 | 25 | ✅ | ❌ | ❌ | ❌ |
-| **[OASIS](https://github.com/camel-ai/oasis)**<br>Social Media Simulation | ❌ 固定社交媒體平台 | ~1,000,000 (規則驅動) | 部分 | ❌ | ❌ | ❌ |
-| **[Mesa](https://github.com/projectmesa/mesa)**<br>Python ABM Framework | ❌ 需自行編碼規則 | 無上限 | ❌ | ❌ | ❌ | ❌ |
-| **[AgentVerse](https://github.com/OpenBMB/AgentVerse)**<br>Multi-Agent Framework | 部分 | 10–20 | ✅ | ❌ | ❌ | ❌ |
-| **[NetLogo](https://github.com/NetLogo/NetLogo)**<br>Classic ABM Tool | ❌ 需自行定義模型 | ~100,000 | ❌ | ❌ | ❌ | ❌ |
-| **[AgentSims](https://github.com/py499372727/AgentSims)**<br>LLM Town Simulation | ❌ 固定小鎮場景 | ~20 | ✅ | ❌ | ❌ | ❌ |
-| **🔭 MurmuraScope** | ✅ **任何文字** | **50,000** | ✅ 完整認知模型 | ✅ 動態演化+時序 | ✅ MC+ARIMA+VAR | ✅ 30秒啟動 |
+| 工具 / Tool | 任意領域？ | 最大規模 | LLM 認知模型？ | 動態知識圖譜？ | 量化預測？ | 零配置？ | 反事實分支？ |
+|------------|----------|--------|-------------|-------------|---------|--------|-----------|
+| **[MiroFish](https://github.com/666ghj/MiroFish)**<br>5-Step Sim (38K ⭐) | ⚠️ 社交輿論為主 | ~1,000 | ⚠️ MBTI+persona | ⚠️ Zep Cloud（外部服務）| ❌ | ✅ | ❌ |
+| **[Generative Agents](https://github.com/joonspk-research/generative_agents)**<br>Stanford Smallville | ❌ 固定小鎮 | 25 | ⚠️ freetext 記憶 | ❌ | ❌ | ❌ | ❌ |
+| **[OASIS](https://github.com/camel-ai/oasis)**<br>Social Media Sim | ❌ 社交媒體固定 | ~1,000,000 | ⚠️ freetext persona | ❌ | ❌ | ❌ | ⚠️ 研究腳本 |
+| **[Concordia](https://github.com/google-deepmind/concordia)**<br>Google DeepMind | ⚠️ 需手動配置 | 不限 | ⚠️ 模組化但 freetext | ❌ | ❌ | ❌ | ❌ |
+| **[Mesa](https://github.com/projectmesa/mesa)**<br>Python ABM | ❌ 需自行編碼 | 無上限 | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **[NetLogo](https://github.com/NetLogo/NetLogo)**<br>Classic ABM | ❌ 需自行定義 | ~100,000 | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **🔭 MurmuraScope** | ✅ **任何文字** | **50,000** | ✅ Big Five+VAD+Bayes+指紋 | ✅ 自建時序回放 | ✅ MC+ARIMA+VAR | ✅ 30秒 | ✅ Monte Carlo 對比 |
+
+> ⚠️ = 部分支持，有重要限制；❌ = 不支持；✅ = 完整支持
+
+---
 
 #### 真正的差異在哪裡？/ What actually makes it different?
 
-**Generative Agents（Stanford, 2023）** — 學術界開創 LLM 代理人嘅記憶同社交互動先河，係真正嘅里程碑。但它係一個固定嘅 25 人小鎮，場景唔可更換，冇量化預測，冇知識圖譜，冇引爆點偵測，冇蒙地卡羅分析。
+**[MiroFish](https://github.com/666ghj/MiroFish)（38K stars）** — 係目前最接近 MurmuraScope 嘅工具，同樣有 5 步工作流程，同樣支持從 seed text 零配置啟動、用 OASIS 做底層、生成 KG 同代理人。呢個係我哋 UI/UX 設計嘅重要參考。**但係**，MiroFish 有幾個核心限制：代理人個性只係 MBTI + freetext persona（無大五人格、無 VAD 情緒模型、無貝葉斯信念系統）；KG 依賴 Zep Cloud 外部管理服務（無自建時序回放）；完全冇量化預測（無 Monte Carlo、無 ARIMA、無回溯驗證）；冇反事實分支；冇引爆點/回音室/認知失調偵測算法。MurmuraScope 嘅決策空間、指標、衝擊推斷係 MiroFish 冇有的。
 
-*A landmark paper that pioneered LLM agent memory and social behavior. But it's a fixed 25-person Smallville town — you can't change the setting, and there's no quantitative forecasting, no knowledge graph, no tipping point detection, no Monte Carlo.*
+*MiroFish is the closest existing tool — same 5-step flow, same zero-config seed-to-simulation concept, same OASIS foundation. A genuine and important predecessor. However: agents use MBTI + freetext persona only (no Big Five, no VAD emotions, no Bayesian beliefs); KG relies on Zep Cloud external managed service (no self-hosted temporal replay); zero quantitative forecasting; no counterfactual branching; no tipping point or echo chamber detection algorithms.*
 
-**OASIS（camel-ai）** — 可以處理百萬用戶嘅社交媒體模擬，規模驚人。但代理人係規則驅動為主，唔係深度 LLM 審議；平台固定為社交媒體設計，無法模擬地緣政治、宏觀經濟或歷史事件；冇知識圖譜。MurmuraScope 嘅 OASIS 整合係作為底層社交平台通訊層（Facebook/Instagram），喺其上建立完整認知引擎。
+**[Generative Agents](https://github.com/joonspk-research/generative_agents)（Stanford, 2023）** — 開創 LLM 代理人記憶同反思機制嘅學術里程碑，係整個領域嘅基礎。但佢係一個固定 25 人小鎮，場景唔可更換，代理人需手動逐個配置（無零配置），冇量化預測，冇 KG，冇湧現行為偵測。
 
-*Impressive million-agent social media simulation, but agents are primarily rule-driven, not LLM-deliberated. Fixed to social media — can't simulate geopolitics, macro-economics, or historical events. MurmuraScope uses OASIS as the underlying social communication layer, building a full cognitive engine on top.*
+*The landmark paper that created the field of LLM agent memory and reflection. The foundation everything builds on. But it's a fixed 25-person Smallville — you can't change the domain, agents must be hand-authored, and there's no forecasting, no KG, no emergence detection.*
 
-**Mesa / NetLogo** — 強大嘅 ABM 框架，但需要你自己寫代碼定義每個代理人嘅行為規則。冇 LLM，冇自動推斷，冇零配置。適合有編程能力嘅研究者自建模型。
+**[OASIS](https://github.com/camel-ai/oasis)（camel-ai）** — 百萬用戶規模嘅社交媒體模擬，係 MiroFish 同 MurmuraScope 共同使用嘅底層通訊引擎。代理人以 freetext persona 為主，唔係深度認知模型；固定社交媒體場景；冇 KG；冇預測。有一個反事實研究腳本（單次替代情景，唔係 Monte Carlo 集成）。
 
-*Powerful ABM frameworks, but you have to write every agent's behavior rules in code. No LLM, no auto-inference. Suited for researchers who want to build models from scratch.*
+*The underlying social communication engine used by both MiroFish and MurmuraScope. Impressive million-agent scale, but agents use freetext personas, fixed social media platform, no KG, no forecasting. One counterfactual research script exists but it's a single alternate-scenario run, not a Monte Carlo ensemble.*
 
-**MurmuraScope 嘅核心差異 / What MurmuraScope uniquely offers:**
+**[Concordia](https://github.com/google-deepmind/concordia)（Google DeepMind）** — 模組化嘅代理人框架，靈活度高，適合研究者自建模型。冇零配置，冇 KG，冇預測，需自行編碼代理人行為。
 
-- ✅ 唯一能從**任意文字**自動推斷完整世界（角色、決策、指標、衝擊）嘅引擎
-- ✅ 唯一同時具備 **LLM 認知深度**（大五人格 + VAD 情緒 + 貝葉斯信念 + 認知指紋）同**量化預測**（Monte Carlo + ARIMA + VAR + 回溯驗證）
-- ✅ 唯一整合**真實預測市場**（Polymarket）作為外部校準錨點，計算引擎 vs 市場定價嘅套利信號
-- ✅ 唯一支持**動態演化知識圖譜**，記錄每輪關係變化、支持時序回放
-- ✅ 唯一支持**反事實分支**（What-If），從任意輪次出發，對比不同決策路徑嘅蒙地卡羅結果
-- ✅ 唯一同時偵測**回音室、引爆點、情緒蔓延、認知失調、集體動量**五種湧現行為
+**Mesa / NetLogo** — 強大嘅傳統 ABM 框架，需要自行寫代碼定義每個代理人嘅規則。冇 LLM，冇自動推斷，冇零配置。
+
+---
+
+**MurmuraScope 相比現有工具嘅實際優勢 / Where MurmuraScope genuinely goes further:**
+
+- ✅ **自動推斷決策空間、指標、衝擊類型**——MiroFish 只抽取社交實體和關係，唔生成決策/指標/衝擊 schema（由 `ScenarioGenerator` LLM 完成，係 MurmuraScope 獨有）
+- ✅ **完整認知模型**——大五人格 + VAD 情緒 + 貝葉斯信念 + 認知指紋，比 MBTI+freetext 深度遠超
+- ✅ **量化預測引擎**——Monte Carlo（LHS + t-Copula）+ AutoARIMA + VAR + 回溯驗證，現有同類工具均無此功能
+- ✅ **真實預測市場校準**——整合 Polymarket 計算套利信號，無其他模擬工具有此功能
+- ✅ **自建時序知識圖譜**——嵌入式 SQLite，支持 `GET /graph/{id}/temporal?round=N` 逐輪回放，唔依賴外部服務
+- ✅ **反事實分支 + Monte Carlo 對比**——從任意輪次出發，多試驗集成比較兩條時間線，係第一類功能
+- ✅ **湧現行為量化偵測**——回音室（Louvain）+ 引爆點（KL 散度）+ 情緒蔓延 + 認知失調 + 集體動量，全部係算法輸出，唔係 config 參數
 
 ---
 
@@ -260,253 +271,6 @@
 > **認知指紋（Cognitive Fingerprint）** 係每個代理人嘅價值觀向量（3–12 個數值，範圍 0–1），例如 `prestige: 0.91, restraint: 0.21`，加上資訊飲食習慣、群組歸屬、易感性同確認偏誤強度。呢個指紋決定代理人如何詮釋世界事件同做出決策。
 >
 > *A cognitive fingerprint is each agent's value vector (3–12 values in [0,1]), e.g. `prestige: 0.91, restraint: 0.21`, plus information diet habits, group memberships, susceptibility, and confirmation bias strength. This fingerprint determines how the agent interprets world events and makes decisions.*
-
----
-
-## 🎬 Workflow Showcase
-
-> **五個真實例子，逐步展示 MurmuraScope 實際做咩。**
-> **Five real examples showing what MurmuraScope actually does — step by step.**
-
----
-
-### Showcase 1 — 香港加息危機 / Hong Kong Rate Hike Crisis
-
-**Seed Text:**
-```
-港府宣布跟隨美聯儲加息50個基點，本港樓市即時出現恐慌性拋售，
-多個屋苑成交價急跌8-12%，銀行按揭審批收緊，業主聯盟發起遊行示威。
-```
-
-**5 步模擬過程：**
-
-```
-Step 1 │ 知識圖譜建立 GRAPH BUILD
-       │ 提取實體: 港府, 美聯儲, 業主聯盟, 銀行系統, 樓市
-       │ 關係鏈: rate_hike → mortgage_squeeze → property_panic
-       │ MemoryInitializationService 將世界背景植入 LanceDB
-       │
-Step 2 │ 代理人生成 AGENT GENERATION
-       │ 模式: hk_demographic（檢測到 HK 關鍵字）
-       │ 300 個代理人橫跨 18 區，按人口普查比例加權
-       │ 人物檔案: 年齡 22–67，月入 HK$15K–$120K
-       │ Tier 1 分配: 最高影響力 30 人，每輪完整 LLM 審議
-       │
-Step 3 │ 模擬運行 SIMULATION（20 輪）
-       │ 第 3 輪:  回音室形成 — 業主群組 vs 租客群組分裂
-       │第 7 輪:  引爆點偵測 — 樓市情緒 KL 散度急升
-       │第 12 輪: 集體行動湧現 — 示威動量分數達 0.73
-       │第 17 輪: 信念極化: 親政府 34% vs 反政府 58%
-       │ Polymarket 匹配: "HK 樓價跌逾10%" — 引擎: 67%, 市場: 51%
-       │
-Step 4 │ 報告生成 REPORT
-       │ ReACT 代理人運行 14 個 XAI 工具: 情緒軌跡、派系地圖、引爆點時間軸
-       │ CCL 指數預測: -14.2%（95% CI: -8.1% 至 -19.4%）未來 4 季
-       │ 蒙地卡羅: 78% 概率 12 個月內樓價跌逾 10%
-       │
-Step 5 │ 互動 INTERACTION
-       │ 訪問代理人 #147（深水埗業主，54 歲）:
-       │ "我知道而家要賣，但係我唔捨得，呢度係我嘅根..."
-       │ 注入 God Mode 衝擊: "政府宣佈緊急按揭援助計劃"
-       │ 觀察: 示威動量 0.73 → 3 輪後降至 0.41
-```
-
-**輸出快照 / Output snapshot:**
-```
-宏觀預測 (12Q):         CCL: -14.2%  │  失業率: +1.8pp  │  恒指: -9.3%
-派系地圖:               業主 (38%) │ 租客 (29%) │ 投資者 (19%) │ 中立 (14%)
-引爆點:                 第 7 輪 (樓市情緒), 第 14 輪 (政治信任)
-Polymarket Alpha 信號:  BUY_YES 樓價下跌合約（市場優勢 +16%）
-代理人共識:             63% 預期 6 個月內再次加息
-```
-
----
-
-### Showcase 2 — 1914 年七月危機（WWI 爆發模擬）/ The July Crisis 1914
-
-**Seed Text:**
-```
-Archduke Franz Ferdinand assassinated in Sarajevo, June 28 1914.
-Austria-Hungary issues ultimatum to Serbia. Russia begins partial mobilization
-in support of Serbia. Germany issues blank cheque guarantee to Austria-Hungary.
-France bound by alliance to Russia. Britain watches Belgian neutrality.
-Six weeks to world war.
-```
-
-**引擎建構內容 / What the engine builds:**
-
-```
-KG 節點提取:        奧匈帝國, 塞爾維亞, 俄國, 德國, 法國, 英國,
-                    鄂圖曼帝國, 保加利亞, 弗朗茨·約瑟夫,
-                    威廉二世, 尼古拉二世, 格雷外相, 潘加萊
-關係映射:           alliance_obligation, ultimatum_issuer, mobilization_trigger,
-                    blank_cheque_guarantee, pan-Slavic_solidarity
-
-生成代理人 (kg_driven 模式):
-  "威廉二世 Kaiser Wilhelm II"
-                    Tier 1 │ 價值觀: prestige 0.91, restraint 0.21
-                    易感性: 0.61 │ 確認偏誤: 0.77
-  "尼古拉二世 Tsar Nicholas II"
-                    Tier 1 │ 泛斯拉夫責任感 0.83, 厭戰 0.69
-  "愛德華·格雷 Sir Edward Grey"
-                    Tier 1 │ 均勢原則 0.88, 不干涉 0.71
-  ... (共 54 個代理人)
-
-LLM 生成決策類型:
-  ISSUE_ULTIMATUM, ACCEPT_TERMS, REJECT_TERMS, PARTIAL_MOBILIZATION,
-  FULL_MOBILIZATION, INVOKE_ALLIANCE, OFFER_MEDIATION, DECLARE_WAR
-
-LLM 生成指標:
-  escalation_momentum（升級動量）, alliance_cohesion（聯盟凝聚力）,
-  mobilization_irreversibility（動員不可逆性）, diplomatic_window（外交窗口）
-```
-
-**15 輪模擬結果 / Simulation result:**
-```
-第 2 輪: 塞爾維亞接受最後通牒 9/10 條款 — 外交窗口: 0.61
-         奧匈鷹派壓倒溫和派，要求完全拒絕
-第 5 輪: 俄國部分動員觸發德國戰爭計劃鎖定
-         引爆點: 動員不可逆性越過 0.70 門檻
-第 9 輪: 施利芬計劃啟動 — 外交窗口崩潰至 0.04
-         連鎖反應: 法國動員 → 英國援引比利時中立保障
-第 15 輪: 升級動量: 0.94 │ 外交窗口: 0.02
-
-蒙地卡羅（100 次試驗）:
-  避免戰爭（塞爾維亞完全屈服）: 8%  (CI: 4–13%)
-  局部奧塞戰爭:               19%  (CI: 13–25%)
-  世界大戰（歷史結果）:        52%  (CI: 45–59%)
-
-反事實分支: "威廉二世在第 5 輪叫停動員"
-  → 開戰概率跌至 0.23
-  → 但 67% 試驗中，第 12 輪前出現內部政權危機
-```
-
----
-
-### Showcase 3 — 伊朗-以色列升級情景 / Iran-Israel Escalation
-
-**Seed Text:**
-```
-Iranian drone swarms struck Israeli military positions in the Negev.
-Israel's Iron Dome intercepted 94% of projectiles. PM Netanyahu calls emergency
-cabinet session. US 5th Fleet repositions to Persian Gulf. Oil futures spike 12%.
-Hezbollah signals readiness for northern front activation.
-```
-
-**代理人和場景 / Agents and scenario:**
-```
-Tier 1 代理人:
-  內塔尼亞胡內閣 (6)  — 鷹派 vs 務實派分裂
-  以色列國防軍 (4)    — 升級門檻建模
-  伊朗革命衛隊 (5)    — 代理人戰爭計算
-  真主黨指揮部 (3)    — 啟動時機評估
-  美國 NSC (4)        — 威懾信號
-  阿拉伯聯盟 (8)      — 正常化協議保護
-  ... (共 67 個)
-
-LLM 生成指標:
-  escalation_probability（升級概率）, oil_price_delta（油價變動）,
-  civilian_casualty_risk（平民傷亡風險）, regional_stability_index（地區穩定指數）
-
-LLM 生成衝擊:
-  HEZBOLLAH_ACTIVATION, US_CARRIER_DEPLOYMENT,
-  SAUDI_MEDIATION_OFFER, IRAN_NUCLEAR_ESCALATION
-```
-
-**模擬輸出 / Output:**
-```
-升級概率走勢:
-  第 3 輪:  0.34  (內閣分裂，美國發出克制信號)
-  第 7 輪:  0.61  (注入真主黨啟動衝擊)
-  第 11 輪: 0.78  (引爆點 — 革命衛隊鷹派主導委員會)
-  第 15 輪: 0.52  (美國最後通牒觸發伊朗降級信號)
-
-蒙地卡羅（100 次試驗）:
-  全面地區戰爭:        23% (CI: 17–29%)
-  有限交火後停火:      54% (CI: 48–60%)
-  談判停火:            23% (CI: 17–29%)
-
-油價預測:   未來 3 個月 +18–34%（95% CI）
-```
-
----
-
-### Showcase 4 — OpenAI vs Anthropic vs Google（企業競爭）/ Corporate Competition
-
-**Seed Text:**
-```
-OpenAI's GPT-5 launch captures enterprise market. Anthropic's Claude 4 leads
-on safety benchmarks and European regulatory approval. Google DeepMind's Gemini
-Ultra 2.0 integrates into 3B Android devices. Microsoft locks in $10B OpenAI
-exclusivity. Meta releases LLaMA 4 open-source.
-```
-
-**場景 / Scenario:**
-```
-Tier 1 企業代理人:
-  OpenAI 策略團隊     — 市場份額防守，定價壓力
-  Anthropic 安全委員會 — 監管槓桿，企業信任
-  Google DeepMind R&D — 分發護城河
-  Microsoft Azure BD  — 排他協議執行
-  Meta AI（開源）     — 生態系統商品化策略
-  企業 CIO 委員會     — 供應商評估，鎖定風險
-
-LLM 生成指標:
-  market_share（市場份額）, regulatory_risk（監管風險）,
-  enterprise_adoption（企業採用率）, open_source_pressure（開源壓力）
-```
-
-**輸出 / Output:**
-```
-第 12 輪派系快照:
-  安全優先陣營:  Anthropic + 歐盟監管機構 (34% 決策權重)
-  分發護城河:    Google + Microsoft (41%)
-  開源生態:      Meta + 開發者社群 (25%)
-
-市場份額預測（蒙地卡羅，未來 8 季）:
-  OpenAI:    38% → 31% (CI: 27–35%)
-  Google:    22% → 28% (CI: 24–33%)
-  Anthropic: 12% → 18% (CI: 14–22%)
-  Meta/OSS:   8% → 15% (CI: 11–19%)
-
-第 9 輪引爆點: 歐盟執法衝擊令閉源模型信任崩潰
-  → 觸發 3 輪企業重新評估決策連鎖反應
-```
-
----
-
-### Showcase 5 — 反事實分析：「如果美聯儲 2022 年降息？」/ What-If Branch
-
-**使用 MurmuraScope 反事實分支功能 / Using MurmuraScope's counterfactual branch:**
-
-```bash
-POST /simulation/{session_id}/branch
-{
-  "branch_name": "Fed_Pivot_2022",
-  "shock_at_round": 3,
-  "shock_type": "RATE_CUT_50BPS",
-  "description": "美聯儲逆轉 — 降息 50bps 代替加息"
-}
-```
-
-```
-基線時間線:   美聯儲加息 → 通脹持續 → 衰退概率 0.61
-分支時間線:   美聯儲降息 → 資產價格飆升 → 通脹重新加速
-              第 8 輪分歧: 兩條時間線相關性降至 0.43（重大分叉）
-
-蒙地卡羅對比（各 100 次試驗）:
-  基線:  衰退概率 0.61 (CI: 0.54–0.68)
-  分支:  衰退概率 0.29 (CI: 0.22–0.36)
-         但是: 12 個月通脹 >5% 概率: 0.71 (CI: 0.64–0.78)
-
-第 15 輪代理人信念對比:
-  基線:  物業信心: 0.31 │ 工作安全感: 0.44
-  分支:  物業信心: 0.67 │ 工作安全感: 0.71
-         但是: 購買力: 0.29（vs 基線 0.41）
-
-報告結論: "聯儲降息會避免短期衰退，
-但埋下結構性通脹 — 從 2025 年視角看是更差的結果。"
-```
 
 ---
 
@@ -1019,25 +783,13 @@ API Keys: OpenRouter（必填）; FRED, Fireworks（選填）/ OpenRouter (requi
 
 ### 致謝 / Acknowledgements
 
-MurmuraScope 嘅開發過程中，以下開源項目對我哋有重大啟發或直接技術貢獻：
+MurmuraScope 站在許多優秀開源工作嘅肩膀上，衷心感謝：
 
-**直接整合 / Directly Integrated:**
-- **[OASIS (camel-ai/oasis)](https://github.com/camel-ai/oasis)** — 作為底層社交媒體通訊層（Facebook/Instagram 互動模擬），以子進程形式運行。OASIS 嘅大規模代理人通訊架構係我哋社交動態引擎嘅骨幹。
-- **[CAMEL (camel-ai/camel)](https://github.com/camel-ai/camel)** — OASIS 嘅依賴框架，提供 LLM 代理人通訊基礎設施。
-
-**重大啟發 / Major Inspiration:**
-- **[Generative Agents (joonspk-research/generative_agents)](https://github.com/joonspk-research/generative_agents)** — Stanford Park et al. (2023) 論文及代碼，係 LLM 代理人情節記憶、反思（Reflection）同計劃（Planning）架構嘅先驅。我哋嘅 `AgentMemoryService`、`BeliefSystem` 同認知指紋設計受其深度啟發。
-- **[Zep Memory](https://github.com/getzep/zep)** — 知識圖譜記憶模式（Zep-style graph evolution）：代理人行動 → 自然語言 → 實體抽取 → 圖譜注入，係我哋 `KGGraphUpdater` 設計嘅參考架構。
-- **[MiroFish (666ghj/MiroFish)](https://github.com/666ghj/MiroFish)** — 5 步工作流程 UI/UX 概念參考。**重要：我哋係 Clean Room 實現，所有代碼獨立編寫，唔係 fork 或改編，以規避 AGPL v3 風險。**
-
-**技術組件 / Technical Components:**
-- **[LanceDB](https://github.com/lancedb/lancedb)** — 嵌入式向量資料庫，用於代理人語義記憶存儲（384 維多語言嵌入）。
-- **[FastAPI](https://github.com/tiangolo/fastapi)** — 後端 API 框架。
-- **[Vue 3](https://github.com/vuejs/vue)** — 前端框架。
-
-如果你係上述項目嘅維護者，對我哋嘅引用方式有任何問題，請直接聯絡我哋。
-
-*If you are a maintainer of any of the above projects and have concerns about attribution, please reach out directly.*
+- **[OASIS](https://github.com/camel-ai/oasis)** 同 **[CAMEL](https://github.com/camel-ai/camel)**（camel-ai）— 我哋嘅社交平台模擬層直接建立喺 OASIS 之上，佢哋令大規模代理人通訊成為可能。
+- **[Generative Agents](https://github.com/joonspk-research/generative_agents)**（Stanford, Park et al. 2023）— 開創咗 LLM 代理人記憶同反思架構，係整個領域嘅奠基之作，深深影響咗我哋嘅代理人設計。
+- **[Zep Memory](https://github.com/getzep/zep)** — 佢哋嘅知識圖譜記憶設計模式啟發咗我哋嘅 KG 演化方式。
+- **[MiroFish](https://github.com/666ghj/MiroFish)** — 一個很有啟發性嘅項目，幫我哋思考咗 5 步工作流程嘅 UI 設計。
+- **[LanceDB](https://github.com/lancedb/lancedb)**、**[FastAPI](https://github.com/tiangolo/fastapi)**、**[Vue 3](https://github.com/vuejs/vue)** — 撐起整個系統嘅核心技術組件。
 
 ---
 
