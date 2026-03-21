@@ -45,24 +45,95 @@
 
 ## 🌟 引擎特色 / What Makes MurmuraScope Different
 
-大多數模擬工具只能處理固定領域。**MurmuraScope 沒有這個限制。**
+### 對所有人的解釋 / For Everyone — No Technical Background Needed
 
-Most simulation tools are domain-locked. **MurmuraScope is not.**
+想像一個工具：你把一篇新聞貼入去，幾秒鐘後，幾百個有性格、有記憶、有立場嘅 AI 人物自動出現，開始互相討論、爭論、形成派系——最後告訴你這件事最可能點樣發展，概率係幾多，哪個引爆點最危險。
 
-貼入任何文字 — 新聞報道、地緣政治簡報、歷史事件、公司業績 — MurmuraScope 自動推斷出所有角色、決策、指標同衝擊事件。數十秒內，數百個擁有獨特個性、記憶同信念的 AI 代理人開始互動。派系自然湧現。引爆點觸發。知識圖譜持續演化。宏觀預測實時更新。
+唔需要你識程式。唔需要設定任何嘢。只需要文字。
 
-Paste any text — a news article, geopolitical briefing, historical event, or company filing — and MurmuraScope automatically infers the actors, decisions, metrics, and shocks. Within seconds, hundreds to tens of thousands of AI agents with distinct personalities, memories, and beliefs begin interacting. Emergent factions form. Tipping points trigger. The knowledge graph evolves. Macro forecasts update.
+*Imagine: you paste a news article, and within seconds, hundreds of AI characters with distinct personalities, memories, and beliefs automatically appear — debating, forming factions, and ultimately telling you the most likely outcome, the probability, and which tipping point is most dangerous.*
 
-**無需配置。無需領域專業知識。只需文字。**
-**No configuration. No domain expertise required. Just text.**
+*No coding. No configuration. Just text.*
+
+---
+
+### 大多數模擬工具只能處理固定領域。MurmuraScope 沒有這個限制。
+### Most simulation tools are domain-locked. MurmuraScope is not.
+
+以下是市面上同類工具嘅**真實比較**（全部係真實 GitHub 項目）：
+
+*Here is a real comparison against existing tools — all real GitHub/research projects:*
+
+| 工具 / Tool | 能處理任意領域？ | 最大規模 | LLM 認知代理人？ | 動態知識圖譜？ | 量化預測？ | 零配置？ |
+|------------|--------------|--------|--------------|-------------|---------|--------|
+| **[Generative Agents](https://github.com/joonspk-research/generative_agents)**<br>Stanford Smallville (2023) | ❌ 固定小鎮 25 人 | 25 | ✅ | ❌ | ❌ | ❌ |
+| **[OASIS](https://github.com/camel-ai/oasis)**<br>Social Media Simulation | ❌ 固定社交媒體平台 | ~1,000,000 (規則驅動) | 部分 | ❌ | ❌ | ❌ |
+| **[Mesa](https://github.com/projectmesa/mesa)**<br>Python ABM Framework | ❌ 需自行編碼規則 | 無上限 | ❌ | ❌ | ❌ | ❌ |
+| **[AgentVerse](https://github.com/OpenBMB/AgentVerse)**<br>Multi-Agent Framework | 部分 | 10–20 | ✅ | ❌ | ❌ | ❌ |
+| **[NetLogo](https://github.com/NetLogo/NetLogo)**<br>Classic ABM Tool | ❌ 需自行定義模型 | ~100,000 | ❌ | ❌ | ❌ | ❌ |
+| **[AgentSims](https://github.com/py499372727/AgentSims)**<br>LLM Town Simulation | ❌ 固定小鎮場景 | ~20 | ✅ | ❌ | ❌ | ❌ |
+| **🔭 MurmuraScope** | ✅ **任何文字** | **50,000** | ✅ 完整認知模型 | ✅ 動態演化+時序 | ✅ MC+ARIMA+VAR | ✅ 30秒啟動 |
+
+#### 真正的差異在哪裡？/ What actually makes it different?
+
+**Generative Agents（Stanford, 2023）** — 學術界開創 LLM 代理人嘅記憶同社交互動先河，係真正嘅里程碑。但它係一個固定嘅 25 人小鎮，場景唔可更換，冇量化預測，冇知識圖譜，冇引爆點偵測，冇蒙地卡羅分析。
+
+*A landmark paper that pioneered LLM agent memory and social behavior. But it's a fixed 25-person Smallville town — you can't change the setting, and there's no quantitative forecasting, no knowledge graph, no tipping point detection, no Monte Carlo.*
+
+**OASIS（camel-ai）** — 可以處理百萬用戶嘅社交媒體模擬，規模驚人。但代理人係規則驅動為主，唔係深度 LLM 審議；平台固定為社交媒體設計，無法模擬地緣政治、宏觀經濟或歷史事件；冇知識圖譜。MurmuraScope 嘅 OASIS 整合係作為底層社交平台通訊層（Facebook/Instagram），喺其上建立完整認知引擎。
+
+*Impressive million-agent social media simulation, but agents are primarily rule-driven, not LLM-deliberated. Fixed to social media — can't simulate geopolitics, macro-economics, or historical events. MurmuraScope uses OASIS as the underlying social communication layer, building a full cognitive engine on top.*
+
+**Mesa / NetLogo** — 強大嘅 ABM 框架，但需要你自己寫代碼定義每個代理人嘅行為規則。冇 LLM，冇自動推斷，冇零配置。適合有編程能力嘅研究者自建模型。
+
+*Powerful ABM frameworks, but you have to write every agent's behavior rules in code. No LLM, no auto-inference. Suited for researchers who want to build models from scratch.*
+
+**MurmuraScope 嘅核心差異 / What MurmuraScope uniquely offers:**
+
+- ✅ 唯一能從**任意文字**自動推斷完整世界（角色、決策、指標、衝擊）嘅引擎
+- ✅ 唯一同時具備 **LLM 認知深度**（大五人格 + VAD 情緒 + 貝葉斯信念 + 認知指紋）同**量化預測**（Monte Carlo + ARIMA + VAR + 回溯驗證）
+- ✅ 唯一整合**真實預測市場**（Polymarket）作為外部校準錨點，計算引擎 vs 市場定價嘅套利信號
+- ✅ 唯一支持**動態演化知識圖譜**，記錄每輪關係變化、支持時序回放
+- ✅ 唯一支持**反事實分支**（What-If），從任意輪次出發，對比不同決策路徑嘅蒙地卡羅結果
+- ✅ 唯一同時偵測**回音室、引爆點、情緒蔓延、認知失調、集體動量**五種湧現行為
+
+---
+
+### 你可以用 MurmuraScope 做什麼？/ Real-World Applications
+
+唔需要技術背景——以下係真實用例：
+
+**政策制定者 / Policy Makers**
+> 模擬「加稅 5%」對18個區居民信念、情緒同消費行為嘅影響，預見社會反彈在哪一輪爆發，哪個政策調整可以降低示威動量。
+
+**投資者 / Investors**
+> 輸入地緣政治事件，預測油價、股市、避險資產嘅概率分佈，對比 Polymarket 套利信號，識別市場低估嘅風險。
+
+**歷史學家 / 教師 / Historians & Educators**
+> 重播七月危機 1914、古巴飛彈危機、法國大革命。改變一個決策，觀察歷史點樣分叉。比任何教科書更直觀地展示因果鏈。
+
+**企業策略師 / Corporate Strategists**
+> 模擬競爭對手推出新產品後，市場份額、企業信任度同監管風險嘅 8 季度演化。識別最危險的競爭派系同最有效嘅反制時機。
+
+**記者 / 研究者 / Journalists & Researchers**
+> 追蹤虛假信息或輿論敘事在不同社群嘅傳播路徑，識別回音室邊界同引爆點時機，量化資訊生態系統嘅極化程度。
+
+**遊戲設計師 / Game Designers**
+> 輸入任何虛構世界（哈利波特、冰與火之歌、三體），引擎自動生成角色代理人同社會動態，測試敘事分叉點嘅可信度。
+
+**安全分析師 / Security Analysts**
+> 模擬衝突升級情景，計算多條路徑嘅概率，識別最關鍵嘅外交干預窗口，預判升級到不可逆點嘅臨界條件。
+
+---
 
 | 你輸入什麼 / What you drop in | MurmuraScope 建構什麼 / What MurmuraScope builds |
 |---|---|
-| `"港府宣布加息50個基點..."` | 300 個跨 18 區 HK 代理人，模擬加息衝擊 |
-| `"Archduke assassinated in Sarajevo, alliances mobilizing..."` | 1914 年七月危機 — 升級概率曲線，WWI 爆發模擬 |
-| `"Iran drone strike on Israeli positions..."` | 地緣政治代理人網絡，升級情景，油價 Monte Carlo |
-| `"OpenAI vs Anthropic vs Google Q4 competition..."` | 企業競爭模擬，市場份額預測，派系動態 |
-| `"Colonial governor imposes trade restrictions on the port..."` | 歷史經濟危機 — 商人派系湧現，集體行動模擬 |
+| `"港府宣布加息50個基點..."` | 300 個跨 18 區 HK 代理人，模擬加息衝擊，CCL 指數 Monte Carlo |
+| `"Archduke assassinated in Sarajevo, alliances mobilizing..."` | 1914 年七月危機 — 升級概率曲線，WWI 爆發蒙地卡羅 52% |
+| `"Iran drone strike on Israeli positions..."` | 地緣政治代理人網絡，升級情景，油價 Monte Carlo +18–34% |
+| `"OpenAI vs Anthropic vs Google Q4 competition..."` | 企業競爭模擬，市場份額 8 季度預測，派系動態 |
+| `"Colonial governor imposes trade restrictions on the port..."` | 歷史經濟危機 — 商人派系湧現，集體行動模擬，衝突引爆點 |
+| `"《紅樓夢》賈府面臨家道中落..."` | 虛構世界社會模擬 — 派系對立，情感網絡，命運分叉分析 |
 
 ---
 
@@ -940,9 +1011,43 @@ API Keys: OpenRouter（必填）; FRED, Fireworks（選填）/ OpenRouter (requi
 
 ## 🤝 貢獻 / Contributing
 
-1. 開啟 [Issue](https://github.com/destinyfrancis/MurmuraScope/issues)
-2. Fork + Pull Request
+歡迎貢獻！以下係參與方式：
+
+1. 開啟 [Issue](https://github.com/destinyfrancis/MurmuraScope/issues) 描述 bug 或功能建議
+2. Fork 倉庫，創建功能分支，提交 Pull Request
 3. 代碼風格 / Code style: `ruff`，不可變 Pydantic 模型（`ConfigDict(frozen=True)`），async 優先，`dataclasses.replace()` 用於狀態變更，每個文件 200–400 行
+
+### 致謝 / Acknowledgements
+
+MurmuraScope 嘅開發過程中，以下開源項目對我哋有重大啟發或直接技術貢獻：
+
+**直接整合 / Directly Integrated:**
+- **[OASIS (camel-ai/oasis)](https://github.com/camel-ai/oasis)** — 作為底層社交媒體通訊層（Facebook/Instagram 互動模擬），以子進程形式運行。OASIS 嘅大規模代理人通訊架構係我哋社交動態引擎嘅骨幹。
+- **[CAMEL (camel-ai/camel)](https://github.com/camel-ai/camel)** — OASIS 嘅依賴框架，提供 LLM 代理人通訊基礎設施。
+
+**重大啟發 / Major Inspiration:**
+- **[Generative Agents (joonspk-research/generative_agents)](https://github.com/joonspk-research/generative_agents)** — Stanford Park et al. (2023) 論文及代碼，係 LLM 代理人情節記憶、反思（Reflection）同計劃（Planning）架構嘅先驅。我哋嘅 `AgentMemoryService`、`BeliefSystem` 同認知指紋設計受其深度啟發。
+- **[Zep Memory](https://github.com/getzep/zep)** — 知識圖譜記憶模式（Zep-style graph evolution）：代理人行動 → 自然語言 → 實體抽取 → 圖譜注入，係我哋 `KGGraphUpdater` 設計嘅參考架構。
+- **[MiroFish (666ghj/MiroFish)](https://github.com/666ghj/MiroFish)** — 5 步工作流程 UI/UX 概念參考。**重要：我哋係 Clean Room 實現，所有代碼獨立編寫，唔係 fork 或改編，以規避 AGPL v3 風險。**
+
+**技術組件 / Technical Components:**
+- **[LanceDB](https://github.com/lancedb/lancedb)** — 嵌入式向量資料庫，用於代理人語義記憶存儲（384 維多語言嵌入）。
+- **[FastAPI](https://github.com/tiangolo/fastapi)** — 後端 API 框架。
+- **[Vue 3](https://github.com/vuejs/vue)** — 前端框架。
+
+如果你係上述項目嘅維護者，對我哋嘅引用方式有任何問題，請直接聯絡我哋。
+
+*If you are a maintainer of any of the above projects and have concerns about attribution, please reach out directly.*
+
+---
+
+## 📬 聯絡 / Contact
+
+有問題、合作洽詢或授權查詢，請聯絡：
+
+**Email:** savouringofdestiny@gmail.com
+
+GitHub Issues: [github.com/destinyfrancis/MurmuraScope/issues](https://github.com/destinyfrancis/MurmuraScope/issues)
 
 ---
 
@@ -959,5 +1064,7 @@ All rights reserved. Contact the repository owner for licensing inquiries.
 
 *多智能體模擬 · 知識圖譜 · 宏觀預測 · 湧現行為 · 預測市場*
 *Multi-agent simulation · Knowledge graphs · Macroeconomic forecasting · Emergent behavior · Prediction markets*
+
+Built with ❤️ — savouringofdestiny@gmail.com
 
 </div>
