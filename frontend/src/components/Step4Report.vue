@@ -12,6 +12,16 @@ const props = defineProps({
 
 const emit = defineEmits(['report-generated', 'update:session'])
 
+// Sanitize HTML to prevent XSS from LLM-generated markdown.
+// Strips <script>, <iframe>, javascript: URIs, and inline event handlers.
+function sanitize(html) {
+  return html
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
+    .replace(/javascript:/gi, '')
+    .replace(/on\w+\s*=/gi, '')
+}
+
 const sharing = ref(false)
 const shareStatus = ref('')
 async function handleShare() {
@@ -99,7 +109,7 @@ let typewriterTimer = null
 
 const renderedDisplayReport = computed(() => {
   if (!displayedReport.value) return ''
-  return marked.parse(displayedReport.value)
+  return sanitize(marked.parse(displayedReport.value))
 })
 
 watch(reportContent, (newContent) => {
