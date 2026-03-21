@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import statistics
 import uuid
 from dataclasses import dataclass, field
 from typing import Any
@@ -526,9 +527,13 @@ class SwarmEnsemble:
                 o.final_belief_centroid.get(topic, 0.5)
                 for o in outcomes
             )
-            p25 = vals[max(0, len(vals) // 4)]
-            median = vals[len(vals) // 2]
-            p75 = vals[max(0, 3 * len(vals) // 4)]
+            if len(vals) < 2:
+                p25 = median = p75 = vals[0] if vals else 0.5
+            else:
+                # statistics.quantiles(n=4) returns [p25, p50, p75] with
+                # linear interpolation — correct for any list size.
+                quarts = statistics.quantiles(vals, n=4)
+                p25, median, p75 = quarts[0], quarts[1], quarts[2]
             belief_cloud[topic] = (
                 round(p25, 4), round(median, 4), round(p75, 4),
             )

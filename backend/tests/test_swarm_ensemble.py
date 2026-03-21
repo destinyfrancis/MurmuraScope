@@ -1,6 +1,7 @@
 """Unit tests for SwarmEnsemble probability cloud pipeline."""
 from __future__ import annotations
 
+import statistics as _statistics
 import pytest
 
 from backend.app.services.swarm_ensemble import (
@@ -178,3 +179,46 @@ class TestFrozenDataclasses:
         import dataclasses
         with pytest.raises(dataclasses.FrozenInstanceError):
             cloud.n_replicas = 20  # type: ignore[misc]
+
+
+def test_belief_cloud_percentiles_use_interpolation():
+    """p25/median/p75 must match statistics.quantiles(), not integer indexing.
+
+    For a 4-element sorted list [0.1, 0.3, 0.7, 0.9]:
+    - Integer index: vals[1] = 0.3 (p25), vals[2] = 0.7 (median — wrong for even N)
+    - statistics.quantiles(n=4): p25=0.2, median=0.5, p75=0.8 (interpolated)
+
+    The integer-index approach biases p25/p75 toward the inner values.
+    """
+    from backend.app.services.swarm_ensemble import SwarmEnsemble, TrajectoryOutcome
+
+    ensemble = SwarmEnsemble.__new__(SwarmEnsemble)  # skip __init__ (needs DB)
+
+    outcomes = [
+        TrajectoryOutcome(
+            replica_index=i,
+            branch_session_id=f"branch_{i}",
+            faction_count=2,
+            tipping_point_rounds=(),
+            dominant_faction_size_ratio=0.5,
+            final_belief_centroid={"metric_a": val},
+            polarization_score=0.1,
+        )
+        for i, val in enumerate([0.1, 0.3, 0.7, 0.9])
+    ]
+
+    cloud = ensemble._aggregate("test_session", 4, outcomes)
+
+    vals = sorted([0.1, 0.3, 0.7, 0.9])
+    expected = _statistics.quantiles(vals, n=4)  # [p25, median, p75]
+    p25_expected = round(expected[0], 4)
+    p75_expected = round(expected[2], 4)
+
+    p25_actual, _, p75_actual = cloud.belief_cloud["metric_a"]
+
+    assert p25_actual == p25_expected, (
+        f"p25 must be interpolated ({p25_expected}), got {p25_actual}"
+    )
+    assert p75_actual == p75_expected, (
+        f"p75 must be interpolated ({p75_expected}), got {p75_actual}"
+    )
