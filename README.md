@@ -57,94 +57,95 @@
 
 ---
 
-### 大多數模擬工具只能處理固定領域。MurmuraScope 沒有這個限制。
-### Most simulation tools are domain-locked. MurmuraScope is not.
+### MurmuraScope 能做什麼？/ What MurmuraScope Can Do
 
-以下是市面上同類工具嘅**真實比較**（全部係真實 GitHub 項目，逐一查證）：
+**掉任何文字入去，引擎自動建構一個可模擬的世界。**
 
-*Here is a real, verified comparison against existing tools — all real GitHub/research projects:*
+唔需要你懂程式，唔需要事先配置任何嘢。把一段新聞、一份歷史記錄、一篇地緣政治簡報，甚至一本小說的段落貼進去——引擎會自動識別裡面的人物、組織、事件、關係，然後產生幾百至幾萬個有獨立性格、記憶和信念的 AI 代理人，讓他們在你眼前互動、爭論、形成派系，最後告訴你這個世界最可能怎樣演化。
 
-| 工具 / Tool | 任意領域？ | 最大規模 | LLM 認知模型？ | 動態知識圖譜？ | 量化預測？ | 零配置？ | 反事實分支？ |
-|------------|----------|--------|-------------|-------------|---------|--------|-----------|
-| **[MiroFish](https://github.com/666ghj/MiroFish)**<br>5-Step Sim (38K ⭐) | ⚠️ 社交輿論為主 | ~1,000 | ⚠️ MBTI+persona | ⚠️ Zep Cloud（外部服務）| ❌ | ✅ | ❌ |
-| **[Generative Agents](https://github.com/joonspk-research/generative_agents)**<br>Stanford Smallville | ❌ 固定小鎮 | 25 | ⚠️ freetext 記憶 | ❌ | ❌ | ❌ | ❌ |
-| **[OASIS](https://github.com/camel-ai/oasis)**<br>Social Media Sim | ❌ 社交媒體固定 | ~1,000,000 | ⚠️ freetext persona | ❌ | ❌ | ❌ | ⚠️ 研究腳本 |
-| **[Concordia](https://github.com/google-deepmind/concordia)**<br>Google DeepMind | ⚠️ 需手動配置 | 不限 | ⚠️ 模組化但 freetext | ❌ | ❌ | ❌ | ❌ |
-| **[Mesa](https://github.com/projectmesa/mesa)**<br>Python ABM | ❌ 需自行編碼 | 無上限 | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **[NetLogo](https://github.com/NetLogo/NetLogo)**<br>Classic ABM | ❌ 需自行定義 | ~100,000 | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **🔭 MurmuraScope** | ✅ **任何文字** | **50,000** | ✅ Big Five+VAD+Bayes+指紋 | ✅ 自建時序回放 | ✅ MC+ARIMA+VAR | ✅ 30秒 | ✅ Monte Carlo 對比 |
-
-> ⚠️ = 部分支持，有重要限制；❌ = 不支持；✅ = 完整支持
+*Drop any text — a news article, historical record, geopolitical brief, or even a novel excerpt — and the engine automatically identifies the actors, organizations, events, and relationships inside. It generates hundreds to tens of thousands of AI agents with distinct personalities, memories, and beliefs, lets them interact, debate, and form factions — and tells you how this world is most likely to evolve.*
 
 ---
 
-#### 真正的差異在哪裡？/ What actually makes it different?
+### 引擎的核心強項 / Core Strengths
 
-**[MiroFish](https://github.com/666ghj/MiroFish)（38K stars）** — 係目前最接近 MurmuraScope 嘅工具，同樣有 5 步工作流程，同樣支持從 seed text 零配置啟動、用 OASIS 做底層、生成 KG 同代理人。呢個係我哋 UI/UX 設計嘅重要參考。**但係**，MiroFish 有幾個核心限制：代理人個性只係 MBTI + freetext persona（無大五人格、無 VAD 情緒模型、無貝葉斯信念系統）；KG 依賴 Zep Cloud 外部管理服務（無自建時序回放）；完全冇量化預測（無 Monte Carlo、無 ARIMA、無回溯驗證）；冇反事實分支；冇引爆點/回音室/認知失調偵測算法。MurmuraScope 嘅決策空間、指標、衝擊推斷係 MiroFish 冇有的。
+**🔍 從文字到世界，全自動**
 
-*MiroFish is the closest existing tool — same 5-step flow, same zero-config seed-to-simulation concept, same OASIS foundation. A genuine and important predecessor. However: agents use MBTI + freetext persona only (no Big Five, no VAD emotions, no Bayesian beliefs); KG relies on Zep Cloud external managed service (no self-hosted temporal replay); zero quantitative forecasting; no counterfactual branching; no tipping point or echo chamber detection algorithms.*
+貼入任何文字，引擎自動推斷：有哪些行動者、他們會做哪些決策、用哪些指標衡量局勢、可能發生哪些衝擊事件。無需手動設定任何領域配置，30 秒內啟動模擬。
 
-**[Generative Agents](https://github.com/joonspk-research/generative_agents)（Stanford, 2023）** — 開創 LLM 代理人記憶同反思機制嘅學術里程碑，係整個領域嘅基礎。但佢係一個固定 25 人小鎮，場景唔可更換，代理人需手動逐個配置（無零配置），冇量化預測，冇 KG，冇湧現行為偵測。
+*Paste any text — the engine infers actors, decisions, metrics, and potential shocks automatically. No domain configuration needed. Simulation starts in 30 seconds.*
 
-*The landmark paper that created the field of LLM agent memory and reflection. The foundation everything builds on. But it's a fixed 25-person Smallville — you can't change the domain, agents must be hand-authored, and there's no forecasting, no KG, no emergence detection.*
+**🧠 真正有深度的 AI 人物**
 
-**[OASIS](https://github.com/camel-ai/oasis)（camel-ai）** — 百萬用戶規模嘅社交媒體模擬，係 MiroFish 同 MurmuraScope 共同使用嘅底層通訊引擎。代理人以 freetext persona 為主，唔係深度認知模型；固定社交媒體場景；冇 KG；冇預測。有一個反事實研究腳本（單次替代情景，唔係 Monte Carlo 集成）。
+每個代理人不只是一個標籤。他們有大五人格、三維情緒狀態、會根據新信息不斷更新的信念系統，以及獨特的認知指紋——決定他們怎樣解讀世界、做出決策。
 
-*The underlying social communication engine used by both MiroFish and MurmuraScope. Impressive million-agent scale, but agents use freetext personas, fixed social media platform, no KG, no forecasting. One counterfactual research script exists but it's a single alternate-scenario run, not a Monte Carlo ensemble.*
+*Each agent carries Big Five personality traits, a three-dimensional emotional state, a belief system that updates as new information arrives, and a unique cognitive fingerprint that shapes how they interpret events and make decisions.*
 
-**[Concordia](https://github.com/google-deepmind/concordia)（Google DeepMind）** — 模組化嘅代理人框架，靈活度高，適合研究者自建模型。冇零配置，冇 KG，冇預測，需自行編碼代理人行為。
+**📊 量化預測，唔係純模擬**
 
-**Mesa / NetLogo** — 強大嘅傳統 ABM 框架，需要自行寫代碼定義每個代理人嘅規則。冇 LLM，冇自動推斷，冇零配置。
+模擬結束後，引擎輸出有數字、有信賴區間的量化預測——例如「12個月內樓價跌逾10%的概率是78%（80% CI: 71–84%）」。背後依靠蒙地卡羅集成（100次試驗）、AutoARIMA 時序預測、多指標向量自回歸，以及對比真實歷史數據的回溯驗證。
 
----
+*The engine outputs quantitative forecasts with numbers and confidence intervals — e.g. "78% probability property prices fall >10% within 12 months." Powered by Monte Carlo ensemble (100 trials), AutoARIMA time-series forecasting, VAR multi-indicator modeling, and retrospective validation against real historical data.*
 
-**MurmuraScope 相比現有工具嘅實際優勢 / Where MurmuraScope genuinely goes further:**
+**🌐 知識圖譜，記錄世界的演化**
 
-- ✅ **自動推斷決策空間、指標、衝擊類型**——MiroFish 只抽取社交實體和關係，唔生成決策/指標/衝擊 schema（由 `ScenarioGenerator` LLM 完成，係 MurmuraScope 獨有）
-- ✅ **完整認知模型**——大五人格 + VAD 情緒 + 貝葉斯信念 + 認知指紋，比 MBTI+freetext 深度遠超
-- ✅ **量化預測引擎**——Monte Carlo（LHS + t-Copula）+ AutoARIMA + VAR + 回溯驗證，現有同類工具均無此功能
-- ✅ **真實預測市場校準**——整合 Polymarket 計算套利信號，無其他模擬工具有此功能
-- ✅ **自建時序知識圖譜**——嵌入式 SQLite，支持 `GET /graph/{id}/temporal?round=N` 逐輪回放，唔依賴外部服務
-- ✅ **反事實分支 + Monte Carlo 對比**——從任意輪次出發，多試驗集成比較兩條時間線，係第一類功能
-- ✅ **湧現行為量化偵測**——回音室（Louvain）+ 引爆點（KL 散度）+ 情緒蔓延 + 認知失調 + 集體動量，全部係算法輸出，唔係 config 參數
+引擎建立並持續更新一張知識圖譜，把人物、組織、事件之間的關係以結構化方式記錄下來。每輪模擬後自動快照，可以回溯任意時間點，觀察關係網絡如何逐輪演化。
+
+*The engine builds and continuously updates a knowledge graph — recording relationships between actors, organizations, and events. Auto-snapshots every round, with full temporal replay.*
+
+**⚡ 湧現行為，讓你看見群體動態**
+
+引擎偵測整個群體層面的湧現現象：回音室（哪些人只跟相似觀點的人交流？）、引爆點（哪一輪集體信念發生根本性轉變？）、情緒蔓延、認知失調、集體行動動量。全部係算法偵測的量化輸出。
+
+*The engine detects emergent collective phenomena: echo chambers, tipping points, emotional contagion, cognitive dissonance, and collective action momentum — all algorithmically detected and quantified.*
+
+**🔀 反事實分支——「如果換一個決策？」**
+
+在任意輪次注入不同衝擊，創建一條平行時間線。兩條時間線分別跑蒙地卡羅模擬，對比概率分佈，清楚看見那個決策究竟改變了多少。
+
+*Pause at any round, inject a different shock, and branch into a parallel timeline. Both timelines run Monte Carlo ensembles — compare probability distributions and see exactly how much that one decision changed.*
+
+**📡 對接真實預測市場**
+
+整合 Polymarket，自動匹配模擬主題的真實合約，計算引擎預測概率 vs 市場定價的差距，輸出 BUY / HOLD 信號。
+
+*Integrates Polymarket to match your simulation topic against real prediction market contracts — outputs alpha signals based on the gap between engine probability and market pricing.*
 
 ---
 
 ### 你可以用 MurmuraScope 做什麼？/ Real-World Applications
 
-唔需要技術背景——以下係真實用例：
-
 **政策制定者 / Policy Makers**
-> 模擬「加稅 5%」對18個區居民信念、情緒同消費行為嘅影響，預見社會反彈在哪一輪爆發，哪個政策調整可以降低示威動量。
+> 在推行新政策前，先模擬它對不同社群的衝擊——哪個群體最先反彈？哪一輪會爆發示威動量？哪個微調可以降低社會阻力？
 
 **投資者 / Investors**
-> 輸入地緣政治事件，預測油價、股市、避險資產嘅概率分佈，對比 Polymarket 套利信號，識別市場低估嘅風險。
+> 輸入地緣政治事件，預測資產走勢的概率分佈，對比預測市場信號，在市場反應前識別風險與機會。
 
 **歷史學家 / 教師 / Historians & Educators**
-> 重播七月危機 1914、古巴飛彈危機、法國大革命。改變一個決策，觀察歷史點樣分叉。比任何教科書更直觀地展示因果鏈。
+> 重播任何歷史轉捩點，改變一個決策，觀察歷史如何分叉。比教科書更直觀地展示因果鏈。
 
 **企業策略師 / Corporate Strategists**
-> 模擬競爭對手推出新產品後，市場份額、企業信任度同監管風險嘅 8 季度演化。識別最危險的競爭派系同最有效嘅反制時機。
+> 模擬競爭對手的行動後，市場動態如何演化——誰會轉投陣營？監管風險幾時爆發？
 
 **記者 / 研究者 / Journalists & Researchers**
-> 追蹤虛假信息或輿論敘事在不同社群嘅傳播路徑，識別回音室邊界同引爆點時機，量化資訊生態系統嘅極化程度。
+> 追蹤輿論敘事在不同社群的傳播路徑，識別回音室邊界同引爆點時機，量化資訊生態的極化程度。
 
 **遊戲設計師 / Game Designers**
-> 輸入任何虛構世界（哈利波特、冰與火之歌、三體），引擎自動生成角色代理人同社會動態，測試敘事分叉點嘅可信度。
+> 輸入任何虛構世界，引擎自動生成角色代理人同社會動態，測試敘事分叉點的可信度。
 
 **安全分析師 / Security Analysts**
-> 模擬衝突升級情景，計算多條路徑嘅概率，識別最關鍵嘅外交干預窗口，預判升級到不可逆點嘅臨界條件。
+> 模擬衝突升級情景，計算多條路徑的概率，識別最關鍵的干預窗口。
 
 ---
 
 | 你輸入什麼 / What you drop in | MurmuraScope 建構什麼 / What MurmuraScope builds |
 |---|---|
-| `"港府宣布加息50個基點..."` | 300 個跨 18 區 HK 代理人，模擬加息衝擊，CCL 指數 Monte Carlo |
-| `"Archduke assassinated in Sarajevo, alliances mobilizing..."` | 1914 年七月危機 — 升級概率曲線，WWI 爆發蒙地卡羅 52% |
-| `"Iran drone strike on Israeli positions..."` | 地緣政治代理人網絡，升級情景，油價 Monte Carlo +18–34% |
-| `"OpenAI vs Anthropic vs Google Q4 competition..."` | 企業競爭模擬，市場份額 8 季度預測，派系動態 |
-| `"Colonial governor imposes trade restrictions on the port..."` | 歷史經濟危機 — 商人派系湧現，集體行動模擬，衝突引爆點 |
-| `"《紅樓夢》賈府面臨家道中落..."` | 虛構世界社會模擬 — 派系對立，情感網絡，命運分叉分析 |
+| 香港加息政策新聞 | HK 代理人社會，樓市走勢 Monte Carlo，政治信任分析 |
+| 1914 年七月危機文本 | 列強代理人網絡，升級概率曲線，WWI 爆發情景樹 |
+| 中東衝突新聞 | 地緣政治代理人，升級情景，油價概率分佈 |
+| AI 公司競爭簡報 | 企業競爭模擬，市場份額預測，派系動態 |
+| 虛構世界設定（小說、遊戲） | 角色代理人社會，情感網絡，派系對立，命運分叉 |
+
 
 ---
 
@@ -783,13 +784,12 @@ API Keys: OpenRouter（必填）; FRED, Fireworks（選填）/ OpenRouter (requi
 
 ### 致謝 / Acknowledgements
 
-MurmuraScope 站在許多優秀開源工作嘅肩膀上，衷心感謝：
+感謝以下開源項目：
 
-- **[OASIS](https://github.com/camel-ai/oasis)** 同 **[CAMEL](https://github.com/camel-ai/camel)**（camel-ai）— 我哋嘅社交平台模擬層直接建立喺 OASIS 之上，佢哋令大規模代理人通訊成為可能。
-- **[Generative Agents](https://github.com/joonspk-research/generative_agents)**（Stanford, Park et al. 2023）— 開創咗 LLM 代理人記憶同反思架構，係整個領域嘅奠基之作，深深影響咗我哋嘅代理人設計。
-- **[Zep Memory](https://github.com/getzep/zep)** — 佢哋嘅知識圖譜記憶設計模式啟發咗我哋嘅 KG 演化方式。
-- **[MiroFish](https://github.com/666ghj/MiroFish)** — 一個很有啟發性嘅項目，幫我哋思考咗 5 步工作流程嘅 UI 設計。
-- **[LanceDB](https://github.com/lancedb/lancedb)**、**[FastAPI](https://github.com/tiangolo/fastapi)**、**[Vue 3](https://github.com/vuejs/vue)** — 撐起整個系統嘅核心技術組件。
+- **[OASIS](https://github.com/camel-ai/oasis)** 同 **[CAMEL](https://github.com/camel-ai/camel)**（camel-ai）
+- **[Generative Agents](https://github.com/joonspk-research/generative_agents)**（Stanford, Park et al. 2023）
+- **[Zep Memory](https://github.com/getzep/zep)**
+- **[LanceDB](https://github.com/lancedb/lancedb)**、**[FastAPI](https://github.com/tiangolo/fastapi)**、**[Vue 3](https://github.com/vuejs/vue)**
 
 ---
 
