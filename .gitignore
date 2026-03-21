@@ -53,12 +53,20 @@ backend/scripts/audit_report_raw.json
 # Claude / Personal (never commit these)
 .claude/
 CLAUDE.md
+AGENTS.md
 NEXT_PHASES.md
 SYSTEM_ASSESSMENT.md
 academic_evaluation_report.md
+system_overview.md
 .superpowers/
 .coverage
 *.local.md
+
+# Test output / internal lists
+test_output.txt
+test_int_output.txt
+services_list.txt
+tests_list.txt
 
 # Playwright MCP
 .playwright-mcp/
