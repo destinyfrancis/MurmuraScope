@@ -172,6 +172,22 @@ def get_agent_provider_model() -> tuple[str, str]:
     return provider, model
 
 
+def get_agent_model(is_stakeholder: bool = True) -> tuple[str, str]:
+    """Return (provider, model) with model routing based on stakeholder status.
+
+    Stakeholders use AGENT_LLM_MODEL (stronger model).
+    Background agents use AGENT_LLM_MODEL_LITE (cheaper model).
+    Falls back to AGENT_LLM_MODEL if LITE not set.
+    """
+    if is_stakeholder:
+        return get_agent_provider_model()
+    provider = os.environ.get("AGENT_LLM_PROVIDER") or get_default_provider()
+    lite_model = os.environ.get("AGENT_LLM_MODEL_LITE")
+    if lite_model:
+        return provider, lite_model
+    return get_agent_provider_model()
+
+
 def get_report_provider_model() -> tuple[str, str]:
     """Return (provider, model) for report generation tasks.
 
