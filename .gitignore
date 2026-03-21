@@ -20,6 +20,7 @@ data/cleaned/
 *.db-shm
 *.db-wal
 data/sessions/
+data/test_sessions/
 data/vector_store/
 
 # Logs
@@ -42,6 +43,9 @@ frontend/dist/
 
 # OASIS
 oasis_output/
+
+# Audit / debug artifacts
+backend/scripts/audit_report_raw.json
 
 # Claude / Personal (never commit these)
 .claude/
