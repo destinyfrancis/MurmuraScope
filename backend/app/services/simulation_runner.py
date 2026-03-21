@@ -1793,6 +1793,57 @@ class SimulationRunner(
                         current_round=round_num,
                     )
 
+                # Task 7: retrieve feed items for decision context
+                feed_context = ""
+                try:
+                    from backend.app.services.feed_ranker import FeedRankingEngine  # noqa: PLC0415
+                    feed_engine = FeedRankingEngine()
+                    prev_round = max(0, round_num - 1)
+                    async with get_db() as _feed_db:
+                        feed_items = await feed_engine.get_agent_feed(
+                            session_id, numeric_id, prev_round, limit=5, db=_feed_db,
+                        )
+                    if feed_items:
+                        feed_lines = [
+                            f"- {item.get('oasis_username', '?')}: "
+                            f"{(item.get('content', '') or '')[:100]}"
+                            for item in feed_items
+                        ]
+                        feed_context = "\n".join(feed_lines)
+                except Exception:
+                    pass  # feed unavailable — degrade gracefully
+
+                # Task 10: retrieve trust context for decision context
+                trust_context = ""
+                try:
+                    async with get_db() as _trust_db:
+                        cursor = await _trust_db.execute(
+                            """SELECT agent_b_id, trust_score
+                               FROM agent_relationships
+                               WHERE session_id = ? AND agent_a_id = ?
+                               ORDER BY trust_score DESC LIMIT 3""",
+                            (session_id, numeric_id),
+                        )
+                        trusted = await cursor.fetchall()
+                        cursor = await _trust_db.execute(
+                            """SELECT agent_b_id, trust_score
+                               FROM agent_relationships
+                               WHERE session_id = ? AND agent_a_id = ?
+                               ORDER BY trust_score ASC LIMIT 3""",
+                            (session_id, numeric_id),
+                        )
+                        distrusted = await cursor.fetchall()
+                        trust_lines: list[str] = []
+                        for r in trusted:
+                            trust_lines.append(f"Trusted: Agent {r[0]} (trust={float(r[1]):.2f})")
+                        for r in distrusted:
+                            if float(r[1]) < 0:
+                                trust_lines.append(f"Distrusted: Agent {r[0]} (trust={float(r[1]):.2f})")
+                        if trust_lines:
+                            trust_context = "\n".join(trust_lines)
+                except Exception:
+                    pass  # trust unavailable — degrade gracefully
+
                 agent_context = {
                     "agent_id": agent_id,
                     "name": agent.get("name", ""),
@@ -1803,6 +1854,8 @@ class SimulationRunner(
                     "recent_events": recent_event_contents,
                     "faction": faction_str,
                     "recent_memories": recent_memories,
+                    "feed_context": feed_context,
+                    "trust_context": trust_context,
                     "strategic_context": strategy_context,
                     "emotional_state": (
                         {

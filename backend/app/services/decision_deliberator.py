@@ -337,11 +337,12 @@ class DecisionDeliberator:
         session_id: str,
         round_number: int,
         batch_size: int = _DEFAULT_BATCH_SIZE,
+        agent_enrichment: dict[int, dict[str, str]] | None = None,
     ) -> list[AgentDecision]:
         """Deliberate decisions for a list of eligible agents in batches.
 
         Before LLM deliberation, queries social contagion context for each
-        agent. When ≥3 trusted peers show distress, injects contagion context
+        agent. When >=3 trusted peers show distress, injects contagion context
         into the prompt to enable herd behaviour.
 
         Args:
@@ -351,6 +352,9 @@ class DecisionDeliberator:
             session_id: Simulation session identifier.
             round_number: Current simulation round.
             batch_size: Max agents per LLM call (default 10).
+            agent_enrichment: Optional per-agent enrichment context keyed by
+                agent_id.  Each value is a dict with optional keys:
+                ``memory``, ``fingerprint``, ``feed``, ``trust``.
 
         Returns:
             List of ``AgentDecision`` records for all processed agents.
@@ -386,6 +390,7 @@ class DecisionDeliberator:
                 return await self._deliberate_one_batch(
                     chunk, macro_state, decision_type, session_id, round_number,
                     contagion_map=contagion_map,
+                    agent_enrichment=agent_enrichment,
                 )
 
         batch_results = await asyncio.gather(
@@ -422,6 +427,7 @@ class DecisionDeliberator:
         session_id: str,
         round_number: int,
         contagion_map: dict[int, SocialContagionContext] | None = None,
+        agent_enrichment: dict[int, dict[str, str]] | None = None,
     ) -> list[AgentDecision]:
         """Call LLM for one batch and parse JSON output.
 
@@ -446,6 +452,7 @@ class DecisionDeliberator:
         messages = build_deliberation_prompt(
             agents, macro_state, decision_type,
             contagion_context="\n\n".join(contagion_sections) if contagion_sections else None,
+            agent_enrichment=agent_enrichment,
         )
         agent_id_set = {p.id for p in agents}
 

@@ -102,6 +102,7 @@ class DecisionEngine:
         macro_state: MacroState,
         macro_state_updater: Callable[[dict[str, float]], Awaitable[None]] | None = None,
         domain_pack_id: str = "hk_city",
+        agent_enrichment: dict[int, dict[str, str]] | None = None,
     ) -> dict[str, Any]:
         """Run the full decision pipeline for one simulation round.
 
@@ -118,6 +119,8 @@ class DecisionEngine:
             round_number: Current round number.
             profiles_by_id: Map of agent_id → AgentProfile.
             macro_state: Current macro-economic state.
+            agent_enrichment: Optional per-agent enrichment context (memory,
+                fingerprint, feed, trust) keyed by agent_id.
 
         Returns:
             Summary dict with counts per decision type.
@@ -160,6 +163,7 @@ class DecisionEngine:
                     decision_type=dt.value,
                     session_id=session_id,
                     round_number=round_number,
+                    agent_enrichment=agent_enrichment,
                 ))
 
         if tasks:

@@ -292,6 +292,40 @@ class AgentProfile:
 
 
 # =========================================================================
+# Cognitive fingerprint inference (HK demographics → personality-derived)
+# =========================================================================
+
+
+def _infer_fingerprint_from_demographics(
+    political_stance: float,
+    age: int,
+    income: float,
+) -> dict[str, float]:
+    """Infer cognitive fingerprint values from HK demographic attributes.
+
+    Provides a lightweight approximation of the full cognitive fingerprint
+    used in kg_driven mode, derived purely from HK census demographics.
+
+    Args:
+        political_stance: 0.0=建制派 to 1.0=民主派.
+        age: Agent's age in years.
+        income: Monthly income in HKD.
+
+    Returns:
+        Dict with authority, loyalty, openness, conformity, security,
+        and prestige scores (each 0.0–1.0).
+    """
+    return {
+        "authority": round(0.3 + 0.4 * (1.0 - political_stance), 2),
+        "loyalty": round(0.4 + 0.3 * (1.0 - political_stance), 2),
+        "openness": round(min(1.0, 0.3 + 0.02 * min(age, 40)), 2),
+        "conformity": round(max(0.1, 0.6 - 0.01 * min(age, 40)), 2),
+        "security": round(min(1.0, 0.3 + income / 100000), 2) if income else 0.5,
+        "prestige": round(min(1.0, income / 80000), 2) if income else 0.3,
+    }
+
+
+# =========================================================================
 # Behavioral params inference (HK demographics)
 # =========================================================================
 

@@ -137,7 +137,8 @@ class RelationshipLifecycleService:
                     payload=f"commitment={state.commitment:.2f}",
                 ))
 
-            # CRISIS — only on negative interactions
+            # CRISIS / DISSOLVED — compute Gottman scores once for negative interactions
+            gottman_avg = 0.0
             if valence < _CRISIS_NEGATIVITY_SIGNAL:
                 gottman = self._engine.compute_gottman_score(
                     interaction_valence=valence,
@@ -147,8 +148,8 @@ class RelationshipLifecycleService:
                         0.5 if state.rounds_since_change > 2 else 0.0
                     ),
                 )
-                agg = sum(gottman.values()) / len(gottman)
-                if agg >= _CRISIS_GOTTMAN_THRESHOLD:
+                gottman_avg = sum(gottman.values()) / max(len(gottman), 1)
+                if gottman_avg >= _CRISIS_GOTTMAN_THRESHOLD:
                     events.append(RelationshipEvent(
                         session_id=session_id,
                         round_number=round_number,
@@ -156,13 +157,13 @@ class RelationshipLifecycleService:
                         agent_b_id=bid,
                         event_type="RELATIONSHIP_CRISIS",
                         payload=(
-                            f"gottman_avg={agg:.2f} "
+                            f"gottman_avg={gottman_avg:.2f} "
                             f"contempt={gottman['contempt']:.2f}"
                         ),
                     ))
 
-            # DISSOLVED
-            if (
+            # DISSOLVED — original condition OR Gottman horsemen overwhelm (>0.8)
+            if gottman_avg > 0.8 or (
                 state.commitment < _DISSOLVED_COMMITMENT_MAX
                 and state.trust < _DISSOLVED_TRUST_MAX
             ):

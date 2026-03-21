@@ -290,6 +290,59 @@ class FeedRankingEngine:
             gini_coefficient=gini,
         )
 
+    async def get_agent_feed(
+        self,
+        session_id: str,
+        agent_id: int,
+        round_number: int,
+        limit: int = 5,
+        db: Any = None,
+    ) -> list[dict[str, Any]]:
+        """Retrieve pre-ranked feed items for decision context.
+
+        Args:
+            session_id: Simulation session UUID.
+            agent_id: Agent primary key.
+            round_number: Round to retrieve feed from.
+            limit: Maximum items to return.
+            db: Aiosqlite connection (optional, opens one if None).
+
+        Returns:
+            List of feed item dicts with rank, score, content, sentiment,
+            and oasis_username fields.
+        """
+        close_db = False
+        if db is None:
+            from backend.app.utils.db import get_db  # noqa: PLC0415
+            db = await get_db().__aenter__()
+            close_db = True
+        try:
+            cursor = await db.execute(
+                """SELECT af.rank, af.score,
+                          sa.content, sa.sentiment, sa.oasis_username
+                   FROM agent_feeds af
+                   JOIN simulation_actions sa
+                     ON sa.id = af.post_id AND sa.session_id = af.session_id
+                   WHERE af.session_id = ? AND af.agent_id = ?
+                     AND af.round_number = ?
+                   ORDER BY af.rank ASC LIMIT ?""",
+                (session_id, agent_id, round_number, limit),
+            )
+            rows = await cursor.fetchall()
+            return [
+                {
+                    "rank": row[0],
+                    "score": row[1],
+                    "content": row[2] or "",
+                    "sentiment": row[3] or "neutral",
+                    "oasis_username": row[4] or "?",
+                }
+                for row in rows
+            ]
+        finally:
+            if close_db:
+                await db.close()
+
     async def persist_feeds(
         self,
         session_id: str,

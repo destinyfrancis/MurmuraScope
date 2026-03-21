@@ -214,6 +214,7 @@ def build_deliberation_prompt(
     macro_state: MacroState,
     decision_type: str,
     contagion_context: str | None = None,
+    agent_enrichment: dict[int, dict[str, str]] | None = None,
 ) -> list[dict[str, str]]:
     """Build the message list for a batch LLM deliberation call.
 
@@ -224,10 +225,15 @@ def build_deliberation_prompt(
         contagion_context: Optional social contagion prompt section. When
             provided, injected between the agent profiles and the output
             instruction to enable herd/panic behaviour.
+        agent_enrichment: Optional per-agent enrichment context keyed by
+            agent_id.  Each value is a dict with optional keys:
+            ``memory``, ``fingerprint``, ``feed``, ``trust`` — each a
+            pre-formatted string to inject into the prompt.
 
     Returns:
         OpenAI-style message list ready for ``LLMClient.chat_json()``.
     """
+    enrichment = agent_enrichment or {}
     macro_context = macro_state.to_prompt_context()
     instructions = _DECISION_INSTRUCTIONS.get(decision_type, "")
     few_shot = _FEW_SHOT_EXAMPLES.get(decision_type, "")
@@ -243,6 +249,20 @@ def build_deliberation_prompt(
             f"OCEAN=[O={p.openness:.2f} C={p.conscientiousness:.2f} "
             f"E={p.extraversion:.2f} A={p.agreeableness:.2f} N={p.neuroticism:.2f}]"
         )
+        # Append per-agent enrichment context (fingerprint, memory, feed, trust)
+        ctx = enrichment.get(p.id, {})
+        fp = ctx.get("fingerprint", "")
+        if fp:
+            line += f"\n  認知特徵：{fp}"
+        mem = ctx.get("memory", "")
+        if mem:
+            line += f"\n  近期記憶：{mem}"
+        feed = ctx.get("feed", "")
+        if feed:
+            line += f"\n  社交動態：{feed}"
+        trust = ctx.get("trust", "")
+        if trust:
+            line += f"\n  信任關係：{trust}"
         agent_lines.append(line)
 
     agents_section = "\n".join(agent_lines)
@@ -472,6 +492,7 @@ def build_deliberation_prompt_en(
     macro_context: str,
     decision_type: str,
     contagion_context: str | None = None,
+    agent_enrichment: dict[int, dict[str, str]] | None = None,
 ) -> list[dict[str, str]]:
     """Build English-language deliberation prompt messages.
 
@@ -480,10 +501,14 @@ def build_deliberation_prompt_en(
         macro_context: Pre-rendered macro state string.
         decision_type: One of ``DecisionType`` values.
         contagion_context: Optional social contagion prompt section.
+        agent_enrichment: Optional per-agent enrichment context keyed by
+            agent_id.  Each value is a dict with optional keys:
+            ``memory``, ``fingerprint``, ``feed``, ``trust``.
 
     Returns:
         OpenAI-style message list for ``LLMClient.chat_json()``.
     """
+    enrichment = agent_enrichment or {}
     instructions = _DECISION_INSTRUCTIONS_EN.get(decision_type, "")
     few_shot = _FEW_SHOT_EXAMPLES_EN.get(decision_type, "")
 
@@ -497,6 +522,20 @@ def build_deliberation_prompt_en(
             f"OCEAN=[O={p.openness:.2f} C={p.conscientiousness:.2f} "
             f"E={p.extraversion:.2f} A={p.agreeableness:.2f} N={p.neuroticism:.2f}]"
         )
+        # Append per-agent enrichment context
+        ctx = enrichment.get(p.id, {})
+        fp = ctx.get("fingerprint", "")
+        if fp:
+            line += f"\n  Cognitive profile: {fp}"
+        mem = ctx.get("memory", "")
+        if mem:
+            line += f"\n  Recent memories: {mem}"
+        feed = ctx.get("feed", "")
+        if feed:
+            line += f"\n  Social feed: {feed}"
+        trust = ctx.get("trust", "")
+        if trust:
+            line += f"\n  Trust network: {trust}"
         agent_lines.append(line)
 
     agents_section = "\n".join(agent_lines)
@@ -532,6 +571,7 @@ def get_deliberation_prompt(
     decision_type: str,
     contagion_context: str | None = None,
     locale: str = "zh-HK",
+    agent_enrichment: dict[int, dict[str, str]] | None = None,
 ) -> list[dict[str, str]]:
     """Locale-aware deliberation prompt dispatcher.
 
@@ -542,6 +582,8 @@ def get_deliberation_prompt(
         contagion_context: Optional social contagion context string.
         locale: BCP-47 locale code.  ``"zh-HK"`` → Chinese prompts (default),
             anything else → English prompts.
+        agent_enrichment: Optional per-agent enrichment context keyed by
+            agent_id.
 
     Returns:
         OpenAI-style message list.
@@ -552,6 +594,7 @@ def get_deliberation_prompt(
             macro_state=macro_state,
             decision_type=decision_type,
             contagion_context=contagion_context,
+            agent_enrichment=agent_enrichment,
         )
     # English path — pass pre-rendered macro context string
     macro_context = macro_state.to_prompt_context()
@@ -560,4 +603,5 @@ def get_deliberation_prompt(
         macro_context=macro_context,
         decision_type=decision_type,
         contagion_context=contagion_context,
+        agent_enrichment=agent_enrichment,
     )

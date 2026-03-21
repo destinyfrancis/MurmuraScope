@@ -309,7 +309,7 @@ class AgentHooksMixin:
             if not rows:
                 return
 
-            from backend.app.services.agent_factory import AgentProfile  # noqa: PLC0415
+            from backend.app.services.agent_factory import AgentProfile, _infer_fingerprint_from_demographics  # noqa: PLC0415
             profiles_by_id: dict[int, AgentProfile] = {}
             for r in rows:
                 profiles_by_id[r["id"]] = AgentProfile(
@@ -338,11 +338,17 @@ class AgentHooksMixin:
                 mc = MacroController()
                 macro_state = await mc.get_baseline()
 
+            # ── Gather enrichment context (Tasks 5, 6, 7, 10) ──
+            agent_enrichment = await self._gather_hk_enrichment(
+                session_id, round_number, profiles_by_id,
+            )
+
             summary = await self._decision_engine.process_round_decisions(
                 session_id=session_id,
                 round_number=round_number,
                 profiles_by_id=profiles_by_id,
                 macro_state=macro_state,
+                agent_enrichment=agent_enrichment,
             )
 
             # Apply macro adjustments derived from agent decisions
@@ -372,6 +378,129 @@ class AgentHooksMixin:
                 session_id,
                 round_number,
             )
+
+    # ------------------------------------------------------------------
+    # Enrichment context gathering (Tasks 5, 6, 7, 10)
+    # ------------------------------------------------------------------
+
+    async def _gather_hk_enrichment(
+        self,
+        session_id: str,
+        round_number: int,
+        profiles_by_id: "dict[int, Any]",
+    ) -> dict[int, dict[str, str]]:
+        """Gather memory, fingerprint, feed, and trust context for HK agents.
+
+        All retrievals are best-effort: failures degrade to empty strings
+        without blocking the decision pipeline.
+
+        Returns:
+            Dict keyed by agent_id, each value is a dict with optional
+            keys ``memory``, ``fingerprint``, ``feed``, ``trust``.
+        """
+        from backend.app.services.agent_factory import _infer_fingerprint_from_demographics  # noqa: PLC0415
+
+        enrichment: dict[int, dict[str, str]] = {}
+
+        # Pre-compute fingerprints (pure computation, no I/O)
+        for agent_id, profile in profiles_by_id.items():
+            fp = _infer_fingerprint_from_demographics(
+                political_stance=getattr(profile, "political_stance", 0.5),
+                age=getattr(profile, "age", 30),
+                income=float(getattr(profile, "monthly_income", 0)),
+            )
+            fp_str = (
+                f"authority={fp['authority']:.1f}, loyalty={fp['loyalty']:.1f}, "
+                f"openness={fp['openness']:.1f}, conformity={fp['conformity']:.1f}, "
+                f"security={fp['security']:.1f}, prestige={fp['prestige']:.1f}"
+            )
+            enrichment.setdefault(agent_id, {})["fingerprint"] = fp_str
+
+        # ── Memory retrieval (Task 5) ─────────────────────────────────
+        if self._memory_service is not None:
+            # Retrieve for a sampled subset to avoid excessive latency
+            sample_ids = list(profiles_by_id.keys())[:50]
+            for agent_id in sample_ids:
+                try:
+                    mem_ctx = await self._memory_service.get_agent_context(
+                        session_id=session_id,
+                        agent_id=agent_id,
+                        current_round=round_number,
+                        context_query="",
+                    )
+                    if mem_ctx:
+                        # Trim to first 200 chars for prompt size management
+                        enrichment.setdefault(agent_id, {})["memory"] = mem_ctx[:200]
+                except Exception:
+                    pass  # memory unavailable — degrade gracefully
+
+        # ── Feed retrieval (Task 7) ───────────────────────────────────
+        try:
+            from backend.app.services.feed_ranker import FeedRankingEngine  # noqa: PLC0415
+            feed_engine = FeedRankingEngine()
+            prev_round = max(0, round_number - 1)
+            async with get_db() as db:
+                sample_ids = list(profiles_by_id.keys())[:50]
+                for agent_id in sample_ids:
+                    try:
+                        feed_items = await feed_engine.get_agent_feed(
+                            session_id, agent_id, prev_round, limit=5, db=db,
+                        )
+                        if feed_items:
+                            feed_text = "; ".join(
+                                f"{item.get('oasis_username', '?')}: "
+                                f"{(item.get('content', '') or '')[:80]}"
+                                for item in feed_items
+                            )
+                            enrichment.setdefault(agent_id, {})["feed"] = feed_text[:300]
+                    except Exception:
+                        pass
+        except Exception:
+            pass  # feed retrieval entirely optional
+
+        # ── Trust context (Task 10) ───────────────────────────────────
+        try:
+            async with get_db() as db:
+                sample_ids = list(profiles_by_id.keys())[:50]
+                for agent_id in sample_ids:
+                    try:
+                        cursor = await db.execute(
+                            """SELECT agent_b_id, trust_score
+                               FROM agent_relationships
+                               WHERE session_id = ? AND agent_a_id = ?
+                               ORDER BY trust_score DESC LIMIT 3""",
+                            (session_id, agent_id),
+                        )
+                        trusted = await cursor.fetchall()
+                        cursor = await db.execute(
+                            """SELECT agent_b_id, trust_score
+                               FROM agent_relationships
+                               WHERE session_id = ? AND agent_a_id = ?
+                               ORDER BY trust_score ASC LIMIT 3""",
+                            (session_id, agent_id),
+                        )
+                        distrusted = await cursor.fetchall()
+                        if trusted or distrusted:
+                            lines: list[str] = []
+                            for r in trusted:
+                                lines.append(
+                                    f"信任Agent{r[0]}({r[1]:.2f})"
+                                )
+                            for r in distrusted:
+                                if float(r[1]) < 0:
+                                    lines.append(
+                                        f"唔信任Agent{r[0]}({r[1]:.2f})"
+                                    )
+                            if lines:
+                                enrichment.setdefault(agent_id, {})["trust"] = (
+                                    ", ".join(lines)
+                                )
+                    except Exception:
+                        pass
+        except Exception:
+            pass  # trust retrieval entirely optional
+
+        return enrichment
 
     # ------------------------------------------------------------------
     # Phase 3: Emotional state + Belief updates

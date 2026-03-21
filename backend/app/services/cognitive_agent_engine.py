@@ -32,7 +32,7 @@ Active metrics: {active_metrics}
 You are: {name} ({role}){persona_block}
 Your core goals: {goals}
 Your current beliefs: {current_beliefs}
-Recent events you are aware of: {recent_events}{memory_block}
+Recent events you are aware of: {recent_events}{memory_block}{feed_block}{trust_block}
 Your current faction: {faction}
 Risk appetite: {risk_appetite_block}{emotional_block}{relationship_block}{strategy_block}
 
@@ -189,6 +189,14 @@ def _build_deliberation_prompt(
     recent_memories = agent_context.get("recent_memories", "")
     memory_block = f"\nYour relevant past memories:\n{recent_memories}" if recent_memories else ""
 
+    # Feed context block — top feed items from social feed (Task 7)
+    feed_context = agent_context.get("feed_context", "")
+    feed_block = f"\nYour social feed this round:\n{feed_context}" if feed_context else ""
+
+    # Trust context block — trusted/distrusted agents (Task 10)
+    trust_context = agent_context.get("trust_context", "")
+    trust_block = f"\nYour trust network:\n{trust_context}" if trust_context else ""
+
     # Strategy block — multi-round plan injected by StrategicPlanner (Phase 4)
     strategic_context = agent_context.get("strategic_context", "")
     strategy_block = strategic_context if strategic_context else ""
@@ -207,6 +215,8 @@ def _build_deliberation_prompt(
         current_beliefs=agent_context.get("current_beliefs", {}),
         recent_events=agent_context.get("recent_events", [])[-3:],
         memory_block=memory_block,
+        feed_block=feed_block,
+        trust_block=trust_block,
         faction=agent_context.get("faction", "none"),
         risk_appetite_block=risk_appetite_block,
         emotional_block=emotional_block,

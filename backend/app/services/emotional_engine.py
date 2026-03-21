@@ -103,6 +103,7 @@ class EmotionalEngine:
         personal_event_valence: float,
         controversy_exposure: float,
         pending_arousal_delta: float = 0.0,
+        relationship_crisis: bool = False,
     ) -> EmotionalState:
         """Compute new VAD state from previous state and round inputs.
 
@@ -126,6 +127,8 @@ class EmotionalEngine:
             personal_event_valence: Personal event valence (decision outcomes).
             controversy_exposure: Fraction of feed posts that are controversial.
             pending_arousal_delta: Carried-over arousal boost from dissonance denial.
+            relationship_crisis: When True, applies valence penalty (-0.1) and
+                arousal boost (+0.15) to model relationship dissolution stress.
 
         Returns:
             New :class:`EmotionalState` for next round.
@@ -173,6 +176,11 @@ class EmotionalEngine:
             0.0,
             1.0,
         )
+
+        # --- Relationship crisis penalty (Task 10) ---
+        if relationship_crisis:
+            new_valence = _clamp(new_valence - 0.1, -1.0, 1.0)
+            new_arousal = _clamp(new_arousal + 0.15, 0.0, 1.0)
 
         # --- Dominance update ---
         # Social validation: positive valence + high agreeableness → mild dominance boost
