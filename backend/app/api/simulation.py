@@ -1557,6 +1557,12 @@ async def inject_live_shock(session_id: str, shock: ScheduledShock) -> APIRespon
             )
             await db.commit()
 
+            # Dual path: also apply direct macro parameter changes if provided
+            if shock.macro_effects:
+                from backend.app.services.macro_shocks import apply_macro_effects  # noqa: PLC0415
+
+                await apply_macro_effects(session_id, shock.macro_effects, db)
+
         return APIResponse(
             success=True,
             data={"injected": True, "shock_type": shock.shock_type},

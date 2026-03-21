@@ -551,6 +551,42 @@ def apply_shock(
 # Handler registry
 # ---------------------------------------------------------------------------
 
+async def apply_macro_effects(
+    session_id: str,
+    effects: dict[str, float],
+    db: Any,
+) -> None:
+    """Apply direct macro parameter changes from a God Mode shock.
+
+    Each key in effects is a column name in macro_scenarios,
+    each value is a delta to add to the current value.
+    """
+    if not effects:
+        return
+    cursor = await db.execute(
+        "SELECT * FROM macro_scenarios WHERE session_id = ? ORDER BY round_number DESC LIMIT 1",
+        (session_id,),
+    )
+    row = await cursor.fetchone()
+    if not row:
+        return
+
+    valid_columns = set(row.keys()) - {"session_id", "round_number", "created_at"}
+    updates: dict[str, float] = {}
+    for param, delta in effects.items():
+        if param in valid_columns and row[param] is not None:
+            updates[param] = row[param] + delta
+
+    if not updates:
+        return
+    set_clause = ", ".join(f"{k} = ?" for k in updates)
+    await db.execute(
+        f"UPDATE macro_scenarios SET {set_clause} WHERE session_id = ? AND round_number = ?",
+        (*updates.values(), session_id, row["round_number"]),
+    )
+    await db.commit()
+
+
 SHOCK_HANDLERS: dict[str, Any] = {
     SHOCK_INTEREST_RATE_HIKE: _shock_interest_rate_hike,
     SHOCK_PROPERTY_CRASH: _shock_property_crash,
