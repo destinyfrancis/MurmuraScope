@@ -1989,6 +1989,43 @@ class SimulationRunner(
                             )
                 kg_state.agent_beliefs = updated
 
+                # Persist debate-updated beliefs to DB
+                try:
+                    import hashlib  # noqa: PLC0415
+                    from backend.app.utils.db import get_db  # noqa: PLC0415
+
+                    debate_belief_rows = []
+                    for agent_id, topic_deltas in deltas.items():
+                        agent_int = int(hashlib.md5(agent_id.encode()).hexdigest()[:12], 16)
+                        for topic in topic_deltas:
+                            new_val = kg_state.agent_beliefs.get(agent_id, {}).get(topic)
+                            if new_val is not None:
+                                debate_belief_rows.append((
+                                    session_id, agent_int, topic, new_val,
+                                    0.5, 0, round_num,
+                                ))
+                    if debate_belief_rows:
+                        if self._batch_writer is not None:
+                            for row in debate_belief_rows:
+                                self._batch_writer.queue("belief_states", row)
+                            async with get_db() as db:
+                                await self._batch_writer.flush("belief_states", db)
+                        else:
+                            async with get_db() as db:
+                                await db.executemany(
+                                    """INSERT OR REPLACE INTO belief_states
+                                       (session_id, agent_id, topic, stance,
+                                        confidence, evidence_count, round_number)
+                                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                                    debate_belief_rows,
+                                )
+                                await db.commit()
+                except Exception:
+                    logger.debug(
+                        "_kg_consensus_debate: persist to belief_states failed session=%s",
+                        session_id, exc_info=True,
+                    )
+
                 logger.info(
                     "consensus_debate session=%s round=%d pairs=%d topics=%d avg_consensus=%.2f",
                     session_id[:8],
