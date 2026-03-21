@@ -23,9 +23,9 @@ class TestKGSessionStateDefaults:
         state = KGSessionState()
         assert state.event_content_history == []
 
-    def test_tier1_agents_default_empty(self) -> None:
+    def test_stakeholder_agents_default_empty(self) -> None:
         state = KGSessionState()
-        assert state.tier1_agents == []
+        assert state.stakeholder_agents == []
 
     def test_active_metrics_default_empty(self) -> None:
         state = KGSessionState()
@@ -78,11 +78,11 @@ class TestKGSessionStateMutability:
         state.event_content_history = ["hello", "world"]
         assert state.event_content_history == ["hello", "world"]
 
-    def test_can_assign_tier1_agents(self) -> None:
+    def test_can_assign_stakeholder_agents(self) -> None:
         state = KGSessionState()
         agent = {"id": "a1", "name": "Alice"}
-        state.tier1_agents = [agent]
-        assert state.tier1_agents[0]["id"] == "a1"
+        state.stakeholder_agents = [agent]
+        assert state.stakeholder_agents[0]["id"] == "a1"
 
     def test_can_assign_active_metrics(self) -> None:
         state = KGSessionState()
@@ -139,8 +139,8 @@ class TestKGSessionStateMutability:
     def test_in_place_list_append(self) -> None:
         """Verify in-place append to list fields works (mutable container)."""
         state = KGSessionState()
-        state.tier1_agents.append({"id": "x"})
-        assert len(state.tier1_agents) == 1
+        state.stakeholder_agents.append({"id": "x"})
+        assert len(state.stakeholder_agents) == 1
 
 
 class TestKGSessionStateIsolation:
@@ -152,11 +152,11 @@ class TestKGSessionStateIsolation:
         s1.active_metrics["key"] = 1.0
         assert "key" not in s2.active_metrics
 
-    def test_tier1_agents_not_shared(self) -> None:
+    def test_stakeholder_agents_not_shared(self) -> None:
         s1 = KGSessionState()
         s2 = KGSessionState()
-        s1.tier1_agents.append({"id": "a"})
-        assert s2.tier1_agents == []
+        s1.stakeholder_agents.append({"id": "a"})
+        assert s2.stakeholder_agents == []
 
     def test_relationship_states_not_shared(self) -> None:
         s1 = KGSessionState()

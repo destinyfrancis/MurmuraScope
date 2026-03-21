@@ -35,7 +35,7 @@ class ReflectionService:
         self,
         session_id: str,
         round_number: int,
-        tier1_agents: list[dict],
+        stakeholder_agents: list[dict],
         scenario_description: str,
     ) -> int:
         """Run reflection for all Tier 1 agents. Returns total insights stored.
@@ -43,7 +43,7 @@ class ReflectionService:
         Best-effort: individual agent failures are logged and skipped.
         """
         total = 0
-        for agent in tier1_agents:
+        for agent in stakeholder_agents:
             try:
                 count = await self._reflect_one(
                     session_id=session_id,
@@ -59,7 +59,7 @@ class ReflectionService:
                 )
         logger.info(
             "reflect_for_agents session=%s round=%d agents=%d insights=%d",
-            session_id, round_number, len(tier1_agents), total,
+            session_id, round_number, len(stakeholder_agents), total,
         )
         return total
 

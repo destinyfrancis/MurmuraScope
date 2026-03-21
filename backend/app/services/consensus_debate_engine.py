@@ -112,7 +112,7 @@ class ConsensusDebateEngine:
         self,
         session_id: str,
         round_num: int,
-        tier1_agents: list[dict[str, Any]],
+        stakeholder_agents: list[dict[str, Any]],
         agent_beliefs: dict[str, dict[str, float]],
         scenario_description: str,
         agent_profiles: dict[str, dict[str, Any]] | None = None,
@@ -122,7 +122,7 @@ class ConsensusDebateEngine:
         Args:
             session_id: Simulation session identifier.
             round_num: Current simulation round.
-            tier1_agents: List of Tier 1 agent dicts (id, name, role, faction).
+            stakeholder_agents: List of Tier 1 agent dicts (id, name, role, faction).
             agent_beliefs: agent_id → {metric_id → stance float}.
             scenario_description: Seed text excerpt for LLM context.
             agent_profiles: Optional agent_id → {persona, goals, ...} enrichment.
@@ -130,7 +130,7 @@ class ConsensusDebateEngine:
         Returns:
             DebateRoundResult with all exchanges and consensus scores.
         """
-        if not tier1_agents or not agent_beliefs:
+        if not stakeholder_agents or not agent_beliefs:
             return DebateRoundResult(
                 round_number=round_num,
                 exchanges=(),
@@ -140,7 +140,7 @@ class ConsensusDebateEngine:
             )
 
         # Step 1: Find topics with highest belief divergence
-        topics = self._select_divergent_topics(agent_beliefs, tier1_agents)
+        topics = self._select_divergent_topics(agent_beliefs, stakeholder_agents)
         if not topics:
             logger.debug("ConsensusDebate: no divergent topics at round %d", round_num)
             return DebateRoundResult(
@@ -156,7 +156,7 @@ class ConsensusDebateEngine:
         belief_deltas: dict[str, dict[str, float]] = {}  # agent_id → {topic → delta}
 
         for topic in topics[:_MAX_TOPICS_PER_ROUND]:
-            pairs = self._select_pairs(tier1_agents, agent_beliefs, topic)
+            pairs = self._select_pairs(stakeholder_agents, agent_beliefs, topic)
             for agent_a, agent_b in pairs:
                 exchange = await self._run_pairwise_debate(
                     agent_a=agent_a,
@@ -180,7 +180,7 @@ class ConsensusDebateEngine:
 
         # Step 4: Compute consensus scores
         consensus_scores = self._compute_consensus(
-            agent_beliefs, tier1_agents, topics[:_MAX_TOPICS_PER_ROUND]
+            agent_beliefs, stakeholder_agents, topics[:_MAX_TOPICS_PER_ROUND]
         )
 
         # Step 5: Persist to DB
@@ -248,10 +248,10 @@ class ConsensusDebateEngine:
     def _select_divergent_topics(
         self,
         agent_beliefs: dict[str, dict[str, float]],
-        tier1_agents: list[dict[str, Any]],
+        stakeholder_agents: list[dict[str, Any]],
     ) -> list[str]:
         """Find topics with highest stance standard deviation among Tier 1."""
-        tier1_ids = {a["id"] for a in tier1_agents}
+        tier1_ids = {a["id"] for a in stakeholder_agents}
         topic_stances: dict[str, list[float]] = {}
 
         for agent_id, beliefs in agent_beliefs.items():
@@ -274,14 +274,14 @@ class ConsensusDebateEngine:
 
     def _select_pairs(
         self,
-        tier1_agents: list[dict[str, Any]],
+        stakeholder_agents: list[dict[str, Any]],
         agent_beliefs: dict[str, dict[str, float]],
         topic: str,
     ) -> list[tuple[dict[str, Any], dict[str, Any]]]:
         """Select debate pairs maximising stance distance on a topic."""
         # Sort agents by stance on this topic
         agents_with_stance = []
-        for agent in tier1_agents:
+        for agent in stakeholder_agents:
             beliefs = agent_beliefs.get(agent["id"], {})
             if topic in beliefs:
                 agents_with_stance.append((agent, beliefs[topic]))
@@ -431,14 +431,14 @@ class ConsensusDebateEngine:
     def _compute_consensus(
         self,
         agent_beliefs: dict[str, dict[str, float]],
-        tier1_agents: list[dict[str, Any]],
+        stakeholder_agents: list[dict[str, Any]],
         topics: list[str],
     ) -> dict[str, float]:
         """Compute consensus score per topic (1 - normalised std dev).
 
         Returns 1.0 for perfect consensus, 0.0 for maximum polarisation.
         """
-        tier1_ids = {a["id"] for a in tier1_agents}
+        tier1_ids = {a["id"] for a in stakeholder_agents}
         scores: dict[str, float] = {}
 
         for topic in topics:

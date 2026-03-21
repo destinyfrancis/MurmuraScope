@@ -38,6 +38,7 @@ class HookConfig:
     emergence_enabled: bool = True          # enable emergence hooks (emotional, belief, contagion, etc.)
     # Reflection loop: synthesise 'thought' memories for Tier 1 agents every N rounds
     reflection_interval: int = 7
+    activation_seed: int | None = None
 
     @classmethod
     def scaled(cls, agent_count: int) -> HookConfig:

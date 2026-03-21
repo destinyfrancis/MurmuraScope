@@ -16,7 +16,7 @@ Information warfare extension:
 Usage::
 
     planner = StrategicPlanner()
-    await planner.update_plans(kg_state, tier1_agents, round_num, scenario_description)
+    await planner.update_plans(kg_state, stakeholder_agents, round_num, scenario_description)
     # kg_state.agent_strategies is updated in-place
 """
 from __future__ import annotations
@@ -83,7 +83,7 @@ class StrategicPlanner:
     async def update_plans(
         self,
         kg_state: Any,           # KGSessionState
-        tier1_agents: list[dict[str, Any]],
+        stakeholder_agents: list[dict[str, Any]],
         round_num: int,
         scenario_description: str,
     ) -> None:
@@ -96,7 +96,7 @@ class StrategicPlanner:
 
         Args:
             kg_state: KGSessionState instance for this session.
-            tier1_agents: List of Tier 1 agent context dicts.
+            stakeholder_agents: List of Tier 1 agent context dicts.
             round_num: Current simulation round.
             scenario_description: Scenario summary for prompt context.
         """
@@ -105,7 +105,7 @@ class StrategicPlanner:
 
         safe_scenario = sanitize_scenario_description(scenario_description)
 
-        for agent in tier1_agents:
+        for agent in stakeholder_agents:
             agent_id = str(agent.get("agent_id", ""))
             if not agent_id:
                 continue
@@ -123,7 +123,7 @@ class StrategicPlanner:
 
         logger.info(
             "StrategicPlanner: updated plans for %d Tier 1 agents at round %d",
-            len(tier1_agents), round_num,
+            len(stakeholder_agents), round_num,
         )
 
     def get_strategy_context(

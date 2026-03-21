@@ -46,6 +46,7 @@ class ScheduledShock(BaseModel):
     description: str
     post_content: str = ""
     parameters: dict = {}
+    macro_effects: dict[str, float] | None = None
 
 
 class SimulationCreateRequest(BaseModel):

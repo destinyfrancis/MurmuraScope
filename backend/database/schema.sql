@@ -145,7 +145,10 @@ CREATE TABLE IF NOT EXISTS agent_profiles (
     savings INTEGER,
     oasis_persona TEXT NOT NULL,
     oasis_username TEXT NOT NULL,
-    created_at TEXT DEFAULT (datetime('now'))
+    created_at TEXT DEFAULT (datetime('now')),
+    activity_level REAL DEFAULT 0.5,
+    influence_weight REAL DEFAULT 1.0,
+    is_stakeholder INTEGER DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_agent_session ON agent_profiles(session_id);
 CREATE INDEX IF NOT EXISTS idx_agent_type ON agent_profiles(agent_type);

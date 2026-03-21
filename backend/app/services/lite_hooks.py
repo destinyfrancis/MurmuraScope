@@ -289,7 +289,7 @@ def debate_lite(
 
 
 def run_debate_round_lite(
-    tier1_agents: list[dict[str, Any]],
+    stakeholder_agents: list[dict[str, Any]],
     agent_beliefs: dict[str, dict[str, float]],
     round_num: int,
     trigger_every: int = 3,
@@ -298,7 +298,7 @@ def run_debate_round_lite(
     """Run a lite debate round: pair maximally-divergent agents, apply deltas.
 
     Args:
-        tier1_agents: List of Tier 1 agent dicts.
+        stakeholder_agents: List of Tier 1 agent dicts.
         agent_beliefs: agent_id → {metric → belief}.
         round_num: Current round number.
         trigger_every: Debate frequency (default every 3 rounds).
@@ -307,7 +307,7 @@ def run_debate_round_lite(
     Returns:
         Updated agent_beliefs (new dict, never mutates input).
     """
-    if round_num % trigger_every != 0 or len(tier1_agents) < 2:
+    if round_num % trigger_every != 0 or len(stakeholder_agents) < 2:
         return agent_beliefs
 
     _rng = rng or random.Random()
@@ -321,7 +321,7 @@ def run_debate_round_lite(
     for metric in all_metrics:
         vals = [
             agent_beliefs.get(a.get("id", ""), {}).get(metric, 0.5)
-            for a in tier1_agents
+            for a in stakeholder_agents
         ]
         if len(vals) < 2:
             continue
@@ -337,12 +337,12 @@ def run_debate_round_lite(
 
     # Pair agents with max divergence
     updated = {aid: dict(b) for aid, b in agent_beliefs.items()}
-    n_pairs = min(5, len(tier1_agents) // 2)
+    n_pairs = min(5, len(stakeholder_agents) // 2)
     paired: set[str] = set()
 
     for topic in top_topics:
         agents_sorted = sorted(
-            tier1_agents,
+            stakeholder_agents,
             key=lambda a: agent_beliefs.get(a.get("id", ""), {}).get(topic, 0.5),
         )
         pair_count = 0

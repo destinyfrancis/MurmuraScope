@@ -31,8 +31,8 @@ class KGSessionState:
     # Running history of event content strings (deduplication + context window)
     event_content_history: list[str] = field(default_factory=list)
 
-    # Top-N Tier 1 agent dicts (id, name, role, faction) loaded from DB
-    tier1_agents: list = field(default_factory=list)
+    # Stakeholder agent dicts (id, name, role, faction) loaded from DB
+    stakeholder_agents: list = field(default_factory=list)
 
     # metric_id → current float value (0..1) for active scenario metrics
     active_metrics: dict[str, float] = field(default_factory=dict)

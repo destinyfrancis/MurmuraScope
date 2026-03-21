@@ -1404,7 +1404,7 @@ class SimulationRunner(
                         "role": r["role"] or "",
                         "faction": r["faction"] or "none",
                     })
-                self._kg_sessions[session_id].tier1_agents = tier1
+                self._kg_sessions[session_id].stakeholder_agents = tier1
 
                 # Generate scenario config (decision types, metrics, shocks) via LLM
                 # Only if active_metrics not already populated
@@ -1638,7 +1638,7 @@ class SimulationRunner(
         kg_state = self._kg_sessions.get(session_id)
         if kg_state is None:
             return
-        tier1 = kg_state.tier1_agents
+        tier1 = kg_state.stakeholder_agents
         if not tier1:
             return
 
@@ -1672,7 +1672,7 @@ class SimulationRunner(
         scenario = kg_state.scenario_description
 
         # Build id→profile lookup for relationship-depth disclosure
-        tier1_agents_by_id: dict[str, dict] = {
+        stakeholder_agents_by_id: dict[str, dict] = {
             a.get("id", ""): a for a in tier1 if a.get("id")
         }
 
@@ -1700,7 +1700,7 @@ class SimulationRunner(
                 key_relationships = _build_key_relationships(
                     agent_id=agent_id,
                     rel_states=rel_states,
-                    tier1_agents_by_id=tier1_agents_by_id,
+                    stakeholder_agents_by_id=stakeholder_agents_by_id,
                 )
 
                 # Task 2.6: retrieve salient memories to ground deliberation.
@@ -1799,7 +1799,7 @@ class SimulationRunner(
                 n = await self._reflection_service.reflect_for_agents(
                     session_id=session_id,
                     round_number=round_num,
-                    tier1_agents=tier1,
+                    stakeholder_agents=tier1,
                     scenario_description=scenario,
                 )
                 logger.debug(
@@ -1822,7 +1822,7 @@ class SimulationRunner(
         for subsequent rounds so agents act with strategic consistency.
         """
         kg_state = self._kg_sessions.get(session_id)
-        if kg_state is None or not kg_state.tier1_agents:
+        if kg_state is None or not kg_state.stakeholder_agents:
             return
         # Lite ensemble: skip LLM strategic planning (deliberate_lite handles it)
         if kg_state.lite_ensemble:
@@ -1832,7 +1832,7 @@ class SimulationRunner(
         try:
             await self._strategic_planner.update_plans(
                 kg_state=kg_state,
-                tier1_agents=kg_state.tier1_agents,
+                stakeholder_agents=kg_state.stakeholder_agents,
                 round_num=round_num,
                 scenario_description=kg_state.scenario_description,
             )
@@ -1849,14 +1849,14 @@ class SimulationRunner(
         Debate deltas feed into agent_beliefs before belief_propagation.
         """
         kg_state = self._kg_sessions.get(session_id)
-        if kg_state is None or not kg_state.agent_beliefs or not kg_state.tier1_agents:
+        if kg_state is None or not kg_state.agent_beliefs or not kg_state.stakeholder_agents:
             return
 
         # Lite ensemble: rule-based debate (no LLM)
         if kg_state.lite_ensemble:
             from backend.app.services.lite_hooks import run_debate_round_lite  # noqa: PLC0415
             kg_state.agent_beliefs = run_debate_round_lite(
-                tier1_agents=kg_state.tier1_agents,
+                stakeholder_agents=kg_state.stakeholder_agents,
                 agent_beliefs=kg_state.agent_beliefs,
                 round_num=round_num,
             )
@@ -1870,7 +1870,7 @@ class SimulationRunner(
         try:
             # Build agent_profiles lookup for enrichment
             agent_profiles: dict[str, dict] = {}
-            for agent in kg_state.tier1_agents:
+            for agent in kg_state.stakeholder_agents:
                 aid = agent["id"]
                 profile: dict = {"persona": "", "recent_memories": ""}
                 # Enrich with strategy context if available
@@ -1882,7 +1882,7 @@ class SimulationRunner(
             result = await self._consensus_debate.run_debate(
                 session_id=session_id,
                 round_num=round_num,
-                tier1_agents=kg_state.tier1_agents,
+                stakeholder_agents=kg_state.stakeholder_agents,
                 agent_beliefs=kg_state.agent_beliefs,
                 scenario_description=kg_state.scenario_description,
                 agent_profiles=agent_profiles,
@@ -2512,14 +2512,14 @@ def _compute_faction_peer_stance(
 def _build_key_relationships(
     agent_id: str,
     rel_states: dict,
-    tier1_agents_by_id: dict[str, dict] | None = None,
+    stakeholder_agents_by_id: dict[str, dict] | None = None,
 ) -> list[dict]:
     """Extract top-5 key relationships for agent_id from relationship_states dict.
 
     Args:
         agent_id: The agent whose perspective we use.
         rel_states: Dict keyed by (agent_a_id, agent_b_id) → RelationshipState.
-        tier1_agents_by_id: Optional map of agent_id → agent profile dict.
+        stakeholder_agents_by_id: Optional map of agent_id → agent profile dict.
             When provided, high-intimacy peers (>0.6) reveal their goals and
             faction — implementing Sotopia-style relationship-depth disclosure.
 
@@ -2543,8 +2543,8 @@ def _build_key_relationships(
             "passion": state.passion,
         }
         # Relationship-depth disclosure: high-intimacy peers share goals + faction
-        if state.intimacy > 0.6 and tier1_agents_by_id:
-            peer = tier1_agents_by_id.get(bid)
+        if state.intimacy > 0.6 and stakeholder_agents_by_id:
+            peer = stakeholder_agents_by_id.get(bid)
             if peer:
                 peer_goals = peer.get("goals", [])
                 peer_faction = peer.get("faction", "")
