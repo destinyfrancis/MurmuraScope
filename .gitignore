@@ -44,6 +44,9 @@ frontend/dist/
 # OASIS
 oasis_output/
 
+# Internal docs
+docs/
+
 # Audit / debug artifacts
 backend/scripts/audit_report_raw.json
 
