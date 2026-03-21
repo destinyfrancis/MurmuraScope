@@ -65,7 +65,7 @@ class KGSessionState:
     agent_factions: dict[str, str] = field(default_factory=dict)
 
     # agent_id → {"plan": str, "horizon": int, "created_round": int}
-    # Multi-round strategic plans for Tier 1 agents (Phase 4)
+    # Multi-round strategic plans for stakeholder agents (Phase 4)
     agent_strategies: dict[str, dict] = field(default_factory=dict)
 
     # Auto-fork guards: count of forks created + rounds already forked

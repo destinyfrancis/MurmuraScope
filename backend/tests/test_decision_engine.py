@@ -606,7 +606,7 @@ class TestTopicTagsPersistence:
     """Tests for persisting topic_tags and emotional_reaction to agent_decisions."""
 
     @pytest.mark.asyncio
-    async def test_tier1_decision_persists_topic_tags(self, test_db) -> None:
+    async def test_stakeholder_decision_persists_topic_tags(self, test_db) -> None:
         """topic_tags and emotional_reaction can be persisted to agent_decisions."""
         import json
         from backend.app.services.cognitive_agent_engine import DeliberationResult
@@ -697,8 +697,8 @@ class TestTopicTagsPersistence:
         assert row["emotional_reaction"] == "擔憂"
 
     @pytest.mark.asyncio
-    async def test_store_decisions_null_topic_tags_for_tier2(self, test_db) -> None:
-        """Tier 2 agents (no topic_tags) store NULL in agent_decisions."""
+    async def test_store_decisions_null_topic_tags_for_passive_agents(self, test_db) -> None:
+        """Passive agents (no topic_tags) store NULL in agent_decisions."""
         import contextlib
         from unittest.mock import patch as _patch
         from backend.app.services.decision_engine import DecisionEngine

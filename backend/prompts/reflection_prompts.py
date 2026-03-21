@@ -1,7 +1,7 @@
-"""Prompt templates for Tier 1 agent reflection synthesis.
+"""Prompt templates for stakeholder agent reflection synthesis.
 
 Inspired by Generative Agents (Park et al., 2023) reflection mechanism.
-Triggered periodically for Tier 1 agents to synthesize abstract insights
+Triggered periodically for stakeholder agents to synthesize abstract insights
 from accumulated memories. Generates type='thought' memory nodes.
 """
 

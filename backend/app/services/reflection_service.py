@@ -1,7 +1,7 @@
-"""Reflection service for Tier 1 agent insight synthesis.
+"""Reflection service for stakeholder agent insight synthesis.
 
 Inspired by Generative Agents (Park et al., 2023):
-- Periodically triggered (every N rounds) for Tier 1 agents
+- Periodically triggered (every N rounds) for stakeholder agents
 - Retrieves top memories by salience + importance
 - LLM synthesizes 3-5 abstract insights ('thought' nodes)
 - Insights stored as high-importance memories for future retrieval
@@ -26,7 +26,7 @@ _MIN_MEMORIES = 3         # skip reflection if fewer memories exist
 
 
 class ReflectionService:
-    """Generate abstract thought memories for Tier 1 agents via reflection."""
+    """Generate abstract thought memories for stakeholder agents via reflection."""
 
     def __init__(self, llm_client: LLMClient | None = None) -> None:
         self._llm = llm_client or LLMClient()
@@ -38,7 +38,7 @@ class ReflectionService:
         stakeholder_agents: list[dict],
         scenario_description: str,
     ) -> int:
-        """Run reflection for all Tier 1 agents. Returns total insights stored.
+        """Run reflection for all stakeholder agents. Returns total insights stored.
 
         Best-effort: individual agent failures are logged and skipped.
         """

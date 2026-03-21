@@ -1,7 +1,7 @@
 # backend/app/services/strategic_planner.py
-"""Strategic multi-round planning for Tier 1 agents.
+"""Strategic multi-round planning for stakeholder agents.
 
-Phase 4 addition.  Tier 1 agents produce a 3-round ahead plan every
+Phase 4 addition.  Stakeholder agents produce a 3-round ahead plan every
 ``_PLAN_HORIZON`` rounds instead of only reacting to the current state.
 The plan is stored in KGSessionState.agent_strategies and injected into the
 deliberation prompt on subsequent rounds, giving agents persistent strategic
@@ -62,7 +62,7 @@ Produce a 3-round strategic plan. Return JSON:
 
 @dataclass(frozen=True)
 class AgentStrategy:
-    """Immutable strategic plan for one Tier 1 agent."""
+    """Immutable strategic plan for one stakeholder agent."""
 
     agent_id: str
     plan: str
@@ -75,7 +75,7 @@ class AgentStrategy:
 
 
 class StrategicPlanner:
-    """Generate and maintain multi-round strategic plans for Tier 1 agents."""
+    """Generate and maintain multi-round strategic plans for stakeholder agents."""
 
     def __init__(self, llm_client: LLMClient | None = None) -> None:
         self._llm = llm_client or LLMClient()
@@ -87,7 +87,7 @@ class StrategicPlanner:
         round_num: int,
         scenario_description: str,
     ) -> None:
-        """Refresh strategic plans for all Tier 1 agents.
+        """Refresh strategic plans for all stakeholder agents.
 
         Plans are refreshed every _PLAN_HORIZON rounds.  On off-rounds, the
         existing plan is carried forward unchanged.
@@ -96,7 +96,7 @@ class StrategicPlanner:
 
         Args:
             kg_state: KGSessionState instance for this session.
-            stakeholder_agents: List of Tier 1 agent context dicts.
+            stakeholder_agents: List of stakeholder agent context dicts.
             round_num: Current simulation round.
             scenario_description: Scenario summary for prompt context.
         """
@@ -122,7 +122,7 @@ class StrategicPlanner:
             }
 
         logger.info(
-            "StrategicPlanner: updated plans for %d Tier 1 agents at round %d",
+            "StrategicPlanner: updated plans for %d stakeholder agents at round %d",
             len(stakeholder_agents), round_num,
         )
 

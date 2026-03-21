@@ -1,5 +1,5 @@
 # backend/tests/test_cognitive_agent_engine.py
-"""Tests for CognitiveAgentEngine — Tier 1 full-LLM deliberation."""
+"""Tests for CognitiveAgentEngine — full-LLM deliberation for stakeholder agents."""
 from __future__ import annotations
 import json
 from unittest.mock import AsyncMock, patch

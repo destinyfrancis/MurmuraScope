@@ -342,7 +342,7 @@ class DecisionEngine:
 
         topic_tags is serialised as a JSON array string (NULL when empty).
         emotional_reaction is stored as plain text (NULL when empty).
-        Tier 2 agents that omit these fields will have NULL in both columns.
+        Agents that omit these fields will have NULL in both columns.
         """
         rows = [
             (

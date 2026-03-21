@@ -607,14 +607,14 @@ class AgentMemoryService:
         """
         budget = TokenBudget(total=max_tokens)
 
-        # Tier 1: Recency (40% budget)
+        # Priority 1: Recency (40% budget)
         recent = await self._get_recent_memories(
             session_id, agent_id, current_round, limit=5
         )
         recency_block = self._format_memories(recent, "短期記憶")
         recency_tokens = TokenCounter.count(recency_block)
 
-        # Tier 2: Semantic (40% budget)
+        # Priority 2: Semantic (40% budget)
         semantic_block = ""
         if self._vector_store and context_query:
             try:

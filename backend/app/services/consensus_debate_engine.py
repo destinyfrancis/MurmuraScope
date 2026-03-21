@@ -1,7 +1,7 @@
 # backend/app/services/consensus_debate_engine.py
 """Consensus debate engine for multi-agent structured argumentation.
 
-Implements a firewall-protected debate mechanism where Tier 1 agents
+Implements a firewall-protected debate mechanism where stakeholder agents
 engage in pairwise cross-challenges on active topics, producing
 measurable belief shifts and consensus scores.
 
@@ -14,7 +14,7 @@ Pipeline per debate round:
   6. Persist debate records to debate_rounds table
 
 Cost control:
-  - Only Tier 1 agents participate (top 30-100)
+  - Only stakeholder agents participate (top 30-100)
   - Max 15 debate pairs per round (configurable)
   - Runs every N rounds (default 3, configurable)
   - Max tokens capped at 1024 per debate call
@@ -122,7 +122,7 @@ class ConsensusDebateEngine:
         Args:
             session_id: Simulation session identifier.
             round_num: Current simulation round.
-            stakeholder_agents: List of Tier 1 agent dicts (id, name, role, faction).
+            stakeholder_agents: List of stakeholder agent dicts (id, name, role, faction).
             agent_beliefs: agent_id → {metric_id → stance float}.
             scenario_description: Seed text excerpt for LLM context.
             agent_profiles: Optional agent_id → {persona, goals, ...} enrichment.
@@ -250,12 +250,12 @@ class ConsensusDebateEngine:
         agent_beliefs: dict[str, dict[str, float]],
         stakeholder_agents: list[dict[str, Any]],
     ) -> list[str]:
-        """Find topics with highest stance standard deviation among Tier 1."""
-        tier1_ids = {a["id"] for a in stakeholder_agents}
+        """Find topics with highest stance standard deviation among stakeholder agents."""
+        stakeholder_ids = {a["id"] for a in stakeholder_agents}
         topic_stances: dict[str, list[float]] = {}
 
         for agent_id, beliefs in agent_beliefs.items():
-            if agent_id not in tier1_ids:
+            if agent_id not in stakeholder_ids:
                 continue
             for topic, stance in beliefs.items():
                 topic_stances.setdefault(topic, []).append(stance)
@@ -438,13 +438,13 @@ class ConsensusDebateEngine:
 
         Returns 1.0 for perfect consensus, 0.0 for maximum polarisation.
         """
-        tier1_ids = {a["id"] for a in stakeholder_agents}
+        stakeholder_ids = {a["id"] for a in stakeholder_agents}
         scores: dict[str, float] = {}
 
         for topic in topics:
             stances = [
                 agent_beliefs[aid][topic]
-                for aid in tier1_ids
+                for aid in stakeholder_ids
                 if aid in agent_beliefs and topic in agent_beliefs.get(aid, {})
             ]
             if len(stances) < 2:

@@ -2121,13 +2121,13 @@ async def get_world_events(simulation_id: str) -> APIResponse:
 @router.get("/{session_id}/behavior-validation", response_model=APIResponse)
 async def get_behavior_validation(
     session_id: str,
-    tier1_sample_size: int = 10,
+    sample_size: int = 10,
     skip_llm: bool = False,
 ) -> APIResponse:
-    """Run Tier 1 agent behavioral validation (diversity + LLM-as-judge consistency).
+    """Run stakeholder agent behavioral validation (diversity + LLM-as-judge consistency).
 
     Query params:
-        tier1_sample_size: Max Tier 1 decisions to send to LLM judge (default 10).
+        sample_size: Max stakeholder decisions to send to LLM judge (default 10).
         skip_llm: If true, compute diversity entropy only (no LLM calls).
     """
     from backend.app.services.agent_behavior_validator import AgentBehaviorValidator  # noqa: PLC0415
@@ -2136,14 +2136,14 @@ async def get_behavior_validation(
         validator = AgentBehaviorValidator()
         result = await validator.validate(
             session_id,
-            tier1_sample_size=tier1_sample_size,
+            sample_size=sample_size,
             skip_llm=skip_llm,
         )
         return APIResponse(
             success=True,
             data={
                 "session_id": result.session_id,
-                "tier1_decisions_sampled": result.tier1_decisions_sampled,
+                "decisions_sampled": result.decisions_sampled,
                 "action_diversity_entropy": result.action_diversity_entropy,
                 "mode_collapse_warning": result.mode_collapse_warning,
                 "avg_consistency_score": result.avg_consistency_score,

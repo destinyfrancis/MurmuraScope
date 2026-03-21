@@ -1,8 +1,8 @@
 # backend/app/services/cognitive_agent_engine.py
-"""Tier 1 Cognitive Agent Engine — full LLM deliberation every round.
+"""Cognitive Agent Engine — full LLM deliberation every round.
 
 Active in kg_driven mode only. Manages deliberation for the 30-100 high-importance
-agents (political leaders, institutions, media outlets) that drive narrative emergence.
+stakeholder agents (political leaders, institutions, media outlets) that drive narrative emergence.
 
 Phase 2 enrichment: agent_context now accepts optional fields:
   persona, goals, stance_axes, key_relationships, emotional_state, attachment_style
@@ -61,7 +61,7 @@ class DeliberationResult:
 
 
 class CognitiveAgentEngine:
-    """Manage Tier 1 full-LLM deliberation for key agents each round."""
+    """Manage full-LLM deliberation for key stakeholder agents each round."""
 
     def __init__(self, llm_client: LLMClient | None = None) -> None:
         self._llm = llm_client or LLMClient()
@@ -74,7 +74,7 @@ class CognitiveAgentEngine:
         provider: str | None = None,
         model: str | None = None,
     ) -> DeliberationResult:
-        """Run full LLM deliberation for one Tier 1 agent.
+        """Run full LLM deliberation for one stakeholder agent.
 
         Args:
             agent_context: Dict with agent_id, name, role, current_beliefs,

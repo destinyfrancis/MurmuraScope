@@ -149,11 +149,11 @@ class SimulationRunner(
         self._relationship_lifecycle: Any | None = None
         # Phase 4: relationship memory service (dyadic memory storage)
         self._relationship_memory: Any | None = None
-        # Phase 4: strategic planner for Tier 1 multi-round planning
+        # Phase 4: strategic planner for stakeholder multi-round planning
         self._strategic_planner: Any | None = None
         # Consensus debate engine for structured multi-agent argumentation
         self._consensus_debate: Any | None = None
-        # Reflection loop: periodic insight synthesis for Tier 1 agents
+        # Reflection loop: periodic insight synthesis for stakeholder agents
         self._reflection_service: Any | None = None
         # Phase 4A: per-session RoundCache for in-memory agent profile lookups
         self._round_caches: dict[str, "RoundCache"] = {}
@@ -556,8 +556,8 @@ class SimulationRunner(
         The cache stores raw aiosqlite.Row objects. Consuming code may:
         - Access columns via r["column_name"] (dict-style, supported by aiosqlite.Row)
         - Reconstruct AgentProfile from the row fields
-        NOTE: `tier` and `oasis_username` are in the cache but are NOT AgentProfile
-        fields — access them via r["tier"] directly, never via a reconstructed AgentProfile.
+        NOTE: `oasis_username` is in the cache but is NOT an AgentProfile
+        field — access it via r["oasis_username"] directly, never via a reconstructed AgentProfile.
         """
         from backend.app.utils.db import get_db  # noqa: PLC0415
         try:
@@ -567,7 +567,7 @@ class SimulationRunner(
                        education_level, marital_status, housing_type,
                        openness, conscientiousness, extraversion,
                        agreeableness, neuroticism, monthly_income,
-                       savings, political_stance, oasis_username, tier
+                       savings, political_stance, oasis_username
                        FROM agent_profiles WHERE session_id = ?""",
                     (session_id,),
                 )
@@ -594,7 +594,6 @@ class SimulationRunner(
                     "id": r["id"],
                     "agent_type": r["agent_type"],
                     "oasis_username": r["oasis_username"],
-                    "tier": r["tier"],
                     "political_stance": r["political_stance"],
                     "openness": r["openness"],
                     "conscientiousness": r["conscientiousness"],
@@ -1401,7 +1400,7 @@ class SimulationRunner(
     async def _load_kg_session_context(
         self, session_id: str, config: dict[str, Any]
     ) -> None:
-        """Load seed text, scenario config, and tier-1 agents for kg_driven."""
+        """Load seed text, scenario config, and stakeholder agents for kg_driven."""
         try:
             from backend.app.utils.db import get_db  # noqa: PLC0415
             async with get_db() as db:
@@ -1490,7 +1489,7 @@ class SimulationRunner(
                                     for r in await ecursor.fetchall()
                                 ]
 
-                            # Build minimal UniversalAgentProfile stubs from tier-1 agents
+                            # Build minimal UniversalAgentProfile stubs from stakeholder agents
                             agent_profiles: list[UniversalAgentProfile] = [
                                 UniversalAgentProfile(
                                     id=a["id"],

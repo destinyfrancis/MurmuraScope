@@ -116,7 +116,7 @@ def generate_lite_events(
 
 
 # ---------------------------------------------------------------------------
-# 2. Rule-based Tier 1 deliberation
+# 2. Rule-based stakeholder deliberation
 # ---------------------------------------------------------------------------
 
 # Emotional reactions indexed by VAD quadrant
@@ -136,7 +136,7 @@ def deliberate_lite(
     cognitive_fingerprint: dict[str, float] | None = None,
     rng: random.Random | None = None,
 ) -> DeliberationResult:
-    """Rule-based deliberation for one Tier 1 agent.
+    """Rule-based deliberation for one stakeholder agent.
 
     Uses cognitive fingerprint values + current beliefs + event impacts
     to compute belief updates and stance, without LLM.  Personality
@@ -298,7 +298,7 @@ def run_debate_round_lite(
     """Run a lite debate round: pair maximally-divergent agents, apply deltas.
 
     Args:
-        stakeholder_agents: List of Tier 1 agent dicts.
+        stakeholder_agents: List of stakeholder agent dicts.
         agent_beliefs: agent_id → {metric → belief}.
         round_num: Current round number.
         trigger_every: Debate frequency (default every 3 rounds).

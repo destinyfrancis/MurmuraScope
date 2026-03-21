@@ -299,7 +299,7 @@ class AgentHooksMixin:
         """Run the Agent Decision Engine for a completed simulation round."""
         try:
             if self._kg_mode.get(session_id):
-                return  # kg_driven: uses UniversalDecisionEngine via Tier 1 deliberation
+                return  # kg_driven: uses UniversalDecisionEngine via stakeholder deliberation
             from backend.app.services.decision_engine import DecisionEngine  # noqa: PLC0415
             if self._decision_engine is None:
                 self._decision_engine = DecisionEngine()

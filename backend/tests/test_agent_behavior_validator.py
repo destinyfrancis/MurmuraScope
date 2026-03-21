@@ -75,7 +75,7 @@ async def test_validate_returns_result():
 
     with patch("backend.app.services.agent_behavior_validator.get_db", fake_get_db):
         # skip_llm=True to avoid LLM calls in unit tests
-        result = await validator.validate("session_123", tier1_sample_size=5, skip_llm=True)
+        result = await validator.validate("session_123", sample_size=5, skip_llm=True)
 
     assert isinstance(result, BehaviorValidationResult)
     assert result.action_diversity_entropy >= 0.0

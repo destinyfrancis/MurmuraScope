@@ -1,17 +1,17 @@
 # backend/app/services/agent_behavior_validator.py
-"""Tier 1 Agent Behavioral Validation.
+"""Stakeholder Agent Behavioral Validation.
 
 Two metrics:
-  1. action_diversity_entropy — Shannon entropy over Tier 1 decision types.
+  1. action_diversity_entropy — Shannon entropy over stakeholder decision types.
      Low entropy (<0.5) = mode collapse (LLM always picks same decision).
   2. avg_consistency_score — LLM-as-judge: given persona + context + decision,
      how consistent is the decision? Score 1–5 (1=incoherent, 5=fully consistent).
-     Sampled from up to `tier1_sample_size` recent Tier 1 agent decisions.
+     Sampled from up to `sample_size` recent stakeholder agent decisions.
 
 Usage::
 
     validator = AgentBehaviorValidator()
-    result = await validator.validate("session_abc", tier1_sample_size=10)
+    result = await validator.validate("session_abc", sample_size=10)
     print(result.mode_collapse_warning, result.avg_consistency_score)
 """
 from __future__ import annotations
@@ -47,7 +47,7 @@ Reply with a single integer (1, 2, 3, 4, or 5) and nothing else."""
 class BehaviorValidationResult:
     """Behavioral validation output for one simulation session."""
     session_id: str
-    tier1_decisions_sampled: int
+    decisions_sampled: int
     action_diversity_entropy: float   # Shannon entropy; 0 = mode collapse
     mode_collapse_warning: bool       # True if entropy < threshold
     avg_consistency_score: float      # 1–5 LLM-as-judge mean; 0.0 if no LLM sample
@@ -56,13 +56,13 @@ class BehaviorValidationResult:
 
 
 class AgentBehaviorValidator:
-    """Validate Tier 1 agent behavioral coherence and diversity."""
+    """Validate stakeholder agent behavioral coherence and diversity."""
 
     def compute_action_diversity(self, decisions: list[str]) -> float:
         """Shannon entropy over decision type distribution.
 
         Args:
-            decisions: List of decision_type strings from Tier 1 agents.
+            decisions: List of decision_type strings from stakeholder agents.
 
         Returns:
             Entropy in bits (log2).  0 = all same, log2(N) = uniform over N types.
@@ -109,14 +109,14 @@ class AgentBehaviorValidator:
     async def validate(
         self,
         session_id: str,
-        tier1_sample_size: int = 10,
+        sample_size: int = 10,
         skip_llm: bool = False,
     ) -> BehaviorValidationResult:
         """Run behavioral validation for a completed session.
 
         Args:
             session_id: Session to validate.
-            tier1_sample_size: Max Tier 1 decisions to send to LLM judge.
+            sample_size: Max stakeholder decisions to send to LLM judge.
             skip_llm: If True, compute diversity only (no LLM calls).
 
         Returns:
@@ -144,12 +144,12 @@ class AgentBehaviorValidator:
         if not rows:
             return BehaviorValidationResult(
                 session_id=session_id,
-                tier1_decisions_sampled=0,
+                decisions_sampled=0,
                 action_diversity_entropy=0.0,
                 mode_collapse_warning=False,
                 avg_consistency_score=0.0,
                 consistency_scores=(),
-                summary=f"No Tier 1 decisions found for session {session_id}.",
+                summary=f"No stakeholder decisions found for session {session_id}.",
             )
 
         # Support both dict-style and sqlite Row objects
@@ -167,7 +167,7 @@ class AgentBehaviorValidator:
 
         consistency_scores: list[float] = []
         if not skip_llm:
-            sample = rows[:tier1_sample_size]
+            sample = rows[:sample_size]
             for row in sample:
                 score = await self._llm_judge_sample(
                     persona=_get(row, "persona") or "",
@@ -184,7 +184,7 @@ class AgentBehaviorValidator:
         )
 
         summary_parts = [
-            f"Session {session_id}: {len(decisions)} Tier 1 decisions.",
+            f"Session {session_id}: {len(decisions)} stakeholder decisions.",
             f"Action diversity entropy={entropy:.3f}",
             "(MODE COLLAPSE DETECTED)" if collapse else "(diversity OK)",
         ]
@@ -193,7 +193,7 @@ class AgentBehaviorValidator:
 
         return BehaviorValidationResult(
             session_id=session_id,
-            tier1_decisions_sampled=len(decisions),
+            decisions_sampled=len(decisions),
             action_diversity_entropy=round(entropy, 4),
             mode_collapse_warning=collapse,
             avg_consistency_score=round(avg_score, 3),
