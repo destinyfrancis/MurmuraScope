@@ -124,9 +124,30 @@ async def _chat_json_router(messages: list[dict], **kw) -> dict:
     """Route chat_json calls to realistic fixtures based on prompt content."""
     prompt = str(messages).lower()
     if "entity" in prompt or "extract" in prompt:
+        # EntityExtractor expects {"nodes": [...], "edges": [...]} format
         if "年青" in prompt or "樓" in prompt or "買樓" in prompt:
-            return _HK_ENTITY_FIXTURE
-        return _KG_ENTITY_FIXTURE
+            return {
+                "nodes": [
+                    {"id": "hk_n0", "entity_type": "Person", "title": "年青夫婦", "description": "Young married couple"},
+                    {"id": "hk_n1", "entity_type": "Market", "title": "樓市", "description": "HK property market"},
+                    {"id": "hk_n2", "entity_type": "Indicator", "title": "CCL指數", "description": "Centa-City Leading Index"},
+                ],
+                "edges": [
+                    {"source_id": "hk_n0", "target_id": "hk_n1", "relation_type": "考慮買入", "weight": 0.7},
+                ],
+            }
+        return {
+            "nodes": [
+                {"id": "kg_n0", "entity_type": "Country", "title": "USA", "description": "United States of America"},
+                {"id": "kg_n1", "entity_type": "Country", "title": "Iran", "description": "Islamic Republic of Iran"},
+                {"id": "kg_n2", "entity_type": "Location", "title": "Strait of Hormuz", "description": "Strategic waterway"},
+                {"id": "kg_n3", "entity_type": "Organization", "title": "UN Security Council", "description": "International body"},
+            ],
+            "edges": [
+                {"source_id": "kg_n0", "target_id": "kg_n1", "relation_type": "military_conflict", "weight": 0.9},
+                {"source_id": "kg_n1", "target_id": "kg_n2", "relation_type": "controls", "weight": 0.8},
+            ],
+        }
     if "ontology" in prompt:
         return _ONTOLOGY_FIXTURE
     if "scenario" in prompt or "decision_type" in prompt:
@@ -209,7 +230,267 @@ def _mock_embed():
     fixed_vec = np.random.default_rng(42).random(384).astype(np.float32).tolist()
 
     with patch(
-        "backend.app.utils.llm_client.LLMClient.embed_single",
+        "backend.app.services.embedding_provider.EmbeddingProvider.embed_single",
         return_value=fixed_vec,
     ):
         yield
+
+
+# ---------------------------------------------------------------------------
+# hk_session fixture
+# ---------------------------------------------------------------------------
+
+
+@pytest_asyncio.fixture()
+async def hk_session(pipeline_db):
+    """Run full HK pipeline: create session, seed graph nodes, run dry simulation."""
+    db_path, mock_get_db = pipeline_db
+    session_id = "hk-pipe-full"
+    graph_id = "hk-graph-001"
+
+    # Add runtime-added columns that schema.sql omits (added via ALTER TABLE in production)
+    async with aiosqlite.connect(db_path) as db:
+        db.row_factory = aiosqlite.Row
+        for stmt in [
+            "ALTER TABLE agent_profiles ADD COLUMN political_stance REAL DEFAULT 0.5",
+            "ALTER TABLE agent_profiles ADD COLUMN tier INTEGER DEFAULT 2",
+        ]:
+            try:
+                await db.execute(stmt)
+            except Exception:
+                pass  # column already exists
+        await db.commit()
+
+    # Seed kg_nodes — table uses (id, session_id, entity_type, title, description)
+    async with aiosqlite.connect(db_path) as db:
+        db.row_factory = aiosqlite.Row
+        for i, entity in enumerate(_HK_ENTITY_FIXTURE["entities"]):
+            await db.execute(
+                "INSERT INTO kg_nodes (id, session_id, entity_type, title, description) VALUES (?, ?, ?, ?, ?)",
+                (
+                    f"hkn{i}",
+                    session_id,
+                    entity["type"],
+                    entity["name"],
+                    entity["description"],
+                ),
+            )
+        await db.commit()
+
+    # Create simulation session + 5 HK agents
+    async with aiosqlite.connect(db_path) as db:
+        db.row_factory = aiosqlite.Row
+        await db.execute(
+            """INSERT INTO simulation_sessions
+               (id, name, sim_mode, scenario_type, graph_id,
+                agent_count, round_count, llm_provider, llm_model,
+                status, oasis_db_path)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                session_id,
+                "hk_pipeline_test",
+                "social_media",
+                "property",
+                graph_id,
+                5,
+                6,
+                "openrouter",
+                "mock-model",
+                "running",
+                str(Path(db_path).parent / "oasis.db"),
+            ),
+        )
+        for i in range(1, 6):
+            await db.execute(
+                """INSERT INTO agent_profiles
+                   (session_id, agent_type, age, sex, district,
+                    occupation, income_bracket, education_level,
+                    marital_status, housing_type,
+                    openness, conscientiousness, extraversion,
+                    agreeableness, neuroticism,
+                    monthly_income, savings,
+                    oasis_username, oasis_persona)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    session_id,
+                    "citizen",
+                    25 + i * 3,
+                    "M" if i % 2 else "F",
+                    "沙田",
+                    "professional",
+                    "middle",
+                    "學位或以上",
+                    "married",
+                    "private",
+                    0.6,
+                    0.5,
+                    0.7,
+                    0.5,
+                    0.4,
+                    30000 + i * 5000,
+                    100000 + i * 20000,
+                    f"hk_user_{i - 1}",
+                    f"HK citizen persona {i}",
+                ),
+            )
+        await db.commit()
+
+    # Run dry simulation — bypass the 3-round cap so round 5 fires Group 3 hooks
+    import backend.app.services.simulation_runner as _sr_mod
+    from backend.app.services.simulation_runner import SimulationRunner
+
+    runner = SimulationRunner(dry_run=True)
+    events: list[dict] = []
+
+    async def _capture(update: dict) -> None:
+        events.append(update)
+
+    config = {
+        "session_id": session_id,
+        "graph_id": graph_id,
+        "scenario_type": "property",
+        "agent_count": 5,
+        "round_count": 6,
+        "platforms": {"facebook": True},
+        "llm_provider": "openrouter",
+        "llm_model": "mock-model",
+        "agent_csv_path": "",
+        "shocks": [],
+    }
+
+    # Patch min() inside the simulation_runner module so mock_rounds = round_count
+    _original_min = _sr_mod.__builtins__["min"] if isinstance(_sr_mod.__builtins__, dict) else _sr_mod.__builtins__.min  # type: ignore[union-attr]
+
+    def _uncapped_min(*args, **kw):  # type: ignore[return]
+        # Allow round_count to pass through uncapped for the specific (N, 3) call
+        if len(args) == 2 and args[1] == 3 and isinstance(args[0], int) and args[0] > 3:
+            return args[0]
+        return _original_min(*args, **kw)
+
+    try:
+        if isinstance(_sr_mod.__builtins__, dict):
+            _sr_mod.__builtins__["min"] = _uncapped_min
+        else:
+            _sr_mod.__builtins__.min = _uncapped_min  # type: ignore[union-attr]
+        await runner.run(session_id, config, progress_callback=_capture)
+    finally:
+        if isinstance(_sr_mod.__builtins__, dict):
+            _sr_mod.__builtins__["min"] = _original_min
+        else:
+            _sr_mod.__builtins__.min = _original_min  # type: ignore[union-attr]
+
+    yield {
+        "session_id": session_id,
+        "graph_id": graph_id,
+        "db_path": db_path,
+        "events": events,
+        "runner": runner,
+    }
+
+    await runner.cleanup_session(session_id)
+
+
+# ---------------------------------------------------------------------------
+# TestHKDemographicPipeline
+# ---------------------------------------------------------------------------
+
+
+class TestHKDemographicPipeline:
+    """Verify full pipeline for hk_demographic mode."""
+
+    @pytest.mark.asyncio
+    async def test_mode_detection(self, pipeline_db):
+        """Seed containing HK keywords routes to hk_demographic without LLM call."""
+        from backend.app.services.zero_config import ZeroConfigService
+
+        svc = ZeroConfigService()
+        # Use a seed that contains an unambiguous HK keyword so the fast-path fires
+        hk_keyword_seed = "香港樓市2026年分析"
+        with patch.object(svc, "_llm_detect_mode", new_callable=AsyncMock) as mock_llm:
+            result = await svc.detect_mode_async(hk_keyword_seed)
+        mock_llm.assert_not_called()
+        assert result == "hk_demographic"
+
+    @pytest.mark.asyncio
+    async def test_graph_build(self, pipeline_db):
+        """GraphBuilderService produces KG nodes from HK seed."""
+        db_path, _ = pipeline_db
+        from backend.app.services.graph_builder import GraphBuilderService
+
+        gbs = GraphBuilderService()
+        result = await gbs.build_graph(
+            session_id="hk-pipe-test",
+            scenario_type="property",
+            seed_text=_HK_SEED,
+            hk_data={},
+        )
+        assert result["graph_id"], "graph_id must be non-empty"
+        # kg_nodes rows are keyed by session_id (not graph_id) per schema
+        async with aiosqlite.connect(db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT COUNT(*) as cnt FROM kg_nodes WHERE session_id = ?",
+                ("hk-pipe-test",),
+            )
+            row = await cursor.fetchone()
+            assert row["cnt"] >= 1, "Graph build should produce at least 1 node"
+
+    @pytest.mark.asyncio
+    async def test_agent_generation(self, hk_session):
+        """HK agents have census fields."""
+        db_path = hk_session["db_path"]
+        session_id = hk_session["session_id"]
+        async with aiosqlite.connect(db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT * FROM agent_profiles WHERE session_id = ?",
+                (session_id,),
+            )
+            rows = await cursor.fetchall()
+        assert len(rows) == 5, f"Expected 5 HK agents, got {len(rows)}"
+        for row in rows:
+            assert row["district"], "HK agent must have district"
+            assert row["income_bracket"], "HK agent must have income_bracket"
+            assert row["education_level"], "HK agent must have education_level"
+
+    @pytest.mark.asyncio
+    async def test_dry_run_completes(self, hk_session):
+        """Dry run emits post, progress, and complete events."""
+        event_types = [e.get("type") for e in hk_session["events"]]
+        assert "post" in event_types, "Must emit post events"
+        assert "progress" in event_types, "Must emit progress events"
+        assert "complete" in event_types, "Must emit complete event"
+
+    @pytest.mark.asyncio
+    async def test_hook_execution(self, hk_session):
+        """Per-round hooks fire — verify via post events emitted each round."""
+        events = hk_session["events"]
+        # _run_dry emits 2 post events per round; with 6 rounds we expect >= 6 posts
+        post_events = [e for e in events if e.get("type") == "post"]
+        progress_events = [e for e in events if e.get("type") == "progress"]
+        assert len(post_events) >= 6, (
+            f"Expected >= 6 post events (2/round × ≥3 rounds), got {len(post_events)}"
+        )
+        assert len(progress_events) >= 3, (
+            f"Expected >= 3 progress events (1/round × ≥3 rounds), got {len(progress_events)}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_db_state_after_sim(self, hk_session):
+        """DB tables have rows after full pipeline."""
+        db_path = hk_session["db_path"]
+        session_id = hk_session["session_id"]
+        async with aiosqlite.connect(db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT graph_id FROM simulation_sessions WHERE id = ?",
+                (session_id,),
+            )
+            row = await cursor.fetchone()
+            assert row is not None, "Session must exist"
+            assert row["graph_id"] == hk_session["graph_id"], "graph_id must flow through"
+            cursor = await db.execute(
+                "SELECT COUNT(*) as cnt FROM agent_profiles WHERE session_id = ?",
+                (session_id,),
+            )
+            assert (await cursor.fetchone())["cnt"] == 5, "Agent profiles must persist"
