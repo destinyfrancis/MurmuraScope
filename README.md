@@ -57,9 +57,9 @@
 
 **🔍 從文字到世界，全自動**
 
-貼入任何文字，引擎自動推斷：有哪些行動者、他們會做哪些決策、用哪些指標衡量局勢、可能發生哪些衝擊事件。無需手動設定任何領域配置，30 秒內啟動模擬。
+貼入任何文字，引擎自動推斷：有哪些行動者、他們會做哪些決策、用哪些指標衡量局勢、可能發生哪些衝擊事件。無需手動設定任何領域配置，1-3 分鐘內啟動模擬（視代理人數量而定）。
 
-*Paste any text — the engine infers actors, decisions, metrics, and potential shocks automatically. No domain configuration needed. Simulation starts in 30 seconds.*
+*Paste any text — the engine infers actors, decisions, metrics, and potential shocks automatically. No domain configuration needed. Simulation starts in 1-3 minutes depending on agent count.*
 
 **🧠 真正有深度的 AI 人物**
 
@@ -69,9 +69,9 @@
 
 **📊 量化預測，唔係純模擬**
 
-模擬結束後，引擎輸出有數字、有信賴區間的量化預測——例如「12個月內樓價跌逾10%的概率是78%（80% CI: 71–84%）」。背後依靠蒙地卡羅集成（500次試驗）、AutoARIMA 時序預測、多指標向量自回歸，以及對比真實歷史數據的回溯驗證。
+模擬結束後，引擎輸出有數字、有信賴區間的量化預測——例如「12個月內樓價跌逾10%的概率是78%（80% CI: 71–84%）」。背後依靠蒙地卡羅集成（500次試驗）、AutoARIMA 時序預測、多指標向量自回歸，以及對比真實歷史數據的回溯驗證（驗證框架已建立，持續累積歷史比對數據）。
 
-*The engine outputs quantitative forecasts with numbers and confidence intervals — e.g. "78% probability property prices fall >10% within 12 months." Powered by Monte Carlo ensemble (500 trials), AutoARIMA time-series forecasting, VAR multi-indicator modeling, and retrospective validation against real historical data.*
+*The engine outputs quantitative forecasts with numbers and confidence intervals — e.g. "78% probability property prices fall >10% within 12 months." Powered by Monte Carlo ensemble (500 trials), AutoARIMA time-series forecasting, VAR multi-indicator modeling, and retrospective validation against real historical data (validation framework built, continuously accumulating historical comparison data).*
 
 **🌐 知識圖譜，記錄世界的演化**
 
@@ -143,7 +143,7 @@
 
 *A multi-agent system consists of many independent AI individuals (agents), each with their own personality, memory, and decision logic — interacting and influencing each other to produce emergent collective behavior. Think of it as simulating a real society where every person is an independent actor, but collective behavior emerges from all their interactions.*
 
-- **100 至 50,000 個 AI 代理人**，自動從 seed text 生成，唔係預設 HK profiles（kg_driven 模式）；內建 preset 涵蓋 100 / 300 / 500 / 1,000 / 3,000，亦可完全自定義
+- **100 至 50,000 個 AI 代理人**，每輪由 stochastic activation 決定邊啲執行 LLM 推理（關鍵持份者優先激活），自動從 seed text 生成；內建 preset 涵蓋 100 / 300 / 500 / 1,000 / 3,000，亦可完全自定義
 - 每位代理人擁有：
   - **情節記憶（Episodic Memory）**：儲存於 LanceDB 向量資料庫，按語義相關性提取
   - **貝葉斯信念系統（Bayesian Belief System）**：根據新資訊更新對世界嘅看法（見下方解釋）
@@ -152,9 +152,9 @@
   - **認知偏差（Cognitive Bias）**：確認偏誤、從衆效應
 - 模擬 Facebook + Instagram 平台互動（OASIS 框架）
 
-> **貝葉斯信念更新（Bayesian Belief Update）** 係一種根據新證據調整自己信念強度嘅方法。例如你原本 60% 相信樓價會跌，睇到一則利淡新聞後，系統會根據呢則新聞嘅可信度同影響力，將你嘅信念自動更新至 75%。唔係直接替換，而係加權更新。
+> **貝葉斯信念更新（Bayesian Belief Update）** 使用真正嘅貝葉斯公式 P(H|E) = P(H)×LR / (P(H)×LR + P(¬H)) 根據新證據調整信念。例如你原本 60% 相信樓價會跌，睇到一則利淡新聞後，系統計算 likelihood ratio（呢則新聞喺「樓價跌」假設下出現嘅概率 vs 「唔跌」假設下嘅概率），然後用貝葉斯公式更新至 75%。確認偏誤會調節 likelihood ratio，令 agent 對符合既有信念嘅證據更敏感。
 >
-> *Bayesian belief update is a method of adjusting belief strength based on new evidence. If you originally 60% believed property prices would fall, and you read a bearish news article, the system updates your belief to, say, 75% based on the article's credibility and impact — not replacing, but probabilistically reweighting.*
+> *Bayesian belief update uses the true Bayes formula P(H|E) = P(H)×LR / (P(H)×LR + P(¬H)). The system computes a likelihood ratio (probability of observing this evidence under the hypothesis vs. under the alternative), then applies Bayes' rule. Confirmation bias modulates the likelihood ratio, making agents more responsive to evidence that aligns with their existing beliefs.*
 
 ---
 
