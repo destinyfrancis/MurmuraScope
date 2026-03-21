@@ -2062,14 +2062,25 @@ class SimulationRunner(
             if delta:
                 all_deltas[agent_id] = delta
 
-        # Apply propagation deltas (immutable update)
+        # Apply propagation deltas via Bayesian core (immutable update)
+        from backend.app.services.belief_system import BeliefSystem  # noqa: PLC0415
+        _bs = BeliefSystem()
+
         updated: dict[str, dict[str, float]] = {
             aid: dict(b) for aid, b in kg_state.agent_beliefs.items()
         }
         for agent_id, deltas in all_deltas.items():
             for m, d in deltas.items():
                 if m in updated.get(agent_id, {}):
-                    updated[agent_id][m] = max(0.0, min(1.0, updated[agent_id][m] + d))
+                    current = updated[agent_id][m]
+                    # Convert delta to likelihood ratio for Bayesian update
+                    lr = _bs.compute_likelihood_ratio(
+                        evidence_stance=d,
+                        evidence_weight=abs(d),
+                        belief_stance=current * 2.0 - 1.0,
+                        confirmation_bias=0.4,
+                    )
+                    updated[agent_id][m] = _bs._bayesian_core(current, lr)
 
         # --- Cascade: 1-hop neighbour pull for large shifts (Task 2.2) ---
         cascade_deltas = self._belief_propagation.cascade(
@@ -2080,7 +2091,14 @@ class SimulationRunner(
             if agent_id in updated:
                 for m, d in c_deltas.items():
                     if m in updated[agent_id]:
-                        updated[agent_id][m] = max(0.0, min(1.0, updated[agent_id][m] + d))
+                        current = updated[agent_id][m]
+                        lr = _bs.compute_likelihood_ratio(
+                            evidence_stance=d,
+                            evidence_weight=abs(d),
+                            belief_stance=current * 2.0 - 1.0,
+                            confirmation_bias=0.4,
+                        )
+                        updated[agent_id][m] = _bs._bayesian_core(current, lr)
 
         kg_state.agent_beliefs = updated
 

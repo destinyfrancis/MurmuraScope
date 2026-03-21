@@ -182,24 +182,82 @@ class BeliefSystem:
 
         return beliefs
 
-    def update_belief(
+    # ------------------------------------------------------------------
+    # Domain transforms: [-1, +1] stance <-> (0, 1) probability
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _stance_to_prob(stance: float) -> float:
+        """Map [-1, +1] stance to (0, 1) probability domain."""
+        return max(0.02, min(0.98, (stance + 1.0) / 2.0))
+
+    @staticmethod
+    def _prob_to_stance(prob: float) -> float:
+        """Map (0, 1) probability back to [-1, +1] stance domain."""
+        return max(-0.98, min(0.98, prob * 2.0 - 1.0))
+
+    # ------------------------------------------------------------------
+    # Bayesian core
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _bayesian_core(prior: float, likelihood_ratio: float) -> float:
+        """Core Bayes update on [0,1] probability scale.
+
+        P(H|E) = P(H) * LR / (P(H) * LR + (1 - P(H)))
+        """
+        prior = max(0.02, min(0.98, prior))
+        if likelihood_ratio <= 0:
+            return prior
+        numerator = prior * likelihood_ratio
+        denominator = numerator + (1.0 - prior)
+        if denominator < 1e-9:
+            return prior
+        return max(0.02, min(0.98, numerator / denominator))
+
+    def compute_likelihood_ratio(
+        self,
+        evidence_stance: float,
+        evidence_weight: float,
+        belief_stance: float,
+        confirmation_bias: float = 0.5,
+    ) -> float:
+        """Compute likelihood ratio from evidence.
+
+        Always returns LR >= 1 representing evidence strength.
+        Confirmation bias modulates the magnitude:
+        - Same-direction evidence gets a bias boost (larger LR)
+        - Opposite-direction evidence gets dampened (smaller LR, closer to 1)
+
+        Direction is handled by the caller (bayesian_update) by choosing
+        which probability space to apply the LR in.
+        """
+        if evidence_weight < 1e-9:
+            return 1.0
+        base_lr = 1.0 + abs(evidence_stance) * evidence_weight
+        same_direction = (evidence_stance >= 0) == (belief_stance >= 0)
+        bias_factor = confirmation_bias * 0.3
+        if same_direction:
+            return base_lr * (1.0 + bias_factor)
+        else:
+            # Dampen contradicting evidence: LR stays >= 1 but is reduced
+            dampened = 1.0 + (base_lr - 1.0) * max(0.0, 1.0 - bias_factor)
+            return max(1.0, dampened)
+
+    # ------------------------------------------------------------------
+    # Primary update method: true Bayesian
+    # ------------------------------------------------------------------
+
+    def bayesian_update(
         self,
         belief: Belief,
         evidence_stance: float,
         evidence_weight: float,
         openness: float,
     ) -> Belief:
-        """Apply a single piece of evidence to a belief using Bayesian update.
+        """True Bayesian belief update on [-1, +1] stance scale.
 
-        Confirmation bias is modulated by the agent's openness:
-        - Low openness → stronger confirmation bias
-        - High openness → near-unbiased update
-
-        Formula:
-            effective_weight = evidence_weight × bias_factor
-            posterior = (confidence × prior + effective_weight × evidence) /
-                        (confidence + effective_weight)
-            new_confidence = min(1.0, confidence + INCREMENT × effective_weight)
+        Transforms: stance -> probability -> Bayes update -> probability -> stance
 
         Args:
             belief: Current belief to update.
@@ -208,7 +266,94 @@ class BeliefSystem:
             openness: Agent Big Five openness (0..1).
 
         Returns:
-            Updated :class:`Belief` (frozen — new object).
+            Updated :class:`Belief` (frozen -- new object).
+        """
+        if evidence_weight < 1e-9:
+            return belief
+
+        confirmation_bias = max(0.0, 1.0 - openness)
+        lr = self.compute_likelihood_ratio(
+            evidence_stance, evidence_weight, belief.stance, confirmation_bias,
+        )
+
+        prob = self._stance_to_prob(belief.stance)
+
+        # The LR is always >= 1 (evidence strength).  Direction is determined
+        # by the sign of evidence_stance:
+        #   positive evidence → push prob toward 1 (stance toward +1)
+        #   negative evidence → push prob toward 0 (stance toward -1)
+        #
+        # For negative evidence we work in the complementary space:
+        #   apply LR to (1 - prob), which increases (1 - prob) and thus
+        #   decreases prob, moving stance toward -1.
+        if evidence_stance < 0:
+            complement = 1.0 - prob
+            posterior_complement = self._bayesian_core(complement, lr)
+            posterior_prob = 1.0 - posterior_complement
+            posterior_prob = max(0.02, min(0.98, posterior_prob))
+        else:
+            posterior_prob = self._bayesian_core(prob, lr)
+
+        new_stance = self._prob_to_stance(posterior_prob)
+
+        same_direction = (evidence_stance >= 0) == (belief.stance >= 0)
+        if same_direction:
+            new_confidence = min(1.0, belief.confidence + self.CONFIDENCE_INCREMENT * evidence_weight)
+        else:
+            reduction = self.CONFIDENCE_INCREMENT * evidence_weight * self.CONFIDENCE_DECREMENT_FACTOR
+            new_confidence = max(self._CONFIDENCE_FLOOR, belief.confidence - reduction)
+
+        return replace(
+            belief,
+            stance=round(new_stance, 4),
+            confidence=round(new_confidence, 4),
+            evidence_count=belief.evidence_count + 1,
+        )
+
+    def update_belief(
+        self,
+        belief: Belief,
+        evidence_stance: float,
+        evidence_weight: float,
+        openness: float,
+    ) -> Belief:
+        """Apply a single piece of evidence via true Bayesian update.
+
+        Delegates to :meth:`bayesian_update`. Kept for backward compatibility.
+        """
+        return self.bayesian_update(belief, evidence_stance, evidence_weight, openness)
+
+    # ------------------------------------------------------------------
+    # Legacy linear-weighted update (kept as fallback)
+    # ------------------------------------------------------------------
+
+    def update_belief_legacy(
+        self,
+        belief: Belief,
+        evidence_stance: float,
+        evidence_weight: float,
+        openness: float,
+    ) -> Belief:
+        """Legacy linear-weighted belief update with confirmation bias.
+
+        Confirmation bias is modulated by the agent's openness:
+        - Low openness -> stronger confirmation bias
+        - High openness -> near-unbiased update
+
+        Formula:
+            effective_weight = evidence_weight * bias_factor
+            posterior = (confidence * prior + effective_weight * evidence) /
+                        (confidence + effective_weight)
+            new_confidence = min(1.0, confidence + INCREMENT * effective_weight)
+
+        Args:
+            belief: Current belief to update.
+            evidence_stance: Stance in evidence (-1..+1).
+            evidence_weight: Credibility/weight of evidence (0..1 typically).
+            openness: Agent Big Five openness (0..1).
+
+        Returns:
+            Updated :class:`Belief` (frozen -- new object).
         """
         # Sigmoid confirmation bias: extreme beliefs resist/boost more strongly.
         # The sigmoid steepness k grows with confirmation_bias (default 0.5) and
@@ -216,28 +361,26 @@ class BeliefSystem:
         # distance_from_center measures how extreme the current stance is (0..1).
         distance_from_center = abs(belief.stance)  # stance in [-1, 1]
         k = 4.0 * 0.5 * (1.0 - openness * 0.5)  # steepness; openness dampens
-        # sigmoid ∈ (0.5, 1.0) — higher at extremes, lower near center
+        # sigmoid in (0.5, 1.0) -- higher at extremes, lower near center
         sigmoid_val = 1.0 / (1.0 + math.exp(-k * distance_from_center))
-        # Map to bias multiplier: same direction → boost (>1), opposing → resist (<1)
+        # Map to bias multiplier: same direction -> boost (>1), opposing -> resist (<1)
         same_direction = (evidence_stance >= 0) == (belief.stance >= 0)
         if same_direction:
-            # Scale sigmoid [0.5, 1.0] → boost [1.0, BOOST]
+            # Scale sigmoid [0.5, 1.0] -> boost [1.0, BOOST]
             effective_bias = 1.0 + (self.CONFIRMATION_BIAS_BOOST - 1.0) * (sigmoid_val - 0.5) * 2.0
         else:
-            # Scale sigmoid [0.5, 1.0] → resist [1.0, RESIST] (inverted: more extreme = more resist)
+            # Scale sigmoid [0.5, 1.0] -> resist [1.0, RESIST] (inverted: more extreme = more resist)
             effective_bias = 1.0 - (1.0 - self.CONFIRMATION_BIAS_RESIST) * (sigmoid_val - 0.5) * 2.0
 
         effective_weight = evidence_weight * effective_bias
 
-        # Bayesian posterior
+        # Linear weighted posterior
         denom = belief.confidence + effective_weight
         if denom < 1e-9:
             return belief
 
         new_stance = (belief.confidence * belief.stance + effective_weight * evidence_stance) / denom
         # Confirming evidence builds confidence; contradictory evidence erodes it.
-        # Without a decrease path, long simulations produce agents with rock-solid
-        # certainty that no amount of counter-evidence can shift (runaway rigidity).
         if same_direction:
             new_confidence = min(1.0, belief.confidence + self.CONFIDENCE_INCREMENT * effective_weight)
         else:

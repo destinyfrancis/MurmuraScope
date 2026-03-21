@@ -50,16 +50,19 @@ async def test_propagate_returns_delta_for_active_metrics():
 
 
 @pytest.mark.asyncio
-async def test_high_confirmation_bias_dampens_contradicting_evidence():
-    """Agent with high confirmation_bias should shift less than one with low bias.
+async def test_high_confirmation_bias_amplifies_confirming_evidence():
+    """Bayesian update: high confirmation_bias amplifies same-direction evidence.
 
-    Correct semantics: confirmation bias fires when evidence REINFORCES an extreme.
-    Current belief HIGH (0.8) + upward delta → reinforcing extreme → should be dampened.
+    Current belief HIGH (0.8) + upward delta is *confirming* evidence.
+    An agent with high confirmation_bias should shift MORE (larger LR) because
+    they weight confirming evidence more heavily. This is the psychologically
+    correct interpretation: confirmation bias = favouring evidence that aligns
+    with existing belief.
     """
     engine = BeliefPropagationEngine()
     event = _make_event({"escalation_index": 0.3})  # pushes escalation up
     active_metrics = ("escalation_index",)
-    # Current belief: escalation is HIGH (0.8) + event pushes further up → reinforces extreme
+    # Current belief: escalation is HIGH (0.8) + event pushes further up → confirms belief
     current_beliefs = {"escalation_index": 0.8}
 
     mock_embed = MagicMock(return_value=[0.1] * 384)
@@ -75,8 +78,8 @@ async def test_high_confirmation_bias_dampens_contradicting_evidence():
             active_metrics=active_metrics, current_beliefs=current_beliefs,
         )
 
-    # High bias → smaller shift than low bias when evidence reinforces an extreme
-    assert abs(delta_high_bias.get("escalation_index", 0)) < abs(delta_low_bias.get("escalation_index", 0))
+    # High bias → larger shift than low bias when evidence confirms existing belief
+    assert abs(delta_high_bias.get("escalation_index", 0)) > abs(delta_low_bias.get("escalation_index", 0))
 
 
 @pytest.mark.asyncio

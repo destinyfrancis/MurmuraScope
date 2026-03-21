@@ -12,9 +12,13 @@ from typing import Any
 
 from backend.app.models.cognitive_fingerprint import CognitiveFingerprint
 from backend.app.models.world_event import WorldEvent
+from backend.app.services.belief_system import BeliefSystem
 from backend.app.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+# Module-level singleton for Bayesian computations
+_bs = BeliefSystem()
 
 
 async def get_embedding(text: str) -> list[float]:
@@ -86,17 +90,22 @@ class BeliefPropagationEngine:
                 susceptibility = fingerprint.susceptibility.get(metric_id, 0.5)
                 raw_delta = impact * event.credibility * susceptibility
 
-                # Dampen if this contradicts current belief direction.
-                # An agent holding a strong belief (far from 0.5) resists evidence
-                # that pushes them further away from their anchored position.
-                # Strong low belief (< 0.5) → resists upward pressure.
-                # Strong high belief (> 0.5) → resists downward pressure.
+                # Bayesian dampening via likelihood ratio.
+                # Convert current [0,1] belief to [-1,1] stance for LR computation,
+                # then compute LR that encodes confirmation bias properly.
                 current = current_beliefs.get(metric_id, 0.5)
-                contradicting = (raw_delta > 0 and current > 0.5) or (raw_delta < 0 and current < 0.5)
-                if contradicting:
-                    raw_delta *= (1.0 - fingerprint.confirmation_bias)
+                credibility = event.credibility
+                lr = _bs.compute_likelihood_ratio(
+                    evidence_stance=raw_delta,
+                    evidence_weight=abs(raw_delta) * credibility,
+                    belief_stance=current * 2.0 - 1.0,  # [0,1] -> [-1,1]
+                    confirmation_bias=fingerprint.confirmation_bias,
+                )
+                # Convert LR to effective delta: Bayesian posterior - prior
+                bayesian_posterior = _bs._bayesian_core(current, lr)
+                effective_delta = bayesian_posterior - current
 
-                accumulated[metric_id] = accumulated.get(metric_id, 0.0) + raw_delta
+                accumulated[metric_id] = accumulated.get(metric_id, 0.0) + effective_delta
 
         # Blend with faction peer pressure via conformity.
         # Hegselmann-Krause bounded confidence: agents only update from peers
