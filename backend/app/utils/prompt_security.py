@@ -1,12 +1,13 @@
 """Prompt injection prevention utilities.
 
 Sanitizes user-controlled text before insertion into LLM prompts.
-Strategy: length truncation + brace escaping + XML tag stripping +
-system-instruction prefix detection.
+Strategy: Unicode normalization + length truncation + brace escaping +
+XML tag stripping + system-instruction prefix detection.
 """
 from __future__ import annotations
 
 import re
+import unicodedata
 
 # ---------------------------------------------------------------------------
 # Length limits
@@ -30,7 +31,8 @@ _INJECTION_PATTERN = re.compile(
     r"|human\s*:"
     r"|<\s*/?instructions?\s*>"
     r"|<\s*/?prompt\s*>"
-    r")"
+    r")",
+    re.MULTILINE | re.DOTALL,
 )
 
 # XML/HTML tag pattern — only matches actual tags (start with letter or slash/!)
@@ -61,6 +63,8 @@ def sanitize_seed_text(text: str, max_len: int = MAX_SEED_TEXT) -> str:
         Sanitized string, safe for interpolation into an LLM prompt template.
     """
     text = str(text)[:max_len]
+    # Normalize Unicode to catch homoglyph attacks (e.g., fullwidth 'ｓｙｓｔｅｍ' → 'system')
+    text = unicodedata.normalize("NFKD", text)
     text = text.replace("{", "{{").replace("}", "}}")
     # Detect injection patterns BEFORE stripping XML tags so that patterns like
     # "<system>..." are matched in full before their tag wrapper is removed.
