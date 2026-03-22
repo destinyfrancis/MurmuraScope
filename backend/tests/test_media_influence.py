@@ -42,10 +42,10 @@ def sample_media_agent() -> MediaAgent:
 
 
 class TestDefaultMediaOutlets:
-    """Verify the 8 HK media outlet definitions."""
+    """Verify the 7 HK media outlet definitions (眾新聞 removed Jan 2022)."""
 
-    def test_exactly_eight_outlets(self) -> None:
-        assert len(DEFAULT_MEDIA_OUTLETS) == 8
+    def test_exactly_seven_outlets(self) -> None:
+        assert len(DEFAULT_MEDIA_OUTLETS) == 7
 
     def test_all_outlets_have_required_keys(self) -> None:
         required = {"media_name", "political_lean", "influence_radius", "credibility"}
@@ -66,8 +66,18 @@ class TestDefaultMediaOutlets:
 
     def test_known_outlet_names(self) -> None:
         names = {o["media_name"] for o in DEFAULT_MEDIA_OUTLETS}
-        expected = {"TVB新聞", "香港電台RTHK", "明報", "南華早報", "大公報", "星島日報", "獨立媒體", "眾新聞"}
+        expected = {"TVB新聞", "香港電台RTHK", "明報", "南華早報", "大公報", "星島日報", "獨立媒體"}
         assert names == expected
+
+    def test_rthk_credibility_post_2021(self) -> None:
+        """RTHK credibility reduced to 0.55 after 2021 management change."""
+        rthk = next(o for o in DEFAULT_MEDIA_OUTLETS if o["media_name"] == "香港電台RTHK")
+        assert rthk["credibility"] == 0.55
+
+    def test_no_ceased_outlets(self) -> None:
+        """眾新聞 ceased Jan 2022 and should not be in defaults."""
+        names = {o["media_name"] for o in DEFAULT_MEDIA_OUTLETS}
+        assert "眾新聞" not in names
 
 
 # ---------------------------------------------------------------------------

@@ -47,11 +47,11 @@ class MediaAgent:
 #   - RTHK and SCMP consistently scored highest (7.0-8.0 range)
 #   - TVB credibility declined from ~6.5 (2018) to ~5.5 (2023)
 #   - 大公報/文匯報 scored lowest (~3.5-4.5)
-#   - Independent outlets (inmediahk, 眾新聞) scored ~5.5-6.5
+#   - Independent outlets (inmediahk) scored ~5.5-6.5
 # Political lean is calibrated against HKPORI editorial stance ratings
 # and cross-referenced with CUHK journalism school content analysis studies.
-# Note: 眾新聞 ceased operations in Jan 2022 but is retained for
-# historical simulation scenarios.
+# Note: 眾新聞 ceased operations in Jan 2022 and has been removed.
+# RTHK credibility reduced from 0.75 to 0.55 reflecting post-2021 management change.
 DEFAULT_MEDIA_OUTLETS: list[dict[str, Any]] = [
     {
         "media_name": "TVB新聞",
@@ -63,7 +63,7 @@ DEFAULT_MEDIA_OUTLETS: list[dict[str, Any]] = [
         "media_name": "香港電台RTHK",
         "political_lean": 0.45,       # HKPORI: near-centre, slightly independent
         "influence_radius": 50,
-        "credibility": 0.75,          # HKPORI 2018-2020: ~7.5/10 (pre-management change)
+        "credibility": 0.55,          # post-2021 management change; HKPORI 2023: ~5.5/10
     },
     {
         "media_name": "明報",
@@ -95,12 +95,7 @@ DEFAULT_MEDIA_OUTLETS: list[dict[str, Any]] = [
         "influence_radius": 20,       # niche online audience
         "credibility": 0.55,          # HKPORI 2020: ~5.5/10
     },
-    {
-        "media_name": "眾新聞",
-        "political_lean": 0.75,       # HKPORI: pro-democracy (ceased Jan 2022)
-        "influence_radius": 15,
-        "credibility": 0.6,           # HKPORI 2021: ~6.0/10
-    },
+    # 眾新聞 removed: ceased operations Jan 2022
 ]
 
 # ---------------------------------------------------------------------------
