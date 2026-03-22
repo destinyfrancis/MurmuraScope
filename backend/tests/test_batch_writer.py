@@ -184,6 +184,39 @@ async def test_flush_all_multiple_tables(mem_db):
     assert (await c2.fetchone())[0] == 2
 
 
+@pytest.mark.asyncio
+async def test_flush_failure_preserves_buffer_for_one_retry(mem_db):
+    """If flush fails, buffer should survive for one retry before clearing.
+
+    Bug: current code clears buffer on ANY failure, losing all rows permanently.
+    Fix: keep buffer on FIRST failure (retry_key unset), clear on SECOND failure.
+    """
+    from unittest.mock import AsyncMock, patch
+    from backend.app.services.batch_writer import BatchWriter
+
+    writer = BatchWriter()
+    writer.register_table("memories", ["session_id", "agent_id", "content"])
+    writer.queue("memories", ("s1", 1, "text"))
+
+    mock_db = AsyncMock()
+    mock_db.executemany = AsyncMock(side_effect=Exception("SQLITE_BUSY"))
+    mock_db.commit = AsyncMock()
+
+    # First flush fails — buffer must survive for retry
+    result = await writer.flush("memories", mock_db)
+    assert result == 0
+    assert writer.queue_count("memories") == 1, (
+        "Buffer cleared on first failure — rows lost permanently (bug)"
+    )
+
+    # Second flush succeeds (simulate recovery)
+    mock_db.executemany = AsyncMock(return_value=None)
+    mock_db.executemany.side_effect = None
+    result = await writer.flush("memories", mock_db)
+    assert result == 1
+    assert writer.queue_count("memories") == 0
+
+
 # ---------------------------------------------------------------------------
 # Clear tests
 # ---------------------------------------------------------------------------

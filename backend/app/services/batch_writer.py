@@ -168,12 +168,26 @@ class BatchWriter:
                 await db.commit()
                 written = len(rows)
                 self._buffers[table] = []
+                # Reset retry flag on success
+                setattr(self, f"_retry_{table}", False)
                 logger.debug("BatchWriter flushed table=%s rows=%d", table, written)
                 return written
             except Exception:
                 logger.exception("BatchWriter.flush failed table=%s rows=%d", table, len(rows))
-                # Clear buffer on failure to prevent retrying stale/bad rows forever
-                self._buffers[table] = []
+                # Keep buffer for ONE retry — next flush will attempt again.
+                # If this is the second consecutive failure, clear to prevent
+                # infinite retry of bad rows.
+                retry_key = f"_retry_{table}"
+                if getattr(self, retry_key, False):
+                    logger.error(
+                        "BatchWriter: second failure for %s — dropping %d rows",
+                        table, len(rows),
+                    )
+                    self._buffers[table] = []
+                    setattr(self, retry_key, False)
+                else:
+                    setattr(self, retry_key, True)
+                    # buffer NOT cleared — rows survive for one retry
                 return 0
 
     async def flush_all(self, db: "aiosqlite.Connection") -> int:
