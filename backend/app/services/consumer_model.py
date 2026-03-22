@@ -30,6 +30,14 @@ _WEALTH_ELASTICITY: float = 0.15
 WEALTH_ELASTICITY_CCL: float = 0.08
 
 # Discretionary categories are more sensitive to wealth changes
+# Price elasticity estimates for discretionary categories (Engel curve extension).
+# Applied when CPI inflation exceeds 3% — quantity_change = elasticity * excess_inflation.
+_PRICE_ELASTICITY: dict[str, float] = {
+    "entertainment": -1.2,
+    "transport": -0.5,
+    "education": -0.3,
+}
+
 _DISCRETIONARY_CATEGORIES: frozenset[str] = frozenset(
     {"entertainment", "education"}
 )
@@ -301,6 +309,19 @@ class ConsumerModel:
             entertainment = _clamp(entertainment * (1.0 - cut))
             savings_rate = _clamp(savings_rate - cut * 0.5)
             food = _clamp(food * (1.0 + cut * 0.3))
+
+        # Price elasticity for discretionary categories (Engel curve extension).
+        # When inflation exceeds 3%, apply per-category elasticity adjustments.
+        if macro_state.cpi_yoy > 0.03:
+            inflation_excess = macro_state.cpi_yoy - 0.03
+            for category, elasticity in _PRICE_ELASTICITY.items():
+                adjustment = max(0.5, 1.0 + elasticity * inflation_excess)
+                if category == "entertainment":
+                    entertainment = _clamp(entertainment * adjustment)
+                elif category == "transport":
+                    transport = _clamp(transport * adjustment)
+                elif category == "education":
+                    education = _clamp(education * adjustment)
 
         # Property crash (CCL < 100) → renters save more (lower housing costs)
         if macro_state.ccl_index < 100 and spending.housing < 0.20:
