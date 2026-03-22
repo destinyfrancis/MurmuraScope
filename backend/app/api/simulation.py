@@ -874,7 +874,10 @@ async def rebalance_shards(
 
 
 @router.post("/{session_id}/resume", response_model=APIResponse)
-async def resume_session(session_id: str) -> APIResponse:
+async def resume_session(
+    session_id: str,
+    user: Annotated[UserProfile | None, Depends(get_optional_user)] = None,
+) -> APIResponse:
     """Resume a simulation session that was paused due to exceeding the hard cost cap.
 
     Calls ``cost_tracker.resume(session_id)`` which clears the paused flag and
@@ -1560,7 +1563,11 @@ async def get_contagion_data(session_id: str) -> APIResponse:
 
 
 @router.post("/{session_id}/shock", response_model=APIResponse)
-async def inject_live_shock(session_id: str, shock: ScheduledShock) -> APIResponse:
+async def inject_live_shock(
+    session_id: str,
+    shock: ScheduledShock,
+    user: Annotated[UserProfile | None, Depends(get_optional_user)] = None,
+) -> APIResponse:
     """Inject a live shock into a running simulation (God Mode)."""
     from backend.app.api.ws import push_progress  # noqa: PLC0415
     from backend.app.utils.db import get_db  # noqa: PLC0415

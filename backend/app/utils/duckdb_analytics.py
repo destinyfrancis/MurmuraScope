@@ -29,6 +29,7 @@ References:
 
 from __future__ import annotations
 
+import re
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -38,6 +39,23 @@ from backend.app.config import get_settings
 from backend.app.utils.logger import get_logger
 
 logger = get_logger("duckdb_analytics")
+
+# ---------------------------------------------------------------------------
+# Table name allowlist — prevents SQL injection via f-string interpolation
+# ---------------------------------------------------------------------------
+
+_VALID_TABLES: frozenset[str] = frozenset({
+    "agent_profiles", "belief_states", "simulation_actions", "simulation_sessions",
+    "emotional_states", "agent_memories", "kg_nodes", "kg_edges", "kg_communities",
+    "agent_relationships", "agent_decisions", "hk_data_snapshots", "market_data",
+    "macro_scenarios", "ensemble_results", "validation_runs", "social_sentiment",
+    "echo_chamber_snapshots", "news_headlines", "network_events", "agent_feeds",
+    "cognitive_dissonance", "polarization_snapshots", "emergence_metrics",
+    "cognitive_fingerprints", "world_events", "faction_snapshots_v2",
+    "tipping_points", "debate_rounds", "consensus_scores", "multi_run_results",
+    "seed_world_context", "seed_persona_templates", "memory_triples",
+    "reports", "scenario_branches",
+})
 
 # ---------------------------------------------------------------------------
 # Optional dependency guard
@@ -100,24 +118,46 @@ class DuckDBAnalytics:
         self._conn: duckdb.DuckDBPyConnection | None = None
         self._lock = threading.Lock()
 
+    def _validate_table(self, name: str) -> str:
+        """Return ``name`` if it is in the allowlist, otherwise raise ValueError."""
+        if name not in _VALID_TABLES:
+            raise ValueError(f"Invalid table name: {name!r}")
+        return name
+
     def _ensure_connection(self) -> "duckdb.DuckDBPyConnection":
-        """Lazily create the DuckDB connection and attach SQLite."""
-        if self._conn is not None:
-            return self._conn
+        """Lazily create the DuckDB connection and attach SQLite.
 
-        if not HAS_DUCKDB:
-            raise RuntimeError("duckdb is not installed")
+        Acquires ``self._lock`` internally so the check-then-create sequence
+        is atomic.  Callers must NOT hold ``self._lock`` when calling this
+        method — doing so would deadlock because ``threading.Lock`` is
+        non-reentrant.  ``query`` and ``query_df`` therefore call this method
+        first (outside their own lock scope) and then acquire the lock only
+        for the query-execution phase.
+        """
+        with self._lock:
+            if self._conn is not None:
+                return self._conn
 
-        conn = duckdb.connect(":memory:")
-        conn.execute("INSTALL sqlite; LOAD sqlite;")
-        conn.execute(
-            f"ATTACH '{self._sqlite_path}' AS sqlite_db (TYPE SQLITE, READ_ONLY)"
-        )
-        # Set default schema so queries can reference tables directly
-        conn.execute("USE sqlite_db")
-        self._conn = conn
-        logger.info("DuckDB attached to SQLite at %s", self._sqlite_path)
-        return conn
+            if not HAS_DUCKDB:
+                raise RuntimeError("duckdb is not installed")
+
+            # Validate path: only allow safe filesystem characters to prevent
+            # SQL injection via the ATTACH statement.
+            if not re.match(r'^[\w./\-]+$', self._sqlite_path):
+                raise ValueError(f"Invalid database path: {self._sqlite_path!r}")
+
+            conn = duckdb.connect(":memory:")
+            conn.execute("INSTALL sqlite; LOAD sqlite;")
+            # Path is safe to interpolate: validated by regex above to contain
+            # only word chars, dots, slashes, and hyphens — no SQL metacharacters.
+            conn.execute(
+                f"ATTACH '{self._sqlite_path}' AS sqlite_db (TYPE SQLITE, READ_ONLY)"
+            )
+            # Set default schema so queries can reference tables directly
+            conn.execute("USE sqlite_db")
+            self._conn = conn
+            logger.info("DuckDB attached to SQLite at %s", self._sqlite_path)
+            return conn
 
     def query(
         self,
@@ -133,23 +173,24 @@ class DuckDBAnalytics:
         Returns:
             Frozen AnalyticsResult. Returns empty result on any failure.
         """
-        with self._lock:
-            try:
-                conn = self._ensure_connection()
+        try:
+            # _ensure_connection acquires self._lock internally for init.
+            conn = self._ensure_connection()
+            with self._lock:
                 if params:
                     result = conn.execute(sql, list(params))
                 else:
                     result = conn.execute(sql)
                 columns = tuple(desc[0] for desc in result.description or [])
                 rows = tuple(tuple(row) for row in result.fetchall())
-                return AnalyticsResult(
-                    columns=columns,
-                    rows=rows,
-                    row_count=len(rows),
-                )
-            except Exception as exc:
-                logger.warning("DuckDB query failed: %s — sql: %s", exc, sql[:200])
-                return _EMPTY_RESULT
+            return AnalyticsResult(
+                columns=columns,
+                rows=rows,
+                row_count=len(rows),
+            )
+        except Exception as exc:
+            logger.warning("DuckDB query failed: %s — sql: %s", exc, sql[:200])
+            return _EMPTY_RESULT
 
     def query_df(self, sql: str, params: Sequence[Any] = ()) -> Any:
         """Execute query and return a pandas DataFrame (or None on failure).
@@ -157,22 +198,23 @@ class DuckDBAnalytics:
         Requires pandas to be installed. Returns None if pandas is unavailable
         or the query fails.
         """
-        with self._lock:
-            try:
-                import pandas  # noqa: PLC0415, F811
+        try:
+            import pandas  # noqa: PLC0415, F811
 
-                conn = self._ensure_connection()
+            # _ensure_connection acquires self._lock internally for init.
+            conn = self._ensure_connection()
+            with self._lock:
                 if params:
                     result = conn.execute(sql, list(params))
                 else:
                     result = conn.execute(sql)
                 return result.fetchdf()
-            except ImportError:
-                logger.warning("pandas not available for query_df")
-                return None
-            except Exception as exc:
-                logger.warning("DuckDB query_df failed: %s", exc)
-                return None
+        except ImportError:
+            logger.warning("pandas not available for query_df")
+            return None
+        except Exception as exc:
+            logger.warning("DuckDB query_df failed: %s", exc)
+            return None
 
     def aggregate_beliefs(
         self,

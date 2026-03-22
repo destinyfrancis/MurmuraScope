@@ -1,4 +1,7 @@
-from pydantic import BaseModel, ConfigDict, Field
+import ipaddress
+from urllib.parse import urlparse
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from typing import Literal
 
 # B2B scenario keywords that trigger auto-generation when company_count is 0
@@ -71,6 +74,27 @@ class SimulationCreateRequest(BaseModel):
     llm_base_url: str | None = Field(default=None, description="Custom LLM endpoint (e.g. self-hosted vLLM)")
     # Preset selection
     preset: str | None = Field(default=None, description="Simulation preset: fast/standard/deep/large/massive/custom")
+
+    @field_validator("llm_base_url")
+    @classmethod
+    def validate_llm_base_url(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        parsed = urlparse(v)
+        if parsed.scheme != "https":
+            raise ValueError("llm_base_url must use https://")
+        hostname = parsed.hostname or ""
+        if hostname in ("localhost", "0.0.0.0", ""):
+            raise ValueError("llm_base_url cannot target localhost")
+        try:
+            ip = ipaddress.ip_address(hostname)
+            if ip.is_private or ip.is_loopback or ip.is_link_local:
+                raise ValueError("llm_base_url cannot target private/loopback addresses")
+        except ValueError as exc:
+            # Re-raise only our own validation errors; ignore AddressValueError for domain names
+            if "llm_base_url" in str(exc):
+                raise
+        return v
 
 
 class SimulationStartRequest(BaseModel):

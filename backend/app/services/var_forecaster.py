@@ -12,7 +12,6 @@ All public data structures are frozen (immutable) per project coding style.
 from __future__ import annotations
 
 import dataclasses
-import logging
 from dataclasses import dataclass
 
 import numpy as np
@@ -394,6 +393,11 @@ class VARForecaster:
         original_data_matrix = data_matrix
         group_diff_order = 0
 
+        # lag_order and is_stable are returned directly from the fit helpers
+        # (never stored as instance attributes — thread-safe).
+        lag_order: int = 1
+        is_stable: bool = True
+
         if is_cointegrated:
             # VECM on original (undifferenced) data — it handles differencing
             # internally via the error correction term.
@@ -403,7 +407,7 @@ class VARForecaster:
             coint_rank = var_diagnostics.get("coint_rank", 1)
             try:
                 try:
-                    forecasts = self._fit_vecm_and_forecast(
+                    forecasts, lag_order, is_stable = self._fit_vecm_and_forecast(
                         group_name=group_name,
                         metrics_order=metrics_order,
                         data_matrix=data_matrix,
@@ -424,7 +428,7 @@ class VARForecaster:
                     diff_data = _apply_differencing(data_matrix, 1)
                     if diff_data.shape[0] < _MIN_VAR_POINTS:
                         return None
-                    forecasts = self._fit_and_forecast(
+                    forecasts, lag_order, is_stable = self._fit_and_forecast(
                         group_name=group_name,
                         metrics_order=metrics_order,
                         data_matrix=diff_data,
@@ -472,7 +476,7 @@ class VARForecaster:
                     return None
 
             try:
-                forecasts = self._fit_and_forecast(
+                forecasts, lag_order, is_stable = self._fit_and_forecast(
                     group_name=group_name,
                     metrics_order=metrics_order,
                     data_matrix=data_matrix,
@@ -496,7 +500,6 @@ class VARForecaster:
             )
 
         # VAR stability check — unstable model means unreliable forecasts
-        is_stable = getattr(self, "_last_is_stable", True)
         var_diagnostics["is_stable"] = is_stable
         if not is_stable:
             logger.warning(
@@ -505,7 +508,6 @@ class VARForecaster:
             )
             return None
 
-        lag_order = getattr(self, "_last_lag_order", 1)
         return VARForecastResult(
             group=group_name,
             metrics=tuple(metrics_order),
@@ -573,8 +575,12 @@ class VARForecaster:
         data_matrix: np.ndarray,
         period_labels: list[str],
         horizon: int,
-    ) -> dict[str, ForecastResult]:
-        """Fit VAR, select lag by AIC, and produce per-metric ForecastResults."""
+    ) -> tuple[dict[str, ForecastResult], int, bool]:
+        """Fit VAR, select lag by AIC, and produce per-metric ForecastResults.
+
+        Returns:
+            Tuple of (forecasts, lag_order, is_stable).
+        """
         from statsmodels.tsa.api import VAR as _VAR_Model  # noqa: N811, PLC0415
 
         model = _VAR_Model(data_matrix)
@@ -591,7 +597,6 @@ class VARForecaster:
             lag_order = 1
 
         lag_order = max(1, lag_order)
-        self._last_lag_order = lag_order  # stash for result
 
         fitted = model.fit(lag_order)
         logger.info(
@@ -599,18 +604,14 @@ class VARForecaster:
             group_name, lag_order, fitted.aic,
         )
 
-        # Stability check — store for caller to inspect
+        # Stability check — returned directly to caller (no instance state)
         try:
-            self._last_is_stable = bool(fitted.is_stable())
+            is_stable = bool(fitted.is_stable())
         except Exception:
-            self._last_is_stable = True  # assume stable if check fails
+            is_stable = True  # assume stable if check fails
 
         # Point forecasts (shape: horizon × K)
         fc_mean = fitted.forecast(data_matrix[-lag_order:], steps=horizon)
-
-        # Forecast error variance → confidence intervals
-        # sigma_u = fitted.sigma_u is the innovation covariance (K × K)
-        sigma_u = fitted.sigma_u  # (K, K)
 
         last_label = period_labels[-1]
         next_labels = _next_period_labels(last_label, horizon)
@@ -653,7 +654,7 @@ class VARForecaster:
                 fit_quality=float(fitted.aic),
             )
 
-        return forecasts
+        return forecasts, lag_order, is_stable
 
     def _fit_vecm_and_forecast(
         self,
@@ -663,7 +664,7 @@ class VARForecaster:
         period_labels: list[str],
         horizon: int,
         coint_rank: int,
-    ) -> dict[str, ForecastResult]:
+    ) -> tuple[dict[str, ForecastResult], int, bool]:
         """Fit VECM and produce per-metric ForecastResults.
 
         Uses the cointegration rank from the Johansen test to fit a VECM
@@ -679,7 +680,7 @@ class VARForecaster:
             coint_rank: Cointegration rank from Johansen test.
 
         Returns:
-            Mapping metric name -> ForecastResult.
+            Tuple of (forecasts, lag_order, is_stable).
         """
         n_obs = data_matrix.shape[0]
         n_vars = len(metrics_order)
@@ -695,8 +696,8 @@ class VARForecaster:
         vecm = _VECM_Model(data_matrix, k_ar_diff=lag_diff, coint_rank=coint_rank, deterministic="ci")
         fitted = vecm.fit()
 
-        self._last_lag_order = lag_diff + 1  # effective lag in levels
-        self._last_is_stable = True  # VECM stability assumed if fit succeeds
+        effective_lag_order = lag_diff + 1  # effective lag in levels
+        # VECM stability assumed if fit succeeds (no instance state written)
 
         logger.info(
             "VECM group=%s lag_diff=%d coint_rank=%d",
@@ -752,7 +753,7 @@ class VARForecaster:
                 },
             )
 
-        return forecasts
+        return forecasts, effective_lag_order, True  # VECM stable if fit succeeds
 
 
 # ---------------------------------------------------------------------------

@@ -17,7 +17,9 @@ Usage::
 """
 from __future__ import annotations
 
+import asyncio
 import os
+import time
 from typing import Any
 
 from backend.app.utils.logger import get_logger
@@ -56,6 +58,36 @@ _TAIWAN_RISK_BASE = 0.20
 _TAIWAN_RISK_HIGH = 0.65
 
 
+def detect_significant_changes(
+    prev: dict[str, float],
+    current: dict[str, float],
+    threshold: float = 0.05,
+) -> list[tuple[str, float, float]]:
+    """Return (field, old_value, new_value) for fields that changed > *threshold* fraction.
+
+    Only compares fields present in both dicts.  Fields exclusive to
+    *current* are ignored (new data, not a change).
+
+    Args:
+        prev: Previous fetch result.
+        current: Current fetch result.
+        threshold: Minimum fractional change to report (0.05 = 5%).
+
+    Returns:
+        List of (field_name, old_value, new_value) tuples.
+    """
+    changes: list[tuple[str, float, float]] = []
+    for key in current:
+        if key not in prev:
+            continue
+        old_val = prev[key]
+        new_val = current[key]
+        denom = max(abs(old_val), 0.001)
+        if abs(new_val - old_val) / denom > threshold:
+            changes.append((key, old_val, new_val))
+    return changes
+
+
 class ExternalDataFeed:
     """Fetch live external macro data from FRED + World Bank + local news proxy."""
 
@@ -73,7 +105,6 @@ class ExternalDataFeed:
             Dict of field_name → value.  Only includes fields successfully
             fetched; callers should fall back to DB/defaults for missing keys.
         """
-        import time  # noqa: PLC0415
         now = time.monotonic()
         if not force_refresh and self._cache and (now - self._cache_ts) < _CACHE_TTL_SECONDS:
             return dict(self._cache)
@@ -81,7 +112,6 @@ class ExternalDataFeed:
         result: dict[str, float] = {}
 
         # Fetch concurrently where possible
-        import asyncio  # noqa: PLC0415
         fred_data, wb_data, taiwan_risk = await asyncio.gather(
             self._fetch_fred(),
             self._fetch_world_bank(),
@@ -112,6 +142,49 @@ class ExternalDataFeed:
             len(result), sorted(result.keys()),
         )
         return result
+
+    async def health_check(self) -> dict[str, Any]:
+        """Return availability status of each data source.
+
+        Returns a dict with one key per source ('fred', 'world_bank',
+        'taiwan_risk_proxy'), each mapping to ``{"configured": bool,
+        "status": str, "fields": list[str]}``.
+        """
+        results: dict[str, Any] = {}
+
+        # FRED
+        fred_key = os.getenv("FRED_API_KEY", "")
+        fred_entry: dict[str, Any] = {"configured": bool(fred_key), "status": "skipped", "fields": []}
+        if fred_key:
+            try:
+                data = await self._fetch_fred()
+                fred_entry["status"] = "ok" if data else "empty"
+                fred_entry["fields"] = sorted(data.keys())
+            except Exception as exc:
+                fred_entry["status"] = f"error: {type(exc).__name__}"
+        results["fred"] = fred_entry
+
+        # World Bank (no auth required)
+        wb_entry: dict[str, Any] = {"configured": True, "status": "unknown", "fields": []}
+        try:
+            data = await self._fetch_world_bank()
+            wb_entry["status"] = "ok" if data else "empty"
+            wb_entry["fields"] = sorted(data.keys())
+        except Exception as exc:
+            wb_entry["status"] = f"error: {type(exc).__name__}"
+        results["world_bank"] = wb_entry
+
+        # Taiwan risk proxy (local DB)
+        tw_entry: dict[str, Any] = {"configured": True, "status": "unknown"}
+        try:
+            risk = await self._fetch_taiwan_risk_proxy()
+            tw_entry["status"] = "ok"
+            tw_entry["value"] = risk
+        except Exception as exc:
+            tw_entry["status"] = f"error: {type(exc).__name__}"
+        results["taiwan_risk_proxy"] = tw_entry
+
+        return results
 
     async def fetch_with_db_fallback(self) -> dict[str, float]:
         """Fetch live data, filling missing fields from hk_data_snapshots.
@@ -202,12 +275,16 @@ class ExternalDataFeed:
             async with get_db() as db:
                 cursor = await db.execute(
                     """
-                    SELECT headline FROM news_headlines
+                    SELECT title FROM news_headlines
                     ORDER BY created_at DESC LIMIT 200
                     """
                 )
                 rows = await cursor.fetchall()
         except Exception:
+            logger.warning(
+                "ExternalDataFeed: DB read failed in _fetch_taiwan_risk_proxy",
+                exc_info=True,
+            )
             return _TAIWAN_RISK_BASE
 
         if not rows:
@@ -216,7 +293,7 @@ class ExternalDataFeed:
         total = len(rows)
         hit_count = 0
         for row in rows:
-            text = (row[0] if isinstance(row, (list, tuple)) else row["headline"]) or ""
+            text = (row[0] if isinstance(row, (list, tuple)) else row["title"]) or ""
             if any(kw.lower() in text.lower() for kw in _TAIWAN_KEYWORDS):
                 hit_count += 1
 
@@ -259,5 +336,8 @@ class ExternalDataFeed:
                         if val is not None:
                             result[field] = float(val)
         except Exception:
-            logger.debug("ExternalDataFeed: DB fallback read failed")
+            logger.warning(
+                "ExternalDataFeed: DB fallback read failed in _load_db_fallback",
+                exc_info=True,
+            )
         return result

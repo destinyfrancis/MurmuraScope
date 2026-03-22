@@ -210,14 +210,15 @@ class KGDrivenHooksMixin:
                                 seed_desc, kg_nodes, kg_edges, agent_profiles
                             )
                             if scenario_cfg and scenario_cfg.metrics:
-                                self._kg_sessions[session_id].active_metrics = [
-                                    m.id for m in scenario_cfg.metrics
-                                ]
+                                self._kg_sessions[session_id].active_metrics = {
+                                    m.id: 0.5 for m in scenario_cfg.metrics
+                                }
+                                metric_keys = list(self._kg_sessions[session_id].active_metrics.keys())
                                 logger.info(
                                     "ScenarioGenerator: %d metrics for session %s: %s",
-                                    len(self._kg_sessions[session_id].active_metrics),
+                                    len(metric_keys),
                                     session_id,
-                                    self._kg_sessions[session_id].active_metrics[:5],
+                                    metric_keys[:5],
                                 )
 
                             # Mark stakeholders based on ScenarioGenerator output
@@ -296,17 +297,17 @@ class KGDrivenHooksMixin:
                 # Load KG edges and seed relationship states
                 if graph_id:
                     cursor = await db.execute(
-                        """SELECT source_id, target_id, label
+                        """SELECT source_id, target_id, relation_type
                            FROM kg_edges
-                           WHERE graph_id = ?""",
-                        (graph_id,),
+                           WHERE session_id = ?""",
+                        (session_id,),
                     )
                     edges = await cursor.fetchall()
                     rel_states: dict[tuple[str, str], Any] = {}
                     for edge in edges:
                         src = str(edge["source_id"])
                         tgt = str(edge["target_id"])
-                        desc = str(edge["label"] or "")
+                        desc = str(edge["relation_type"] or "")
                         state = engine.initialize_relationship(
                             agent_a_id=src,
                             agent_b_id=tgt,
@@ -434,6 +435,7 @@ class KGDrivenHooksMixin:
         if kg_state.lite_ensemble:
             from backend.app.services.lite_hooks import deliberate_lite  # noqa: PLC0415
             events = kg_state.current_round_events
+            round_decisions: dict[str, str] = {}
             for agent in active:
                 agent_id = agent.get("id", "")
                 beliefs = kg_state.agent_beliefs.get(agent_id, {})
@@ -443,7 +445,9 @@ class KGDrivenHooksMixin:
                     beliefs=beliefs,
                     events=events,
                     emotional_state=emotional,
+                    prev_decision=kg_state.agent_prev_decisions.get(agent_id),
                 )
+                round_decisions[agent_id] = result.decision
                 # Apply belief updates
                 if agent_id in kg_state.agent_beliefs:
                     updated = dict(kg_state.agent_beliefs[agent_id])
@@ -451,6 +455,7 @@ class KGDrivenHooksMixin:
                         if metric in updated:
                             updated[metric] = max(0.0, min(1.0, updated[metric] + delta))
                     kg_state.agent_beliefs[agent_id] = updated
+            kg_state.agent_prev_decisions = round_decisions
             return
 
         if self._cognitive_engine is None:
@@ -996,7 +1001,8 @@ class KGDrivenHooksMixin:
             # Gather interaction valences from simulation_actions this round
             valences: dict[tuple[str, str], float] = {}
             try:
-                async with __import__("backend.app.utils.db", fromlist=["get_db"]).get_db() as db:
+                from backend.app.utils.db import get_db  # noqa: PLC0415
+                async with get_db() as db:
                     cursor = await db.execute(
                         """
                         SELECT oasis_username, target_agent_username, sentiment
@@ -1018,13 +1024,16 @@ class KGDrivenHooksMixin:
                     session_id,
                 )
 
+            _raw_profiles = [
+                dict(r) for r in self._round_profiles.get(session_id, [])
+            ]
             profiles = {
-                r["oasis_username"]: {
-                    "agreeableness": float(r.get("agreeableness", 0.5) or 0.5),
-                    "neuroticism": float(r.get("neuroticism", 0.5) or 0.5),
+                rd["oasis_username"]: {
+                    "agreeableness": float(rd.get("agreeableness", 0.5) or 0.5),
+                    "neuroticism": float(rd.get("neuroticism", 0.5) or 0.5),
                 }
-                for r in self._round_profiles.get(session_id, [])
-                if r.get("oasis_username")
+                for rd in _raw_profiles
+                if rd.get("oasis_username")
             }
             attachment_styles = kg_state.attachment_styles
 
@@ -1076,10 +1085,12 @@ class KGDrivenHooksMixin:
                 if self._batch_writer is not None:
                     for row in rel_rows:
                         self._batch_writer.queue("relationship_states", row)
-                    async with __import__("backend.app.utils.db", fromlist=["get_db"]).get_db() as db:
+                    from backend.app.utils.db import get_db  # noqa: PLC0415
+                    async with get_db() as db:
                         await self._batch_writer.flush("relationship_states", db)
                 else:
-                    async with __import__("backend.app.utils.db", fromlist=["get_db"]).get_db() as db:
+                    from backend.app.utils.db import get_db  # noqa: PLC0415
+                    async with get_db() as db:
                         await db.executemany(
                             """
                             INSERT OR REPLACE INTO relationship_states
@@ -1122,7 +1133,8 @@ class KGDrivenHooksMixin:
                 rel_states=rel_states,
             )
             if events:
-                async with __import__("backend.app.utils.db", fromlist=["get_db"]).get_db() as db:
+                from backend.app.utils.db import get_db  # noqa: PLC0415
+                async with get_db() as db:
                     await self._relationship_lifecycle.persist_events(events, db)
                 # Store lifecycle events as dyadic relationship memories
                 if self._relationship_memory is not None:

@@ -141,7 +141,7 @@ def _compute_conditional_variances(
 
     for t in range(1, t_len):
         s2 = omega + alpha * eps2[t - 1] + beta * sigma2[t - 1]
-        sigma2[t] = max(s2, _VARIANCE_FLOOR)
+        sigma2[t] = max(s2, _VARIANCE_FLOOR)  # variance floor: prevents log(0)
 
     return sigma2
 
@@ -166,12 +166,11 @@ def _neg_log_likelihood(
     try:
         sigma2 = _compute_conditional_variances(params, eps2)
 
-        # Guard against non-positive variances
-        if np.any(sigma2 <= 0):
-            return float("inf")
-
-        log_sigma2 = np.log(sigma2)
-        ll = -0.5 * np.sum(np.log(2.0 * np.pi) + log_sigma2 + eps2 / sigma2)
+        # Guard against non-positive variances (belt-and-suspenders alongside
+        # the per-step floor in _compute_conditional_variances)
+        sigma2_safe = np.maximum(sigma2, _VARIANCE_FLOOR)
+        log_sigma2 = np.log(sigma2_safe)
+        ll = -0.5 * np.sum(np.log(2.0 * np.pi) + log_sigma2 + eps2 / sigma2_safe)
 
         if not math.isfinite(ll):
             return float("inf")

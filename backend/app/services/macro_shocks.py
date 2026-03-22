@@ -34,6 +34,22 @@ from backend.app.services.macro_state import (
 )
 
 
+# Explicit allowlist of macro_scenarios columns that may be mutated via God Mode shocks.
+# Keys NOT in this set are silently ignored, preventing SQL injection via dynamic column names.
+_ALLOWED_MACRO_FIELDS: frozenset[str] = frozenset({
+    "hsi_level",
+    "unemployment_rate",
+    "gdp_growth",
+    "consumer_confidence",
+    "ccl_index",
+    "birth_rate",
+    "death_rate",
+    "immigration_rate",
+    "fed_rate",
+    "policy_flags",
+})
+
+
 def _shock_interest_rate_hike(
     state: MacroState, params: dict[str, Any]
 ) -> MacroState:
@@ -571,10 +587,9 @@ async def apply_macro_effects(
     if not row:
         return
 
-    valid_columns = set(row.keys()) - {"session_id", "round_number", "created_at"}
     updates: dict[str, float] = {}
     for param, delta in effects.items():
-        if param in valid_columns and row[param] is not None:
+        if param in _ALLOWED_MACRO_FIELDS and row[param] is not None:
             updates[param] = row[param] + delta
 
     if not updates:

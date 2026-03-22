@@ -27,18 +27,28 @@ class SessionKeyInfo:
 
 
 def _get_fernet():
-    """Lazy-load Fernet cipher from SESSION_ENCRYPTION_KEY env var."""
+    """Lazy-load Fernet cipher from SESSION_ENCRYPTION_KEY or DATA_ENCRYPTION_KEY env var.
+
+    In production (DEBUG != 'true'), raises RuntimeError when no key is configured
+    rather than silently generating an ephemeral key that would lose all BYOK API
+    keys on restart.
+    """
     from cryptography.fernet import Fernet  # noqa: PLC0415
 
-    key = os.environ.get("SESSION_ENCRYPTION_KEY", "")
+    key = os.environ.get("SESSION_ENCRYPTION_KEY") or os.environ.get("DATA_ENCRYPTION_KEY")
     if not key:
-        # Generate a deterministic fallback for dev (NOT production-safe)
-        key = Fernet.generate_key().decode()
-        os.environ["SESSION_ENCRYPTION_KEY"] = key
+        debug_mode = os.environ.get("DEBUG", "false").lower() == "true"
+        if not debug_mode:
+            raise RuntimeError(
+                "SESSION_ENCRYPTION_KEY or DATA_ENCRYPTION_KEY must be set in production. "
+                "Generate with: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'"
+            )
+        # Debug mode: ephemeral key with warning
         logger.warning(
-            "SESSION_ENCRYPTION_KEY not set — generated ephemeral key. "
-            "Set this env var in production for persistent key storage."
+            "No encryption key set — using ephemeral key (DEBUG mode). "
+            "All BYOK API keys will be lost on restart."
         )
+        key = Fernet.generate_key().decode()
     return Fernet(key.encode() if isinstance(key, str) else key)
 
 
