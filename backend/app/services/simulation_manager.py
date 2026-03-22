@@ -280,7 +280,23 @@ class SimulationManager:
                         exc_info=task.exception(),
                     )
 
-            task = asyncio.create_task(_run_and_finalize(), name=f"sim-{session_id}")
+            async def _run_with_timeout() -> None:
+                timeout_s = float(os.environ.get("SIM_TASK_TIMEOUT_S", "7200"))  # 2h default
+                try:
+                    await asyncio.wait_for(_run_and_finalize(), timeout=timeout_s)
+                except asyncio.TimeoutError:
+                    logger.critical(
+                        "Simulation %s timed out after %.0fs", session_id, timeout_s
+                    )
+                    async with get_db() as db:
+                        await db.execute(
+                            "UPDATE simulation_sessions SET status='failed', "
+                            "error_message='Simulation timed out' WHERE id=?",
+                            (session_id,),
+                        )
+                        await db.commit()
+
+            task = asyncio.create_task(_run_with_timeout(), name=f"sim-{session_id}")
             self._session_tasks[session_id] = task
             task.add_done_callback(_on_task_done)
 
