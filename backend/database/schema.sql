@@ -1,6 +1,9 @@
 -- MurmuraScope Database Schema
 -- SQLite with WAL mode for concurrent reads
 
+-- NOTE: FK constraints only apply to newly created databases. Existing databases
+-- retain their original schema without FKs (SQLite cannot ALTER TABLE to add FKs).
+
 PRAGMA journal_mode=WAL;
 PRAGMA foreign_keys=ON;
 
@@ -43,7 +46,7 @@ CREATE INDEX IF NOT EXISTS idx_pop_category ON population_distributions(category
 -- ============================================================
 CREATE TABLE IF NOT EXISTS kg_nodes (
     id TEXT PRIMARY KEY,
-    session_id TEXT NOT NULL,
+    session_id TEXT NOT NULL REFERENCES simulation_sessions(id) ON DELETE CASCADE,
     entity_type TEXT NOT NULL,
     title TEXT NOT NULL,
     description TEXT,
@@ -55,7 +58,7 @@ CREATE INDEX IF NOT EXISTS idx_kg_type ON kg_nodes(entity_type);
 
 CREATE TABLE IF NOT EXISTS kg_edges (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT NOT NULL,
+    session_id TEXT NOT NULL REFERENCES simulation_sessions(id) ON DELETE CASCADE,
     source_id TEXT NOT NULL REFERENCES kg_nodes(id),
     target_id TEXT NOT NULL REFERENCES kg_nodes(id),
     relation_type TEXT NOT NULL,
@@ -70,7 +73,7 @@ CREATE INDEX IF NOT EXISTS idx_edge_target ON kg_edges(target_id);
 
 CREATE TABLE IF NOT EXISTS kg_communities (
     id TEXT PRIMARY KEY,
-    session_id TEXT NOT NULL,
+    session_id TEXT NOT NULL REFERENCES simulation_sessions(id) ON DELETE CASCADE,
     title TEXT NOT NULL,
     summary TEXT,
     member_ids TEXT NOT NULL,
@@ -126,7 +129,7 @@ CREATE INDEX IF NOT EXISTS idx_session_status ON simulation_sessions(status);
 -- ============================================================
 CREATE TABLE IF NOT EXISTS agent_profiles (
     id INTEGER PRIMARY KEY,
-    session_id TEXT NOT NULL REFERENCES simulation_sessions(id),
+    session_id TEXT NOT NULL REFERENCES simulation_sessions(id) ON DELETE CASCADE,
     agent_type TEXT NOT NULL,
     age INTEGER NOT NULL,
     sex TEXT NOT NULL,
@@ -158,7 +161,7 @@ CREATE INDEX IF NOT EXISTS idx_agent_type ON agent_profiles(agent_type);
 -- ============================================================
 CREATE TABLE IF NOT EXISTS reports (
     id TEXT PRIMARY KEY,
-    session_id TEXT REFERENCES simulation_sessions(id),
+    session_id TEXT REFERENCES simulation_sessions(id) ON DELETE CASCADE,
     report_type TEXT NOT NULL,
     title TEXT NOT NULL,
     content_markdown TEXT NOT NULL,
@@ -175,7 +178,7 @@ CREATE INDEX IF NOT EXISTS idx_report_session ON reports(session_id);
 -- ============================================================
 CREATE TABLE IF NOT EXISTS simulation_actions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT NOT NULL,
+    session_id TEXT NOT NULL REFERENCES simulation_sessions(id) ON DELETE CASCADE,
     round_number INTEGER NOT NULL,
     agent_id INTEGER,
     oasis_username TEXT NOT NULL,
@@ -198,7 +201,7 @@ CREATE INDEX IF NOT EXISTS idx_action_session_agent ON simulation_actions(sessio
 -- Phase 17: Polarization snapshots
 CREATE TABLE IF NOT EXISTS polarization_snapshots (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT NOT NULL,
+    session_id TEXT NOT NULL REFERENCES simulation_sessions(id) ON DELETE CASCADE,
     round_number INTEGER NOT NULL,
     polarization_index REAL NOT NULL,
     modularity REAL NOT NULL,
@@ -215,7 +218,7 @@ CREATE INDEX IF NOT EXISTS idx_polar_session ON polarization_snapshots(session_i
 -- ============================================================
 CREATE TABLE IF NOT EXISTS agent_memories (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT NOT NULL,
+    session_id TEXT NOT NULL REFERENCES simulation_sessions(id) ON DELETE CASCADE,
     agent_id INTEGER NOT NULL,
     round_number INTEGER NOT NULL,
     memory_text TEXT NOT NULL,
@@ -233,7 +236,7 @@ CREATE INDEX IF NOT EXISTS idx_memory_session_round ON agent_memories(session_id
 CREATE TABLE IF NOT EXISTS memory_triples (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     memory_id INTEGER NOT NULL REFERENCES agent_memories(id) ON DELETE CASCADE,
-    session_id TEXT NOT NULL,
+    session_id TEXT NOT NULL REFERENCES simulation_sessions(id) ON DELETE CASCADE,
     agent_id INTEGER NOT NULL,
     round_number INTEGER NOT NULL,
     subject TEXT NOT NULL,
@@ -273,7 +276,7 @@ CREATE INDEX IF NOT EXISTS idx_snapshot_session_round ON kg_snapshots(session_id
 -- ============================================================
 CREATE TABLE IF NOT EXISTS agent_relationships (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT NOT NULL,
+    session_id TEXT NOT NULL REFERENCES simulation_sessions(id) ON DELETE CASCADE,
     agent_a_id INTEGER NOT NULL,
     agent_b_id INTEGER NOT NULL,
     relationship_type TEXT NOT NULL,
@@ -343,7 +346,7 @@ CREATE INDEX IF NOT EXISTS idx_sentiment_category ON social_sentiment(category);
 -- ============================================================
 CREATE TABLE IF NOT EXISTS agent_decisions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT NOT NULL,
+    session_id TEXT NOT NULL REFERENCES simulation_sessions(id) ON DELETE CASCADE,
     agent_id INTEGER NOT NULL,
     round_number INTEGER NOT NULL,
     decision_type TEXT NOT NULL,
@@ -495,7 +498,7 @@ CREATE INDEX IF NOT EXISTS idx_consumption_session
 -- ============================================================
 CREATE TABLE IF NOT EXISTS echo_chamber_snapshots (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT NOT NULL,
+    session_id TEXT NOT NULL REFERENCES simulation_sessions(id) ON DELETE CASCADE,
     round_number INTEGER NOT NULL,
     num_clusters INTEGER NOT NULL DEFAULT 0,
     modularity REAL NOT NULL DEFAULT 0.0,
@@ -618,7 +621,7 @@ CREATE INDEX IF NOT EXISTS idx_custom_packs_locale ON custom_domain_packs(locale
 -- ============================================================
 CREATE TABLE IF NOT EXISTS network_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT NOT NULL,
+    session_id TEXT NOT NULL REFERENCES simulation_sessions(id) ON DELETE CASCADE,
     round_number INTEGER NOT NULL,
     event_type TEXT NOT NULL,
     agent_a_username TEXT NOT NULL DEFAULT '',
@@ -636,7 +639,7 @@ CREATE INDEX IF NOT EXISTS idx_nev_type ON network_events(session_id, event_type
 -- ============================================================
 CREATE TABLE IF NOT EXISTS agent_feeds (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT NOT NULL,
+    session_id TEXT NOT NULL REFERENCES simulation_sessions(id) ON DELETE CASCADE,
     agent_id INTEGER NOT NULL,
     round_number INTEGER NOT NULL,
     post_id TEXT NOT NULL,
@@ -668,7 +671,7 @@ CREATE TABLE IF NOT EXISTS filter_bubble_snapshots (
 -- ============================================================
 CREATE TABLE IF NOT EXISTS virality_scores (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT NOT NULL,
+    session_id TEXT NOT NULL REFERENCES simulation_sessions(id) ON DELETE CASCADE,
     post_id TEXT NOT NULL,
     cascade_depth INTEGER NOT NULL DEFAULT 0,
     cascade_breadth INTEGER NOT NULL DEFAULT 0,
@@ -686,7 +689,7 @@ CREATE INDEX IF NOT EXISTS idx_vs_session ON virality_scores(session_id);
 -- ============================================================
 CREATE TABLE IF NOT EXISTS emotional_states (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT NOT NULL,
+    session_id TEXT NOT NULL REFERENCES simulation_sessions(id) ON DELETE CASCADE,
     agent_id INTEGER NOT NULL,
     round_number INTEGER NOT NULL,
     valence REAL NOT NULL DEFAULT 0.0,
@@ -702,7 +705,7 @@ CREATE INDEX IF NOT EXISTS idx_es_session ON emotional_states(session_id, round_
 -- ============================================================
 CREATE TABLE IF NOT EXISTS belief_states (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT NOT NULL,
+    session_id TEXT NOT NULL REFERENCES simulation_sessions(id) ON DELETE CASCADE,
     agent_id INTEGER NOT NULL,
     topic TEXT NOT NULL,
     stance REAL NOT NULL DEFAULT 0.0,
@@ -720,7 +723,7 @@ CREATE INDEX IF NOT EXISTS idx_bs_agent ON belief_states(session_id, agent_id);
 -- ============================================================
 CREATE TABLE IF NOT EXISTS cognitive_dissonance (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT NOT NULL,
+    session_id TEXT NOT NULL REFERENCES simulation_sessions(id) ON DELETE CASCADE,
     agent_id INTEGER NOT NULL,
     round_number INTEGER NOT NULL,
     dissonance_score REAL NOT NULL DEFAULT 0.0,
@@ -762,7 +765,7 @@ CREATE INDEX IF NOT EXISTS idx_sb_created ON scale_benchmarks(created_at);
 
 CREATE TABLE IF NOT EXISTS cognitive_fingerprints (
     agent_id               TEXT PRIMARY KEY,
-    simulation_id          TEXT NOT NULL,
+    simulation_id          TEXT NOT NULL REFERENCES simulation_sessions(id) ON DELETE CASCADE,
     values_json            TEXT NOT NULL,
     info_diet_json         TEXT NOT NULL,
     group_memberships_json TEXT NOT NULL,
@@ -775,7 +778,7 @@ CREATE INDEX IF NOT EXISTS idx_cf_simulation ON cognitive_fingerprints(simulatio
 
 CREATE TABLE IF NOT EXISTS world_events (
     id                 TEXT PRIMARY KEY,
-    simulation_id      TEXT NOT NULL,
+    simulation_id      TEXT NOT NULL REFERENCES simulation_sessions(id) ON DELETE CASCADE,
     round_number       INTEGER NOT NULL,
     content            TEXT NOT NULL,
     event_type         TEXT NOT NULL,
@@ -788,7 +791,7 @@ CREATE INDEX IF NOT EXISTS idx_we_sim_round ON world_events(simulation_id, round
 
 CREATE TABLE IF NOT EXISTS faction_snapshots_v2 (
     id                      TEXT PRIMARY KEY,
-    simulation_id           TEXT NOT NULL,
+    simulation_id           TEXT NOT NULL REFERENCES simulation_sessions(id) ON DELETE CASCADE,
     round_number            INTEGER NOT NULL,
     factions_json           TEXT NOT NULL,
     bridge_agents_json      TEXT NOT NULL,
@@ -800,7 +803,7 @@ CREATE INDEX IF NOT EXISTS idx_fs2_sim_round ON faction_snapshots_v2(simulation_
 
 CREATE TABLE IF NOT EXISTS tipping_points (
     id                     TEXT PRIMARY KEY,
-    simulation_id          TEXT NOT NULL,
+    simulation_id          TEXT NOT NULL REFERENCES simulation_sessions(id) ON DELETE CASCADE,
     round_number           INTEGER NOT NULL,
     trigger_event_id       TEXT,
     kl_divergence          REAL NOT NULL,
@@ -811,7 +814,7 @@ CREATE TABLE IF NOT EXISTS tipping_points (
 
 CREATE TABLE IF NOT EXISTS multi_run_results (
     id                         TEXT PRIMARY KEY,
-    simulation_id              TEXT NOT NULL,
+    simulation_id              TEXT NOT NULL REFERENCES simulation_sessions(id) ON DELETE CASCADE,
     trial_count                INTEGER NOT NULL,
     outcome_distribution_json  TEXT NOT NULL,
     most_common_path_json      TEXT NOT NULL,
@@ -826,7 +829,7 @@ CREATE TABLE IF NOT EXISTS multi_run_results (
 -- ============================================================
 CREATE TABLE IF NOT EXISTS debate_rounds (
     id                    TEXT PRIMARY KEY NOT NULL,
-    session_id            TEXT NOT NULL,
+    session_id            TEXT NOT NULL REFERENCES simulation_sessions(id) ON DELETE CASCADE,
     round_number          INTEGER NOT NULL,
     topic                 TEXT NOT NULL,
     agent_a_id            TEXT NOT NULL,
@@ -847,7 +850,7 @@ CREATE INDEX IF NOT EXISTS idx_debate_rounds_session
 -- ============================================================
 CREATE TABLE IF NOT EXISTS consensus_scores (
     id           TEXT PRIMARY KEY NOT NULL,
-    session_id   TEXT NOT NULL,
+    session_id   TEXT NOT NULL REFERENCES simulation_sessions(id) ON DELETE CASCADE,
     round_number INTEGER NOT NULL,
     topic        TEXT NOT NULL,
     score        REAL NOT NULL DEFAULT 0.0,
@@ -903,7 +906,7 @@ CREATE INDEX IF NOT EXISTS idx_spt_session ON seed_persona_templates(session_id)
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS relationship_states (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id          TEXT    NOT NULL,
+    session_id          TEXT    NOT NULL REFERENCES simulation_sessions(id) ON DELETE CASCADE,
     agent_a_id          TEXT    NOT NULL,
     agent_b_id          TEXT    NOT NULL,
     round_number        INTEGER NOT NULL DEFAULT 0,
@@ -930,7 +933,7 @@ CREATE INDEX IF NOT EXISTS idx_rs_session
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS attachment_styles (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id  TEXT    NOT NULL,
+    session_id  TEXT    NOT NULL REFERENCES simulation_sessions(id) ON DELETE CASCADE,
     agent_id    TEXT    NOT NULL,
     style       TEXT    NOT NULL DEFAULT 'secure',
     anxiety     REAL    NOT NULL DEFAULT 0.2,
@@ -948,7 +951,7 @@ CREATE INDEX IF NOT EXISTS idx_as_session ON attachment_styles(session_id);
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS emergence_metrics (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id  TEXT    NOT NULL,
+    session_id  TEXT    NOT NULL REFERENCES simulation_sessions(id) ON DELETE CASCADE,
     round_number INTEGER NOT NULL,
     topic       TEXT    NOT NULL,
     lag         INTEGER NOT NULL,  -- rounds of temporal offset (1, 3, or 5)
