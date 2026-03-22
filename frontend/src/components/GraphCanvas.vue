@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, toRefs } from 'vue'
 import ForceGraph from 'force-graph'
 import { forceManyBody, forceCollide, forceX, forceY } from 'd3-force'
+import { select as d3Select } from 'd3-selection'
 
 import {
   convexHull, clusterHue, expandHull, drawRoundedHull,
@@ -360,6 +361,9 @@ function initGraph() {
   // Remove old hull listeners before attaching new ones to prevent accumulation
   containerRef.value.removeEventListener('mousemove', handleHullHover)
   containerRef.value.removeEventListener('click', handleHullClick)
+
+  // Explicitly remove D3 zoom handlers to prevent accumulation across reinits
+  d3Select(containerRef.value).on('.zoom', null)
 
   if (graphInstance) {
     graphInstance._destructor?.()
