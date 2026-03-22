@@ -17,6 +17,7 @@ import pytest
 from backend.app.services.emergence_metrics import (
     EmergenceMetricsSummary,
     TDMIResult,
+    _MIN_SAMPLES,
     _build_summary,
     _collect_pairs,
     _histogram_mi,
@@ -170,6 +171,16 @@ def test_build_summary_detection_below_threshold() -> None:
 
     assert summary.emergence_detected is False
     assert summary.mean_tdmi == pytest.approx(0.005)
+
+
+def test_min_samples_threshold_is_30() -> None:
+    """TDMI must require ≥30 paired samples per Kraskov et al. (2004).
+
+    KNN MI estimator (k=5) on n=10 samples is below the reliability threshold.
+    """
+    assert _MIN_SAMPLES == 30, (
+        f"_MIN_SAMPLES should be 30 (KNN MI reliable at n≥30), got {_MIN_SAMPLES}"
+    )
 
 
 def test_build_summary_per_topic_structure() -> None:

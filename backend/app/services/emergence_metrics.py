@@ -38,8 +38,10 @@ logger = get_logger("emergence_metrics")
 # Lags (in simulation rounds) used for TDMI computation
 _DEFAULT_LAGS: tuple[int, ...] = (1, 3, 5)
 
-# Minimum paired samples required for a meaningful MI estimate
-_MIN_SAMPLES: int = 10
+# Minimum paired samples required for a meaningful MI estimate.
+# Raised from 10 → 30: Kraskov et al. (2004) KNN MI estimator (k=5)
+# is unreliable below n≈30 paired samples.
+_MIN_SAMPLES: int = 30
 
 # Emergence detection threshold (nats): mean TDMI above this → "detected"
 # Audit fix (2026-03-20): raised 0.01 → 0.02 to reduce false positives.
