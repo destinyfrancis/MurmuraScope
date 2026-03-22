@@ -216,15 +216,21 @@ class ScenarioScanner:
     def _lhs_combinations(
         parameter_space: dict[str, list[float]],
         n_samples: int,
+        seed: int | None = None,
     ) -> list[dict[str, float]]:
         """Latin Hypercube Sampling — returns *n_samples* quasi-random points.
 
         Each parameter's range is derived from its min/max values. This gives
         better coverage than pure random sampling within the budget.
+
+        Args:
+            seed: Optional RNG seed. Defaults to None (non-deterministic), so
+                  repeated ensemble runs produce genuinely different samples.
+                  Pass an explicit integer for reproducible tests.
         """
         keys = list(parameter_space)
         n_params = len(keys)
-        rng = np.random.default_rng(seed=42)  # deterministic for reproducibility
+        rng = np.random.default_rng(seed=seed)
 
         # Build (n_samples, n_params) LHS matrix in [0, 1]
         lhs = np.zeros((n_samples, n_params))
