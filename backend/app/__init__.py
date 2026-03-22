@@ -17,6 +17,79 @@ from backend.app.utils.logger import setup_logging
 # Router module names under backend.app.api
 _ROUTER_MODULES = ("auth", "graph", "simulation_macro", "simulation_branches", "simulation", "simulation_actions", "report", "data", "data_connector", "ws", "domain_packs", "workspace", "comments", "validation", "calibration", "emergence", "prediction_market", "stock_forecast")
 
+# Patterns that identify OASIS simulation subprocesses.
+_OASIS_SCRIPT_PATTERNS = (
+    "run_parallel_simulation.py",
+    "run_twitter_simulation.py",
+    "run_facebook_simulation.py",
+    "run_instagram_simulation.py",
+    "run_reddit_simulation.py",
+)
+
+
+async def _reap_orphaned_oasis_processes(logger: logging.Logger) -> None:
+    """Terminate any OASIS simulation subprocesses left by a previous server run.
+
+    Uses psutil to enumerate all OS processes and matches against known OASIS
+    script names.  Sends SIGTERM first, then SIGKILL after 5 seconds if the
+    process has not exited.
+
+    Falls back to a ``pkill`` invocation when psutil is unavailable.
+
+    Args:
+        logger: Logger instance for status/error messages.
+    """
+    try:
+        import psutil
+    except ImportError:
+        # psutil not installed — fall back to the best-effort pkill approach.
+        logger.warning(
+            "psutil not installed — falling back to pkill for orphan reaping"
+        )
+        import subprocess as _sp
+        _sp.run(
+            ["pkill", "-f", "run_(twitter|parallel|facebook|instagram|reddit)_simulation.py"],
+            capture_output=True,
+        )
+        logger.info("Cleaned up stale simulation subprocesses via pkill (fallback)")
+        return
+
+    reaped: list[int] = []
+    for proc in psutil.process_iter(["pid", "name", "cmdline"]):
+        try:
+            cmdline = proc.info.get("cmdline") or []
+            cmdline_str = " ".join(cmdline)
+            if any(pattern in cmdline_str for pattern in _OASIS_SCRIPT_PATTERNS):
+                logger.warning(
+                    "Reaping orphaned OASIS process PID %d: %s",
+                    proc.pid,
+                    cmdline_str[:120],
+                )
+                proc.terminate()
+                reaped.append(proc.pid)
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+
+    if reaped:
+        # Give processes a chance to exit gracefully before force-killing.
+        import asyncio
+        await asyncio.sleep(5.0)
+        for pid in reaped:
+            try:
+                p = psutil.Process(pid)
+                if p.is_running():
+                    logger.warning(
+                        "Orphaned OASIS process PID %d did not terminate — sending SIGKILL",
+                        pid,
+                    )
+                    p.kill()
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass  # Already gone — expected.
+
+        logger.info("Reaped %d orphaned OASIS subprocess(es): PIDs %s", len(reaped), reaped)
+    else:
+        logger.info("No orphaned OASIS subprocesses found at startup")
+
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -27,16 +100,17 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger = logging.getLogger("murmuroscope")
     logger.info("Starting Morai backend")
 
-    # Kill stale simulation subprocesses from previous server instance
-    import subprocess as _sp
-    _sp.run(
-        ["pkill", "-f", "run_(twitter|parallel|facebook|instagram|reddit)_simulation.py"],
-        capture_output=True,
-    )
-    logger.info("Cleaned up any stale simulation subprocesses")
+    # Reap orphaned OASIS simulation subprocesses from a previous server instance.
+    await _reap_orphaned_oasis_processes(logger)
 
     await init_db()
     await apply_migrations()
+
+    # Start the serialised write queue — prevents "database is locked" errors
+    # under concurrent load (3-5+ simultaneous users / active simulations).
+    from backend.app.services.db_write_queue import get_write_queue
+    await get_write_queue()
+    logger.info("SQLite WriteQueue started")
 
     # Runtime migration: add share_token to reports table
     try:
@@ -263,13 +337,13 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     yield
 
-    # Kill simulation subprocesses before server exit
-    import subprocess as _sp
-    _sp.run(
-        ["pkill", "-f", "run_(twitter|parallel|facebook|instagram|reddit)_simulation.py"],
-        capture_output=True,
-    )
-    logger.info("Killed simulation subprocesses on shutdown")
+    # Kill any remaining simulation subprocesses before server exit.
+    await _reap_orphaned_oasis_processes(logger)
+
+    # Stop the serialised write queue and flush final metrics.
+    from backend.app.services.db_write_queue import shutdown_write_queue
+    await shutdown_write_queue()
+    logger.info("SQLite WriteQueue stopped")
 
     # Shutdown scheduler
     if scheduler is not None:

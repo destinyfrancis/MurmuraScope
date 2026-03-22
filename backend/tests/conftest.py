@@ -17,6 +17,11 @@ _PROJECT_ROOT = Path(__file__).parent.parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
+# Ensure AUTH_SECRET_KEY is set before any auth module import so that
+# the production startup guard (SystemExit) does not fire during tests.
+if not os.environ.get("AUTH_SECRET_KEY"):
+    os.environ["AUTH_SECRET_KEY"] = "test-secret-key-for-pytest-do-not-use-in-production"
+
 
 # ---------------------------------------------------------------------------
 # Auto-marker: tag tests as "integration" if they use DB fixtures or

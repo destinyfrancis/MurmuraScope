@@ -120,7 +120,9 @@ CREATE TABLE IF NOT EXISTS simulation_sessions (
     error_message TEXT,
     started_at TEXT,
     completed_at TEXT,
-    created_at TEXT DEFAULT (datetime('now'))
+    created_at TEXT DEFAULT (datetime('now')),
+    -- Nullable for backward compatibility with sessions created before auth was enforced
+    owner_id TEXT REFERENCES users(id) ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS idx_session_status ON simulation_sessions(status);
 

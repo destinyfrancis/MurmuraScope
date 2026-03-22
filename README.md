@@ -10,7 +10,9 @@
 [![Python](https://img.shields.io/badge/Python-3.10%2F3.11-blue?logo=python)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green?logo=fastapi)](https://fastapi.tiangolo.com)
 [![Vue 3](https://img.shields.io/badge/Vue-3.x-brightgreen?logo=vue.js)](https://vuejs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.4+-blue?logo=typescript)](https://www.typescriptlang.org)
 [![LanceDB](https://img.shields.io/badge/Vector_DB-LanceDB-orange)](https://lancedb.com)
+[![CI](https://github.com/francistam/MurmuraScope/actions/workflows/ci.yml/badge.svg)](https://github.com/francistam/MurmuraScope/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Proprietary-red)](LICENSE)
 
 <br/>
@@ -529,6 +531,7 @@ cp .env.example .env
 ```env
 # 必填 / Required
 OPENROUTER_API_KEY=sk-or-v1-your-key-here   # DeepSeek V3.2 (~$0.00014/1K tokens)
+AUTH_SECRET_KEY=your-32-byte-secret          # 必須設置 / REQUIRED in production: openssl rand -hex 32
 
 # 選填 / Optional
 FIREWORKS_API_KEY=fw_your-key-here
@@ -540,6 +543,11 @@ DATABASE_PATH=data/murmuroscope.db
 HOST=0.0.0.0
 PORT=5001
 LLM_PROVIDER=openrouter
+
+# 新功能開關 / Feature Flags (optional)
+EXTERNAL_FEED_ENABLED=false                  # 接入 ExternalDataFeed 到宏觀模型
+SESSION_COST_HARD_CAP_USD=10.0               # 超過此費用自動暫停模擬
+SUBPROCESS_MEMORY_LIMIT_MB=2048              # OASIS subprocess RAM 上限
 ```
 
 **獲取 OpenRouter 密鑰 / Get OpenRouter key:** [openrouter.ai/keys](https://openrouter.ai/keys)
@@ -583,11 +591,11 @@ cd frontend && npm run dev
 
 | 方案 / Preset | 代理人數 / Agents | 輪數 / Rounds | MC 試驗 / MC Trials | 湧現 / Emergence | 費用估算 / Est. Cost |
 |--------|--------|--------|-----------|-----------|----------------------|
-| `PRESET_FAST` | 100 | 15 | 30 | 關閉 Off | ~$0.42 |
-| `PRESET_STANDARD` | 300 | 20 | 50 | 開啟 On | ~$1.12 |
+| `PRESET_FAST` | 100 | 15 | 30 | 關閉 Off | ~$0.15 |
+| `PRESET_STANDARD` | 300 | 20 | 50 | 開啟 On | ~$0.60 |
 | `PRESET_DEEP` | 500 | 30 | 100 | 開啟 On | ~$1.89 |
 | `PRESET_LARGE` | 1,000 | 25 | 200 | 開啟 On | ~$3.50 |
-| `PRESET_MASSIVE` | 3,000 | 20 | 300 | 開啟 On | ~$8.40 |
+| `PRESET_MASSIVE` | 3,000 | 20 | 300 | 開啟 On | ~$8.00 |
 | `custom` | **自定義，最高 50,000** | 最高 100 | 自定義 | 自動調整 | 依規模而定 |
 
 > **大規模模擬自動優化 / Auto-scaling for large simulations:**

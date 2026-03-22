@@ -13,8 +13,10 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Request, UploadFile
-from backend.app.api.auth import _limiter
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
+from backend.app.api.auth import UserProfile, _limiter, get_optional_user
 
 from backend.app.models.request import (
     SimulationCreateRequest,
@@ -74,7 +76,10 @@ async def list_sessions(limit: int = 20, offset: int = 0) -> APIResponse:
 
 
 @router.post("/create", response_model=APIResponse)
-async def create_simulation(req: SimulationCreateRequest) -> APIResponse:
+async def create_simulation(
+    req: SimulationCreateRequest,
+    user: Annotated[UserProfile | None, Depends(get_optional_user)] = None,
+) -> APIResponse:
     """Create a new simulation session."""
     try:
         enriched_shocks = [
@@ -128,6 +133,8 @@ async def create_simulation(req: SimulationCreateRequest) -> APIResponse:
 
         manager = get_simulation_manager()
         request_dict = req.model_dump()
+        if user:
+            request_dict["owner_id"] = user.id
         session_data = await manager.create_session(request_dict, csv_path=None)
         session_id = session_data["session_id"]
 
@@ -279,7 +286,12 @@ _QUICK_START_MAX_BYTES = 10 * 1024 * 1024  # 10 MB
 _QUICK_START_ALLOWED_EXTS = {".pdf", ".txt", ".md", ".markdown"}
 
 
-async def _run_quick_start(seed_text: str, scenario_question: str = "", preset: str = "fast") -> APIResponse:
+async def _run_quick_start(
+    seed_text: str,
+    scenario_question: str = "",
+    preset: str = "fast",
+    owner_id: str | None = None,
+) -> APIResponse:
     """Shared business logic for both JSON and file-upload quick-start endpoints."""
     from backend.app.utils.prompt_security import sanitize_seed_text as _sanitize_seed  # noqa: PLC0415
     from backend.app.services.zero_config import ZeroConfigService  # noqa: PLC0415
@@ -324,6 +336,7 @@ async def _run_quick_start(seed_text: str, scenario_question: str = "", preset: 
             "domain_pack_id": config.domain_pack_id,
             "platforms": {"twitter": True, "reddit": True} if is_kg else {"facebook": True, "instagram": True},
             "time_config": time_config.to_dict(),
+            "owner_id": owner_id,
         },
         csv_path=None,
     )
@@ -396,7 +409,10 @@ async def _run_quick_start(seed_text: str, scenario_question: str = "", preset: 
 
 
 @router.post("/quick-start", response_model=APIResponse)
-async def quick_start(req: dict) -> APIResponse:
+async def quick_start(
+    req: dict,
+    user: Annotated[UserProfile | None, Depends(get_optional_user)] = None,
+) -> APIResponse:
     """One-click quick start: paste text and run simulation."""
     try:
         seed_text = (req.get("seed_text") or "").strip()
@@ -407,7 +423,8 @@ async def quick_start(req: dict) -> APIResponse:
         scenario_question_raw = (req.get("scenario_question") or "").strip()
         scenario_question = sanitize_scenario_description(scenario_question_raw) if scenario_question_raw else ""
         preset = (req.get("preset") or "fast").strip()
-        return await _run_quick_start(seed_text, scenario_question, preset)
+        owner_id = user.id if user else None
+        return await _run_quick_start(seed_text, scenario_question, preset, owner_id=owner_id)
     except HTTPException:
         raise
     except Exception as exc:
@@ -420,6 +437,7 @@ async def quick_start_upload(
     file: UploadFile,
     scenario_question: str = "",
     preset: str = "fast",
+    user: Annotated[UserProfile | None, Depends(get_optional_user)] = None,
 ) -> APIResponse:
     """Quick-start via file upload (PDF / TXT / Markdown, max 10 MB).
 
@@ -465,7 +483,8 @@ async def quick_start_upload(
 
         scenario_question_raw = (scenario_question or "").strip()
         scenario_question = sanitize_scenario_description(scenario_question_raw) if scenario_question_raw else ""
-        return await _run_quick_start(seed_text, scenario_question, preset)
+        owner_id = user.id if user else None
+        return await _run_quick_start(seed_text, scenario_question, preset, owner_id=owner_id)
     except HTTPException:
         raise
     except Exception as exc:
@@ -852,6 +871,32 @@ async def rebalance_shards(
 # ---------------------------------------------------------------------------
 # Parameterized session routes (MUST come AFTER all static routes)
 # ---------------------------------------------------------------------------
+
+
+@router.post("/{session_id}/resume", response_model=APIResponse)
+async def resume_session(session_id: str) -> APIResponse:
+    """Resume a simulation session that was paused due to exceeding the hard cost cap.
+
+    Calls ``cost_tracker.resume(session_id)`` which clears the paused flag and
+    signals the asyncio.Event that the simulation loop is waiting on.
+    """
+    try:
+        from backend.app.services import cost_tracker as _ct  # noqa: PLC0415
+        if not _ct.is_paused(session_id):
+            return APIResponse(
+                success=True,
+                data={"session_id": session_id, "resumed": False, "message": "Session is not paused"},
+            )
+        _ct.resume(session_id)
+        total_cost = _ct.get_session_cost(session_id)
+        logger.info("resume_session: session=%s total_cost=$%.4f", session_id, total_cost)
+        return APIResponse(
+            success=True,
+            data={"session_id": session_id, "resumed": True, "total_cost": total_cost},
+        )
+    except Exception as exc:
+        logger.exception("resume_session failed for session %s", session_id)
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/{session_id}/status", response_model=APIResponse)

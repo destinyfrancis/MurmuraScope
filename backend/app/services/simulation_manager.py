@@ -821,6 +821,7 @@ async def _persist_session(
     enriched_request = {**request, "agent_csv_path": csv_path}
 
     domain_pack_id = request.get("domain_pack_id", "hk_city")
+    owner_id = request.get("owner_id")
 
     async with get_db() as db:
         await db.execute(
@@ -828,8 +829,9 @@ async def _persist_session(
                (id, name, sim_mode, seed_text, scenario_type, graph_id,
                 agent_count, round_count, llm_provider, llm_model,
                 macro_scenario_id, oasis_db_path, status,
-                estimated_cost_usd, config_json, created_at, domain_pack_id)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                estimated_cost_usd, config_json, created_at, domain_pack_id,
+                owner_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 session.id,
                 session.name,
@@ -852,6 +854,7 @@ async def _persist_session(
                 json.dumps(enriched_request, ensure_ascii=False),
                 session.created_at,
                 domain_pack_id,
+                owner_id,
             ),
         )
         await db.commit()

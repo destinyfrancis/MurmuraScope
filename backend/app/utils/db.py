@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import AsyncIterator
+from typing import AsyncIterator, Optional
 
 import aiosqlite
 
@@ -113,3 +114,100 @@ async def apply_migrations() -> None:
                 else:
                     logger.warning("Index migration warning: %s | SQL: %s", e, sql[:100])
     logger.info("DB migrations applied")
+
+
+@asynccontextmanager
+async def get_workspace_db(workspace_id: Optional[str]) -> AsyncIterator[aiosqlite.Connection]:
+    """Get a database connection for a workspace-scoped database.
+
+    Each workspace has its own SQLite file at:
+        data/workspaces/{workspace_id}/murmuroscope.db
+
+    This gives true write isolation between workspaces — no concurrent write
+    contention between tenants.  Falls back to the global database when
+    workspace_id is None.
+
+    Usage::
+
+        async with get_workspace_db(workspace_id) as db:
+            await db.execute("SELECT 1")
+    """
+    if workspace_id is None:
+        async with get_db() as db:
+            yield db
+        return
+
+    settings = get_settings()
+    # Derive the workspace DB directory from the global DB's parent.
+    # Global DB lives at <data_dir>/murmuroscope.db; workspace DBs live at
+    # <data_dir>/workspaces/<workspace_id>/murmuroscope.db
+    global_db_parent = Path(settings.DATABASE_PATH).parent
+    workspace_dir = global_db_parent / "workspaces" / workspace_id
+    os.makedirs(workspace_dir, exist_ok=True)
+
+    db_path = workspace_dir / "murmuroscope.db"
+    is_new_db = not db_path.exists()
+
+    db = await aiosqlite.connect(str(db_path))
+    try:
+        await db.execute("PRAGMA journal_mode=WAL")
+        await db.execute("PRAGMA foreign_keys=ON")
+        await db.execute("PRAGMA journal_size_limit = 67108864")
+        await db.execute("PRAGMA wal_autocheckpoint = 2000")
+        await db.execute("PRAGMA cache_size = -65536")
+        await db.execute("PRAGMA mmap_size = 268435456")
+        await db.execute("PRAGMA busy_timeout = 5000")
+        db.row_factory = aiosqlite.Row
+
+        if is_new_db:
+            schema_file = Path(settings.schema_path)
+            if schema_file.exists():
+                schema_sql = schema_file.read_text(encoding="utf-8")
+                await db.executescript(schema_sql)
+                await db.commit()
+                logger.info(
+                    "Initialised new workspace DB for workspace %s at %s",
+                    workspace_id,
+                    db_path,
+                )
+            else:
+                logger.warning(
+                    "schema.sql not found at %s — workspace DB %s created without schema",
+                    schema_file,
+                    db_path,
+                )
+
+        yield db
+    finally:
+        await db.close()
+
+
+async def get_db_for_session(session_id: str) -> Optional[str]:
+    """Look up the workspace_id for a session, if any.
+
+    Returns the workspace_id string when the session belongs to a workspace,
+    or None when it belongs to the global (default) database.
+
+    This is the hook point for future callers that want to route DB access to
+    the correct per-workspace SQLite file.  The actual query routing is done by
+    callers using ``get_workspace_db(await get_db_for_session(session_id))``.
+
+    Usage::
+
+        workspace_id = await get_db_for_session(session_id)
+        async with get_workspace_db(workspace_id) as db:
+            ...
+    """
+    async with get_db() as db:
+        cursor = await db.execute(
+            """SELECT ws.workspace_id
+               FROM workspace_sessions ws
+               WHERE ws.session_id = ?
+               LIMIT 1""",
+            (session_id,),
+        )
+        row = await cursor.fetchone()
+
+    if row is None:
+        return None
+    return row["workspace_id"]

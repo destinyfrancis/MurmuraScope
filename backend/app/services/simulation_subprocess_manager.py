@@ -17,6 +17,13 @@ from backend.app.utils.logger import get_logger
 
 logger = get_logger("simulation_subprocess_manager")
 
+# Memory limit for OASIS subprocesses in megabytes.
+# Subprocess is killed after exceeding this threshold for 2 consecutive checks.
+_MEMORY_LIMIT_MB: int = int(os.environ.get("SUBPROCESS_MEMORY_LIMIT_MB", "2048"))
+_HEALTH_CHECK_INTERVAL_S: float = 30.0
+# Number of consecutive over-limit checks before killing the process.
+_MEMORY_STRIKE_LIMIT: int = 2
+
 
 class SimulationSubprocessManager:
     """Manages the lifecycle of OASIS simulation subprocesses.
@@ -30,6 +37,8 @@ class SimulationSubprocessManager:
         self._processes: dict[str, asyncio.subprocess.Process] = {}
         self._report_pending: dict[str, bool] = {}
         self._auto_release_tasks: dict[str, asyncio.Task] = {}
+        self._health_monitors: dict[str, asyncio.Task] = {}
+        self._memory_warnings: dict[str, int] = {}
 
     # ------------------------------------------------------------------
     # Launch
@@ -69,6 +78,7 @@ class SimulationSubprocessManager:
             env=env,
         )
         self._processes[session_id] = process
+        self._start_health_monitor(session_id)
         return process
 
     # ------------------------------------------------------------------
@@ -100,6 +110,7 @@ class SimulationSubprocessManager:
             await process.wait()
 
         self._processes.pop(session_id, None)
+        self._stop_health_monitor(session_id)
         logger.info("Session %s stopped", session_id)
 
     # ------------------------------------------------------------------
@@ -138,7 +149,139 @@ class SimulationSubprocessManager:
         if self._report_pending.get(session_id):
             logger.debug("cleanup deferred: report pending for %s", session_id)
             return
+        self._stop_health_monitor(session_id)
         self._processes.pop(session_id, None)
+
+    # ------------------------------------------------------------------
+    # Health monitoring
+    # ------------------------------------------------------------------
+
+    def _start_health_monitor(self, session_id: str) -> None:
+        """Start an asyncio background task that monitors the subprocess health.
+
+        Checks every :data:`_HEALTH_CHECK_INTERVAL_S` seconds that:
+        - The process is still alive (``returncode is None``).
+        - RSS memory usage is below ``SUBPROCESS_MEMORY_LIMIT_MB``.
+
+        A process that exceeds the memory limit for :data:`_MEMORY_STRIKE_LIMIT`
+        consecutive checks is killed via SIGTERM → SIGKILL.
+
+        Args:
+            session_id: UUID of the session to monitor.
+        """
+        if session_id in self._health_monitors:
+            return  # Already monitoring
+
+        task = asyncio.create_task(
+            self._run_health_check(session_id),
+            name=f"health_monitor_{session_id}",
+        )
+        self._health_monitors[session_id] = task
+
+    def _stop_health_monitor(self, session_id: str) -> None:
+        """Cancel the health monitoring task for *session_id*, if any.
+
+        Args:
+            session_id: UUID of the session to stop monitoring.
+        """
+        task = self._health_monitors.pop(session_id, None)
+        if task is not None and not task.done():
+            task.cancel()
+        self._memory_warnings.pop(session_id, None)
+
+    async def _run_health_check(self, session_id: str) -> None:
+        """Coroutine body for the health monitor task.
+
+        Runs until the process exits, is stopped externally, or is killed due
+        to excessive memory usage.
+
+        Args:
+            session_id: UUID of the session being monitored.
+        """
+        try:
+            import psutil  # imported lazily to avoid hard startup dependency
+        except ImportError:
+            logger.warning(
+                "psutil not installed — subprocess memory monitoring disabled for session %s",
+                session_id,
+            )
+            return
+
+        try:
+            while True:
+                await asyncio.sleep(_HEALTH_CHECK_INTERVAL_S)
+
+                process = self._processes.get(session_id)
+                if process is None or process.returncode is not None:
+                    # Process already finished or was cleaned up.
+                    break
+
+                # --- liveness check ---
+                if not self.is_running(session_id):
+                    logger.debug(
+                        "Health monitor: session %s process has exited", session_id
+                    )
+                    break
+
+                # --- memory check ---
+                try:
+                    ps_proc = psutil.Process(process.pid)
+                    rss_mb = ps_proc.memory_info().rss / (1024 * 1024)
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    logger.debug(
+                        "Health monitor: psutil could not inspect PID %d (session %s)",
+                        process.pid,
+                        session_id,
+                    )
+                    break
+
+                if rss_mb > _MEMORY_LIMIT_MB:
+                    strikes = self._memory_warnings.get(session_id, 0) + 1
+                    self._memory_warnings[session_id] = strikes
+                    logger.warning(
+                        "Health monitor: session %s PID %d using %.1f MB "
+                        "(limit %d MB) — strike %d/%d",
+                        session_id,
+                        process.pid,
+                        rss_mb,
+                        _MEMORY_LIMIT_MB,
+                        strikes,
+                        _MEMORY_STRIKE_LIMIT,
+                    )
+
+                    if strikes >= _MEMORY_STRIKE_LIMIT:
+                        logger.error(
+                            "Health monitor: killing session %s PID %d — "
+                            "exceeded memory limit (%.1f MB) for %d consecutive checks",
+                            session_id,
+                            process.pid,
+                            rss_mb,
+                            strikes,
+                        )
+                        process.terminate()
+                        try:
+                            await asyncio.wait_for(process.wait(), timeout=5.0)
+                        except asyncio.TimeoutError:
+                            logger.warning(
+                                "Health monitor: SIGTERM timed out for PID %d, sending SIGKILL",
+                                process.pid,
+                            )
+                            process.kill()
+                            await process.wait()
+                        self._processes.pop(session_id, None)
+                        self._memory_warnings.pop(session_id, None)
+                        break
+                else:
+                    # Reset strike counter on a healthy check.
+                    self._memory_warnings.pop(session_id, None)
+
+        except asyncio.CancelledError:
+            # Normal cancellation via _stop_health_monitor.
+            pass
+        except Exception:
+            logger.exception(
+                "Health monitor unexpected error for session %s", session_id
+            )
 
     # ------------------------------------------------------------------
     # Report keep-alive

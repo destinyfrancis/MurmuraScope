@@ -1,4 +1,4 @@
-.PHONY: stop test test-unit test-int test-all test-changed test-file dev frontend clean docker-up docker-down docker-dev docker-logs docker-clean
+.PHONY: stop test test-unit test-int test-all test-changed test-file test-cov test-cov-full dev frontend clean docker-up docker-down docker-dev docker-logs docker-clean
 
 PYTEST = .venv311/bin/python -m pytest
 
@@ -37,6 +37,22 @@ test-changed:
 # ── Run a single test file: make test-file F=test_belief_system ────
 test-file:
 	$(PYTEST) backend/tests/$(F).py -q --tb=short
+
+# ── Unit tests with HTML + terminal coverage report ────────────────
+test-cov:
+	$(PYTEST) -m "not integration and not slow" \
+		--cov=backend/app \
+		--cov-report=html:htmlcov \
+		--cov-report=term-missing \
+		-q --tb=short
+
+# ── All tests with coverage report ─────────────────────────────────
+test-cov-full:
+	$(PYTEST) \
+		--cov=backend/app \
+		--cov-report=html:htmlcov \
+		--cov-report=term-missing \
+		-q --tb=short
 
 # ── Server commands ────────────────────────────────────────────────
 stop:

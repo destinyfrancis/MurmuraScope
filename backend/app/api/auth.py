@@ -32,13 +32,22 @@ logger = get_logger("api.auth")
 _limiter = Limiter(key_func=get_remote_address)
 
 _raw_secret = os.environ.get("AUTH_SECRET_KEY")
+_debug_mode = os.environ.get("DEBUG", "false").lower() == "true"
+
 if not _raw_secret:
-    _raw_secret = secrets.token_urlsafe(32)
-    logger.warning(
-        "AUTH_SECRET_KEY env var not set — using ephemeral secret. "
-        "All JWT tokens will be invalidated on restart. "
-        "Set AUTH_SECRET_KEY in your environment for stable auth."
-    )
+    if _debug_mode:
+        _raw_secret = secrets.token_urlsafe(32)
+        logger.warning(
+            "AUTH_SECRET_KEY env var not set — using ephemeral secret (DEBUG mode). "
+            "All JWT tokens will be invalidated on restart. "
+            "Set AUTH_SECRET_KEY in your environment for stable auth."
+        )
+    else:
+        raise SystemExit(
+            "FATAL: AUTH_SECRET_KEY environment variable must be set in production. "
+            "Generate one with: openssl rand -hex 32"
+        )
+
 AUTH_SECRET_KEY: str = _raw_secret
 AUTH_ALGORITHM = "HS256"
 AUTH_TOKEN_EXPIRE_DAYS = 7
@@ -139,6 +148,10 @@ def _decode_token(token: str) -> str:
         ) from exc
 
 
+_oauth2_scheme_optional = OAuth2PasswordBearer(
+    tokenUrl="/api/auth/login", auto_error=False
+)
+
 # ---------------------------------------------------------------------------
 # Dependency: get_current_user
 # ---------------------------------------------------------------------------
@@ -176,6 +189,45 @@ async def get_current_user(
             detail="User not found",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    return UserProfile(
+        id=row["id"],
+        email=row["email"],
+        display_name=row["display_name"],
+        created_at=row["created_at"],
+    )
+
+
+async def get_optional_user(
+    token: Annotated[str | None, Depends(_oauth2_scheme_optional)],
+) -> UserProfile | None:
+    """Optional auth dependency — returns None when no token is provided.
+
+    Use this on endpoints that work both authenticated and unauthenticated::
+
+        from backend.app.api.auth import get_optional_user, UserProfile
+
+        @router.post("/create")
+        async def create(user: UserProfile | None = Depends(get_optional_user)):
+            owner_id = user.id if user else None
+    """
+    if not token:
+        return None
+    try:
+        user_id = _decode_token(token)
+    except HTTPException:
+        return None
+    try:
+        async with get_db() as db:
+            cursor = await db.execute(
+                "SELECT id, email, display_name, created_at FROM users WHERE id = ?",
+                (user_id,),
+            )
+            row = await cursor.fetchone()
+    except Exception:
+        logger.warning("DB error in get_optional_user for user %s", user_id)
+        return None
+    if row is None:
+        return None
     return UserProfile(
         id=row["id"],
         email=row["email"],

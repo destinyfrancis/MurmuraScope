@@ -78,6 +78,9 @@ class SimPreset:
     rounds: int
     mc_trials: int
     hook_config: HookConfig = field(default_factory=HookConfig)
+    # Conservative cost estimate in USD for this preset (informational only).
+    # Based on: 500 agents × 30 rounds ≈ $1.89 (AGENT_LLM_MODEL rate).
+    estimated_cost_usd: float = 0.0
 
     @classmethod
     def custom(
@@ -87,34 +90,43 @@ class SimPreset:
         mc_trials: int = 100,
     ) -> SimPreset:
         """Create a custom preset with auto-scaled HookConfig."""
+        # Estimate cost linearly relative to DEEP preset (500 agents × 30 rounds → $1.89)
+        _deep_cost_per_agent_round = 1.89 / (500 * 30)
+        estimated = round(_deep_cost_per_agent_round * agents * rounds, 2)
         return cls(
             name="custom",
             agents=agents,
             rounds=rounds,
             mc_trials=mc_trials,
             hook_config=HookConfig.scaled(agents),
+            estimated_cost_usd=estimated,
         )
 
 
 PRESET_FAST = SimPreset(
     name="fast", agents=100, rounds=15, mc_trials=30,
     hook_config=HookConfig(emergence_enabled=False),
+    estimated_cost_usd=0.15,
 )
 PRESET_STANDARD = SimPreset(
     name="standard", agents=300, rounds=20, mc_trials=50,
     hook_config=HookConfig(emergence_enabled=True),
+    estimated_cost_usd=0.60,
 )
 PRESET_DEEP = SimPreset(
     name="deep", agents=500, rounds=30, mc_trials=100,
     hook_config=HookConfig(emergence_enabled=True),
+    estimated_cost_usd=1.89,
 )
 PRESET_LARGE = SimPreset(
     name="large", agents=1000, rounds=25, mc_trials=200,
     hook_config=HookConfig.scaled(1000),
+    estimated_cost_usd=3.50,
 )
 PRESET_MASSIVE = SimPreset(
     name="massive", agents=3000, rounds=20, mc_trials=300,
     hook_config=HookConfig.scaled(3000),
+    estimated_cost_usd=8.00,
 )
 
 # Registry for lookup by name

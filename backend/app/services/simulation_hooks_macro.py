@@ -6,16 +6,59 @@ All methods access SimulationRunner state via ``self`` (cooperative MRO).
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses
+import os
 from typing import Any
 
 from backend.app.utils.logger import get_logger
 
 logger = get_logger("simulation_hooks.macro")
 
+# Per-session cache for ExternalDataFeed results (one fetch per session lifetime).
+# Keyed by session_id; value is the merged dict[str, float] returned by
+# ExternalDataFeed.fetch_with_db_fallback().
+_external_feed_cache: dict[str, dict[str, float]] = {}
+
 
 class MacroHooksMixin:
     """Periodic hooks for macro-economic phenomena."""
+
+    async def _fetch_external_feed(self, session_id: str) -> dict[str, float]:
+        """Fetch external macro data, caching the result for the session lifetime.
+
+        Returns an empty dict on any error so callers can safely ignore failures.
+        The result is cached in the module-level ``_external_feed_cache`` dict
+        keyed by *session_id*.  Subsequent calls within the same session return
+        the cached value without hitting the network again.
+        """
+        if session_id in _external_feed_cache:
+            logger.debug(
+                "ExternalDataFeed: using cached data for session=%s (%d fields)",
+                session_id,
+                len(_external_feed_cache[session_id]),
+            )
+            return _external_feed_cache[session_id]
+
+        try:
+            from backend.app.services.external_data_feed import ExternalDataFeed  # noqa: PLC0415
+            feed = ExternalDataFeed()
+            data = await feed.fetch_with_db_fallback()
+            _external_feed_cache[session_id] = data
+            logger.debug(
+                "ExternalDataFeed: fetched and cached %d fields for session=%s: %s",
+                len(data),
+                session_id,
+                sorted(data.keys()),
+            )
+            return data
+        except Exception:
+            logger.warning(
+                "ExternalDataFeed fetch failed for session=%s — skipping external merge",
+                session_id,
+                exc_info=True,
+            )
+            return {}
 
     async def _process_macro_feedback(
         self,
@@ -51,6 +94,33 @@ class MacroHooksMixin:
                 )
 
                 updated_state = self._clamp_macro_state(updated_state)
+
+                # Optionally merge live external macro data into MacroState.
+                # Gated behind EXTERNAL_FEED_ENABLED env var (default "false").
+                # Failures are non-fatal and never crash the simulation.
+                if os.environ.get("EXTERNAL_FEED_ENABLED", "false").lower() == "true":
+                    external_data = await self._fetch_external_feed(session_id)
+                    if external_data:
+                        import dataclasses as _dc  # noqa: PLC0415
+                        valid_fields = {f.name for f in _dc.fields(updated_state)}
+                        overrides: dict[str, Any] = {}
+                        for field_name, value in external_data.items():
+                            if field_name in valid_fields and isinstance(value, (int, float)):
+                                overrides[field_name] = type(
+                                    getattr(updated_state, field_name)
+                                )(value)
+                        if overrides:
+                            updated_state = self._clamp_macro_state(
+                                dataclasses.replace(updated_state, **overrides)
+                            )
+                            logger.debug(
+                                "ExternalDataFeed merged into MacroState session=%s "
+                                "round=%d fields=%s",
+                                session_id,
+                                round_number,
+                                sorted(overrides.keys()),
+                            )
+
                 self._macro_state[session_id] = updated_state
 
             await self._persist_macro_state(session_id, round_number, updated_state)

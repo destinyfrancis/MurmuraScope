@@ -219,23 +219,35 @@ class TestAuthSecretKeyConfiguration:
         assert auth_module.AUTH_SECRET_KEY == test_secret
 
     @pytest.mark.unit
-    def test_auth_secret_key_warns_when_missing(self, monkeypatch, caplog):
-        """When AUTH_SECRET_KEY is missing, a warning must be logged."""
-        # Remove the env var
+    def test_auth_secret_key_warns_in_debug_mode_when_missing(self, monkeypatch, caplog):
+        """In DEBUG mode, a warning is logged when AUTH_SECRET_KEY is missing."""
         monkeypatch.delenv("AUTH_SECRET_KEY", raising=False)
+        monkeypatch.setenv("DEBUG", "true")
 
-        # Reload the auth module to trigger the initialization code
         import importlib
         import logging
         import backend.app.api.auth as auth_module
 
-        # Capture logging at WARNING level
         with caplog.at_level(logging.WARNING, logger="api.auth"):
             importlib.reload(auth_module)
 
-        # Verify the warning was logged
         assert any(
             "AUTH_SECRET_KEY env var not set" in record.message
             and "ephemeral secret" in record.message
             for record in caplog.records
         ), f"Expected warning not found in logs: {[r.message for r in caplog.records]}"
+
+    @pytest.mark.unit
+    def test_auth_secret_key_raises_in_production_when_missing(self, monkeypatch):
+        """In production (DEBUG=false), missing AUTH_SECRET_KEY must raise SystemExit."""
+        monkeypatch.delenv("AUTH_SECRET_KEY", raising=False)
+        monkeypatch.setenv("DEBUG", "false")
+
+        import importlib
+        import backend.app.api.auth as auth_module
+
+        with pytest.raises(SystemExit) as exc_info:
+            importlib.reload(auth_module)
+
+        assert "FATAL" in str(exc_info.value)
+        assert "AUTH_SECRET_KEY" in str(exc_info.value)

@@ -60,6 +60,7 @@ academic_evaluation_report.md
 system_overview.md
 .superpowers/
 .coverage
+htmlcov/
 *.local.md
 
 # Test output / internal lists
