@@ -261,7 +261,12 @@ class MacroHooksMixin:
             if self._bank_agent is None:
                 self._bank_agent = BankAgent()
 
-            macro_state = self._macro_state.get(session_id)
+            lock = self._macro_locks.get(session_id)
+            if lock:
+                async with lock:
+                    macro_state = self._macro_state.get(session_id)
+            else:
+                macro_state = self._macro_state.get(session_id)
             if macro_state is None:
                 from backend.app.services.macro_controller import MacroController  # noqa: PLC0415
                 mc = MacroController()

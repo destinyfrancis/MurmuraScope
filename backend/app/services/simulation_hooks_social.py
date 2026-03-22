@@ -146,7 +146,7 @@ class SocialHooksMixin:
         try:
             from backend.app.services.wealth_transfer import process_wealth_transfers  # noqa: PLC0415
 
-            rows = list(self._round_profiles.get(session_id, []))
+            rows = [dict(r) for r in self._round_profiles.get(session_id, [])]
 
             if not rows:
                 return
@@ -177,7 +177,12 @@ class SocialHooksMixin:
                 except Exception:
                     pass
 
-            macro_state = self._macro_state.get(session_id)
+            lock = self._macro_locks.get(session_id)
+            if lock:
+                async with lock:
+                    macro_state = self._macro_state.get(session_id)
+            else:
+                macro_state = self._macro_state.get(session_id)
             if macro_state is None:
                 from backend.app.services.macro_controller import MacroController  # noqa: PLC0415
                 macro_state = await MacroController().get_baseline()
