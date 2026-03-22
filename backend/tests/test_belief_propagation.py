@@ -225,6 +225,40 @@ async def test_sequential_events_produce_diminishing_returns():
 
 
 @pytest.mark.asyncio
+async def test_conformity_peer_pressure_no_hidden_scaling():
+    """Peer pressure delta must equal conformity × (peer - current), no 0.1 factor.
+
+    With no events and conformity=1.0, peer_current=0.7, current=0.5:
+    - After fix: peer_delta = 1.0 * (0.7 - 0.5) = 0.2
+    - Before fix: peer_delta = 1.0 * (0.7 - 0.5) * 0.1 = 0.02
+    """
+    engine = BeliefPropagationEngine()
+    fp = _make_fingerprint(confirmation_bias=0.0, conformity=1.0)
+    active_metrics = ("escalation_index",)
+    current_beliefs = {"escalation_index": 0.5}
+    faction_peer = {"escalation_index": 0.7}  # gap=0.2, within HC_EPSILON
+
+    with patch(
+        "backend.app.services.belief_propagation.get_embedding",
+        MagicMock(return_value=[0.1] * 384),
+    ):
+        delta = await engine.propagate(
+            fingerprint=fp,
+            events=[],
+            faction_peer_stance=faction_peer,
+            active_metrics=active_metrics,
+            current_beliefs=current_beliefs,
+        )
+
+    d = delta.get("escalation_index", 0.0)
+    # peer_delta = conformity * (peer - current) = 1.0 * 0.2 = 0.2
+    # blended = event_delta * (1 - 1.0) + 0.2 = 0.2
+    assert d > 0.1, (
+        f"Peer pressure delta must be ~0.2 (no hidden 0.1 scaling), got {d:.4f}"
+    )
+
+
+@pytest.mark.asyncio
 async def test_conflicting_events_do_not_cancel_perfectly():
     """Opposite-direction events must not cancel to exactly zero.
 
