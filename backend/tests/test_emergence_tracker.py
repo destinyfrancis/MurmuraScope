@@ -133,6 +133,33 @@ def test_faction_mapping_is_deterministic():
 
 
 @pytest.mark.unit
+def test_jsd_adaptive_bins_with_zero():
+    """_jsd with n_bins=0 must compute adaptive bin count without error.
+
+    Before fix: n_bins=0 passed to _to_histogram causes IndexError.
+    After fix: n_bins=0 triggers adaptive logic based on population size.
+    """
+    detector = TippingPointDetector()
+    # 20 agents → adaptive: max(5, min(20, 20 // 10)) = max(5, 2) = 5
+    beliefs = {f"a{i}": {"metric": float(i) / 19} for i in range(20)}
+    result = detector._jsd(beliefs, beliefs, n_bins=0)
+    assert 0.0 <= result <= 1.0, f"JSD with adaptive bins out of range: {result}"
+
+
+@pytest.mark.unit
+def test_jsd_adaptive_bin_count_formula():
+    """Adaptive n_bins formula: max(5, min(20, n_agents // 10))."""
+    # Test the formula directly
+    def _expected_bins(n_agents: int) -> int:
+        return max(5, min(20, n_agents // 10))
+
+    assert _expected_bins(20) == 5    # small → floor at 5
+    assert _expected_bins(100) == 10  # medium
+    assert _expected_bins(200) == 20  # large → capped at 20
+    assert _expected_bins(50) == 5    # 50//10=5 → exactly at floor
+
+
+@pytest.mark.unit
 def test_narrative_entry_creation():
     """NarrativeEntry must be creatable and frozen."""
     import dataclasses

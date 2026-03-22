@@ -261,7 +261,7 @@ class TippingPointDetector:
         self,
         current: dict[str, dict[str, float]],
         prev: dict[str, dict[str, float]],
-        n_bins: int = 10,
+        n_bins: int = 0,
     ) -> float:
         """Jensen-Shannon Divergence averaged across all metrics.
 
@@ -271,10 +271,19 @@ class TippingPointDetector:
         population splits into two camps without shifting the overall mean).
 
         Result is in [0, 1] (log₂ scale).
+
+        Args:
+            n_bins: Number of histogram bins. Pass 0 (default) for adaptive
+                    sizing: max(5, min(20, n_agents // 10)).
         """
         all_metrics: set[str] = set()
         for beliefs in current.values():
             all_metrics.update(beliefs.keys())
+
+        # Adaptive bin count: scale with population size for better resolution
+        if n_bins <= 0:
+            n_agents = max(len(current), 1)
+            n_bins = max(5, min(20, n_agents // 10))
 
         if not all_metrics:
             return 0.0
