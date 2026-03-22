@@ -113,6 +113,38 @@ class TestAssignPoliticalStance:
         assert _EDUCATION_LEAN["學位或以上"] > 0
         assert _EDUCATION_LEAN["小學或以下"] < 0
 
+    def test_personality_contribution_small_for_moderate_traits(self, model: PoliticalModel) -> None:
+        """H5: personality multipliers should be small to avoid double-counting with belief bias."""
+        # Moderate personality: openness=0.7, neuroticism=0.6
+        # Personality contribution = (0.7-0.5)*multiplier + (0.6-0.5)*multiplier
+        # With reduced multipliers (0.05 and 0.02), total ≈ 0.012
+        # Must be < 0.05 for moderate traits
+        base_stance = model.assign_political_stance(
+            age=40, district="沙田", education_level="中學",
+            occupation="Clerk", openness=0.5, neuroticism=0.5,
+        )
+        high_personality_stances = [
+            model.assign_political_stance(
+                age=40, district="沙田", education_level="中學",
+                occupation="Clerk", openness=0.7, neuroticism=0.6,
+            )
+            for _ in range(200)
+        ]
+        base_stances = [
+            model.assign_political_stance(
+                age=40, district="沙田", education_level="中學",
+                occupation="Clerk", openness=0.5, neuroticism=0.5,
+            )
+            for _ in range(200)
+        ]
+        avg_diff = abs(
+            sum(high_personality_stances) / len(high_personality_stances)
+            - sum(base_stances) / len(base_stances)
+        )
+        # Personality contribution for moderate traits must be < 0.02
+        # (reduced multipliers to avoid double-counting with belief system)
+        assert avg_diff < 0.02, f"Personality contribution {avg_diff:.4f} too large (double-counting risk)"
+
     def test_unknown_district_no_error(self, model: PoliticalModel) -> None:
         stance = model.assign_political_stance(
             age=40, district="UnknownDistrict", education_level="中學",

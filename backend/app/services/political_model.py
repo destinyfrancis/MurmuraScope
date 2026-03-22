@@ -182,9 +182,11 @@ class PoliticalModel:
         # District effect
         base += _DISTRICT_LEAN.get(district, 0.0)
 
-        # Personality effect
-        base += (openness - 0.5) * 0.15
-        base -= (neuroticism - 0.5) * 0.05
+        # Personality effect (reduced: belief_system already uses openness
+        # for confirmation bias, so we avoid double-counting here)
+        base += (openness - 0.5) * 0.05
+        # Positive: anxiety → conformity (not anti-democracy)
+        base += (neuroticism - 0.5) * 0.02
 
         # Individual variation
         noise = random.gauss(0, 0.05)
