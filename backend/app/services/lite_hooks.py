@@ -20,6 +20,7 @@ from typing import Any
 
 from backend.app.models.world_event import WorldEvent
 from backend.app.services.cognitive_agent_engine import DeliberationResult
+from backend.app.services.constants import HC_EPSILON
 from backend.app.utils.logger import get_logger
 
 logger = get_logger("lite_hooks")
@@ -272,7 +273,7 @@ def debate_lite(
     gap = abs(stance_a - stance_b)
 
     # Bounded confidence: no influence if too far apart
-    if gap > 0.4:
+    if gap > HC_EPSILON:
         return (0.0, 0.0)
 
     # Pull toward each other, modulated by agreeableness

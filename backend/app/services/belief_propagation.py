@@ -13,6 +13,7 @@ from typing import Any
 from backend.app.models.cognitive_fingerprint import CognitiveFingerprint
 from backend.app.models.world_event import WorldEvent
 from backend.app.services.belief_system import BeliefSystem
+from backend.app.services.constants import HC_EPSILON
 from backend.app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -119,7 +120,6 @@ class BeliefPropagationEngine:
         # Hegselmann-Krause bounded confidence: agents only update from peers
         # whose belief is within epsilon of their own current belief.
         # Effective epsilon scales with openness: open agents accept wider range.
-        _BC_EPSILON = 0.4  # base bounded-confidence radius
 
         final: dict[str, float] = {}
         for metric_id in active_metrics:
@@ -129,9 +129,9 @@ class BeliefPropagationEngine:
 
             # Hegselmann-Krause: ignore faction peers too far from current belief
             openness = getattr(fingerprint, "openness", 0.5)
-            effective_epsilon = _BC_EPSILON * (0.5 + 0.5 * openness)
+            effective_epsilon = HC_EPSILON * (0.5 + 0.5 * openness)
             if abs(peer_current - current) <= effective_epsilon:
-                peer_delta = fingerprint.conformity * (peer_current - current) * 0.1
+                peer_delta = fingerprint.conformity * (peer_current - current)
             else:
                 peer_delta = 0.0  # ignore distant peers
 
