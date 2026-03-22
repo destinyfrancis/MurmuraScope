@@ -211,12 +211,13 @@ function connectWs() {
   ws.onclose = () => {
     if (isUnmounted) return
     addLog('WebSocket 連接已關閉')
+    const capturedSessionId = props.session?.sessionId  // capture BEFORE delay
     if (!completed.value && running.value && reconnectAttempts < MAX_RECONNECT) {
       const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000)
       reconnectAttempts++
       addLog(`${delay / 1000}s 後重連 (${reconnectAttempts}/${MAX_RECONNECT})...`)
       reconnectTimer = setTimeout(() => {
-        if (!isUnmounted) connectWs()
+        if (!isUnmounted && props.session?.sessionId === capturedSessionId) connectWs()
       }, delay)
     }
   }
