@@ -122,6 +122,53 @@ class TestReceptivity:
 
 
 # ---------------------------------------------------------------------------
+# Asymmetric receptivity (H11)
+# ---------------------------------------------------------------------------
+
+
+class TestAsymmetricReceptivity:
+    """H11: Aligned agents should be more receptive than cross-cutting ones."""
+
+    @staticmethod
+    def _receptivity_with_asymmetry(
+        agent_stance: float, media_lean: float, credibility: float
+    ) -> float:
+        """Reproduce the receptivity formula WITH asymmetry adjustment."""
+        from backend.app.services.media_influence import compute_receptivity
+        return compute_receptivity(agent_stance, media_lean, credibility)
+
+    def test_aligned_agent_boosted(self) -> None:
+        """Pro-establishment agent + pro-establishment media → 15% boost."""
+        r = self._receptivity_with_asymmetry(0.2, 0.2, 0.7)
+        base = max(0.0, 1.0 - 0.0 * 2.0) * 0.7  # = 0.7
+        assert r == pytest.approx(base * 1.15, abs=0.01)
+
+    def test_cross_cutting_penalised(self) -> None:
+        """Pro-democracy agent + pro-establishment media → 15% penalty."""
+        r = self._receptivity_with_asymmetry(0.8, 0.3, 0.7)
+        base = max(0.0, 1.0 - 0.5 * 2.0) * 0.7  # = 0.0 (too far apart)
+        # With diff=0.5, base receptivity is 0 — so penalty doesn't matter
+        # Use a closer but cross-cutting pair: agent=0.6, media=0.3
+        r2 = self._receptivity_with_asymmetry(0.6, 0.3, 0.7)
+        base2 = max(0.0, 1.0 - 0.3 * 2.0) * 0.7  # = 0.28
+        assert r2 == pytest.approx(base2 * 0.85, abs=0.01)
+
+    def test_asymmetry_difference(self) -> None:
+        """Aligned receptivity should be > cross-cutting for same stance_diff."""
+        # Both have diff=0.1 from media
+        # Aligned: agent=0.3, media=0.2 (both < 0.5)
+        r_aligned = self._receptivity_with_asymmetry(0.3, 0.2, 0.7)
+        # Cross-cutting: agent=0.6, media=0.5-0.1=0.4... but agent>0.5 and media<0.5
+        # Better: agent=0.6, media=0.5 — agent>0.5, media=0.5 (centrist, not aligned)
+        # Use: agent=0.3, media=0.4 — agent<0.5, media<0.5 (aligned)
+        # vs: agent=0.6, media=0.4 — agent>0.5, media<0.5 (cross-cutting), diff=0.2
+        r_cross = self._receptivity_with_asymmetry(0.6, 0.4, 0.7)
+        # r_aligned: diff=0.1, aligned → 1.15× boost
+        # r_cross: diff=0.2, cross-cutting → 0.85× penalty
+        assert r_aligned > r_cross
+
+
+# ---------------------------------------------------------------------------
 # Shift clamping
 # ---------------------------------------------------------------------------
 

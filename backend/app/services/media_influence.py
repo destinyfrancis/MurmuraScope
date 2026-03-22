@@ -103,6 +103,44 @@ DEFAULT_MEDIA_OUTLETS: list[dict[str, Any]] = [
     },
 ]
 
+# ---------------------------------------------------------------------------
+# Receptivity with asymmetry (H11)
+# ---------------------------------------------------------------------------
+
+
+def compute_receptivity(
+    agent_stance: float, media_lean: float, credibility: float
+) -> float:
+    """Compute receptivity with asymmetric aligned/cross-cutting modulation.
+
+    Post-2020 HK dynamics: agents are more receptive to ideologically aligned
+    media (confirmation bias at media level) and less receptive to
+    cross-cutting exposure.
+
+    Args:
+        agent_stance: Agent political stance 0–1.
+        media_lean: Media outlet political lean 0–1.
+        credibility: Media outlet credibility 0–1.
+
+    Returns:
+        Receptivity score (>= 0).
+    """
+    stance_diff = abs(agent_stance - media_lean)
+    receptivity = max(0.0, 1.0 - stance_diff * 2.0) * credibility
+
+    # Asymmetric modulation: aligned agents are more receptive,
+    # cross-cutting exposure is harder (confirmation bias at media level).
+    if receptivity > 0.0:
+        agent_pro_estab = agent_stance < 0.5
+        media_pro_estab = media_lean < 0.5
+        if agent_pro_estab == media_pro_estab:
+            receptivity *= 1.15  # aligned: 15% boost
+        else:
+            receptivity *= 0.85  # cross-cutting: 15% penalty
+
+    return receptivity
+
+
 # Maximum per-round stance shift applied to any single agent (guards against
 # runaway drift when many outlets all push in the same direction).
 _MAX_SHIFT_PER_ROUND = 0.02
@@ -310,13 +348,9 @@ class MediaInfluenceModel:
                     agent_id = int(agent_row["id"])
                     current_stance = float(agent_row["political_stance"])
 
-                    stance_diff = abs(current_stance - media.political_lean)
-
-                    # Receptivity: agents ideologically close to outlet are
-                    # most affected; the 2.0× multiplier means stances >0.5
-                    # apart get zero receptivity (stricter than previous 1.5×).
-                    receptivity = (
-                        max(0.0, 1.0 - stance_diff * 2.0) * media.credibility
+                    # Receptivity with asymmetric aligned/cross-cutting modulation
+                    receptivity = compute_receptivity(
+                        current_stance, media.political_lean, media.credibility
                     )
                     if receptivity < _MIN_RECEPTIVITY:
                         continue
