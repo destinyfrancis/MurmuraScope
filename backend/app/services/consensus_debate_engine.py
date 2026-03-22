@@ -289,21 +289,27 @@ class ConsensusDebateEngine:
         if len(agents_with_stance) < 2:
             return []
 
+        import random  # noqa: PLC0415
+
         agents_with_stance.sort(key=lambda x: x[1])
 
-        # Pair from opposite ends (most divergent pairs)
-        pairs: list[tuple[dict[str, Any], dict[str, Any]]] = []
         n = len(agents_with_stance)
-        left, right = 0, n - 1
-        while left < right and len(pairs) < self._max_pairs:
-            a_agent, a_stance = agents_with_stance[left]
-            b_agent, b_stance = agents_with_stance[right]
-            if abs(a_stance - b_stance) >= _DIVERGENCE_THRESHOLD:
-                pairs.append((a_agent, b_agent))
-            left += 1
-            right -= 1
+        tercile = max(1, n // 3)
+        low_agents = agents_with_stance[:tercile]
+        high_agents = agents_with_stance[-tercile:]
 
-        return pairs
+        # Randomly sample cross-cutting pairs from low × high terciles.
+        # Avoids deterministic always-pairing the two most extreme agents,
+        # which was brittle and suppressed mid-range debate dynamics.
+        candidates: list[tuple[dict[str, Any], dict[str, Any]]] = [
+            (a_agent, b_agent)
+            for a_agent, a_stance in low_agents
+            for b_agent, b_stance in high_agents
+            if abs(a_stance - b_stance) >= _DIVERGENCE_THRESHOLD
+        ]
+        random.shuffle(candidates)
+
+        return candidates[: self._max_pairs]
 
     async def _run_pairwise_debate(
         self,
