@@ -257,6 +257,17 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     except Exception as exc:
         logger.warning("idx_kg_edge_temporal index error: %s", exc)
 
+    # Validate ExternalDataFeed configuration when enabled
+    import os as _os
+    if _os.environ.get("EXTERNAL_FEED_ENABLED", "false").lower() == "true":
+        if not _os.environ.get("FRED_API_KEY", "").strip():
+            logger.warning(
+                "EXTERNAL_FEED_ENABLED=true but FRED_API_KEY not set — "
+                "FRED data source will be unavailable"
+            )
+        else:
+            logger.info("ExternalDataFeed enabled with FRED + World Bank + Taiwan risk sources")
+
     # 1. Seed static population/census data (legitimate reference data)
     try:
         from backend.data_pipeline.hk_reference_data import seed_population_data

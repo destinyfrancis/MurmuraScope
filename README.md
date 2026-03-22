@@ -6,7 +6,7 @@ Drop in a news article, novel excerpt, or geopolitical brief — the engine auto
 
 ---
 
-## What it does
+## How it works — 5 steps
 
 **Step 1 — Paste text.** The engine reads seed text, extracts entities and relationships into a knowledge graph, and generates up to 50 implied actors you didn't mention explicitly.
 
@@ -48,38 +48,159 @@ make docker-logs    # follow container logs
 
 ---
 
-## Architecture
+## System Architecture
+
+```mermaid
+graph TB
+    subgraph Client["Browser Client"]
+        UI["Vue 3 + Vite<br/>5-step workflow UI<br/>35+ components"]
+        WS_Client["WebSocket client<br/>live round progress"]
+    end
+
+    subgraph Gateway["API Gateway (FastAPI :5001)"]
+        Auth["auth router<br/>JWT · rate limits"]
+        GraphAPI["graph router<br/>KG build + query"]
+        SimAPI["simulation router<br/>start · shock · branch"]
+        ReportAPI["report router<br/>ReACT · PDF · share"]
+        WS_Server["ws router<br/>live events"]
+    end
+
+    subgraph Simulation["Simulation Engine"]
+        Runner["SimulationRunner<br/>OASIS subprocess orchestrator"]
+        KGHooks["KG-Driven Hooks<br/>deliberation · debate<br/>faction · belief propagation"]
+        MacroHooks["Macro Hooks<br/>VAR forecast · GARCH<br/>external feed"]
+        LiteHooks["Lite Hooks<br/>rule-based fallback<br/>zero LLM cost"]
+        Swarm["SwarmEnsemble<br/>Phase A→B fork<br/>N lite replicas"]
+    end
+
+    subgraph Agents["Agent Layer"]
+        CAE["CognitiveAgentEngine<br/>Big Five · attachment · strategy<br/>Bayesian belief update"]
+        KGFactory["KGAgentFactory<br/>3-stage: filter → profile → fingerprint"]
+        Memory["AgentMemoryService<br/>salience decay · vector search"]
+    end
+
+    subgraph Analytics["Analytics & Validation"]
+        VAR["VARForecaster<br/>ADF+KPSS stationarity<br/>Johansen cointegration"]
+        GARCH["GARCHForecaster<br/>Bollerslev MLE<br/>ARCH-LM auto-fit"]
+        MC["MonteCarloEngine<br/>500-trial LHS + t-Copula"]
+        Validate["ValidationReporter<br/>Brier skill · CRPS · MAPE<br/>walk-forward backtest"]
+        Emergence["EmergenceMetrics<br/>TDMI permutation null-model<br/>Louvain factions · JSD tipping"]
+    end
+
+    subgraph Storage["Storage Layer"]
+        SQLite["SQLite WAL<br/>55+ tables<br/>aiosqlite"]
+        DuckDB["DuckDB overlay<br/>read-only analytical queries<br/>columnar aggregation"]
+        LanceDB["LanceDB<br/>384-dim embeddings<br/>vector search"]
+    end
+
+    subgraph LLMs["LLM Providers"]
+        OpenRouter["OpenRouter<br/>agent deliberation<br/>gemini-flash-lite"]
+        Google["Google AI<br/>report generation<br/>gemini-pro"]
+    end
+
+    UI -->|REST + WebSocket| Gateway
+    WS_Client -->|ws://| WS_Server
+    Auth --> SimAPI
+    GraphAPI --> KGFactory
+    SimAPI --> Runner
+    ReportAPI --> Analytics
+
+    Runner --> KGHooks
+    Runner --> MacroHooks
+    Runner --> LiteHooks
+    Runner -->|Phase B| Swarm
+
+    KGHooks --> CAE
+    KGHooks --> Emergence
+    MacroHooks --> VAR
+    MacroHooks --> GARCH
+    MacroHooks --> MC
+
+    CAE --> Memory
+    CAE -->|LLM call| OpenRouter
+    ReportAPI -->|LLM call| Google
+
+    Runner --> SQLite
+    Analytics --> DuckDB
+    Memory --> LanceDB
+    DuckDB -.->|read-only scan| SQLite
+```
+
+---
+
+## Simulation modes
+
+| Mode | Trigger | Agent source | Decision space |
+|------|---------|-------------|---------------|
+| `kg_driven` | Any non-HK seed | KGAgentFactory (LLM-generated) | ScenarioGenerator (LLM) |
+| `hk_demographic` | HK keywords in seed | HK Census AgentFactory | Hardcoded DecisionType enum |
+
+## Simulation presets
+
+| Preset | Agents | Rounds | Emergence |
+|--------|--------|--------|-----------|
+| FAST | 100 | 15 | Off |
+| STANDARD | 300 | 20 | On |
+| DEEP | 500 | 30 | On |
+| LARGE | 1,000 | 25 | On |
+| custom | up to 50,000 | up to 100 | On |
+
+---
+
+## Backend structure
 
 ```
-backend/app/
-  api/            FastAPI routers
-  services/       50+ business logic services
-  models/         Pydantic (frozen) + frozen dataclasses
-  utils/          db.py · llm_client.py · duckdb_analytics.py
-  domain/         7 built-in domain packs
-
-frontend/src/
-  views/          5-step workflow UI
-  components/     35+ Vue components
-  api/            Typed API client layer
+backend/
+├── app/
+│   ├── api/                  FastAPI routers (18 modules)
+│   │   ├── auth.py           JWT auth · rate limits
+│   │   ├── simulation.py     start · shock · branch · swarm
+│   │   ├── graph.py          KG build + temporal query
+│   │   ├── report.py         ReACT report · PDF · share
+│   │   └── ws.py             WebSocket live progress
+│   ├── services/             50+ business logic services
+│   │   ├── simulation_runner.py          OASIS subprocess orchestrator
+│   │   ├── simulation_hooks_kg_driven.py KG-driven round hooks
+│   │   ├── simulation_hooks_macro.py     macro feedback + external feed
+│   │   ├── simulation_lifecycle.py       run / stop / cleanup
+│   │   ├── lite_hooks.py                 rule-based LLM fallbacks
+│   │   ├── cognitive_agent_engine.py     LLM deliberation + risk appetite
+│   │   ├── belief_system.py              Bayesian update
+│   │   ├── var_forecaster.py             VAR / VECM + stationarity
+│   │   ├── garch_model.py                GARCH(1,1) volatility
+│   │   ├── emergence_metrics.py          TDMI + Louvain factions
+│   │   ├── validation_reporter.py        composite score A–F
+│   │   └── swarm_ensemble.py             probability cloud pipeline
+│   ├── models/               Pydantic (frozen) + frozen dataclasses
+│   ├── utils/
+│   │   ├── db.py             aiosqlite connection (WAL + FK enforcement)
+│   │   ├── duckdb_analytics.py  read-only analytical overlay
+│   │   ├── llm_client.py     provider-agnostic LLM client + cost tracker
+│   │   └── prompt_security.py   injection sanitisation
+│   └── domain/               7 built-in domain packs
+├── database/schema.sql       55+ table schema (source of truth)
+├── prompts/                  LLM prompt templates
+├── scripts/                  OASIS subprocess runner
+└── tests/                    2700+ unit + 134 integration tests
 ```
 
-### Simulation modes
+---
 
-| Mode | Trigger | Agents |
-|------|---------|--------|
-| `kg_driven` | Any non-HK seed | LLM-generated via KGAgentFactory |
-| `hk_demographic` | HK keywords in seed | HK Census AgentFactory |
+## Simulation hook groups (per round)
 
-### Simulation presets
-
-| Preset | Agents | Rounds |
-|--------|--------|--------|
-| FAST | 100 | 15 |
-| STANDARD | 300 | 20 |
-| DEEP | 500 | 30 |
-| LARGE | 1,000 | 25 |
-| custom | up to 50,000 | up to 100 |
+```
+Pre-Group-1:  feed ranking | world event generation (kg_driven)
+Group 1 (parallel):
+  memories · trust · emotional state · relationship states
+Group 2 (sequential):
+  decisions → side effects → belief update → consumption
+  kg_driven: strategic planning → LLM deliberation (all active agents)
+             → consensus debate (every 3rd round) → belief propagation
+Group 3 (periodic, fire-and-forget):
+  echo chambers(3) · network evolution(3) · virality(3)
+  macro feedback(5) · KG evolution(3) · polarization(5) · TDMI(5)
+  kg_driven: faction + tipping(3) · relationship lifecycle(3)
+```
 
 ---
 
@@ -89,12 +210,11 @@ frontend/src/
 |---------|---------------|
 | Stationarity | ADF + KPSS dual test before every VAR fit; auto-differencing if I(1)/I(2) |
 | VAR / VECM | Johansen cointegration test; VECM when cointegrated, VAR otherwise |
-| GARCH(1,1) | Bollerslev (1986) MLE; fits automatically when ARCH effects detected |
+| GARCH(1,1) | Bollerslev (1986) MLE via scipy; auto-fits when ARCH LM detects effects |
 | Monte Carlo | 500-trial LHS + t-Copula; GARCH-adjusted CIs during volatility clustering |
 | TDMI | Kraskov KNN estimator; permutation null-model (200 shuffles, 95th pct) |
 | Brier skill | Climatological baseline p×(1-p) from dataset prevalence |
-| CRPS | Continuous Ranked Probability Score for probabilistic forecast evaluation |
-| Backtesting | Walk-forward k-fold; _FoldScopedCoefficients prevents look-ahead bias |
+| Backtesting | Walk-forward k-fold; look-ahead bias prevented by FoldScopedCoefficients |
 
 ---
 
@@ -115,19 +235,31 @@ frontend/src/
 ## Environment variables
 
 ```env
-OPENROUTER_API_KEY=         # agent LLM calls
-GOOGLE_API_KEY=             # report generation
+# Required
+OPENROUTER_API_KEY=             # agent LLM calls
+GOOGLE_API_KEY=                 # report generation
+AUTH_SECRET_KEY=                # JWT signing key — openssl rand -hex 32
+SESSION_ENCRYPTION_KEY=         # BYOK key encryption — see below
 
+# LLM models
 AGENT_LLM_MODEL=google/gemini-3.1-flash-lite-preview
-AGENT_LLM_MODEL_LITE=       # background agents (cheaper; falls back to above)
+AGENT_LLM_MODEL_LITE=           # background agents (falls back to above)
 GOOGLE_REPORT_MODEL=gemini-3.1-pro-preview
 
-SESSION_COST_BUDGET_USD=5   # warning threshold
-SESSION_COST_HARD_CAP_USD=10 # hard pause
+# Cost controls
+SESSION_COST_BUDGET_USD=5       # warning threshold
+SESSION_COST_HARD_CAP_USD=10    # hard pause
 SUBPROCESS_MEMORY_LIMIT_MB=2048
 
-EXTERNAL_FEED_ENABLED=false
-OTEL_ENABLED=false
+# Optional features
+EXTERNAL_FEED_ENABLED=false     # live macro data feed
+EXTERNAL_FEED_REFRESH_ROUNDS=10
+OTEL_ENABLED=false              # OpenTelemetry tracing
+```
+
+Generate encryption key:
+```bash
+python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'
 ```
 
 ---
@@ -136,9 +268,10 @@ OTEL_ENABLED=false
 
 - **Python version**: 3.10 or 3.11 only. OASIS does not support 3.12+.
 - **Immutability**: all models use `frozen=True` dataclasses or `ConfigDict(frozen=True)`. Use `dataclasses.replace()`, never mutate.
-- **DB write pattern**: all simulation writes go through `BatchWriter` → `executemany()` per round. Analytical reads use `DuckDBAnalytics` (zero-copy SQLite scanner).
+- **DB write pattern**: all simulation writes go through `BatchWriter` → `executemany()` per round. Analytical reads use `DuckDBAnalytics` (zero-copy SQLite scanner, read-only).
 - **LLM singletons**: never instantiate `LLMClient` per-call. Use `_get_llm_client()` / `_get_xai_llm()`.
-- **Column names**: `agent_memories` uses `memory_text` (not `content`), `salience_score` (not `salience`). `kg_nodes` uses `session_id` (not `graph_id`), `title` (not `name`).
+- **Column names**: `agent_memories` uses `memory_text` / `salience_score`. `kg_nodes` uses `session_id` / `title`. `kg_edges` uses `session_id` / `relation_type`. `news_headlines` uses `title`.
+- **Security**: all user text passes through `prompt_security.py` before LLM calls. `llm_base_url` validated against SSRF allowlist. Shock/resume endpoints require auth.
 
 ---
 

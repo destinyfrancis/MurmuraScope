@@ -81,3 +81,6 @@ class KGSessionState:
 
     # Lite ensemble mode: use rule-based hooks instead of LLM
     lite_ensemble: bool = False
+
+    # Per-agent previous-round decision for strategic momentum in lite mode
+    agent_prev_decisions: dict[str, str] = field(default_factory=dict)

@@ -24,15 +24,17 @@ _external_feed_cache: dict[str, dict[str, float]] = {}
 class MacroHooksMixin:
     """Periodic hooks for macro-economic phenomena."""
 
-    async def _fetch_external_feed(self, session_id: str) -> dict[str, float]:
-        """Fetch external macro data, caching the result for the session lifetime.
+    async def _fetch_external_feed(
+        self, session_id: str, *, force_refresh: bool = False,
+    ) -> dict[str, float]:
+        """Fetch external macro data with per-session caching.
 
         Returns an empty dict on any error so callers can safely ignore failures.
         The result is cached in the module-level ``_external_feed_cache`` dict
-        keyed by *session_id*.  Subsequent calls within the same session return
-        the cached value without hitting the network again.
+        keyed by *session_id*.  Pass *force_refresh=True* to bypass the cache
+        and re-fetch from live APIs (used for periodic refresh every N rounds).
         """
-        if session_id in _external_feed_cache:
+        if not force_refresh and session_id in _external_feed_cache:
             logger.debug(
                 "ExternalDataFeed: using cached data for session=%s (%d fields)",
                 session_id,
@@ -44,6 +46,19 @@ class MacroHooksMixin:
             from backend.app.services.external_data_feed import ExternalDataFeed  # noqa: PLC0415
             feed = ExternalDataFeed()
             data = await feed.fetch_with_db_fallback()
+
+            # Detect significant changes since last fetch (for logging)
+            prev = _external_feed_cache.get(session_id, {})
+            if prev and data:
+                from backend.app.services.external_data_feed import detect_significant_changes  # noqa: PLC0415
+                changes = detect_significant_changes(prev, data)
+                if changes:
+                    logger.warning(
+                        "ExternalDataFeed: significant changes detected session=%s: %s",
+                        session_id,
+                        [(f, f"{o:.4f}→{n:.4f}") for f, o, n in changes],
+                    )
+
             _external_feed_cache[session_id] = data
             logger.debug(
                 "ExternalDataFeed: fetched and cached %d fields for session=%s: %s",
@@ -97,9 +112,16 @@ class MacroHooksMixin:
 
                 # Optionally merge live external macro data into MacroState.
                 # Gated behind EXTERNAL_FEED_ENABLED env var (default "false").
+                # Refreshes every EXTERNAL_FEED_REFRESH_ROUNDS rounds (default 10).
                 # Failures are non-fatal and never crash the simulation.
                 if os.environ.get("EXTERNAL_FEED_ENABLED", "false").lower() == "true":
-                    external_data = await self._fetch_external_feed(session_id)
+                    refresh_interval = int(os.environ.get("EXTERNAL_FEED_REFRESH_ROUNDS", "10"))
+                    should_refresh = (
+                        round_number % refresh_interval == 0
+                    ) or session_id not in _external_feed_cache
+                    external_data = await self._fetch_external_feed(
+                        session_id, force_refresh=should_refresh,
+                    )
                     if external_data:
                         import dataclasses as _dc  # noqa: PLC0415
                         valid_fields = {f.name for f in _dc.fields(updated_state)}

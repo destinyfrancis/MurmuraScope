@@ -82,9 +82,15 @@ def generate_lite_events(
         impact: dict[str, float] = {}
         for metric in affected:
             stance = prev_dominant_stance.get(metric, 0.5)
-            # Mean-revert direction: push toward 0.5
-            revert_dir = -1.0 if stance > 0.5 else 1.0
-            base_delta = revert_dir * 0.05
+            deviation = abs(stance - 0.5)
+            # Probabilistic counter-trend: extreme stances more likely to revert,
+            # but reinforcement still possible — avoids deterministic mean-revert
+            revert_prob = 0.5 + deviation * 0.75  # [0.5, 0.875]
+            if _rng.random() < revert_prob:
+                direction = -1.0 if stance > 0.5 else 1.0
+            else:
+                direction = 1.0 if stance > 0.5 else -1.0  # reinforcing
+            base_delta = direction * (0.03 + deviation * 0.06)
             noise = _rng.gauss(0, 0.08)
             if etype == "shock":
                 noise *= 2.5  # Shocks have bigger impact
@@ -136,6 +142,7 @@ def deliberate_lite(
     emotional_state: Any | None = None,
     cognitive_fingerprint: dict[str, float] | None = None,
     rng: random.Random | None = None,
+    prev_decision: str | None = None,
 ) -> DeliberationResult:
     """Rule-based deliberation for one stakeholder agent.
 
@@ -171,25 +178,40 @@ def deliberate_lite(
         for metric, delta in event.impact_vector.items():
             if metric not in beliefs:
                 continue
-            # Confirmation bias: if event pushes in same direction as belief,
-            # agent is more receptive.  If opposite, dampened.
+            # Personality-graded confirmation bias: closed-minded agents
+            # amplify confirming evidence and dismiss disconfirming evidence
+            # more strongly than open-minded agents.
             current = beliefs.get(metric, 0.5)
             event_direction = 1.0 if delta > 0 else -1.0
             belief_direction = 1.0 if current > 0.5 else -1.0
-            confirmation = 1.2 if event_direction == belief_direction else 0.7
+            dogmatism = 1.0 - agent.get("openness", 0.5)
+            if event_direction == belief_direction:
+                confirmation = 1.0 + 0.4 * dogmatism      # [1.0, 1.4]
+            else:
+                confirmation = 1.0 - 0.5 * dogmatism       # [0.5, 1.0]
 
             # Cognitive fingerprint modulation
             susceptibility = cf.get("susceptibility", 0.5)
             adjusted_delta = delta * reactivity * confirmation * (0.5 + susceptibility)
-            adjusted_delta = max(-0.15, min(0.15, adjusted_delta))
+            adjusted_delta = max(-0.25, min(0.25, adjusted_delta))
 
             belief_updates[metric] = belief_updates.get(metric, 0.0) + adjusted_delta
 
     # Round and cap updates
     belief_updates = {
-        k: round(max(-0.15, min(0.15, v)), 4)
+        k: round(max(-0.25, min(0.25, v)), 4)
         for k, v in belief_updates.items()
     }
+
+    # Strategic momentum: bias toward consistency with previous decision.
+    # Conscientiousness modulates persistence (high = more sticky).
+    if prev_decision in ("escalate", "de-escalate") and belief_updates:
+        momentum_metric = max(belief_updates, key=lambda k: abs(belief_updates[k]))
+        sign = 1.0 if prev_decision == "escalate" else -1.0
+        nudge = sign * 0.03 * (0.5 + agent.get("conscientiousness", 0.5))
+        belief_updates[momentum_metric] = round(
+            max(-0.25, min(0.25, belief_updates[momentum_metric] + nudge)), 4,
+        )
 
     # Decision: pick action based on strongest belief shift
     if belief_updates:
@@ -250,21 +272,24 @@ def debate_lite(
     beliefs_b: dict[str, float],
     topic: str,
     rng: random.Random | None = None,
+    confidence_radius: float = 0.55,
 ) -> tuple[float, float]:
     """Rule-based pairwise debate on a single topic.
 
     Uses Hegselmann-Krause bounded confidence: agents only influence each
-    other if their stance gap is < 0.4 (moderate).  Personality modulates
-    the magnitude of shift.
+    other if their stance gap is < *confidence_radius* (default 0.55,
+    wider than the global HC_EPSILON to reduce premature convergence in
+    lite mode).  Personality modulates the magnitude of shift.
 
     Args:
         agent_a, agent_b: Agent dicts with personality traits.
         beliefs_a, beliefs_b: Current beliefs.
         topic: Metric ID to debate.
         rng: Optional seeded Random.
+        confidence_radius: Maximum stance gap for mutual influence.
 
     Returns:
-        (delta_a, delta_b): Belief deltas for each agent, capped at ±0.15.
+        (delta_a, delta_b): Belief deltas for each agent, capped at ±0.20.
     """
     _rng = rng or random.Random()
 
@@ -273,7 +298,7 @@ def debate_lite(
     gap = abs(stance_a - stance_b)
 
     # Bounded confidence: no influence if too far apart
-    if gap > HC_EPSILON:
+    if gap > confidence_radius:
         return (0.0, 0.0)
 
     # Pull toward each other, modulated by agreeableness
@@ -283,8 +308,8 @@ def debate_lite(
     pull_a = (stance_b - stance_a) * agree_a * 0.3 + _rng.gauss(0, 0.02)
     pull_b = (stance_a - stance_b) * agree_b * 0.3 + _rng.gauss(0, 0.02)
 
-    delta_a = max(-0.15, min(0.15, pull_a))
-    delta_b = max(-0.15, min(0.15, pull_b))
+    delta_a = max(-0.20, min(0.20, pull_a))
+    delta_b = max(-0.20, min(0.20, pull_b))
 
     return (round(delta_a, 4), round(delta_b, 4))
 

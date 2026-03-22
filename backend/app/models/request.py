@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import ipaddress
+from typing import Literal
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from typing import Literal
 
 # B2B scenario keywords that trigger auto-generation when company_count is 0
 _B2B_SCENARIO_KEYWORDS: frozenset[str] = frozenset({"b2b", "trade", "enterprise", "supply_chain"})
