@@ -111,7 +111,7 @@ class SimulationRunner(
         # Tracks the latest MacroState per session for feedback accumulation
         self._macro_state: dict[str, Any] = {}
         # Per-session locks protecting _macro_state writes (Plan A — H3 race condition)
-        self._macro_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+        self._macro_locks: dict[str, asyncio.Lock] = {}
         self._decision_engine: Any | None = None
         self._media_model: Any | None = None
         self._consumption_tracker: Any | None = None
@@ -266,6 +266,8 @@ class SimulationRunner(
         if session_id not in self._macro_state:
             restored = await self._restore_macro_state(session_id)
             if restored is not None:
+                if session_id not in self._macro_locks:
+                    self._macro_locks[session_id] = asyncio.Lock()
                 async with self._macro_locks[session_id]:
                     self._macro_state[session_id] = restored
 
@@ -868,6 +870,7 @@ class SimulationRunner(
         # Memory caches
         self._posts_buffer.pop(session_id, None)
         self._macro_state.pop(session_id, None)
+        self._macro_locks.pop(session_id, None)
         self._round_profiles.pop(session_id, None)
         rc = self._round_caches.pop(session_id, None)
         if rc is not None:

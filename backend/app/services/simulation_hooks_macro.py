@@ -36,6 +36,8 @@ class MacroHooksMixin:
             if self._macro_history is None:
                 self._macro_history = MacroHistoryService()
 
+            if session_id not in self._macro_locks:
+                self._macro_locks[session_id] = asyncio.Lock()
             async with self._macro_locks[session_id]:
                 if session_id not in self._macro_state:
                     self._macro_state[session_id] = await self._macro_controller.get_baseline()
@@ -87,6 +89,8 @@ class MacroHooksMixin:
         if kg_state is None:
             return
 
+        if session_id not in self._macro_locks:
+            self._macro_locks[session_id] = asyncio.Lock()
         async with self._macro_locks[session_id]:
             # Initialize GenericMacroState from active_metrics if not yet cached
             if session_id not in self._macro_state:
@@ -278,6 +282,8 @@ class MacroHooksMixin:
             )
 
             if adjustments and session_id in self._macro_state:
+                if session_id not in self._macro_locks:
+                    self._macro_locks[session_id] = asyncio.Lock()
                 async with self._macro_locks[session_id]:
                     current = self._macro_state[session_id]
                     updates: dict[str, Any] = {}
@@ -625,6 +631,8 @@ class MacroHooksMixin:
                 macro_adjustments["hsi_level"] = -round(relocate_count * 30.0, 2)
 
             if macro_adjustments and session_id in self._macro_state:
+                if session_id not in self._macro_locks:
+                    self._macro_locks[session_id] = asyncio.Lock()
                 async with self._macro_locks[session_id]:
                     current = self._macro_state[session_id]
                     updates: dict[str, Any] = {}
