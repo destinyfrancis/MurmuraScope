@@ -726,6 +726,12 @@ class SimulationRunner(
                     session_id,
                     self._process_wealth_transfers(session_id, round_num),
                 )
+            # Supply chain cascade: propagate disruption through KG edges (kg_driven only)
+            if self._kg_mode.get(session_id):
+                self._create_tracked_task(
+                    session_id,
+                    self._process_supply_chain_cascade(session_id, round_num),
+                )
         if round_num > 0 and round_num % hc.news_shock_interval == 0:
             self._create_tracked_task(
                 session_id,

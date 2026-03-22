@@ -182,3 +182,61 @@ class KGHooksMixin:
                 "_init_social_network failed for session=%s — continuing without social network",
                 session_id,
             )
+
+    async def _process_supply_chain_cascade(
+        self, session_id: str, round_number: int
+    ) -> None:
+        """Group 3 periodic: propagate supply chain disruption through KG edges.
+
+        Fires every macro_feedback_interval rounds (default 5) for kg_driven
+        sessions. Checks for entities with supply_chain_disruption > 0.3 and
+        cascades revenue impacts to downstream entities.
+        """
+        try:
+            from backend.app.utils.db import get_db  # noqa: PLC0415
+            from backend.app.services.supply_chain_cascade import (  # noqa: PLC0415
+                propagate_supply_chain_shock,
+            )
+
+            # Find entities currently under disruption (supply_chain_disruption > 0.3)
+            async with get_db() as db:
+                cursor = await db.execute(
+                    """SELECT DISTINCT source_id
+                       FROM kg_edges
+                       WHERE session_id = ?
+                         AND relation_type = 'SUPPLIES_TO'""",
+                    (session_id,),
+                )
+                rows = await cursor.fetchall()
+
+            if not rows:
+                return
+
+            # Use macro state to determine if supply chain disruption is active
+            macro_state = getattr(self, "_macro_states", {}).get(session_id)
+            if macro_state is None or macro_state.supply_chain_disruption < 0.3:
+                return
+
+            # Identify failed entities: for now, use entities with highest centrality
+            # as proxies for disrupted upstream nodes
+            failed_ids = frozenset(row["source_id"] for row in rows[:5])
+
+            effects = await propagate_supply_chain_shock(
+                session_id=session_id,
+                failed_entity_ids=failed_ids,
+            )
+
+            if effects:
+                logger.info(
+                    "Supply chain cascade: session=%s round=%d effects=%d",
+                    session_id[:8],
+                    round_number,
+                    len(effects),
+                )
+
+        except Exception:
+            logger.exception(
+                "_process_supply_chain_cascade failed session=%s round=%d",
+                session_id[:8],
+                round_number,
+            )
