@@ -205,6 +205,39 @@ class TestEmailNormalization:
 
 
 class TestAuthSecretKeyConfiguration:
+    @pytest.fixture(autouse=True)
+    def _restore_auth_module(self):
+        """Reload auth module after each test to undo any destructive reloads.
+
+        importlib.reload() inside a test that triggers SystemExit leaves the
+        module's router with no routes registered (SystemExit fires before the
+        @router.post decorators run). Without this teardown subsequent tests
+        that import `from backend.app.api.auth import router` would see an
+        empty router.
+
+        We set env vars directly in teardown (not via monkeypatch) because
+        monkeypatch restores the environment before our yield-teardown runs.
+        """
+        yield
+        import importlib
+        import os
+        import backend.app.api.auth as auth_module
+        original_secret = os.environ.get("AUTH_SECRET_KEY")
+        original_debug = os.environ.get("DEBUG")
+        try:
+            os.environ["AUTH_SECRET_KEY"] = "test-secret-key-for-pytest-do-not-use-in-production"
+            os.environ.pop("DEBUG", None)
+            importlib.reload(auth_module)
+        finally:
+            if original_secret is not None:
+                os.environ["AUTH_SECRET_KEY"] = original_secret
+            else:
+                os.environ.pop("AUTH_SECRET_KEY", None)
+            if original_debug is not None:
+                os.environ["DEBUG"] = original_debug
+            else:
+                os.environ.pop("DEBUG", None)
+
     @pytest.mark.unit
     def test_auth_secret_key_uses_env_when_set(self, monkeypatch):
         """AUTH_SECRET_KEY must use the env var value when set."""

@@ -29,8 +29,6 @@ jobs:
       - name: Run unit tests with coverage
         run: |
           pytest -m "not integration and not slow" \
-            --deselect backend/tests/test_auth_ratelimit.py::test_rate_limiter_is_configured \
-            --deselect backend/tests/test_auth_ratelimit.py::test_register_route_exists \
             --cov=backend/app \
             --cov-report=xml \
             --cov-report=term-missing \
