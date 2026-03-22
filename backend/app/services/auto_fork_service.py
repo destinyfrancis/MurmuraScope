@@ -120,6 +120,7 @@ async def fork_at_tipping_point(
 
     try:
         async with get_db() as db:
+            await db.execute("BEGIN IMMEDIATE")
             # Fetch parent session metadata
             row = await (
                 await db.execute(
@@ -298,6 +299,41 @@ async def fork_at_tipping_point(
                     )
                 except Exception:
                     logger.debug("cognitive_dissonance copy skipped (table may not exist)")
+
+            # Copy kg_nodes (entity metadata for the knowledge graph)
+            for branch_id in (natural_id, nudged_id):
+                try:
+                    await db.execute(
+                        """INSERT OR IGNORE INTO kg_nodes
+                           (id, session_id, entity_type, title, description,
+                            properties, created_at)
+                           SELECT id || '_' || ?, ?, entity_type, title, description,
+                                  properties, datetime('now')
+                           FROM kg_nodes WHERE session_id = ?""",
+                        (branch_id[:8], branch_id, session_id),
+                    )
+                except Exception:
+                    logger.debug("kg_nodes copy skipped (table may not exist)")
+
+            # Copy relationship_states up to fork round
+            for branch_id in (natural_id, nudged_id):
+                try:
+                    await db.execute(
+                        """INSERT OR IGNORE INTO relationship_states
+                           (session_id, agent_a_id, agent_b_id, round_number,
+                            intimacy, passion, commitment, satisfaction,
+                            alternatives, investment, trust,
+                            interaction_count, rounds_since_change, updated_at)
+                           SELECT ?, agent_a_id, agent_b_id, round_number,
+                                  intimacy, passion, commitment, satisfaction,
+                                  alternatives, investment, trust,
+                                  interaction_count, rounds_since_change, datetime('now')
+                           FROM relationship_states
+                           WHERE session_id = ? AND round_number <= ?""",
+                        (branch_id, session_id, round_num),
+                    )
+                except Exception:
+                    logger.debug("relationship_states copy skipped (table may not exist)")
 
             # Persist nudged beliefs as round fork_round+1 belief_snapshot
             # so the nudged branch starts with altered beliefs
