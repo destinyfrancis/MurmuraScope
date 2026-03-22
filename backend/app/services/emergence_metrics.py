@@ -45,9 +45,15 @@ _MIN_SAMPLES: int = 30
 
 # Emergence detection threshold (nats): mean TDMI above this → "detected"
 # Audit fix (2026-03-20): raised 0.01 → 0.02 to reduce false positives.
-# 0.01 nats is near the noise floor of the KNN estimator on small samples;
-# 0.02 requires a more meaningful degree of temporal information persistence.
+# 0.02 is used as a static fallback only; prefer the permutation null-model
+# threshold when sufficient data is available (see _permutation_threshold).
 _EMERGENCE_THRESHOLD: float = 0.02
+
+# Number of permutation shuffles for null-model calibration of TDMI.
+# Shuffling breaks temporal structure → the 95th percentile of MI scores
+# from shuffled data gives a data-adaptive significance boundary.
+_PERMUTATION_SHUFFLES: int = 200
+_PERMUTATION_QUANTILE: float = 0.95
 
 
 @dataclass(frozen=True)
@@ -78,6 +84,12 @@ class EmergenceMetricsSummary:
 class EmergenceMetricsCalculator:
     """Compute and persist TDMI from the ``belief_states`` table.
 
+    Uses a permutation null-model for significance testing: shuffle temporal
+    indices to break autocorrelation structure, compute MI on shuffled data
+    ``_PERMUTATION_SHUFFLES`` times, and use the 95th percentile as the
+    data-adaptive detection threshold.  Falls back to ``_EMERGENCE_THRESHOLD``
+    when insufficient data for stable permutation estimates.
+
     Usage::
 
         calc = EmergenceMetricsCalculator()
@@ -97,15 +109,21 @@ class EmergenceMetricsCalculator:
         Returns an :class:`EmergenceMetricsSummary` regardless of whether
         belief data is available (returns zero-valued summary on empty data).
         """
-        results = await self._compute_all_topics(session_id, round_number, lags)
+        results, perm_threshold = await self._compute_all_topics(
+            session_id, round_number, lags,
+        )
         await self._persist_results(session_id, round_number, results)
-        summary = _build_summary(session_id, round_number, results, self._THRESHOLD)
+        effective_threshold = perm_threshold if perm_threshold is not None else self._THRESHOLD
+        summary = _build_summary(session_id, round_number, results, effective_threshold)
         logger.info(
-            "TDMI session=%s round=%d n_topics=%d mean_tdmi=%.4f detected=%s",
+            "TDMI session=%s round=%d n_topics=%d mean_tdmi=%.4f "
+            "threshold=%.4f (perm=%s) detected=%s",
             session_id,
             round_number,
             summary.n_topics,
             summary.mean_tdmi,
+            effective_threshold,
+            perm_threshold is not None,
             summary.emergence_detected,
         )
         return summary
@@ -119,12 +137,13 @@ class EmergenceMetricsCalculator:
         session_id: str,
         round_number: int,
         lags: tuple[int, ...],
-    ) -> list[TDMIResult]:
+    ) -> tuple[list[TDMIResult], float | None]:
+        """Return (results, permutation_threshold_or_None)."""
         try:
             import numpy as np  # noqa: PLC0415
         except ImportError:
             logger.warning("numpy unavailable — TDMI computation skipped")
-            return []
+            return [], None
 
         async with get_db() as db:
             cursor = await db.execute(
@@ -137,7 +156,7 @@ class EmergenceMetricsCalculator:
             rows = await cursor.fetchall()
 
         if not rows:
-            return []
+            return [], None
 
         # topic → agent_id → sorted [(round, stance)]
         topic_agent_series: dict[str, dict[str, list[tuple[int, float]]]] = defaultdict(
@@ -149,15 +168,17 @@ class EmergenceMetricsCalculator:
             )
 
         results: list[TDMIResult] = []
+        all_x_y_pairs: list[tuple["np.ndarray", "np.ndarray"]] = []
+
         for topic, agent_series in topic_agent_series.items():
             for lag in lags:
                 x_vals, y_vals = _collect_pairs(agent_series, lag, round_number)
                 if len(x_vals) < _MIN_SAMPLES:
                     continue
-                score = _histogram_mi(
-                    np.asarray(x_vals, dtype=np.float64),
-                    np.asarray(y_vals, dtype=np.float64),
-                )
+                x_arr = np.asarray(x_vals, dtype=np.float64)
+                y_arr = np.asarray(y_vals, dtype=np.float64)
+                score = _histogram_mi(x_arr, y_arr)
+                all_x_y_pairs.append((x_arr, y_arr))
                 results.append(
                     TDMIResult(
                         session_id=session_id,
@@ -169,7 +190,10 @@ class EmergenceMetricsCalculator:
                     )
                 )
 
-        return results
+        # Permutation null-model: shuffle y to destroy temporal structure,
+        # compute MI on shuffled pairs, use 95th percentile as threshold.
+        perm_threshold = _permutation_threshold(all_x_y_pairs, np)
+        return results, perm_threshold
 
     async def _persist_results(
         self,
@@ -223,6 +247,42 @@ def _collect_pairs(
                 x_vals.append(stance_t)
                 y_vals.append(round_to_stance[lagged])
     return x_vals, y_vals
+
+
+def _permutation_threshold(
+    pairs: list[tuple["np.ndarray", "np.ndarray"]],  # type: ignore[name-defined]
+    np: "module",  # type: ignore[name-defined]
+) -> float | None:
+    """Compute a data-adaptive TDMI significance threshold via permutation.
+
+    For each (x, y) pair, shuffle y ``_PERMUTATION_SHUFFLES`` times and
+    compute MI on the shuffled data (which has no real temporal structure).
+    The 95th percentile of all null MI values is the detection threshold.
+
+    Returns ``None`` when there are fewer than 3 valid pairs (not enough
+    data for a stable null distribution estimate).
+    """
+    if len(pairs) < 3:
+        return None
+
+    rng = np.random.RandomState(seed=42)
+    null_scores: list[float] = []
+
+    for x_arr, y_arr in pairs:
+        for _ in range(_PERMUTATION_SHUFFLES):
+            y_shuffled = y_arr.copy()
+            rng.shuffle(y_shuffled)
+            mi_null = _histogram_mi(x_arr, y_shuffled)
+            null_scores.append(mi_null)
+
+    if not null_scores:
+        return None
+
+    null_arr = np.asarray(null_scores, dtype=np.float64)
+    threshold = float(np.percentile(null_arr, _PERMUTATION_QUANTILE * 100))
+    # Ensure threshold is at least _EMERGENCE_THRESHOLD / 2 to avoid
+    # degenerate near-zero thresholds on very uniform data.
+    return max(threshold, _EMERGENCE_THRESHOLD * 0.5)
 
 
 def _histogram_mi(x: "np.ndarray", y: "np.ndarray") -> float:  # type: ignore[name-defined]

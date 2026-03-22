@@ -35,6 +35,13 @@ except ImportError:
     HAS_STATSMODELS = False
     logger.info("statsmodels not installed — VAR forecaster unavailable")
 
+try:
+    from statsmodels.tsa.stattools import kpss as _kpss_test
+
+    HAS_KPSS = True
+except ImportError:
+    HAS_KPSS = False
+
 # ---------------------------------------------------------------------------
 # VAR group definitions
 # ---------------------------------------------------------------------------
@@ -56,6 +63,170 @@ _MIN_VAR_POINTS = 20
 
 # Maximum VAR lag order (keep small for short macro series)
 _MAX_VAR_LAG = 4
+
+# ---------------------------------------------------------------------------
+# Stationarity pre-check (ADF + KPSS dual test)
+# ---------------------------------------------------------------------------
+
+_ADF_SIGNIFICANCE = 0.05
+_KPSS_SIGNIFICANCE = 0.05
+_MAX_DIFF_ORDER = 2
+
+
+@dataclass(frozen=True)
+class _StationarityInfo:
+    """Per-metric stationarity check result (internal).
+
+    Attributes:
+        metric: Metric name.
+        is_stationary: Whether the series is stationary after any needed differencing.
+        diff_order: Differencing order applied (0, 1, or 2).
+        adf_p: ADF test p-value at the final diff_order.
+        kpss_p: KPSS test p-value at the final diff_order (None if unavailable).
+    """
+
+    metric: str
+    is_stationary: bool
+    diff_order: int
+    adf_p: float
+    kpss_p: float | None
+
+
+def _check_stationarity(
+    series: np.ndarray,
+    metric_name: str,
+) -> _StationarityInfo:
+    """Check stationarity via ADF + KPSS dual test.
+
+    Both tests must agree for a confident determination:
+    - ADF rejects (p < 0.05) AND KPSS does NOT reject (p > 0.05) -> stationary
+    - If non-stationary, try differencing and re-test (up to d=2)
+
+    Returns:
+        _StationarityInfo with (is_stationary, diff_order).
+        (True, 0) if stationary in levels.
+        (True, 1) if stationary after 1st differencing.
+        (True, 2) if stationary after 2nd differencing.
+        (False, 0) if still non-stationary after d=2.
+    """
+    from statsmodels.tsa.stattools import adfuller  # noqa: PLC0415
+
+    def _is_stationary_at(arr: np.ndarray) -> tuple[bool, float, float | None]:
+        """Run ADF + KPSS on *arr*. Returns (stationary, adf_p, kpss_p)."""
+        if len(arr) < 8 or np.std(arr) == 0.0:
+            return False, 1.0, None
+
+        adf_result = adfuller(arr, autolag="AIC")
+        adf_p = float(adf_result[1])
+        adf_ok = adf_p < _ADF_SIGNIFICANCE
+
+        kpss_p: float | None = None
+        if HAS_KPSS:
+            try:
+                _, kpss_p_val, _, _ = _kpss_test(arr, regression="c", nlags="auto")
+                kpss_p = float(kpss_p_val)
+                kpss_ok = kpss_p > _KPSS_SIGNIFICANCE
+                # Both must agree
+                return adf_ok and kpss_ok, adf_p, kpss_p
+            except Exception:
+                logger.debug(
+                    "KPSS test failed for %s — falling back to ADF only",
+                    metric_name,
+                )
+
+        # ADF-only fallback
+        return adf_ok, adf_p, kpss_p
+
+    current = series.copy()
+    last_adf_p: float = 1.0
+    last_kpss_p: float | None = None
+
+    for d in range(_MAX_DIFF_ORDER + 1):
+        if d > 0:
+            current = np.diff(current)
+        if len(current) < 8:
+            break
+
+        stationary, last_adf_p, last_kpss_p = _is_stationary_at(current)
+        if stationary:
+            return _StationarityInfo(
+                metric=metric_name,
+                is_stationary=True,
+                diff_order=d,
+                adf_p=last_adf_p,
+                kpss_p=last_kpss_p,
+            )
+
+    # Still non-stationary after max differencing
+    return _StationarityInfo(
+        metric=metric_name,
+        is_stationary=False,
+        diff_order=0,
+        adf_p=last_adf_p,
+        kpss_p=last_kpss_p,
+    )
+
+
+def _apply_differencing(data_matrix: np.ndarray, diff_order: int) -> np.ndarray:
+    """Apply *diff_order* rounds of first-differencing along axis 0.
+
+    Returns a new array (never mutates the input).
+    """
+    result = data_matrix
+    for _ in range(diff_order):
+        result = np.diff(result, axis=0)
+    return result
+
+
+def _invert_differencing(
+    forecasted: np.ndarray,
+    original_tail: np.ndarray,
+    diff_order: int,
+) -> np.ndarray:
+    """Invert differencing on forecasted values using the original series tail.
+
+    Args:
+        forecasted: (horizon, K) array of forecasts in differenced space.
+        original_tail: Tail of the original (undifferenced) series. Must have
+            at least *diff_order* rows. Shape (>=diff_order, K).
+        diff_order: Number of differencing rounds to undo.
+
+    Returns:
+        (horizon, K) array of forecasts in level space.
+    """
+    if diff_order == 0:
+        return forecasted
+
+    # Build the integration anchors from the original data tail
+    # For d=1: anchor = last original value
+    # For d=2: we need to undo two levels of cumsum
+    result = forecasted.copy()
+    # We need d rows from the tail for anchoring
+    anchors = original_tail[-diff_order:]  # shape (diff_order, K)
+
+    for d_inv in range(diff_order):
+        # Undo one level of differencing: cumulative sum anchored to prior level
+        # The anchor for this inversion is the last value of the series at the
+        # current differencing level. For the first inversion (innermost diff),
+        # we use the diff^(diff_order-1) of the original tail.
+        if diff_order == 1:
+            anchor_row = original_tail[-1]  # shape (K,)
+        elif diff_order == 2 and d_inv == 0:
+            # First inversion: anchor is last first-difference of original
+            anchor_row = original_tail[-1] - original_tail[-2]  # shape (K,)
+        else:
+            # Second inversion (d_inv=1, diff_order=2): anchor is last level
+            anchor_row = original_tail[-1]  # shape (K,)
+
+        level = np.empty_like(result)
+        prev = anchor_row
+        for h in range(result.shape[0]):
+            prev = prev + result[h]
+            level[h] = prev
+        result = level
+
+    return result
+
 
 # ---------------------------------------------------------------------------
 # Result dataclass
@@ -145,35 +316,92 @@ class VARForecaster:
             )
             return None
 
-        # Johansen cointegration test (informational — VAR still fitted)
-        var_diagnostics: dict = {}
-        try:
-            from statsmodels.tsa.vector_ar.vecm import coint_johansen  # noqa: PLC0415
-            johansen_result = coint_johansen(data_matrix, det_order=0, k_ar_diff=1)
-            trace_stats = johansen_result.lr1.tolist()
-            crit_5pct = johansen_result.cvt[:, 1].tolist()  # 5% critical values
-            is_cointegrated = any(t > c for t, c in zip(trace_stats, crit_5pct))
-            var_diagnostics["johansen_cointegrated"] = is_cointegrated
-            var_diagnostics["johansen_trace_stats"] = [round(t, 4) for t in trace_stats]
-            var_diagnostics["johansen_crit_5pct"] = [round(c, 4) for c in crit_5pct]
-            if is_cointegrated:
-                coint_rank = sum(
-                    1 for t, c in zip(trace_stats, crit_5pct) if t > c
-                )
-                var_diagnostics["coint_rank"] = coint_rank
-                logger.info(
-                    "VAR group=%s: Johansen test indicates cointegration "
-                    "(rank=%d), fitting VECM",
-                    group_name, coint_rank,
-                )
-        except Exception as exc:
-            logger.debug("Johansen test skipped for group=%s: %s", group_name, exc)
-            var_diagnostics["johansen_cointegrated"] = None
-            is_cointegrated = False
+        # ----- Stationarity pre-check (ADF + KPSS) -----
+        stationarity_infos: list[_StationarityInfo] = []
+        for k_idx, metric in enumerate(metrics_order):
+            info = _check_stationarity(data_matrix[:, k_idx], metric)
+            stationarity_infos.append(info)
+            logger.debug(
+                "Stationarity %s: stationary=%s d=%d adf_p=%.4f kpss_p=%s",
+                metric, info.is_stationary, info.diff_order,
+                info.adf_p, info.kpss_p,
+            )
 
-        try:
-            if is_cointegrated:
-                coint_rank = var_diagnostics.get("coint_rank", 1)
+        any_non_stationary = any(
+            info.diff_order > 0 or not info.is_stationary
+            for info in stationarity_infos
+        )
+
+        var_diagnostics: dict = {
+            "stationarity": {
+                info.metric: {
+                    "is_stationary": info.is_stationary,
+                    "diff_order": info.diff_order,
+                    "adf_p": round(info.adf_p, 6),
+                    "kpss_p": round(info.kpss_p, 6) if info.kpss_p is not None else None,
+                }
+                for info in stationarity_infos
+            },
+        }
+
+        # ----- Johansen cointegration test -----
+        # Run on ORIGINAL (undifferenced) data. Cointegration is a property
+        # of I(1) series sharing a long-run equilibrium; differencing first
+        # would destroy that relationship.
+        is_cointegrated = False
+        if any_non_stationary:
+            try:
+                from statsmodels.tsa.vector_ar.vecm import coint_johansen  # noqa: PLC0415
+                johansen_result = coint_johansen(data_matrix, det_order=0, k_ar_diff=1)
+                trace_stats = johansen_result.lr1.tolist()
+                crit_5pct = johansen_result.cvt[:, 1].tolist()
+                is_cointegrated = any(t > c for t, c in zip(trace_stats, crit_5pct))
+                var_diagnostics["johansen_cointegrated"] = is_cointegrated
+                var_diagnostics["johansen_trace_stats"] = [round(t, 4) for t in trace_stats]
+                var_diagnostics["johansen_crit_5pct"] = [round(c, 4) for c in crit_5pct]
+                if is_cointegrated:
+                    coint_rank = sum(
+                        1 for t, c in zip(trace_stats, crit_5pct) if t > c
+                    )
+                    # Clamp rank to [1, K-1] — full rank means no cointegration
+                    n_vars = len(metrics_order)
+                    if coint_rank >= n_vars:
+                        is_cointegrated = False
+                        var_diagnostics["johansen_cointegrated"] = False
+                        logger.info(
+                            "VAR group=%s: Johansen full rank (%d/%d) — "
+                            "treating as stationary, no cointegration",
+                            group_name, coint_rank, n_vars,
+                        )
+                    else:
+                        var_diagnostics["coint_rank"] = coint_rank
+                        logger.info(
+                            "VAR group=%s: Johansen test indicates cointegration "
+                            "(rank=%d), fitting VECM on original data",
+                            group_name, coint_rank,
+                        )
+            except Exception as exc:
+                logger.debug("Johansen test skipped for group=%s: %s", group_name, exc)
+                var_diagnostics["johansen_cointegrated"] = None
+        else:
+            var_diagnostics["johansen_cointegrated"] = None
+
+        # ----- Model selection based on stationarity + cointegration -----
+        # Decision tree:
+        #   1. Cointegrated -> VECM on original data (VECM handles I(1) internally)
+        #   2. Non-stationary, not cointegrated -> difference, then VAR
+        #   3. Already stationary -> VAR on original data
+        original_data_matrix = data_matrix
+        group_diff_order = 0
+
+        if is_cointegrated:
+            # VECM on original (undifferenced) data — it handles differencing
+            # internally via the error correction term.
+            group_diff_order = 0
+            var_diagnostics["group_diff_order"] = 0
+
+            coint_rank = var_diagnostics.get("coint_rank", 1)
+            try:
                 try:
                     forecasts = self._fit_vecm_and_forecast(
                         group_name=group_name,
@@ -186,19 +414,64 @@ class VARForecaster:
                     var_diagnostics["model_type"] = "VECM"
                 except Exception as vecm_exc:
                     logger.warning(
-                        "VECM failed for group=%s (rank=%d): %s — falling back to VAR",
+                        "VECM failed for group=%s (rank=%d): %s — "
+                        "falling back to differenced VAR",
                         group_name, coint_rank, vecm_exc,
                     )
+                    var_diagnostics["vecm_fallback_reason"] = str(vecm_exc)
+                    # Fall back to differenced VAR
+                    group_diff_order = 1
+                    diff_data = _apply_differencing(data_matrix, 1)
+                    if diff_data.shape[0] < _MIN_VAR_POINTS:
+                        return None
                     forecasts = self._fit_and_forecast(
                         group_name=group_name,
                         metrics_order=metrics_order,
-                        data_matrix=data_matrix,
+                        data_matrix=diff_data,
                         period_labels=period_labels,
                         horizon=horizon,
                     )
                     var_diagnostics["model_type"] = "VAR"
-                    var_diagnostics["vecm_fallback_reason"] = str(vecm_exc)
-            else:
+                    var_diagnostics["group_diff_order"] = 1
+            except Exception as exc:
+                logger.warning(
+                    "VAR fitting failed for group=%s: %s", group_name, exc
+                )
+                return None
+        else:
+            # Non-cointegrated: apply differencing if needed
+            if any_non_stationary:
+                group_diff_order = max(
+                    (info.diff_order for info in stationarity_infos if info.is_stationary),
+                    default=0,
+                )
+                # If no series became stationary, use d=1 as best-effort
+                if all(not info.is_stationary for info in stationarity_infos):
+                    group_diff_order = 1
+                    logger.warning(
+                        "VAR group=%s: all series non-stationary after d=%d — "
+                        "applying d=1 as best-effort fallback",
+                        group_name, _MAX_DIFF_ORDER,
+                    )
+
+            var_diagnostics["group_diff_order"] = group_diff_order
+
+            if group_diff_order > 0:
+                data_matrix = _apply_differencing(data_matrix, group_diff_order)
+                n_obs = data_matrix.shape[0]
+                logger.info(
+                    "VAR group=%s: differenced d=%d, %d obs remaining",
+                    group_name, group_diff_order, n_obs,
+                )
+                if n_obs < _MIN_VAR_POINTS:
+                    logger.debug(
+                        "VAR skipped for group=%s after differencing: "
+                        "only %d obs (need %d)",
+                        group_name, n_obs, _MIN_VAR_POINTS,
+                    )
+                    return None
+
+            try:
                 forecasts = self._fit_and_forecast(
                     group_name=group_name,
                     metrics_order=metrics_order,
@@ -207,11 +480,20 @@ class VARForecaster:
                     horizon=horizon,
                 )
                 var_diagnostics["model_type"] = "VAR"
-        except Exception as exc:
-            logger.warning(
-                "VAR fitting failed for group=%s: %s", group_name, exc
+            except Exception as exc:
+                logger.warning(
+                    "VAR fitting failed for group=%s: %s", group_name, exc
+                )
+                return None
+
+        # Invert differencing on forecasted values to get level forecasts
+        if group_diff_order > 0:
+            forecasts = _invert_forecast_differencing(
+                forecasts=forecasts,
+                metrics_order=metrics_order,
+                original_data=original_data_matrix,
+                diff_order=group_diff_order,
             )
-            return None
 
         # VAR stability check — unstable model means unreliable forecasts
         is_stable = getattr(self, "_last_is_stable", True)
@@ -471,6 +753,68 @@ class VARForecaster:
             )
 
         return forecasts
+
+
+# ---------------------------------------------------------------------------
+# Differencing inversion for forecasts
+# ---------------------------------------------------------------------------
+
+
+def _invert_forecast_differencing(
+    forecasts: dict[str, ForecastResult],
+    metrics_order: list[str],
+    original_data: np.ndarray,
+    diff_order: int,
+) -> dict[str, ForecastResult]:
+    """Invert differencing on all ForecastResult point values.
+
+    Reconstructs level-space forecasts from differenced-space forecasts
+    using the tail of the original undifferenced data as anchors.
+
+    Returns a new dict of ForecastResult objects (immutable — no mutation).
+    """
+    if diff_order == 0:
+        return forecasts
+
+    # Build a (horizon, K) matrix of differenced forecasts
+    first_key = metrics_order[0]
+    horizon = len(forecasts[first_key].points)
+    n_metrics = len(metrics_order)
+
+    diff_fc = np.zeros((horizon, n_metrics), dtype=np.float64)
+    for k_idx, metric in enumerate(metrics_order):
+        for h, pt in enumerate(forecasts[metric].points):
+            diff_fc[h, k_idx] = pt.value
+
+    # Invert to level space
+    level_fc = _invert_differencing(diff_fc, original_data, diff_order)
+
+    # Rebuild ForecastResult objects with corrected values and intervals
+    new_forecasts: dict[str, ForecastResult] = {}
+    for k_idx, metric in enumerate(metrics_order):
+        old_result = forecasts[metric]
+        new_points: list[ForecastPoint] = []
+        for h, old_pt in enumerate(old_result.points):
+            # Shift intervals by the same offset as the point value
+            offset = level_fc[h, k_idx] - old_pt.value
+            new_points.append(ForecastPoint(
+                period=old_pt.period,
+                value=round(level_fc[h, k_idx], 6),
+                lower_80=round(old_pt.lower_80 + offset, 6),
+                upper_80=round(old_pt.upper_80 + offset, 6),
+                lower_95=round(old_pt.lower_95 + offset, 6),
+                upper_95=round(old_pt.upper_95 + offset, 6),
+            ))
+        new_forecasts[metric] = ForecastResult(
+            metric=old_result.metric,
+            horizon=old_result.horizon,
+            points=new_points,
+            model_used=old_result.model_used,
+            fit_quality=old_result.fit_quality,
+            diagnostics=old_result.diagnostics,
+        )
+
+    return new_forecasts
 
 
 # ---------------------------------------------------------------------------

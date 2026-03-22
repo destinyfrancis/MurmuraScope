@@ -37,8 +37,16 @@ _GRADE_THRESHOLDS: list[tuple[float, str]] = [
     (0.0,  "F"),
 ]
 
-# Reference Brier score for an uninformative (always-p=0.5) predictor.
-_BRIER_REFERENCE = 0.25
+def _climatological_brier(base_rate: float) -> float:
+    """Brier score of a climatological (always-predict-base-rate) forecast.
+
+    A predictor that always outputs P(up) = base_rate achieves
+    BS_clim = base_rate * (1 - base_rate).  This is the proper reference
+    for the Brier Skill Score, replacing the previous hardcoded 0.25 which
+    implicitly assumed a perfectly balanced 50/50 dataset.
+    """
+    p = max(0.01, min(0.99, base_rate))  # guard against degenerate extremes
+    return p * (1.0 - p)
 
 
 def _score_metric(result: ValidationResult) -> float:
@@ -50,14 +58,16 @@ def _score_metric(result: ValidationResult) -> float:
       - 1 - min(MAPE, 1):    20%
       - Brier skill score:   20%
 
-    Brier skill score = max(0, 1 - BS / 0.25) where 0.25 is the uninformative
-    baseline (always predicting p=0.5). A perfect probabilistic predictor scores
-    1.0; random scores 0.0; worse than random is clamped to 0.0.
+    Brier skill score = max(0, 1 - BS / BS_clim) where BS_clim = p*(1-p)
+    is the climatological baseline derived from the dataset's actual
+    prevalence of "up" movements.  This properly credits the model
+    relative to a naive always-predict-base-rate strategy.
     """
     dir_score = result.directional_accuracy
     corr_score = abs(result.pearson_r)
     mape_score = max(0.0, 1.0 - min(result.mape, 1.0))
-    brier_skill = max(0.0, 1.0 - result.brier_score / _BRIER_REFERENCE)
+    brier_ref = _climatological_brier(getattr(result, "base_rate", 0.5))
+    brier_skill = max(0.0, 1.0 - result.brier_score / brier_ref) if brier_ref > 1e-9 else 0.0
     return 0.3 * dir_score + 0.3 * corr_score + 0.2 * mape_score + 0.2 * brier_skill
 
 

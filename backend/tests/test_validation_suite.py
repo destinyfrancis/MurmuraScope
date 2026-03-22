@@ -47,7 +47,7 @@ def _random_walk(n: int = 200) -> list[float]:
 
 
 class TestStationarityStationary:
-    """White noise should be detected as stationary by ADF."""
+    """White noise should be detected as stationary by ADF + KPSS."""
 
     def test_is_stationary(self) -> None:
         series = _white_noise(200)
@@ -63,6 +63,23 @@ class TestStationarityStationary:
         result = validate_stationarity(series, "white_noise")
 
         assert result.differencing_applied is False
+
+    def test_kpss_p_value_populated(self) -> None:
+        """KPSS p-value should be present in the result."""
+        series = _white_noise(200)
+        result = validate_stationarity(series, "white_noise")
+
+        # kpss_p_value should be either float or None (if KPSS unavailable)
+        if result.kpss_p_value is not None:
+            assert isinstance(result.kpss_p_value, float)
+            # For a stationary series, KPSS should NOT reject (p > 0.05)
+            assert result.kpss_p_value > 0.05
+
+    def test_has_kpss_field(self) -> None:
+        """StationarityResult should always have kpss_p_value attribute."""
+        series = _white_noise(50)
+        result = validate_stationarity(series, "test")
+        assert hasattr(result, "kpss_p_value")
 
 
 class TestStationarityRandomWalk:
@@ -81,6 +98,16 @@ class TestStationarityRandomWalk:
         else:
             assert result.p_value > 0.05
 
+    def test_kpss_agrees_with_adf_on_differenced(self) -> None:
+        """After differencing a random walk, both ADF and KPSS should agree."""
+        series = _random_walk(200)
+        result = validate_stationarity(series, "random_walk")
+
+        if result.is_stationary and result.kpss_p_value is not None:
+            # ADF rejected (p < 0.05) AND KPSS did not reject (p > 0.05)
+            assert result.p_value < 0.05
+            assert result.kpss_p_value > 0.05
+
 
 class TestStationarityShortSeries:
     """Series with fewer than 8 points should return gracefully."""
@@ -94,6 +121,26 @@ class TestStationarityShortSeries:
         assert result.is_stationary is False
         assert result.p_value == 1.0
         assert result.lags_used == 0
+        assert result.kpss_p_value is None
+
+
+class TestStationarityDualTest:
+    """Verify ADF+KPSS dual test agreement logic."""
+
+    def test_trend_stationary_may_disagree(self) -> None:
+        """A trend-stationary series may cause ADF/KPSS disagreement."""
+        # Series with deterministic trend + noise
+        rng = np.random.RandomState(55)
+        n = 200
+        trend = np.linspace(0, 10, n)
+        noise = rng.normal(0, 1, size=n)
+        series = (trend + noise).tolist()
+
+        result = validate_stationarity(series, "trend")
+
+        # Result should be valid regardless of agreement
+        assert isinstance(result, StationarityResult)
+        assert hasattr(result, "kpss_p_value")
 
 
 # ---------------------------------------------------------------------------
@@ -256,6 +303,7 @@ class TestValidationReport:
         stat = StationarityResult(
             metric="cpi", adf_statistic=-3.5, p_value=0.01,
             is_stationary=True, lags_used=2, differencing_applied=False,
+            kpss_p_value=0.10,
         )
         granger = GrangerResult(
             cause_metric="sentiment", effect_metric="cpi",

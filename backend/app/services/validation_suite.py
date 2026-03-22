@@ -1,7 +1,7 @@
 """Statistical validation framework for the MurmuraScope prediction engine.
 
-Provides stationarity testing (ADF), Granger causality analysis,
-forecast accuracy metrics (MAPE, RMSE, Theil's U), and a full
+Provides stationarity testing (ADF + KPSS dual test), Granger causality
+analysis, forecast accuracy metrics (MAPE, RMSE, Theil's U), and a full
 validation report aggregating results from DB-sourced macro + sentiment data.
 
 Design notes:
@@ -23,6 +23,17 @@ from backend.app.utils.db import get_db
 from backend.app.utils.logger import get_logger
 
 logger = get_logger("validation_suite")
+
+# ---------------------------------------------------------------------------
+# Optional KPSS dependency
+# ---------------------------------------------------------------------------
+
+try:
+    from statsmodels.tsa.stattools import kpss as _kpss_test
+
+    _HAS_KPSS = True
+except ImportError:
+    _HAS_KPSS = False
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -62,7 +73,12 @@ _SENTIMENT_COLUMNS: tuple[str, ...] = (
 
 @dataclass(frozen=True)
 class StationarityResult:
-    """ADF stationarity test result for a single indicator series."""
+    """ADF + KPSS dual stationarity test result for a single indicator series.
+
+    Both tests must agree for a confident determination:
+    - ADF rejects (p < 0.05) AND KPSS does NOT reject (p > 0.05) -> stationary
+    - If only ADF is available, falls back to ADF-only.
+    """
 
     metric: str
     adf_statistic: float
@@ -70,6 +86,7 @@ class StationarityResult:
     is_stationary: bool
     lags_used: int
     differencing_applied: bool
+    kpss_p_value: float | None = None
 
 
 @dataclass(frozen=True)
@@ -123,6 +140,7 @@ class ValidationReport:
     overall_score: float
     warnings: tuple[str, ...]
     data_sources_used: dict[str, Any]
+    garch_results: tuple[Any, ...] = ()  # tuple[GARCHResult, ...] — lazy import to avoid circular
 
 
 # ---------------------------------------------------------------------------
@@ -180,15 +198,49 @@ def _is_constant(series: list[float]) -> bool:
 # ---------------------------------------------------------------------------
 
 
+def _run_kpss(arr: np.ndarray, metric_name: str) -> float | None:
+    """Run KPSS test, returning p-value or None on failure/unavailability."""
+    if not _HAS_KPSS:
+        return None
+    try:
+        _, kpss_p_val, _, _ = _kpss_test(arr, regression="c", nlags="auto")
+        return float(kpss_p_val)
+    except Exception:
+        logger.debug("KPSS test failed for %s — using ADF result only", metric_name)
+        return None
+
+
+def _is_dual_stationary(
+    adf_p: float,
+    kpss_p: float | None,
+) -> bool:
+    """Determine stationarity from ADF + KPSS dual test.
+
+    Both tests must agree for a confident determination:
+    - ADF rejects (p < 0.05) AND KPSS does NOT reject (p > 0.05) -> stationary
+    - Falls back to ADF-only if KPSS is unavailable.
+    """
+    adf_ok = adf_p <= _ADF_SIGNIFICANCE
+    if kpss_p is not None:
+        kpss_ok = kpss_p > _ADF_SIGNIFICANCE  # KPSS null = stationary
+        return adf_ok and kpss_ok
+    return adf_ok
+
+
 def validate_stationarity(
     series: list[float],
     metric_name: str,
 ) -> StationarityResult:
-    """Run the Augmented Dickey-Fuller test on *series*.
+    """Run ADF + KPSS dual stationarity test on *series*.
 
-    If the raw series is non-stationary (p > 0.05), a first-differenced
-    version is tested and the result reflects the differenced series with
+    Both tests must agree for a confident determination:
+    - ADF rejects (p < 0.05) AND KPSS does NOT reject (p > 0.05) -> stationary
+
+    If the raw series is non-stationary, a first-differenced version is tested
+    and the result reflects the differenced series with
     ``differencing_applied=True``.
+
+    Falls back to ADF-only if KPSS is unavailable.
 
     Returns a frozen ``StationarityResult``.
     """
@@ -202,6 +254,7 @@ def validate_stationarity(
             is_stationary=False,
             lags_used=0,
             differencing_applied=False,
+            kpss_p_value=None,
         )
 
     arr = np.array(clean, dtype=np.float64)
@@ -209,8 +262,9 @@ def validate_stationarity(
     adf_stat: float = float(result[0])
     p_val: float = float(result[1])
     lags: int = int(result[2])
+    kpss_p = _run_kpss(arr, metric_name)
 
-    if p_val <= _ADF_SIGNIFICANCE:
+    if _is_dual_stationary(p_val, kpss_p):
         return StationarityResult(
             metric=metric_name,
             adf_statistic=adf_stat,
@@ -218,6 +272,7 @@ def validate_stationarity(
             is_stationary=True,
             lags_used=lags,
             differencing_applied=False,
+            kpss_p_value=kpss_p,
         )
 
     # Try first differencing
@@ -230,16 +285,21 @@ def validate_stationarity(
             is_stationary=False,
             lags_used=lags,
             differencing_applied=False,
+            kpss_p_value=kpss_p,
         )
 
     diff_result = adfuller(diffed, autolag="AIC")
+    diff_adf_p = float(diff_result[1])
+    diff_kpss_p = _run_kpss(diffed, f"{metric_name}_diff")
+
     return StationarityResult(
         metric=metric_name,
         adf_statistic=float(diff_result[0]),
-        p_value=float(diff_result[1]),
-        is_stationary=float(diff_result[1]) <= _ADF_SIGNIFICANCE,
+        p_value=diff_adf_p,
+        is_stationary=_is_dual_stationary(diff_adf_p, diff_kpss_p),
         lags_used=int(diff_result[2]),
         differencing_applied=True,
+        kpss_p_value=diff_kpss_p,
     )
 
 
@@ -811,6 +871,7 @@ async def run_full_validation(db: Any) -> ValidationReport:
 
     # --- 3b. ARCH test on naive forecast residuals ---
     arch: list[ARCHTestResult] = []
+    residuals_by_label: dict[str, list[float]] = {}
     for label, s in macro.items():
         if len(s) < _MIN_SERIES_LENGTH + 4:
             warnings.append(f"ARCH skipped for {label}: only {len(s)} points")
@@ -818,6 +879,26 @@ async def run_full_validation(db: Any) -> ValidationReport:
         # Naive residuals: actual[t] - actual[t-1]
         residuals = [s[i] - s[i - 1] for i in range(1, len(s))]
         arch.append(validate_arch_effects(residuals, label))
+        residuals_by_label[label] = residuals
+
+    # --- 3c. GARCH(1,1) fit for series with detected ARCH effects ---
+    from backend.app.services.garch_model import GARCHForecaster, GARCHResult  # noqa: PLC0415
+
+    garch: list[GARCHResult] = []
+    garch_forecaster = GARCHForecaster()
+    for arch_result in arch:
+        if not arch_result.has_arch_effects:
+            continue
+        residuals = residuals_by_label.get(arch_result.metric)
+        if residuals is None:
+            continue
+        garch_fit = garch_forecaster.fit(residuals, arch_result.metric)
+        if garch_fit is not None:
+            garch.append(garch_fit)
+        else:
+            warnings.append(
+                f"GARCH fit failed for {arch_result.metric} despite ARCH effects detected"
+            )
 
     # --- 4. Overall score ---
     score = _compute_overall_score(stationarity, granger, accuracy)
@@ -827,6 +908,7 @@ async def run_full_validation(db: Any) -> ValidationReport:
         granger_results=tuple(granger),
         forecast_accuracy=tuple(accuracy),
         arch_results=tuple(arch),
+        garch_results=tuple(garch),
         overall_score=score,
         warnings=tuple(warnings),
         data_sources_used=data_sources,

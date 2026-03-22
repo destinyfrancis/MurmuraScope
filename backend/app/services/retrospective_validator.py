@@ -146,6 +146,7 @@ class ValidationResult:
     period_start: str
     period_end: str
     brier_score: float = 0.25   # probabilistic calibration: 0 = perfect, 0.25 = random
+    base_rate: float = 0.5      # prevalence of "up" movements in actual data
 
 
 # ---------------------------------------------------------------------------
@@ -340,6 +341,7 @@ class RetrospectiveValidator:
                 n_observations=len(actual_values),
                 period_start=period_start,
                 period_end=period_end,
+                base_rate=accuracy_metrics.get("base_rate", 0.5),
             )
             results.append(result)
 
@@ -635,14 +637,20 @@ class RetrospectiveValidator:
             pred_prob_up = 1.0 / (1.0 + np.exp(-p_diff / scale))
             actual_up = (a_diff > 0).astype(np.float64)
             brier_score = float(np.mean((pred_prob_up - actual_up) ** 2))
+            # Base rate: fraction of actual "up" movements — used by
+            # ValidationReporter to compute Brier skill with a proper
+            # climatological baseline instead of the hardcoded 0.25.
+            base_rate = float(np.mean(actual_up))
         else:
             brier_score = 0.25  # uninformative default
+            base_rate = 0.5
 
         return {
             "directional_accuracy": round(directional_accuracy, 4),
             "pearson_r": round(pearson_r, 4),
             "mape": round(mape, 4),
             "brier_score": round(brier_score, 4),
+            "base_rate": round(base_rate, 4),
         }
 
     async def _persist_results(self, results: list[ValidationResult]) -> None:

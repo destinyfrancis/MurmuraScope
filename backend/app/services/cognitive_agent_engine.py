@@ -11,6 +11,7 @@ character-driven decisions (especially for relationship-oriented scenarios).
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any
 
@@ -236,21 +237,26 @@ def _build_deliberation_prompt(
 
 
 def _compute_risk_appetite(emotional_state: dict[str, Any]) -> float:
-    """Derive a risk appetite scalar [0, 1] from VAD emotional state.
+    """Derive a risk appetite scalar [0.1, 0.9] from VAD emotional state.
 
-    High arousal + negative valence → risk averse (0.2).
-    High arousal + positive valence → risk seeking (0.8).
-    Low arousal or neutral → risk neutral (0.5).
+    Arousal acts as a smooth amplifier (sigmoid centered at 0.5).
+    Valence determines direction via tanh mapping.
+    Low arousal → near 0.5 (neutral).  High arousal + negative valence → cautious.
+    High arousal + positive valence → bold.  Continuous — no step-function cliffs.
     """
-    valence = float(emotional_state.get("valence", 0.0))  # -1 to 1
-    arousal = float(emotional_state.get("arousal", 0.3))  # 0 to 1
+    valence = float(emotional_state.get("valence", 0.0))   # [-1, 1]
+    arousal = float(emotional_state.get("arousal", 0.3))    # [0, 1]
 
-    if arousal > 0.6:
-        if valence < -0.2:
-            return 0.2   # anxious / fearful → very cautious
-        if valence > 0.2:
-            return 0.8   # excited / enthusiastic → bold
-    return 0.5
+    # Smooth amplifier: ≈0 when arousal << 0.5, ≈1 when arousal >> 0.5
+    # Steepness=-6: smooth gradient (not quasi-binary like -12).
+    # At arousal=0.3 → amplifier≈0.23; 0.5→0.50; 0.7→0.77.
+    amplifier = 1.0 / (1.0 + math.exp(-6.0 * (arousal - 0.5)))
+
+    # Smooth direction from valence (saturates at extremes)
+    direction = math.tanh(2.0 * valence)
+
+    raw = 0.5 + 0.4 * amplifier * direction
+    return round(max(0.1, min(0.9, raw)), 3)
 
 
 def _build_relationship_block(
