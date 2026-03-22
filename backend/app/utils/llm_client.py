@@ -323,7 +323,7 @@ class LLMClient:
 
         if session_id and response.cost_usd > 0:
             from backend.app.services.cost_tracker import record_cost  # noqa: PLC0415
-            record_cost(session_id, response.cost_usd)
+            await record_cost(session_id, response.cost_usd)
 
         return response
 
