@@ -44,7 +44,7 @@ async function handleShare() {
     shareStatus.value = '分享失敗，請稍後再試'
   } finally {
     sharing.value = false
-    setTimeout(() => { shareStatus.value = '' }, 4000)
+    shareStatusTimer = setTimeout(() => { shareStatus.value = '' }, 4000)
   }
 }
 
@@ -84,6 +84,7 @@ const collapsedSteps = ref(new Set())
 
 const startTime = ref(null)
 const elapsedLabel = ref('0s')
+let shareStatusTimer = null
 let elapsedTimer = null
 
 function startElapsedTimer() {
@@ -313,6 +314,7 @@ onUnmounted(() => {
     typewriterTimer = null
   }
   if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
+  if (shareStatusTimer) { clearTimeout(shareStatusTimer); shareStatusTimer = null; }
 })
 
 // ---------------------------------------------------------------------------

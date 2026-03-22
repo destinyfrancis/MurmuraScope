@@ -144,6 +144,7 @@ const currentComponentProps = computed(() => {
 
 // Express mode: unmount-safe guard
 let _expressAdvanceCancelled = false
+const _expressTimeoutIds = []
 
 // --- Resource cleanup on navigation away or browser close ---
 function _releaseSessionResources() {
@@ -169,6 +170,8 @@ onMounted(() => {
 
 onUnmounted(() => {
   _expressAdvanceCancelled = true
+  _expressTimeoutIds.forEach(id => clearTimeout(id))
+  _expressTimeoutIds.length = 0
   window.removeEventListener('beforeunload', _onBeforeUnload)
   // Release resources when navigating away within the SPA
   if (session.sessionId) {
@@ -193,10 +196,16 @@ onMounted(async () => {
 
   // Auto-advance: briefly show each step as "auto-completed" before landing on Step 3
   currentStep.value = 1
-  await new Promise((r) => setTimeout(r, 600))
+  await new Promise((r) => {
+    const id = setTimeout(r, 600)
+    _expressTimeoutIds.push(id)
+  })
   if (_expressAdvanceCancelled) return
   currentStep.value = 2
-  await new Promise((r) => setTimeout(r, 400))
+  await new Promise((r) => {
+    const id = setTimeout(r, 400)
+    _expressTimeoutIds.push(id)
+  })
   if (_expressAdvanceCancelled) return
   currentStep.value = 3
 })
