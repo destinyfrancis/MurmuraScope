@@ -25,23 +25,16 @@ from backend.app.services.report_agent_xai import (
 from backend.app.services.report_section_generator import _truncate_observation
 from backend.app.services.simulation_ipc import SimulationIPC
 from backend.app.utils.db import get_db
-from backend.app.utils.llm_client import LLMClient, get_report_provider_model
+from backend.app.utils.llm_client import (
+    LLMClient,
+    get_default_client as _get_llm_client,
+    get_report_provider_model,
+)
 from backend.app.utils.logger import get_logger
 
 logger = get_logger("report_agent")
 
 _MAX_REACT_ITERATIONS = 10
-
-# Module-level LLM client — reused across all legacy ReACT calls to share
-# the httpx connection pool and avoid per-call socket leaks.
-_llm_client: LLMClient | None = None
-
-
-def _get_llm_client() -> LLMClient:
-    global _llm_client
-    if _llm_client is None:
-        _llm_client = LLMClient()
-    return _llm_client
 
 TOOLS: dict[str, str] = {
     "query_graph": (
