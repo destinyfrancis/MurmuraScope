@@ -2,6 +2,8 @@ from pydantic import BaseModel, ConfigDict
 
 
 class APIResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     success: bool
     data: dict | list | None = None
     error: str | None = None
