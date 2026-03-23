@@ -1,72 +1,74 @@
-# MurmuraScope
+# 👁️ MurmuraScope
+### Predict the Social Pulse | 預見社會脈動 | 預見社會脈動
 
-[English] | [繁體中文] | [简体中文]
+![License](https://img.shields.io/badge/license-Proprietary-red)
+![Platform](https://img.shields.io/badge/platform-Docker-blue)
+![Language](https://img.shields.io/badge/language-English%20%7C%20繁體中文%20%7C%20简体中文-green)
 
 ---
 
 ## 🌟 Overview / 概覽 / 概览
 
-**[EN]** MurmuraScope is a universal prediction engine that turns any text—news articles, novel excerpts, or geopolitical briefs—into a runnable social simulation. It helps you visualize how events might unfold by creating digital "agents" that interact based on the information you provide.
+**[EN]** MurmuraScope is a universal prediction engine that transforms any text into a high-fidelity social simulation. By dropping in news, articles, or reports, it automatically creates digital "agents" that interact, debate, and evolve, providing you with data-driven forecasts on social outcomes.
 
-**[繁中]** MurmuraScope 是一個通用的預測引擎，能將任何文本（如新聞文章、小說片段或地緣政治簡報）轉化為可運行的社會模擬。它透過創建數位「智能代理」，根據您提供的資訊進行互動，幫助您預見事件可能如何發展。
+**[繁中]** MurmuraScope 是一個通用的預測引擎，能將任何文本轉化為高真度的社會模擬。只需放入新聞、文章或報告，系統就會自動創建數位「智能代理」進行互動、辯論與演化，為您提供基於數據的社會發展預測。
 
-**[简中]** MurmuraScope 是一个通用的预测引擎，能将任何文本（如新闻文章、小说片段或地缘政治简报）转化为可运行的社会模拟。它通过创建数字“智能代理”，根据您提供的信息进行互动，帮助您预见事件可能如何发展。
-
----
-
-## 🚀 How it works / 工作原理 / 工作原理
-
-### 1. Paste Text / 貼上文本 / 贴上文本
-**[EN]** Drop in any text. The engine automatically identifies key people, organizations, and relationships.
-**[繁中]** 放入任何文本，引擎會自動識別關鍵人物、組織及其相互關係。
-**[简中]** 放入任何文本，引擎会自动识别关键人物、组织及其相互关系。
-
-### 2. Agents Appear / 代理生成 / 代理生成
-**[EN]** The system creates digital characters (agents) with distinct personalities, beliefs, and emotional states—no manual setup required.
-**[繁中]** 系統會自動創建具有獨特個性、信念和情緒狀態的數位角色（代理），無需手動設置。
-**[简中]** 系统会自动创建具有独特个性、信念和情绪状态的数字角色（代理），无需手动设置。
-
-### 3. Run Simulation / 運行模擬 / 运行模拟
-**[EN]** Agents interact, debate, and form groups. They update their beliefs as they "talk" to each other across multiple rounds.
-**[繁中]** 代理之間會進行互動、辯論並形成群體。他們在多輪「對話」中不斷更新自己的觀點。
-**[简中]** 代理之间会进行互动、辩论并形成群体。他们在多轮“对话”中不断更新自己的观点。
-
-### 4. Get Forecasts / 獲取預測 / 获取预测
-**[EN]** The engine runs hundreds of scenarios to give you probabilistic forecasts and data-driven insights.
-**[繁中]** 引擎會運行數百種場景，為您提供概率預測和數據驅動的洞察。
-**[简中]** 引擎会运行数百种场景，为您提供概率预测和数据驱动的洞察。
-
-### 5. Explore & Interact / 探索與互動 / 探索与互动
-**[EN]** "Interview" any agent to understand their logic, or introduce new events (shocks) to see how the simulation changes.
-**[繁中]** 您可以「採訪」任何代理以了解他們的邏輯，或加入突發事件（衝擊）來觀察模擬的變化。
-**[简中]** 您可以“采访”任何代理以了解他们的逻辑，或加入突发事件（冲击）来观察模拟的变化。
+**[简中]** MurmuraScope 是一个通用的预测引擎，能将任何文本转化为高真度的社会模拟。只需放入新闻、文章或报告，系统就会自动创建数字“智能代理”进行互动、辩论与演化，为您提供基于数据的社会发展预测。
 
 ---
 
-## 🛠 For Developers / 開發者指南 / 开发者指南
+## 🎯 Use Cases: When to use MurmuraScope?
+### 應用場景：MurmuraScope 能為你解決什麼？ | 应用场景：MurmuraScope 能为你解决什么？
 
-### Quickstart / 快速入門 / 快速入门
+| Scenario / 場景 / 场景 | How it helps / 運作方式 / 运作方式 |
+| :--- | :--- |
+| **Breaking News Reaction** <br> 突發新聞反應分析 | Predict how different social factions (e.g., conservatives vs. progressives) will react to a new policy or event. <br> 預測不同社會群體（如：保守派 vs 進取派）對新政策或事件的反應。 |
+| **Geopolitical Analysis** <br> 地緣政治分析 | Simulate potential escalations or diplomatic shifts based on recent strategic briefs. <br> 根據最新的戰略簡報，模擬潛在的局勢升級或外交轉向。 |
+| **Market Sentiment** <br> 市場情緒預測 | Understand how a new product launch or economic shift ripples through a community’s belief system. <br> 了解新產品發佈或經濟變動如何影響社群的信念體系。 |
+| **Crisis Management** <br> 危機管理模擬 | Test different "what-if" scenarios (Shocks) to see which intervention effectively calms social unrest. <br> 測試不同的「如果」場景（衝擊），觀察哪種干預措施能有效平息社會動盪。 |
+
+---
+
+## ✨ Key Features / 核心功能 / 核心功能
+
+*   **🧠 Instant Intelligence (無須設定，即時生成):** No manual agent creation. The engine extracts personalities (Big Five traits) and beliefs directly from your text.
+*   **📊 Probabilistic Forecasting (數據化預測):** Runs hundreds of "Monte Carlo" trials to give you clear confidence intervals and likelihoods, not just a single guess.
+*   **🗣️ Interactive Interviews (互動式採訪):** Don't just watch—talk to the agents. "Interview" digital characters to understand the logic behind their decisions.
+*   **⚡ Branching Realities (多重現實分支):** At any point, inject a "Shock" (e.g., a sudden rumor or a disaster) to see how it alters the future.
+
+---
+
+## 🚀 The 5-Step Workflow / 五步流程 / 五步流程
+
+1.  **Input (輸入):** Paste your source text. / 貼上您的原始文本。
+2.  **Extract (提取):** System builds a Knowledge Graph of people and organizations. / 系統自動建立人物與組織的知識圖譜。
+3.  **Generate (生成):** Up to 500+ unique agents appear with distinct psychological profiles. / 生成多達 500+ 個具有獨特心理特徵的代理。
+4.  **Simulate (模擬):** Watch rounds of debates, faction forming, and belief updates. / 觀察多輪辯論、派系形成和信念更新。
+5.  **Report (報告):** Receive a comprehensive AI-generated report with statistical charts. / 獲取包含統計圖表的 AI 生成詳盡報告。
+
+---
+
+## 🛠 Developer Quickstart / 開發者快速入門 / 开发者快速入门
 
 ```bash
-# Setup environment / 設置環境 / 设置环境
-cp .env.example .env        # Add API keys (OpenRouter & Google)
+# 1. Setup Environment
+cp .env.example .env
 
-# Run with Docker / 使用 Docker 運行 / 使用 Docker 运行
-docker compose up -d        # Frontend :8080 | Backend :5001
+# 2. Launch with Docker
+docker compose up -d
+
+# 3. Access
+# Frontend: http://localhost:8080
+# Backend API: http://localhost:5001
 ```
 
-### Tech Stack / 技術棧 / 技术栈
-- **Backend:** Python 3.11, FastAPI, SQLite (WAL mode)
-- **Analytical Queries:** DuckDB (High-speed columnar aggregation)
-- **Frontend:** Vue 3, Vite, TypeScript
-- **AI/LLMs:** OpenRouter (Agent deliberation), Google AI (Reports)
-- **Vector DB:** LanceDB (384-dim multilingual embeddings)
+<details>
+<summary><b>🔍 Technical Specifications (進階技術規格)</b></summary>
 
----
-
-## 📊 System Architecture / 系統架構 / 系统架构
-
-MurmuraScope uses a sophisticated multi-layered architecture to manage everything from individual agent cognition to complex statistical forecasting. For full technical details, including Monte Carlo ensembles and VAR/GARCH econometric models, please refer to the documentation in the `docs/` folder.
+- **Forecasting:** VAR/VECM, GARCH(1,1) for volatility, Monte Carlo ensembles.
+- **Cognition:** Bayesian belief updating, Big Five personality mapping.
+- **Stack:** FastAPI, Vue 3, DuckDB, LanceDB (Vector), SQLite (WAL).
+</details>
 
 ---
 
