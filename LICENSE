@@ -1,43 +1,17 @@
-PROPRIETARY SOFTWARE LICENSE
+# Prosperity Public License 2.0.0
 
-Copyright (c) 2026 MurmuraScope Engine. All Rights Reserved.
+This license allows you to use and share this software for non-commercial purposes for free.
 
-NOTICE: This software and its source code are proprietary and confidential.
-Unauthorized copying, modification, distribution, public display, or use of
-this software, in whole or in part, is strictly prohibited without the express
-prior written permission of the copyright holder.
+## Non-commercial Use
+You may use, copy, and share this software for any non-commercial purpose for free. "Non-commercial" means your use is not primarily intended for or directed toward commercial advantage or monetary compensation.
 
-PERMITTED USES
---------------
-No rights are granted to any third party under this license. All rights
-(including the right to use, copy, modify, merge, publish, distribute,
-sublicense, and/or sell copies of the Software) are reserved exclusively
-by the copyright holder.
+## Commercial Use
+If you want to use this software for commercial purposes, you must obtain a separate commercial license from the author.
 
-The source code is made available for inspection and evaluation purposes only.
-Viewing the source code does not grant any license to use, copy, or distribute
-the software.
+## Contributions
+If you contribute to this software, you grant the author a non-exclusive, royalty-free, perpetual, irrevocable, worldwide license to use and share your contributions.
 
-RESTRICTIONS
-------------
-You may NOT, without explicit written permission from the copyright holder:
+## No Warranty
+This software is provided "as is", without warranty of any kind, express or implied.
 
-1. Use this software for any commercial or non-commercial purpose
-2. Copy, reproduce, or duplicate this software in whole or in part
-3. Modify, adapt, translate, or create derivative works
-4. Distribute, publish, sublicense, sell, rent, lease, or transfer copies
-5. Reverse engineer, decompile, or disassemble the software
-6. Remove or alter any proprietary notices, labels, or marks
-7. Deploy this software as a service (SaaS, API, hosted platform, etc.)
-8. Use this software internally within any organisation or business
-
-COMMERCIAL LICENSING
---------------------
-For commercial licensing inquiries, partnership opportunities, or permitted
-use cases, please contact the copyright holder directly.
-
-DISCLAIMER
-----------
-THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED. THE COPYRIGHT HOLDER SHALL NOT BE LIABLE FOR ANY CLAIM, DAMAGES,
-OR OTHER LIABILITY ARISING FROM USE OR ATTEMPTED USE OF THIS SOFTWARE.
+Copyright (c) 2026 destinyfrancis. All rights reserved.
