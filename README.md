@@ -1,280 +1,75 @@
 # MurmuraScope
 
-A universal prediction engine that turns any text into a runnable social simulation.
-
-Drop in a news article, novel excerpt, or geopolitical brief — the engine automatically extracts actors, generates agents with distinct personalities and beliefs, runs the simulation, and outputs probabilistic forecasts with confidence intervals.
+[English] | [繁體中文] | [简体中文]
 
 ---
 
-## How it works — 5 steps
+## 🌟 Overview / 概覽 / 概览
 
-**Step 1 — Paste text.** The engine reads seed text, extracts entities and relationships into a knowledge graph, and generates up to 50 implied actors you didn't mention explicitly.
+**[EN]** MurmuraScope is a universal prediction engine that turns any text—news articles, novel excerpts, or geopolitical briefs—into a runnable social simulation. It helps you visualize how events might unfold by creating digital "agents" that interact based on the information you provide.
 
-**Step 2 — Agents appear.** Each agent gets Big Five personality traits, a three-dimensional emotional state, a Bayesian belief system, and a cognitive fingerprint. No manual configuration.
+**[繁中]** MurmuraScope 是一個通用的預測引擎，能將任何文本（如新聞文章、小說片段或地緣政治簡報）轉化為可運行的社會模擬。它透過創建數位「智能代理」，根據您提供的資訊進行互動，幫助您預見事件可能如何發展。
 
-**Step 3 — Simulation runs.** Agents interact across rounds: debate, form factions, update beliefs, propagate information. LLM deliberation for key stakeholders; rule-based lite hooks for background agents (cost-efficient).
-
-**Step 4 — Forecasts with numbers.** Monte Carlo ensemble (up to 500 trials), AutoARIMA + VAR time-series models, stationarity-checked before fitting, GARCH(1,1) for volatility during crises. Walk-forward backtesting with CRPS, Brier skill, MAPE, Pearson r.
-
-**Step 5 — Explore.** Interview any agent in character. Branch the simulation at any tipping point. Inject shocks. Compare counterfactuals.
+**[简中]** MurmuraScope 是一个通用的预测引擎，能将任何文本（如新闻文章、小说片段或地缘政治简报）转化为可运行的社会模拟。它通过创建数字“智能代理”，根据您提供的信息进行互动，帮助您预见事件可能如何发展。
 
 ---
 
-## Quickstart
+## 🚀 How it works / 工作原理 / 工作原理
+
+### 1. Paste Text / 貼上文本 / 贴上文本
+**[EN]** Drop in any text. The engine automatically identifies key people, organizations, and relationships.
+**[繁中]** 放入任何文本，引擎會自動識別關鍵人物、組織及其相互關係。
+**[简中]** 放入任何文本，引擎会自动识别关键人物、组织及其相互关系。
+
+### 2. Agents Appear / 代理生成 / 代理生成
+**[EN]** The system creates digital characters (agents) with distinct personalities, beliefs, and emotional states—no manual setup required.
+**[繁中]** 系統會自動創建具有獨特個性、信念和情緒狀態的數位角色（代理），無需手動設置。
+**[简中]** 系统会自动创建具有独特个性、信念和情绪状态的数字角色（代理），无需手动设置。
+
+### 3. Run Simulation / 運行模擬 / 运行模拟
+**[EN]** Agents interact, debate, and form groups. They update their beliefs as they "talk" to each other across multiple rounds.
+**[繁中]** 代理之間會進行互動、辯論並形成群體。他們在多輪「對話」中不斷更新自己的觀點。
+**[简中]** 代理之间会进行互动、辩论并形成群体。他们在多轮“对话”中不断更新自己的观点。
+
+### 4. Get Forecasts / 獲取預測 / 获取预测
+**[EN]** The engine runs hundreds of scenarios to give you probabilistic forecasts and data-driven insights.
+**[繁中]** 引擎會運行數百種場景，為您提供概率預測和數據驅動的洞察。
+**[简中]** 引擎会运行数百种场景，为您提供概率预测和数据驱动的洞察。
+
+### 5. Explore & Interact / 探索與互動 / 探索与互动
+**[EN]** "Interview" any agent to understand their logic, or introduce new events (shocks) to see how the simulation changes.
+**[繁中]** 您可以「採訪」任何代理以了解他們的邏輯，或加入突發事件（衝擊）來觀察模擬的變化。
+**[简中]** 您可以“采访”任何代理以了解他们的逻辑，或加入突发事件（冲击）来观察模拟的变化。
+
+---
+
+## 🛠 For Developers / 開發者指南 / 开发者指南
+
+### Quickstart / 快速入門 / 快速入门
 
 ```bash
-cp .env.example .env        # add OPENROUTER_API_KEY + GOOGLE_API_KEY
-docker compose up -d        # frontend :8080 · backend :5001
+# Setup environment / 設置環境 / 设置环境
+cp .env.example .env        # Add API keys (OpenRouter & Google)
+
+# Run with Docker / 使用 Docker 運行 / 使用 Docker 运行
+docker compose up -d        # Frontend :8080 | Backend :5001
 ```
 
-Or locally:
-```bash
-cd backend && uvicorn run:app --reload --port 5001
-cd frontend && npm run dev   # :5173
-```
+### Tech Stack / 技術棧 / 技术栈
+- **Backend:** Python 3.11, FastAPI, SQLite (WAL mode)
+- **Analytical Queries:** DuckDB (High-speed columnar aggregation)
+- **Frontend:** Vue 3, Vite, TypeScript
+- **AI/LLMs:** OpenRouter (Agent deliberation), Google AI (Reports)
+- **Vector DB:** LanceDB (384-dim multilingual embeddings)
 
 ---
 
-## Key commands
+## 📊 System Architecture / 系統架構 / 系统架构
 
-```bash
-make test           # unit tests (~2700 tests, ~20s)
-make test-int       # integration tests
-make test-cov       # coverage report → htmlcov/
-make test-changed   # only tests for files you changed
-make stop           # kill all simulation processes
-make docker-logs    # follow container logs
-```
+MurmuraScope uses a sophisticated multi-layered architecture to manage everything from individual agent cognition to complex statistical forecasting. For full technical details, including Monte Carlo ensembles and VAR/GARCH econometric models, please refer to the documentation in the `docs/` folder.
 
 ---
 
-## System Architecture
+## 📜 License / 許可證 / 许可证
 
-```mermaid
-graph TB
-    subgraph Client["Browser Client"]
-        UI["Vue 3 + Vite<br/>5-step workflow UI<br/>35+ components"]
-        WS_Client["WebSocket client<br/>live round progress"]
-    end
-
-    subgraph Gateway["API Gateway (FastAPI :5001)"]
-        Auth["auth router<br/>JWT · rate limits"]
-        GraphAPI["graph router<br/>KG build + query"]
-        SimAPI["simulation router<br/>start · shock · branch"]
-        ReportAPI["report router<br/>ReACT · PDF · share"]
-        WS_Server["ws router<br/>live events"]
-    end
-
-    subgraph Simulation["Simulation Engine"]
-        Runner["SimulationRunner<br/>OASIS subprocess orchestrator"]
-        KGHooks["KG-Driven Hooks<br/>deliberation · debate<br/>faction · belief propagation"]
-        MacroHooks["Macro Hooks<br/>VAR forecast · GARCH<br/>external feed"]
-        LiteHooks["Lite Hooks<br/>rule-based fallback<br/>zero LLM cost"]
-        Swarm["SwarmEnsemble<br/>Phase A→B fork<br/>N lite replicas"]
-    end
-
-    subgraph Agents["Agent Layer"]
-        CAE["CognitiveAgentEngine<br/>Big Five · attachment · strategy<br/>Bayesian belief update"]
-        KGFactory["KGAgentFactory<br/>3-stage: filter → profile → fingerprint"]
-        Memory["AgentMemoryService<br/>salience decay · vector search"]
-    end
-
-    subgraph Analytics["Analytics & Validation"]
-        VAR["VARForecaster<br/>ADF+KPSS stationarity<br/>Johansen cointegration"]
-        GARCH["GARCHForecaster<br/>Bollerslev MLE<br/>ARCH-LM auto-fit"]
-        MC["MonteCarloEngine<br/>500-trial LHS + t-Copula"]
-        Validate["ValidationReporter<br/>Brier skill · CRPS · MAPE<br/>walk-forward backtest"]
-        Emergence["EmergenceMetrics<br/>TDMI permutation null-model<br/>Louvain factions · JSD tipping"]
-    end
-
-    subgraph Storage["Storage Layer"]
-        SQLite["SQLite WAL<br/>55+ tables<br/>aiosqlite"]
-        DuckDB["DuckDB overlay<br/>read-only analytical queries<br/>columnar aggregation"]
-        LanceDB["LanceDB<br/>384-dim embeddings<br/>vector search"]
-    end
-
-    subgraph LLMs["LLM Providers"]
-        OpenRouter["OpenRouter<br/>agent deliberation<br/>gemini-flash-lite"]
-        Google["Google AI<br/>report generation<br/>gemini-pro"]
-    end
-
-    UI -->|REST + WebSocket| Gateway
-    WS_Client -->|ws://| WS_Server
-    Auth --> SimAPI
-    GraphAPI --> KGFactory
-    SimAPI --> Runner
-    ReportAPI --> Analytics
-
-    Runner --> KGHooks
-    Runner --> MacroHooks
-    Runner --> LiteHooks
-    Runner -->|Phase B| Swarm
-
-    KGHooks --> CAE
-    KGHooks --> Emergence
-    MacroHooks --> VAR
-    MacroHooks --> GARCH
-    MacroHooks --> MC
-
-    CAE --> Memory
-    CAE -->|LLM call| OpenRouter
-    ReportAPI -->|LLM call| Google
-
-    Runner --> SQLite
-    Analytics --> DuckDB
-    Memory --> LanceDB
-    DuckDB -.->|read-only scan| SQLite
-```
-
----
-
-## Simulation modes
-
-| Mode | Trigger | Agent source | Decision space |
-|------|---------|-------------|---------------|
-| `kg_driven` | Any non-HK seed | KGAgentFactory (LLM-generated) | ScenarioGenerator (LLM) |
-| `hk_demographic` | HK keywords in seed | HK Census AgentFactory | Hardcoded DecisionType enum |
-
-## Simulation presets
-
-| Preset | Agents | Rounds | Emergence |
-|--------|--------|--------|-----------|
-| FAST | 100 | 15 | Off |
-| STANDARD | 300 | 20 | On |
-| DEEP | 500 | 30 | On |
-| LARGE | 1,000 | 25 | On |
-| custom | up to 50,000 | up to 100 | On |
-
----
-
-## Backend structure
-
-```
-backend/
-├── app/
-│   ├── api/                  FastAPI routers (18 modules)
-│   │   ├── auth.py           JWT auth · rate limits
-│   │   ├── simulation.py     start · shock · branch · swarm
-│   │   ├── graph.py          KG build + temporal query
-│   │   ├── report.py         ReACT report · PDF · share
-│   │   └── ws.py             WebSocket live progress
-│   ├── services/             50+ business logic services
-│   │   ├── simulation_runner.py          OASIS subprocess orchestrator
-│   │   ├── simulation_hooks_kg_driven.py KG-driven round hooks
-│   │   ├── simulation_hooks_macro.py     macro feedback + external feed
-│   │   ├── simulation_lifecycle.py       run / stop / cleanup
-│   │   ├── lite_hooks.py                 rule-based LLM fallbacks
-│   │   ├── cognitive_agent_engine.py     LLM deliberation + risk appetite
-│   │   ├── belief_system.py              Bayesian update
-│   │   ├── var_forecaster.py             VAR / VECM + stationarity
-│   │   ├── garch_model.py                GARCH(1,1) volatility
-│   │   ├── emergence_metrics.py          TDMI + Louvain factions
-│   │   ├── validation_reporter.py        composite score A–F
-│   │   └── swarm_ensemble.py             probability cloud pipeline
-│   ├── models/               Pydantic (frozen) + frozen dataclasses
-│   ├── utils/
-│   │   ├── db.py             aiosqlite connection (WAL + FK enforcement)
-│   │   ├── duckdb_analytics.py  read-only analytical overlay
-│   │   ├── llm_client.py     provider-agnostic LLM client + cost tracker
-│   │   └── prompt_security.py   injection sanitisation
-│   └── domain/               7 built-in domain packs
-├── database/schema.sql       55+ table schema (source of truth)
-├── prompts/                  LLM prompt templates
-├── scripts/                  OASIS subprocess runner
-└── tests/                    2700+ unit + 134 integration tests
-```
-
----
-
-## Simulation hook groups (per round)
-
-```
-Pre-Group-1:  feed ranking | world event generation (kg_driven)
-Group 1 (parallel):
-  memories · trust · emotional state · relationship states
-Group 2 (sequential):
-  decisions → side effects → belief update → consumption
-  kg_driven: strategic planning → LLM deliberation (all active agents)
-             → consensus debate (every 3rd round) → belief propagation
-Group 3 (periodic, fire-and-forget):
-  echo chambers(3) · network evolution(3) · virality(3)
-  macro feedback(5) · KG evolution(3) · polarization(5) · TDMI(5)
-  kg_driven: faction + tipping(3) · relationship lifecycle(3)
-```
-
----
-
-## Statistical / econometric layer
-
-| Feature | Implementation |
-|---------|---------------|
-| Stationarity | ADF + KPSS dual test before every VAR fit; auto-differencing if I(1)/I(2) |
-| VAR / VECM | Johansen cointegration test; VECM when cointegrated, VAR otherwise |
-| GARCH(1,1) | Bollerslev (1986) MLE via scipy; auto-fits when ARCH LM detects effects |
-| Monte Carlo | 500-trial LHS + t-Copula; GARCH-adjusted CIs during volatility clustering |
-| TDMI | Kraskov KNN estimator; permutation null-model (200 shuffles, 95th pct) |
-| Brier skill | Climatological baseline p×(1-p) from dataset prevalence |
-| Backtesting | Walk-forward k-fold; look-ahead bias prevented by FoldScopedCoefficients |
-
----
-
-## Tech stack
-
-| Layer | Stack |
-|-------|-------|
-| Backend | Python 3.11, FastAPI, aiosqlite (SQLite WAL) |
-| Analytical queries | DuckDB (read-only overlay on SQLite) |
-| Frontend | Vue 3, Vite, TypeScript |
-| Vector DB | LanceDB (384-dim multilingual embeddings) |
-| LLMs — agents | OpenRouter (`AGENT_LLM_MODEL`) |
-| LLMs — reports | Google AI (`GOOGLE_REPORT_MODEL`) |
-| Observability | OpenTelemetry → Jaeger (`--profile observability`) |
-
----
-
-## Environment variables
-
-```env
-# Required
-OPENROUTER_API_KEY=             # agent LLM calls
-GOOGLE_API_KEY=                 # report generation
-AUTH_SECRET_KEY=                # JWT signing key — openssl rand -hex 32
-SESSION_ENCRYPTION_KEY=         # BYOK key encryption — see below
-
-# LLM models
-AGENT_LLM_MODEL=google/gemini-3.1-flash-lite-preview
-AGENT_LLM_MODEL_LITE=           # background agents (falls back to above)
-GOOGLE_REPORT_MODEL=gemini-3.1-pro-preview
-
-# Cost controls
-SESSION_COST_BUDGET_USD=5       # warning threshold
-SESSION_COST_HARD_CAP_USD=10    # hard pause
-SUBPROCESS_MEMORY_LIMIT_MB=2048
-
-# Optional features
-EXTERNAL_FEED_ENABLED=false     # live macro data feed
-EXTERNAL_FEED_REFRESH_ROUNDS=10
-OTEL_ENABLED=false              # OpenTelemetry tracing
-```
-
-Generate encryption key:
-```bash
-python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'
-```
-
----
-
-## Development notes
-
-- **Python version**: 3.10 or 3.11 only. OASIS does not support 3.12+.
-- **Immutability**: all models use `frozen=True` dataclasses or `ConfigDict(frozen=True)`. Use `dataclasses.replace()`, never mutate.
-- **DB write pattern**: all simulation writes go through `BatchWriter` → `executemany()` per round. Analytical reads use `DuckDBAnalytics` (zero-copy SQLite scanner, read-only).
-- **LLM singletons**: never instantiate `LLMClient` per-call. Use `_get_llm_client()` / `_get_xai_llm()`.
-- **Column names**: `agent_memories` uses `memory_text` / `salience_score`. `kg_nodes` uses `session_id` / `title`. `kg_edges` uses `session_id` / `relation_type`. `news_headlines` uses `title`.
-- **Security**: all user text passes through `prompt_security.py` before LLM calls. `llm_base_url` validated against SSRF allowlist. Shock/resume endpoints require auth.
-
----
-
-## Licence
-
-Proprietary. All rights reserved.
+Proprietary. All rights reserved. / 私有軟體，保留所有權利。 / 私有软件，保留所有权利。
