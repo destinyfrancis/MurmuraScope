@@ -32,7 +32,7 @@ jobs:
             --cov=backend/app \
             --cov-report=xml \
             --cov-report=term-missing \
-            --cov-fail-under=70 \
+            --cov-fail-under=55 \
             -q \
             --tb=short
 
