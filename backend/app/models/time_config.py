@@ -4,6 +4,7 @@ Inspired by MiroFish/OASIS time engine: LLM infers scenario-appropriate
 time granularity (e.g. social media → 72h/60min per round;
 geopolitics → 30d/1d per round). User can override.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

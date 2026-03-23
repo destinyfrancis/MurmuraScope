@@ -99,7 +99,7 @@ def detect_regime(macro_state: Any, *, domain: str = "hk") -> RegimeState:
 _REGIME_MULTIPLIERS: dict[str, dict[str, float]] = {
     "crisis": {"negative": 1.5, "positive": 0.7},
     "normal": {"negative": 1.0, "positive": 1.0},
-    "boom":   {"negative": 0.8, "positive": 1.3},
+    "boom": {"negative": 0.8, "positive": 1.3},
 }
 
 
@@ -108,10 +108,16 @@ def _classify_shock_direction(shock_type: str) -> str:
 
     Returns "negative" or "positive".
     """
-    _POSITIVE_SHOCKS = frozenset({
-        "market_rally", "fed_rate_cut", "china_stimulus",
-        "taiwan_strait_ease", "greater_bay_boost", "rcep_benefit",
-    })
+    _POSITIVE_SHOCKS = frozenset(
+        {
+            "market_rally",
+            "fed_rate_cut",
+            "china_stimulus",
+            "taiwan_strait_ease",
+            "greater_bay_boost",
+            "rcep_benefit",
+        }
+    )
     if shock_type in _POSITIVE_SHOCKS:
         return "positive"
     return "negative"
@@ -139,9 +145,7 @@ _THRESHOLD_EFFECTS: dict[str, dict[str, Any]] = {
 }
 
 
-def _check_thresholds(
-    macro_state: Any, base_adjustments: dict[str, float]
-) -> dict[str, float]:
+def _check_thresholds(macro_state: Any, base_adjustments: dict[str, float]) -> dict[str, float]:
     """Amplify adjustments when macro indicators cross critical thresholds.
 
     Args:
@@ -170,7 +174,9 @@ def _check_thresholds(
                     result[field] = result[field] * effect["multiplier"]
                     logger.debug(
                         "Threshold %s triggered: %s *= %.1f",
-                        _name, field, effect["multiplier"],
+                        _name,
+                        field,
+                        effect["multiplier"],
                     )
 
     return result
@@ -180,9 +186,7 @@ def _check_thresholds(
 # Interaction terms (compounding shocks)
 # ---------------------------------------------------------------------------
 
-_INTERACTION_TERMS: dict[
-    tuple[str, str], dict[str, float]
-] = {
+_INTERACTION_TERMS: dict[tuple[str, str], dict[str, float]] = {
     ("interest_rate_hike", "china_slowdown"): {
         "hsi_level": -0.05,
         "consumer_confidence": -3.0,
@@ -198,9 +202,7 @@ _INTERACTION_TERMS: dict[
 }
 
 
-def _compute_interaction_effects(
-    shock_type: str, active_shocks: tuple[str, ...]
-) -> dict[str, float]:
+def _compute_interaction_effects(shock_type: str, active_shocks: tuple[str, ...]) -> dict[str, float]:
     """Compute additional adjustments from shock interactions.
 
     Checks both orderings of (shock_type, active_shock) to find matches.
@@ -227,7 +229,10 @@ def _compute_interaction_effects(
                 extras[field] = extras.get(field, 0.0) + delta
                 logger.debug(
                     "Interaction (%s, %s): %s += %.4f",
-                    shock_type, other, field, delta,
+                    shock_type,
+                    other,
+                    field,
+                    delta,
                 )
 
     return extras
@@ -270,9 +275,7 @@ def apply_nonlinear_shock(
     direction = _classify_shock_direction(shock_type)
     multiplier = _REGIME_MULTIPLIERS.get(regime.regime, {}).get(direction, 1.0)
 
-    scaled: dict[str, float] = {
-        field: delta * multiplier for field, delta in base_adjustments.items()
-    }
+    scaled: dict[str, float] = {field: delta * multiplier for field, delta in base_adjustments.items()}
 
     # Step 2: Threshold amplification
     scaled = _check_thresholds(state, scaled)
@@ -291,8 +294,8 @@ def apply_nonlinear_shock(
 
 _SIMPLE_REGIME_MULTIPLIERS: dict[str, float] = {
     "normal": 1.0,
-    "stress": 1.4,   # shocks hit 40% harder in stress
-    "crisis": 2.1,   # shocks hit 2.1x in crisis (asymmetry: crises amplify shocks)
+    "stress": 1.4,  # shocks hit 40% harder in stress
+    "crisis": 2.1,  # shocks hit 2.1x in crisis (asymmetry: crises amplify shocks)
 }
 
 

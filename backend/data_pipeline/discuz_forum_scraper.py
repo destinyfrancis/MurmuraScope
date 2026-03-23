@@ -56,6 +56,7 @@ BK_FORUMS: tuple[dict[str, Any], ...] = (
 # Data model
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class ForumPost:
     """Immutable representation of a single forum thread."""
@@ -73,6 +74,7 @@ class ForumPost:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _random_ua() -> str:
     """Return a random user-agent string."""
@@ -101,6 +103,7 @@ def _parse_int(text: str | None) -> int:
 # ---------------------------------------------------------------------------
 # Scraper
 # ---------------------------------------------------------------------------
+
 
 class DiscuzForumScraper:
     """Async scraper for Discuz!-based forums (Discuss.com.hk, Baby Kingdom)."""
@@ -134,11 +137,15 @@ class DiscuzForumScraper:
                     all_posts.extend(posts)
                     logger.info(
                         "Scraped %d posts from %s/%s",
-                        len(posts), forum["platform"], forum["name"],
+                        len(posts),
+                        forum["platform"],
+                        forum["name"],
                     )
                 except Exception:
                     logger.warning(
-                        "Failed to scrape %s/%s", forum["platform"], forum["name"],
+                        "Failed to scrape %s/%s",
+                        forum["platform"],
+                        forum["name"],
                         exc_info=True,
                     )
 
@@ -222,16 +229,18 @@ class DiscuzForumScraper:
             if not title:
                 continue
 
-            posts.append(ForumPost(
-                title=title,
-                content=content[:2000],
-                reply_count=0,
-                view_count=0,
-                published=published,
-                forum_name=forum_name,
-                source_url=link,
-                platform=platform,
-            ))
+            posts.append(
+                ForumPost(
+                    title=title,
+                    content=content[:2000],
+                    reply_count=0,
+                    view_count=0,
+                    published=published,
+                    forum_name=forum_name,
+                    source_url=link,
+                    platform=platform,
+                )
+            )
 
         return posts
 
@@ -291,16 +300,18 @@ class DiscuzForumScraper:
                 date_tag = row.select_one("td.by em span") or row.select_one("td.by em")
                 published = date_tag.get_text(strip=True) if date_tag else ""
 
-                posts.append(ForumPost(
-                    title=title,
-                    content="",  # Content requires opening each thread
-                    reply_count=reply_count,
-                    view_count=view_count,
-                    published=published,
-                    forum_name=forum_name,
-                    source_url=thread_url,
-                    platform=platform,
-                ))
+                posts.append(
+                    ForumPost(
+                        title=title,
+                        content="",  # Content requires opening each thread
+                        reply_count=reply_count,
+                        view_count=view_count,
+                        published=published,
+                        forum_name=forum_name,
+                        source_url=thread_url,
+                        platform=platform,
+                    )
+                )
             except Exception:
                 logger.debug("Failed to parse thread row in %s/%s page %d", platform, forum_name, page, exc_info=True)
                 continue
@@ -364,6 +375,7 @@ class DiscuzForumScraper:
 # ---------------------------------------------------------------------------
 # Standalone runner
 # ---------------------------------------------------------------------------
+
 
 async def download_all_discuz(client: httpx.AsyncClient | None = None) -> list:
     """Entry point for the download pipeline.

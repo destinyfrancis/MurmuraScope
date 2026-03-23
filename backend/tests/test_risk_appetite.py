@@ -1,7 +1,6 @@
 """Unit tests for _compute_risk_appetite smooth sigmoid function."""
-from __future__ import annotations
 
-import pytest
+from __future__ import annotations
 
 from backend.app.services.cognitive_agent_engine import _compute_risk_appetite
 
@@ -18,9 +17,7 @@ class TestRiskAppetiteSigmoid:
         """Low arousal should produce near-neutral regardless of valence."""
         for valence in [-0.8, -0.3, 0.0, 0.3, 0.8]:
             result = _compute_risk_appetite({"valence": valence, "arousal": 0.1})
-            assert 0.45 <= result <= 0.55, (
-                f"arousal=0.1, valence={valence} → {result}, expected [0.45, 0.55]"
-            )
+            assert 0.45 <= result <= 0.55, f"arousal=0.1, valence={valence} → {result}, expected [0.45, 0.55]"
 
     def test_high_arousal_neg_valence_cautious(self):
         """High arousal + strong negative valence → cautious (< 0.35)."""
@@ -52,9 +49,7 @@ class TestRiskAppetiteSigmoid:
             for valence in [0.1, 0.3, 0.5, 0.8]:
                 pos = _compute_risk_appetite({"valence": valence, "arousal": arousal})
                 neg = _compute_risk_appetite({"valence": -valence, "arousal": arousal})
-                assert abs((pos + neg) - 1.0) < 0.02, (
-                    f"arousal={arousal}, v={valence}: pos={pos}+neg={neg}={pos + neg}"
-                )
+                assert abs((pos + neg) - 1.0) < 0.02, f"arousal={arousal}, v={valence}: pos={pos}+neg={neg}={pos + neg}"
 
     def test_boundary_clamping(self):
         """Extreme inputs never exceed [0.1, 0.9]."""
@@ -76,8 +71,7 @@ class TestRiskAppetiteSigmoid:
             arousal = a_int / 10.0
             current = _compute_risk_appetite({"valence": valence, "arousal": arousal})
             assert current >= prev - 0.001, (
-                f"Non-monotonic: arousal {(a_int - 1) / 10:.1f}→{arousal:.1f}, "
-                f"risk {prev:.4f}→{current:.4f}"
+                f"Non-monotonic: arousal {(a_int - 1) / 10:.1f}→{arousal:.1f}, risk {prev:.4f}→{current:.4f}"
             )
             prev = current
 
@@ -89,7 +83,6 @@ class TestRiskAppetiteSigmoid:
             arousal = a_int / 10.0
             current = _compute_risk_appetite({"valence": valence, "arousal": arousal})
             assert current <= prev + 0.001, (
-                f"Non-monotonic: arousal {(a_int - 1) / 10:.1f}→{arousal:.1f}, "
-                f"risk {prev:.4f}→{current:.4f}"
+                f"Non-monotonic: arousal {(a_int - 1) / 10:.1f}→{arousal:.1f}, risk {prev:.4f}→{current:.4f}"
             )
             prev = current

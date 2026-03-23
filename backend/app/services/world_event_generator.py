@@ -1,5 +1,6 @@
 # backend/app/services/world_event_generator.py
 """Per-round world event generator for kg_driven simulation mode."""
+
 from __future__ import annotations
 
 import uuid
@@ -72,6 +73,7 @@ class WorldEventGenerator:
 # Private helpers
 # ---------------------------------------------------------------------------
 
+
 def _parse_events(
     raw: dict[str, Any],
     round_number: int,
@@ -95,19 +97,19 @@ def _parse_events(
             reach_raw = item.get("reach", ["ALL"])
             reach = tuple(str(r) for r in reach_raw) if reach_raw else ("ALL",)
 
-            result.append(WorldEvent(
-                event_id=str(item.get("event_id", uuid.uuid4().hex[:8])),
-                round_number=round_number,
-                content=str(item.get("content", "")),
-                event_type=str(item.get("event_type", "shock")),
-                reach=reach,
-                impact_vector=impact,
-                credibility=float(item.get("credibility", 0.8)),
-            ))
+            result.append(
+                WorldEvent(
+                    event_id=str(item.get("event_id", uuid.uuid4().hex[:8])),
+                    round_number=round_number,
+                    content=str(item.get("content", "")),
+                    event_type=str(item.get("event_type", "shock")),
+                    reach=reach,
+                    impact_vector=impact,
+                    credibility=float(item.get("credibility", 0.8)),
+                )
+            )
         except (ValueError, TypeError) as exc:
             logger.warning("WorldEventGenerator: skipping malformed event: %s", exc)
 
-    logger.info(
-        "WorldEventGenerator: round=%d generated %d events", round_number, len(result)
-    )
+    logger.info("WorldEventGenerator: round=%d generated %d events", round_number, len(result))
     return result

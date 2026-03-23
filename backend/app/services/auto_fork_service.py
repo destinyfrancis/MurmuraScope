@@ -15,12 +15,12 @@ to run them.
 
 Guard: maximum 3 auto-forks per session to prevent runaway branching.
 """
+
 from __future__ import annotations
 
 import json
 import uuid
 from dataclasses import dataclass
-from typing import Any
 
 from backend.app.services.emergence_tracker import TippingPoint
 from backend.app.utils.db import get_db
@@ -43,6 +43,7 @@ _JSD_BASE_THRESHOLD: float = 0.15
 @dataclass(frozen=True)
 class AutoForkResult:
     """Immutable record of an auto-fork event."""
+
     parent_session_id: str
     fork_round: int
     natural_branch_id: str
@@ -96,7 +97,9 @@ async def fork_at_tipping_point(
     if auto_fork_count >= budget:
         logger.info(
             "Auto-fork guard: budget exhausted (%d/%d) session=%s",
-            auto_fork_count, budget, session_id,
+            auto_fork_count,
+            budget,
+            session_id,
         )
         return None
 
@@ -105,7 +108,10 @@ async def fork_at_tipping_point(
     if tipping.kl_divergence < jsd_min:
         logger.debug(
             "Auto-fork skip: JSD %.3f < strong threshold %.3f session=%s round=%d",
-            tipping.kl_divergence, jsd_min, session_id, tipping.round_number,
+            tipping.kl_divergence,
+            jsd_min,
+            session_id,
+            tipping.round_number,
         )
         return None
 
@@ -158,9 +164,12 @@ async def fork_at_tipping_point(
                        VALUES (?, ?, 'parallel', ?, 'created', ?,
                                ?, ?, ?, ?, '', datetime('now'))""",
                     (
-                        branch_id, label, scenario_type,
+                        branch_id,
+                        label,
+                        scenario_type,
                         json.dumps(branch_config, ensure_ascii=False),
-                        row["agent_count"], row["round_count"],
+                        row["agent_count"],
+                        row["round_count"],
                         row["llm_provider"] or "openrouter",
                         row["llm_model"] or "deepseek/deepseek-v3.2",
                     ),
@@ -344,7 +353,9 @@ async def fork_at_tipping_point(
                         salience_score, memory_type, created_at)
                        VALUES (?, ?, ?, ?, 1.0, 'belief_snapshot', datetime('now'))""",
                     (
-                        nudged_id, agent_id, round_num,
+                        nudged_id,
+                        agent_id,
+                        round_num,
                         json.dumps(beliefs, ensure_ascii=False),
                     ),
                 )
@@ -366,7 +377,11 @@ async def fork_at_tipping_point(
 
         logger.info(
             "Auto-fork created session=%s round=%d direction=%s natural=%s nudged=%s",
-            session_id, round_num, direction, natural_id[:8], nudged_id[:8],
+            session_id,
+            round_num,
+            direction,
+            natural_id[:8],
+            nudged_id[:8],
         )
         return AutoForkResult(
             parent_session_id=session_id,
@@ -378,9 +393,7 @@ async def fork_at_tipping_point(
         )
 
     except Exception:
-        logger.exception(
-            "Auto-fork failed session=%s round=%d", session_id, round_num
-        )
+        logger.exception("Auto-fork failed session=%s round=%d", session_id, round_num)
         return None
 
 

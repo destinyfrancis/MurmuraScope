@@ -6,26 +6,43 @@ fully-formed SuggestedConfig using a single DeepSeek call.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from backend.app.utils.llm_client import LLMClient, get_agent_provider_model
 from backend.app.utils.logger import get_logger
 from backend.app.utils.prompt_security import sanitize_scenario_description
 from backend.prompts.config_prompts import (
-    CONFIG_SYSTEM,
-    CONFIG_USER,
+    _VALID_MACRO_SCENARIOS,
     _VALID_SCENARIOS,
     _VALID_SHOCK_TYPES,
-    _VALID_MACRO_SCENARIOS,
+    CONFIG_SYSTEM,
+    CONFIG_USER,
 )
 
 logger = get_logger("config_generator")
 
-_HK_DISTRICTS = frozenset([
-    "中西區", "灣仔", "東區", "南區", "油尖旺", "深水埗",
-    "九龍城", "黃大仙", "觀塘", "葵青", "荃灣", "屯門",
-    "元朗", "北區", "大埔", "沙田", "西貢", "離島",
-])
+_HK_DISTRICTS = frozenset(
+    [
+        "中西區",
+        "灣仔",
+        "東區",
+        "南區",
+        "油尖旺",
+        "深水埗",
+        "九龍城",
+        "黃大仙",
+        "觀塘",
+        "葵青",
+        "荃灣",
+        "屯門",
+        "元朗",
+        "北區",
+        "大埔",
+        "沙田",
+        "西貢",
+        "離島",
+    ]
+)
 
 _AGENT_COUNT_MIN = 50
 _AGENT_COUNT_MAX = 1000
@@ -84,12 +101,14 @@ def _parse_shocks(raw: list) -> tuple[SuggestedShock, ...]:
         round_num = int(s.get("round_number", 5))
         if round_num < 1:
             round_num = 1
-        shocks.append(SuggestedShock(
-            round_number=round_num,
-            shock_type=shock_type,
-            description=str(s.get("description", "")),
-            post_content=str(s.get("post_content", "")),
-        ))
+        shocks.append(
+            SuggestedShock(
+                round_number=round_num,
+                shock_type=shock_type,
+                description=str(s.get("description", "")),
+                post_content=str(s.get("post_content", "")),
+            )
+        )
     return tuple(shocks)
 
 

@@ -16,17 +16,18 @@ Hook methods are organised into mixin classes:
 from __future__ import annotations
 
 import asyncio
-from collections import defaultdict
 import json
 import os
 import random
 import random as _random
 import time as _time
+from collections import defaultdict
+from collections.abc import Callable, Coroutine
 from pathlib import Path
-from typing import Any, Callable, Coroutine
+from typing import Any
 
 from backend.app.models.kg_session_state import KGSessionState
-from backend.app.services.simulation_helpers import _timed_block, _PROJECT_ROOT
+from backend.app.services.simulation_helpers import _PROJECT_ROOT, _timed_block
 from backend.app.services.simulation_hooks_agent import AgentHooksMixin
 from backend.app.services.simulation_hooks_kg import KGHooksMixin
 from backend.app.services.simulation_hooks_kg_driven import KGDrivenHooksMixin
@@ -58,16 +59,19 @@ class SimulationRunner(
     def __init__(
         self,
         dry_run: bool = False,
-        preset: "SimPreset | None" = None,
+        preset: SimPreset | None = None,
     ) -> None:
         from backend.app.models.simulation_config import PRESET_STANDARD, SimPreset  # noqa: PLC0415
+
         self._preset: SimPreset = preset or PRESET_STANDARD
         self._dry_run = dry_run
         self._subprocess_mgr = SimulationSubprocessManager()
         self._action_logger: Any | None = None
         self._memory_service: Any | None = None
         self._vector_store: Any | None = None
-        self._posts_buffer: dict[str, dict[int, dict[str, list[str]]]] = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+        self._posts_buffer: dict[str, dict[int, dict[str, list[str]]]] = defaultdict(
+            lambda: defaultdict(lambda: defaultdict(list))
+        )
         self._macro_controller: Any | None = None
         self._macro_history: Any | None = None
         # Tracks the latest MacroState per session for feedback accumulation
@@ -118,7 +122,7 @@ class SimulationRunner(
         # Reflection loop: periodic insight synthesis for stakeholder agents
         self._reflection_service: Any | None = None
         # Phase 4A: per-session RoundCache for in-memory agent profile lookups
-        self._round_caches: dict[str, "RoundCache"] = {}
+        self._round_caches: dict[str, RoundCache] = {}
         # Phase 4A: BatchWriter for high-throughput bulk inserts
         self._batch_writer: Any | None = None
         # Phase 4D: optional shard coordinator for large-scale subprocess sharding
@@ -130,22 +134,51 @@ class SimulationRunner(
         """Lazily initialise the BatchWriter and register hot-path tables."""
         try:
             from backend.app.services.batch_writer import BatchWriter  # noqa: PLC0415
+
             writer = BatchWriter(flush_threshold=500)
-            writer.register_table("belief_states", [
-                "session_id", "agent_id", "topic", "stance",
-                "confidence", "evidence_count", "round_number",
-            ])
-            writer.register_table("relationship_states", [
-                "session_id", "agent_a_id", "agent_b_id", "round_number",
-                "intimacy", "passion", "commitment", "satisfaction",
-                "alternatives", "investment", "trust",
-                "interaction_count", "rounds_since_change", "updated_at",
-            ])
-            writer.register_table("simulation_actions", [
-                "session_id", "oasis_username", "round_number",
-                "action_type", "content", "sentiment",
-                "target_agent_username",
-            ])
+            writer.register_table(
+                "belief_states",
+                [
+                    "session_id",
+                    "agent_id",
+                    "topic",
+                    "stance",
+                    "confidence",
+                    "evidence_count",
+                    "round_number",
+                ],
+            )
+            writer.register_table(
+                "relationship_states",
+                [
+                    "session_id",
+                    "agent_a_id",
+                    "agent_b_id",
+                    "round_number",
+                    "intimacy",
+                    "passion",
+                    "commitment",
+                    "satisfaction",
+                    "alternatives",
+                    "investment",
+                    "trust",
+                    "interaction_count",
+                    "rounds_since_change",
+                    "updated_at",
+                ],
+            )
+            writer.register_table(
+                "simulation_actions",
+                [
+                    "session_id",
+                    "oasis_username",
+                    "round_number",
+                    "action_type",
+                    "content",
+                    "sentiment",
+                    "target_agent_username",
+                ],
+            )
             self._batch_writer = writer
             logger.debug("BatchWriter initialised with 3 registered tables")
         except Exception:
@@ -171,6 +204,7 @@ class SimulationRunner(
 
         if session_id not in self._shard_coordinators:
             from backend.app.services.shard_coordinator import ShardCoordinator  # noqa: PLC0415
+
             coord = ShardCoordinator(
                 session_id=session_id,
                 python_bin=python_bin,
@@ -196,7 +230,7 @@ class SimulationRunner(
         session_id: str,
         coro: Any,
         timeout_s: float = 60.0,
-    ) -> "asyncio.Task[Any]":
+    ) -> asyncio.Task[Any]:
         """Create an asyncio task and register it for cleanup on session end.
 
         All fire-and-forget tasks must go through this method so that the
@@ -252,6 +286,7 @@ class SimulationRunner(
         field — access it via r["oasis_username"] directly, never via a reconstructed AgentProfile.
         """
         from backend.app.utils.db import get_db  # noqa: PLC0415
+
         try:
             async with get_db() as db:
                 cursor = await db.execute(
@@ -267,7 +302,8 @@ class SimulationRunner(
         except Exception:
             logger.error(
                 "_fetch_and_cache_profiles failed session=%s — using empty cache",
-                session_id, exc_info=True,
+                session_id,
+                exc_info=True,
             )
             rows = []
         self._round_profiles[session_id] = rows
@@ -275,6 +311,7 @@ class SimulationRunner(
         # Populate RoundCache with agent data keyed by oasis_username for O(1) lookups
         try:
             from backend.app.services.round_cache import RoundCache  # noqa: PLC0415
+
             cache = self._round_caches.get(session_id)
             if cache is None:
                 cache = RoundCache()
@@ -297,7 +334,8 @@ class SimulationRunner(
         except Exception:
             logger.debug(
                 "_fetch_and_cache_profiles: RoundCache population failed session=%s",
-                session_id, exc_info=True,
+                session_id,
+                exc_info=True,
             )
 
         return rows
@@ -353,7 +391,9 @@ class SimulationRunner(
             if isinstance(r, Exception):
                 logger.error(
                     "Critical hook failed session=%s round=%d: %s",
-                    session_id, round_num, r,
+                    session_id,
+                    round_num,
+                    r,
                 )
 
         # Group 2: Depends on memories being stored
@@ -519,7 +559,10 @@ class SimulationRunner(
         _round_total_ms = int((_time.monotonic() - _round_t0) * 1000)
         logger.info(
             "session=%s round=%d agents=%d total_round_ms=%d",
-            session_id, round_num, agent_count, _round_total_ms,
+            session_id,
+            round_num,
+            agent_count,
+            _round_total_ms,
         )
 
         # Clean up posts buffer for completed round to prevent memory growth
@@ -531,26 +574,31 @@ class SimulationRunner(
         # The simulation continues automatically after the timeout even if not resumed.
         try:
             from backend.app.services import cost_tracker as _ct  # noqa: PLC0415
+
             if _ct.is_paused(session_id):
                 total_cost = _ct.get_session_cost(session_id)
-                hard_cap = float(
-                    os.environ.get("SESSION_COST_HARD_CAP_USD", "10.0")
-                )
+                hard_cap = float(os.environ.get("SESSION_COST_HARD_CAP_USD", "10.0"))
                 logger.warning(
-                    "Cost pause: session=%s round=%d total=$%.4f cap=$%.2f — "
-                    "waiting up to 30 min for resume",
-                    session_id, round_num, total_cost, hard_cap,
+                    "Cost pause: session=%s round=%d total=$%.4f cap=$%.2f — waiting up to 30 min for resume",
+                    session_id,
+                    round_num,
+                    total_cost,
+                    hard_cap,
                 )
                 # Push WebSocket notification (best-effort)
                 try:
                     from backend.app.api.ws import push_progress as _push  # noqa: PLC0415
-                    await _push(session_id, {
-                        "type": "cost_pause",
-                        "session_id": session_id,
-                        "total_cost": total_cost,
-                        "cap": hard_cap,
-                        "round": round_num,
-                    })
+
+                    await _push(
+                        session_id,
+                        {
+                            "type": "cost_pause",
+                            "session_id": session_id,
+                            "total_cost": total_cost,
+                            "cap": hard_cap,
+                            "round": round_num,
+                        },
+                    )
                 except Exception:
                     logger.debug("cost_pause: WS push failed (best-effort)")
 
@@ -568,7 +616,9 @@ class SimulationRunner(
         except Exception:
             logger.debug(
                 "cost_pause check failed session=%s round=%d — continuing",
-                session_id, round_num, exc_info=True,
+                session_id,
+                round_num,
+                exc_info=True,
             )
 
     # ------------------------------------------------------------------
@@ -620,8 +670,8 @@ class SimulationRunner(
             return True  # Unknown agent — always active
 
         try:
-            from backend.app.services.temporal_activation import TemporalActivationService  # noqa: PLC0415
             from backend.app.models.activity_profile import ActivityProfile  # noqa: PLC0415
+            from backend.app.services.temporal_activation import TemporalActivationService  # noqa: PLC0415
 
             profile = ActivityProfile(
                 agent_id=agent_data.get("agent_id", 0),
@@ -666,13 +716,15 @@ class SimulationRunner(
         if not self._is_agent_active(session_id, username, round_number):
             logger.debug(
                 "Temporal gate: skipping post from %s round %d (inactive)",
-                username, round_number,
+                username,
+                round_number,
             )
             return
 
         # 1. Log structured action
         try:
             from backend.scripts.action_logger import ActionLogger  # noqa: PLC0415
+
             if self._action_logger is None:
                 self._action_logger = ActionLogger()
             logged = await self._action_logger.log_post(
@@ -690,6 +742,7 @@ class SimulationRunner(
 
         if "timestamp" not in data:
             from datetime import datetime as _dt  # noqa: PLC0415
+
             data["timestamp"] = _dt.now().isoformat()
 
         # 2. Accumulate for memory service (batch per round)
@@ -718,12 +771,12 @@ class SimulationRunner(
 
         # Phase 1B: passive DO_NOTHING always passes (no cost to log passivity);
         # other non-content actions are gated by temporal activation.
-        if action_type != "do_nothing" and not self._is_agent_active(
-            session_id, username, round_number
-        ):
+        if action_type != "do_nothing" and not self._is_agent_active(session_id, username, round_number):
             logger.debug(
                 "Temporal gate: skipping action %s from %s round %d (inactive)",
-                action_type, username, round_number,
+                action_type,
+                username,
+                round_number,
             )
             return
 
@@ -735,6 +788,7 @@ class SimulationRunner(
         # 1. Log the action to simulation_actions
         try:
             from backend.scripts.action_logger import ActionLogger  # noqa: PLC0415
+
             if self._action_logger is None:
                 self._action_logger = ActionLogger()
             await self._action_logger.log_action(
@@ -749,7 +803,8 @@ class SimulationRunner(
         except Exception:
             logger.exception(
                 "action_logger.log_action failed session=%s action=%s",
-                session_id, action_type,
+                session_id,
+                action_type,
             )
 
         # 2. Route graph-affecting actions to social_network service
@@ -757,12 +812,17 @@ class SimulationRunner(
         if action_type in _graph_actions and target_username:
             try:
                 await self._process_graph_action(
-                    session_id, username, target_username, action_type, round_number,
+                    session_id,
+                    username,
+                    target_username,
+                    action_type,
+                    round_number,
                 )
             except Exception:
                 logger.exception(
                     "graph action routing failed session=%s action=%s",
-                    session_id, action_type,
+                    session_id,
+                    action_type,
                 )
 
     async def _process_graph_action(
@@ -779,8 +839,7 @@ class SimulationRunner(
         async with get_db() as db:
             # Resolve agent IDs from oasis_username
             cursor = await db.execute(
-                "SELECT id, oasis_username FROM agent_profiles "
-                "WHERE session_id = ? AND oasis_username IN (?, ?)",
+                "SELECT id, oasis_username FROM agent_profiles WHERE session_id = ? AND oasis_username IN (?, ?)",
                 (session_id, source_username, target_username),
             )
             rows = await cursor.fetchall()

@@ -52,6 +52,10 @@ Few-shot 示例：
 _VALID_SCENARIOS = ("property", "emigration", "fertility", "career", "education", "b2b", "macro")
 _VALID_SHOCK_TYPES = ("policy_change", "economic_shock", "social_event", "news_release")
 _VALID_MACRO_SCENARIOS = (
-    "baseline", "rate_cut", "rate_hike",
-    "property_boom", "property_crash", "emigration_surge",
+    "baseline",
+    "rate_cut",
+    "rate_hike",
+    "property_boom",
+    "property_crash",
+    "emigration_surge",
 )

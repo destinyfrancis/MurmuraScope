@@ -21,25 +21,24 @@ import httpx
 
 from backend.app.utils.db import get_db
 from backend.app.utils.logger import get_logger, setup_logging
-
+from backend.data_pipeline.calibration import CalibrationPipeline
 from backend.data_pipeline.census_downloader import download_all_census
+from backend.data_pipeline.china_macro_downloader import download_all_china_macro
 from backend.data_pipeline.data_normalizer import normalize_all
 from backend.data_pipeline.economy_downloader import download_all_economy
 from backend.data_pipeline.education_downloader import download_all_education
 from backend.data_pipeline.employment_downloader import download_all_employment
+from backend.data_pipeline.fred_downloader import download_all_fred
+from backend.data_pipeline.hk_retail_tourism_downloader import download_all_retail_tourism
+from backend.data_pipeline.lihkg_downloader import download_all_social
+from backend.data_pipeline.market_downloader import MarketRecord, download_all_market
 from backend.data_pipeline.migration_parser import download_all_migration
 from backend.data_pipeline.property_downloader import download_all_property
-from backend.data_pipeline.weather_downloader import download_all_weather
-from backend.data_pipeline.transport_downloader import download_all_transport
-from backend.data_pipeline.market_downloader import download_all_market, MarketRecord
-from backend.data_pipeline.lihkg_downloader import download_all_social
-from backend.data_pipeline.china_macro_downloader import download_all_china_macro
-from backend.data_pipeline.fred_downloader import download_all_fred, FredRecord
-from backend.data_pipeline.hk_retail_tourism_downloader import download_all_retail_tourism
-from backend.data_pipeline.trade_downloader import download_all_trade
-from backend.data_pipeline.social_sentiment_processor import process_social_sentiment
 from backend.data_pipeline.rvd_downloader import download_all_rvd
-from backend.data_pipeline.calibration import CalibrationPipeline
+from backend.data_pipeline.social_sentiment_processor import process_social_sentiment
+from backend.data_pipeline.trade_downloader import download_all_trade
+from backend.data_pipeline.transport_downloader import download_all_transport
+from backend.data_pipeline.weather_downloader import download_all_weather
 
 # New real-data downloaders
 try:
@@ -81,18 +80,47 @@ setup_logging()
 logger = get_logger("data_pipeline.cli")
 
 ALL_CATEGORIES = (
-    "census", "economy", "property", "rvd", "employment", "education", "migration",
-    "weather", "transport", "market", "yfinance", "censtatd",
-    "social", "china_macro", "fred", "retail_tourism", "trade",
-    "news_rss", "google_trends", "discuss", "hkgolden", "stocks_weekly",
+    "census",
+    "economy",
+    "property",
+    "rvd",
+    "employment",
+    "education",
+    "migration",
+    "weather",
+    "transport",
+    "market",
+    "yfinance",
+    "censtatd",
+    "social",
+    "china_macro",
+    "fred",
+    "retail_tourism",
+    "trade",
+    "news_rss",
+    "google_trends",
+    "discuss",
+    "hkgolden",
+    "stocks_weekly",
 )
 
 # Categories whose records use 'date' instead of 'period' and may lack
 # 'category' or 'source_url'.  These need adaptation before normalize_all().
 _ADAPT_CATEGORIES = frozenset(
-    {"weather", "transport", "china_macro", "fred", "retail_tourism", "trade", "rvd",
-     "yfinance", "censtatd", "news_rss", "google_trends",
-     "stocks_weekly"}
+    {
+        "weather",
+        "transport",
+        "china_macro",
+        "fred",
+        "retail_tourism",
+        "trade",
+        "rvd",
+        "yfinance",
+        "censtatd",
+        "news_rss",
+        "google_trends",
+        "stocks_weekly",
+    }
 )
 
 # Forum scrapers return unstructured post objects (no numeric 'value' field).
@@ -147,10 +175,7 @@ def _adapt_record(rec: Any, fallback_category: str) -> _AdaptedRecord:
     category = getattr(rec, "category", None) or fallback_category
     # metric: FredRecord has series_id; TrendsRecord has keyword; others have metric
     metric = (
-        getattr(rec, "metric", None)
-        or getattr(rec, "series_id", None)
-        or getattr(rec, "keyword", None)
-        or "unknown"
+        getattr(rec, "metric", None) or getattr(rec, "series_id", None) or getattr(rec, "keyword", None) or "unknown"
     )
     # unit
     unit = getattr(rec, "unit", "") or ""
@@ -188,10 +213,7 @@ async def _insert_market_records(records: list[MarketRecord]) -> int:
     inserted = 0
     async with get_db() as db:
         # Ensure unique index to allow idempotent re-runs
-        await db.execute(
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_market_unique "
-            "ON market_data(date, asset_type, ticker)"
-        )
+        await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_market_unique ON market_data(date, asset_type, ticker)")
         for rec in records:
             try:
                 cursor = await db.execute(
@@ -199,8 +221,14 @@ async def _insert_market_records(records: list[MarketRecord]) -> int:
                     "(date, asset_type, ticker, open, close, high, low, volume, source) "
                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
-                        rec.date, rec.asset_type, rec.ticker,
-                        rec.open, rec.close, rec.high, rec.low, rec.volume,
+                        rec.date,
+                        rec.asset_type,
+                        rec.ticker,
+                        rec.open,
+                        rec.close,
+                        rec.high,
+                        rec.low,
+                        rec.volume,
                         rec.source,
                     ),
                 )
@@ -209,7 +237,9 @@ async def _insert_market_records(records: list[MarketRecord]) -> int:
             except Exception:
                 logger.exception(
                     "Failed to insert market_data: %s/%s/%s",
-                    rec.date, rec.asset_type, rec.ticker,
+                    rec.date,
+                    rec.asset_type,
+                    rec.ticker,
                 )
         await db.commit()
 
@@ -378,7 +408,8 @@ async def _run_category(
             elif category in _FORUM_CATEGORIES:
                 logger.info(
                     "Forum category %s: %d posts scraped (not normalised into snapshots)",
-                    category, total_records,
+                    category,
+                    total_records,
                 )
 
             # ----------------------------------------------------------------

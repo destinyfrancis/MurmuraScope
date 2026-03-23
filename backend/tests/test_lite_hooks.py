@@ -1,15 +1,14 @@
 """Unit tests for lite_hooks rule-based fallbacks."""
+
 from __future__ import annotations
 
 import random
 import statistics
 
-import pytest
-
 from backend.app.services.lite_hooks import (
-    generate_lite_events,
-    deliberate_lite,
     debate_lite,
+    deliberate_lite,
+    generate_lite_events,
     run_debate_round_lite,
 )
 
@@ -103,9 +102,7 @@ class TestGenerateLiteEvents:
                         reinforcing += 1
         # At least 10% should be reinforcing (not all mean-reverting)
         assert total > 0
-        assert reinforcing / total > 0.10, (
-            f"Only {reinforcing}/{total} = {reinforcing / total:.2%} reinforcing events"
-        )
+        assert reinforcing / total > 0.10, f"Only {reinforcing}/{total} = {reinforcing / total:.2%} reinforcing events"
 
 
 class TestDeliberateLite:
@@ -146,11 +143,15 @@ class TestDeliberateLite:
         )
         result_open = deliberate_lite(
             agent={"id": "a", "openness": 0.95, "neuroticism": 0.1},
-            beliefs={"x": 0.5}, events=events, rng=random.Random(42),
+            beliefs={"x": 0.5},
+            events=events,
+            rng=random.Random(42),
         )
         result_closed = deliberate_lite(
             agent={"id": "b", "openness": 0.05, "neuroticism": 0.1},
-            beliefs={"x": 0.5}, events=events, rng=random.Random(42),
+            beliefs={"x": 0.5},
+            events=events,
+            rng=random.Random(42),
         )
         # High openness → larger absolute delta
         open_mag = sum(abs(v) for v in result_open.belief_updates.values())
@@ -351,7 +352,10 @@ class TestRunDebateRoundLite:
         beliefs = {"a": {"x": 0.3}, "b": {"x": 0.6}}
         agents = [{"id": "a", "agreeableness": 0.8}, {"id": "b", "agreeableness": 0.8}]
         result = run_debate_round_lite(
-            agents, beliefs, round_num=6, trigger_every=3,
+            agents,
+            beliefs,
+            round_num=6,
+            trigger_every=3,
             rng=random.Random(42),
         )
         # Beliefs should change (agents are close enough for bounded confidence)
@@ -362,6 +366,8 @@ class TestRunDebateRoundLite:
         original_a = beliefs["a"]["x"]
         run_debate_round_lite(
             [{"id": "a", "agreeableness": 0.8}, {"id": "b", "agreeableness": 0.8}],
-            beliefs, round_num=3, rng=random.Random(42),
+            beliefs,
+            round_num=3,
+            rng=random.Random(42),
         )
         assert beliefs["a"]["x"] == original_a

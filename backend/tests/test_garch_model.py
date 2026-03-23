@@ -19,7 +19,6 @@ import math
 import numpy as np
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Frozen dataclass tests
 # ---------------------------------------------------------------------------
@@ -285,7 +284,7 @@ class TestForecastVariance:
 
         for i in range(1, len(forecasts)):
             assert forecasts[i] <= forecasts[i - 1] + 1e-12, (
-                f"Forecast should not increase: step {i} = {forecasts[i]} > {forecasts[i-1]}"
+                f"Forecast should not increase: step {i} = {forecasts[i]} > {forecasts[i - 1]}"
             )
 
     def test_forecast_monotone_convergence_from_below(self) -> None:
@@ -309,7 +308,7 @@ class TestForecastVariance:
 
         for i in range(1, len(forecasts)):
             assert forecasts[i] >= forecasts[i - 1] - 1e-12, (
-                f"Forecast should not decrease: step {i} = {forecasts[i]} < {forecasts[i-1]}"
+                f"Forecast should not decrease: step {i} = {forecasts[i]} < {forecasts[i - 1]}"
             )
 
     def test_forecast_zero_horizon_returns_empty(self) -> None:
@@ -384,7 +383,11 @@ class TestAdjustConfidenceIntervals:
         static_std = 2.0
 
         adjusted = forecaster.adjust_confidence_intervals(
-            point_forecasts, static_std, result, horizon=3, z_score=1.96,
+            point_forecasts,
+            static_std,
+            result,
+            horizon=3,
+            z_score=1.96,
         )
 
         assert len(adjusted) == 3
@@ -411,7 +414,10 @@ class TestAdjustConfidenceIntervals:
 
         forecaster = GARCHForecaster()
         adjusted = forecaster.adjust_confidence_intervals(
-            [50.0], 1.0, result, horizon=1,
+            [50.0],
+            1.0,
+            result,
+            horizon=1,
         )
 
         assert len(adjusted) == 1
@@ -456,7 +462,10 @@ class TestAdjustConfidenceIntervals:
 
         forecaster = GARCHForecaster()
         adjusted = forecaster.adjust_confidence_intervals(
-            [10.0, 20.0], 1.0, result, horizon=10,
+            [10.0, 20.0],
+            1.0,
+            result,
+            horizon=10,
         )
         assert len(adjusted) == 2
 
@@ -478,7 +487,10 @@ class TestAdjustConfidenceIntervals:
 
         forecaster = GARCHForecaster()
         adjusted = forecaster.adjust_confidence_intervals(
-            [100.0], 3.5, result, horizon=1,
+            [100.0],
+            3.5,
+            result,
+            horizon=1,
         )
         assert len(adjusted) == 1
         assert adjusted[0].static_std == 3.5

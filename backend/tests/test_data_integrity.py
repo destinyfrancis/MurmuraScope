@@ -8,11 +8,9 @@ Covers:
 
 from __future__ import annotations
 
-import dataclasses
 from pathlib import Path
 
 import pytest
-import pytest_asyncio
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -54,8 +52,7 @@ class TestNoHardcodedFallbacks:
     def test_no_hardcoded_fallback_in_fred_downloader(self) -> None:
         source = (_PIPELINE_DIR / "fred_downloader.py").read_text(encoding="utf-8")
         assert "_FALLBACK_VALUES" not in source, (
-            "fred_downloader.py must not contain _FALLBACK_VALUES — "
-            "use FRED API with proper error handling instead"
+            "fred_downloader.py must not contain _FALLBACK_VALUES — use FRED API with proper error handling instead"
         )
 
     def test_no_hardcoded_fallback_in_china_macro_downloader(self) -> None:
@@ -81,12 +78,8 @@ class TestNoHardcodedFallbacks:
 
     def test_no_hardcoded_fallback_in_market_downloader(self) -> None:
         source = (_PIPELINE_DIR / "market_downloader.py").read_text(encoding="utf-8")
-        assert "_HSI_MONTHLY" not in source, (
-            "market_downloader.py must not contain _HSI_MONTHLY hardcoded list"
-        )
-        assert "hsi_monthly =" not in source, (
-            "market_downloader.py must not contain hsi_monthly = hardcoded assignment"
-        )
+        assert "_HSI_MONTHLY" not in source, "market_downloader.py must not contain _HSI_MONTHLY hardcoded list"
+        assert "hsi_monthly =" not in source, "market_downloader.py must not contain hsi_monthly = hardcoded assignment"
 
 
 # ===================================================================
@@ -121,8 +114,7 @@ class TestForecasterIntegrity:
         from backend.app.services.time_series_forecaster import TimeSeriesForecaster
 
         assert not hasattr(TimeSeriesForecaster, "_hardcoded_baseline"), (
-            "TimeSeriesForecaster must not have _hardcoded_baseline — "
-            "all data must come from the database"
+            "TimeSeriesForecaster must not have _hardcoded_baseline — all data must come from the database"
         )
 
     @pytest.mark.asyncio
@@ -155,12 +147,9 @@ class TestForecasterIntegrity:
             result = await forecaster.forecast("gdp_growth", horizon=4)
 
         assert result.data_quality in ("insufficient", "no_data"), (
-            f"Expected data_quality='insufficient' or 'no_data' with <8 points, "
-            f"got '{result.data_quality}'"
+            f"Expected data_quality='insufficient' or 'no_data' with <8 points, got '{result.data_quality}'"
         )
-        assert len(result.points) == 0, (
-            "Forecaster must return empty points when data is insufficient"
-        )
+        assert len(result.points) == 0, "Forecaster must return empty points when data is insufficient"
 
 
 # ===================================================================
@@ -182,8 +171,7 @@ class TestBacktestResultFields:
         from backend.app.services.backtester import BacktestResult
 
         assert _has_dataclass_field(BacktestResult, "data_quality_flag"), (
-            "BacktestResult must have data_quality_flag field "
-            "(real_data | partial_real | insufficient)"
+            "BacktestResult must have data_quality_flag field (real_data | partial_real | insufficient)"
         )
 
 
@@ -194,8 +182,7 @@ class TestEnsembleResultFields:
         from backend.app.models.ensemble import EnsembleResult
 
         assert _has_dataclass_field(EnsembleResult, "data_integrity_score"), (
-            "EnsembleResult must have data_integrity_score field "
-            "(0.0 = all synthetic, 1.0 = all real data)"
+            "EnsembleResult must have data_integrity_score field (0.0 = all synthetic, 1.0 = all real data)"
         )
 
 
@@ -206,8 +193,7 @@ class TestForecastResultFields:
         from backend.app.models.forecast import ForecastResult
 
         assert _has_dataclass_field(ForecastResult, "data_quality"), (
-            "ForecastResult must have data_quality field "
-            "(real_data | partial_real | insufficient | no_data)"
+            "ForecastResult must have data_quality field (real_data | partial_real | insufficient | no_data)"
         )
 
 
@@ -265,13 +251,11 @@ class TestConsumerConfidenceProxy:
 
         # Must produce at least 1 record for the overlapping period
         assert result.row_count > 0, (
-            "compute_consumer_confidence_proxy should produce records "
-            "when given overlapping quarterly data"
+            "compute_consumer_confidence_proxy should produce records when given overlapping quarterly data"
         )
 
         # Every output record must be tagged as derived_proxy
         for record in result.records:
             assert record.source == "derived_proxy", (
-                f"Consumer confidence proxy record has source='{record.source}', "
-                f"expected 'derived_proxy'"
+                f"Consumer confidence proxy record has source='{record.source}', expected 'derived_proxy'"
             )

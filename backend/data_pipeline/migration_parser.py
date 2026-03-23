@@ -16,10 +16,8 @@ from __future__ import annotations
 
 import csv
 import io
-import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 import httpx
 
@@ -133,15 +131,17 @@ def parse_migration_csv(csv_text: str, source_url: str) -> list[MigrationRecord]
                 category = "migration"
 
             metric = key_lower.replace(" ", "_").replace("/", "_").replace("-", "_")
-            records.append(MigrationRecord(
-                category=category,
-                metric=metric,
-                value=numeric,
-                unit="persons",
-                period=period,
-                source="Immigration Department",
-                source_url=source_url,
-            ))
+            records.append(
+                MigrationRecord(
+                    category=category,
+                    metric=metric,
+                    value=numeric,
+                    unit="persons",
+                    period=period,
+                    source="Immigration Department",
+                    source_url=source_url,
+                )
+            )
 
     return records
 
@@ -271,7 +271,8 @@ async def download_all_migration(client: httpx.AsyncClient | None = None) -> lis
 
         logger.info(
             "Migration download complete: %d/%d datasets succeeded",
-            len(results), len(downloaders),
+            len(results),
+            len(downloaders),
         )
         return results
     finally:

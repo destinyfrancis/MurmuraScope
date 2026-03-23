@@ -12,10 +12,9 @@
 
 from __future__ import annotations
 
+import aiosqlite
 import pytest
 import pytest_asyncio
-import aiosqlite
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -27,12 +26,8 @@ async def mem_db():
     """In-memory SQLite connection with two test tables."""
     db = await aiosqlite.connect(":memory:")
     db.row_factory = aiosqlite.Row
-    await db.execute(
-        "CREATE TABLE memories (session_id TEXT, agent_id INTEGER, content TEXT)"
-    )
-    await db.execute(
-        "CREATE TABLE actions (session_id TEXT, round_num INTEGER, msg TEXT)"
-    )
+    await db.execute("CREATE TABLE memories (session_id TEXT, agent_id INTEGER, content TEXT)")
+    await db.execute("CREATE TABLE actions (session_id TEXT, round_num INTEGER, msg TEXT)")
     await db.commit()
     yield db
     await db.close()
@@ -191,7 +186,8 @@ async def test_flush_failure_preserves_buffer_for_one_retry(mem_db):
     Bug: current code clears buffer on ANY failure, losing all rows permanently.
     Fix: keep buffer on FIRST failure (retry_key unset), clear on SECOND failure.
     """
-    from unittest.mock import AsyncMock, patch
+    from unittest.mock import AsyncMock
+
     from backend.app.services.batch_writer import BatchWriter
 
     writer = BatchWriter()
@@ -205,9 +201,7 @@ async def test_flush_failure_preserves_buffer_for_one_retry(mem_db):
     # First flush fails — buffer must survive for retry
     result = await writer.flush("memories", mock_db)
     assert result == 0
-    assert writer.queue_count("memories") == 1, (
-        "Buffer cleared on first failure — rows lost permanently (bug)"
-    )
+    assert writer.queue_count("memories") == 1, "Buffer cleared on first failure — rows lost permanently (bug)"
 
     # Second flush succeeds (simulate recovery)
     mock_db.executemany = AsyncMock(return_value=None)

@@ -9,10 +9,10 @@ from __future__ import annotations
 
 import asyncio
 import json
-from dataclasses import replace
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
-from backend.app.models.decision import AgentDecision, DecisionType, DecisionSummary
+from backend.app.models.decision import AgentDecision, DecisionSummary, DecisionType
 from backend.app.services.agent_factory import AgentProfile
 from backend.app.services.decision_deliberator import DecisionDeliberator
 from backend.app.services.decision_rules import filter_eligible_agents
@@ -54,15 +54,15 @@ CREATE INDEX IF NOT EXISTS idx_decision_session
 # ---------------------------------------------------------------------------
 
 # ~0.1 CCL point per 100 transactions/month (HK monthly avg ~4,000 transactions)
-_BUY_PROPERTY_CCL_DELTA: float = 0.3   # per 10 net-buy decisions
+_BUY_PROPERTY_CCL_DELTA: float = 0.3  # per 10 net-buy decisions
 
 # 1 agent represents total_population / agent_count real people
 # e.g. 100 agents = 1 agent ≈ 75,000 people; 10 net-emigrate ≈ 750,000 movement
-_EMIGRATE_NET_MIG_DELTA: int = -50      # per 10 net-emigrate decisions (thousands)
+_EMIGRATE_NET_MIG_DELTA: int = -50  # per 10 net-emigrate decisions (thousands)
 
 # Individual retail investors have negligible HSI impact — institutional flows dominate
 # Set to 0; kept as named constant for future institutional investor modelling
-_INVEST_STOCKS_HSI_DELTA: float = 0.0   # retail investor impact ≈ 0
+_INVEST_STOCKS_HSI_DELTA: float = 0.0  # retail investor impact ≈ 0
 
 # HAVE_CHILD → small positive confidence boost (optimism signal)
 _HAVE_CHILD_CONFIDENCE_DELTA: float = 0.2  # per 10 net-births
@@ -75,15 +75,17 @@ _ADJUST_SPENDING_CONFIDENCE_DELTA: float = -0.3  # per 10 net-cutters
 # DecisionEngine
 # ---------------------------------------------------------------------------
 
+
 class DecisionEngine:
     """Orchestrates multi-type agent decision processing per simulation round."""
 
     def __init__(
         self,
         llm_client: LLMClient | None = None,
-        hook_config: "HookConfig | None" = None,
+        hook_config: HookConfig | None = None,
     ) -> None:
         from backend.app.models.simulation_config import HookConfig  # noqa: PLC0415
+
         self._deliberator = DecisionDeliberator(llm_client)
         self._schema_initialised = False
         hc = hook_config or HookConfig()
@@ -136,6 +138,7 @@ class DecisionEngine:
         try:
             from backend.app.services.emotional_engine import EmotionalEngine  # noqa: PLC0415
             from backend.app.utils.db import get_db as _get_db  # noqa: PLC0415
+
             eng = EmotionalEngine()
             async with _get_db() as _db:
                 emotional_states = await eng.load_states(session_id, round_number, _db)
@@ -157,14 +160,16 @@ class DecisionEngine:
             # Phase 3: apply emotional state sampling adjustments
             eligible = _apply_emotional_sampling(eligible, dt.value, emotional_states, dissonance_scores)
             if eligible:
-                tasks.append(self._deliberator.deliberate_batch(
-                    eligible_agents=eligible,
-                    macro_state=macro_state,
-                    decision_type=dt.value,
-                    session_id=session_id,
-                    round_number=round_number,
-                    agent_enrichment=agent_enrichment,
-                ))
+                tasks.append(
+                    self._deliberator.deliberate_batch(
+                        eligible_agents=eligible,
+                        macro_state=macro_state,
+                        decision_type=dt.value,
+                        session_id=session_id,
+                        round_number=round_number,
+                        agent_enrichment=agent_enrichment,
+                    )
+                )
 
         if tasks:
             batch_results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -183,6 +188,7 @@ class DecisionEngine:
         # Derive macro adjustments (use pack deltas if available)
         try:
             from backend.app.domain.base import DomainPackRegistry  # noqa: PLC0415
+
             pack = DomainPackRegistry.get(domain_pack_id)
             impact_deltas = pack.macro_impact_deltas
         except (KeyError, ImportError):
@@ -377,6 +383,7 @@ class DecisionEngine:
 # Phase 3: Emotional state multipliers
 # ---------------------------------------------------------------------------
 
+
 def _apply_emotional_sampling(
     eligible: list[AgentProfile],
     decision_type: str,
@@ -455,6 +462,7 @@ def _apply_emotional_sampling(
 # Module-level helpers
 # ---------------------------------------------------------------------------
 
+
 def _build_summary(
     session_id: str,
     round_number: int,
@@ -502,42 +510,47 @@ def _derive_macro_adjustments(
 
     # Property: net buyers vs waiters
     property_decisions = [d for d in decisions if d.decision_type == DecisionType.BUY_PROPERTY]
-    net_buyers = sum(1 for d in property_decisions if d.action == "buy") - \
-                 sum(1 for d in property_decisions if d.action in ("rent_more", "sell"))
+    net_buyers = sum(1 for d in property_decisions if d.action == "buy") - sum(
+        1 for d in property_decisions if d.action in ("rent_more", "sell")
+    )
     if net_buyers != 0:
         adjustments["ccl_index"] = round((net_buyers / 10) * ccl_delta, 2)
 
     # Emigration: net emigrants
     emigrate_decisions = [d for d in decisions if d.decision_type == DecisionType.EMIGRATE]
-    net_emigrants = sum(1 for d in emigrate_decisions if d.action == "emigrate") - \
-                    sum(1 for d in emigrate_decisions if d.action == "stay")
+    net_emigrants = sum(1 for d in emigrate_decisions if d.action == "emigrate") - sum(
+        1 for d in emigrate_decisions if d.action == "stay"
+    )
     if net_emigrants != 0:
-        adjustments["net_migration"] = float(
-            (net_emigrants / 10) * mig_delta
-        )
+        adjustments["net_migration"] = float((net_emigrants / 10) * mig_delta)
 
     # Investment: retail investors have negligible HSI impact (institutional flows dominate)
     invest_decisions = [d for d in decisions if d.decision_type == DecisionType.INVEST]
-    net_investors = sum(1 for d in invest_decisions if d.action in ("invest_stocks", "diversify")) - \
-                    sum(1 for d in invest_decisions if d.action == "hold_cash")
+    net_investors = sum(1 for d in invest_decisions if d.action in ("invest_stocks", "diversify")) - sum(
+        1 for d in invest_decisions if d.action == "hold_cash"
+    )
     if net_investors != 0 and hsi_delta != 0.0:
         adjustments["hsi_level"] = round((net_investors / 10) * hsi_delta, 2)
 
     # Child-bearing: net births → small positive confidence signal
     child_decisions = [d for d in decisions if d.decision_type == DecisionType.HAVE_CHILD]
-    net_births = sum(1 for d in child_decisions if d.action == "have_child") - \
-                 sum(1 for d in child_decisions if d.action in ("delay", "no_child"))
+    net_births = sum(1 for d in child_decisions if d.action == "have_child") - sum(
+        1 for d in child_decisions if d.action in ("delay", "no_child")
+    )
     if net_births != 0:
-        adjustments["consumer_confidence"] = adjustments.get("consumer_confidence", 0.0) + \
-            round((net_births / 10) * child_delta, 2)
+        adjustments["consumer_confidence"] = adjustments.get("consumer_confidence", 0.0) + round(
+            (net_births / 10) * child_delta, 2
+        )
 
     # Spending adjustment: net cutters → negative confidence feedback
     spending_decisions = [d for d in decisions if d.decision_type == DecisionType.ADJUST_SPENDING]
-    net_cutters = sum(1 for d in spending_decisions if d.action in ("cut_spending", "save_more")) - \
-                  sum(1 for d in spending_decisions if d.action in ("spend_more", "upgrade"))
+    net_cutters = sum(1 for d in spending_decisions if d.action in ("cut_spending", "save_more")) - sum(
+        1 for d in spending_decisions if d.action in ("spend_more", "upgrade")
+    )
     if net_cutters != 0:
-        adjustments["consumer_confidence"] = adjustments.get("consumer_confidence", 0.0) + \
-            round((net_cutters / 10) * spend_delta, 2)
+        adjustments["consumer_confidence"] = adjustments.get("consumer_confidence", 0.0) + round(
+            (net_cutters / 10) * spend_delta, 2
+        )
 
     # Employment change: quit/lie_flat → unemployment rises; strike → GDP/confidence fall
     employment_decisions = [d for d in decisions if d.decision_type == DecisionType.EMPLOYMENT_CHANGE]
@@ -545,21 +558,17 @@ def _derive_macro_adjustments(
     net_strike = sum(1 for d in employment_decisions if d.action == "strike")
     if net_quit > 0:
         # Each quit/lie_flat agent represents ~0.002 unemployment rate rise
-        adjustments["unemployment_rate"] = adjustments.get("unemployment_rate", 0.0) + \
-            round(net_quit * 0.002, 4)
+        adjustments["unemployment_rate"] = adjustments.get("unemployment_rate", 0.0) + round(net_quit * 0.002, 4)
     if net_strike > 0:
         # Strikes reduce GDP growth and dent consumer confidence
-        adjustments["gdp_growth"] = adjustments.get("gdp_growth", 0.0) - \
-            round(net_strike * 0.001, 4)
-        adjustments["consumer_confidence"] = adjustments.get("consumer_confidence", 0.0) - \
-            round(net_strike * 0.5, 2)
+        adjustments["gdp_growth"] = adjustments.get("gdp_growth", 0.0) - round(net_strike * 0.001, 4)
+        adjustments["consumer_confidence"] = adjustments.get("consumer_confidence", 0.0) - round(net_strike * 0.5, 2)
 
     # Relocate: GBA relocations reduce net_migration slightly (emigration proxy)
     relocate_decisions = [d for d in decisions if d.decision_type == DecisionType.RELOCATE]
     gba_relocators = sum(1 for d in relocate_decisions if d.action == "relocate_gba")
     if gba_relocators > 0:
-        adjustments["net_migration"] = adjustments.get("net_migration", 0.0) + \
-            float((gba_relocators / 10) * -10)
+        adjustments["net_migration"] = adjustments.get("net_migration", 0.0) + float((gba_relocators / 10) * -10)
 
     return adjustments
 
@@ -591,10 +600,8 @@ def get_decision_engine(mode: str = "hk_demographic", **kwargs: object) -> objec
         from backend.app.services.universal_decision_engine import (  # noqa: PLC0415
             UniversalDecisionEngine,
         )
+
         return UniversalDecisionEngine(**kwargs)
     if mode == "hk_demographic":
         return DecisionEngine(**kwargs)
-    raise ValueError(
-        f"Unknown decision engine mode {mode!r}. "
-        "Choose 'hk_demographic' or 'kg_driven'."
-    )
+    raise ValueError(f"Unknown decision engine mode {mode!r}. Choose 'hk_demographic' or 'kg_driven'.")

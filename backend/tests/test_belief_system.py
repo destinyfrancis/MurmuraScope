@@ -1,4 +1,5 @@
 """Tests for BeliefSystem and Belief models (Phase 3)."""
+
 from __future__ import annotations
 
 import random
@@ -10,10 +11,10 @@ import pytest
 from backend.app.models.emotional_state import CORE_BELIEF_TOPICS, Belief, BeliefState
 from backend.app.services.belief_system import BeliefSystem
 
-
 # ---------------------------------------------------------------------------
 # Helper fixtures
 # ---------------------------------------------------------------------------
+
 
 def _make_profile(
     agent_id: int = 1,
@@ -38,6 +39,7 @@ def _make_profile(
 # ---------------------------------------------------------------------------
 # Model tests
 # ---------------------------------------------------------------------------
+
 
 def test_belief_creation():
     """Belief is a frozen dataclass with correct defaults."""
@@ -86,6 +88,7 @@ def test_core_belief_topics_count():
 # ---------------------------------------------------------------------------
 # initialize_beliefs tests
 # ---------------------------------------------------------------------------
+
 
 def test_initialize_beliefs_returns_six():
     """initialize_beliefs should return 6 beliefs (one per core topic)."""
@@ -151,6 +154,7 @@ def test_initialize_beliefs_young_open_on_ai():
 # ---------------------------------------------------------------------------
 # update_belief tests
 # ---------------------------------------------------------------------------
+
 
 def test_update_belief_shifts_stance():
     """Evidence should shift belief stance toward evidence direction."""
@@ -238,8 +242,7 @@ def test_contradictory_evidence_reduces_confidence():
     # Negative evidence contradicts positive prior (stance > 0)
     updated = system.update_belief(belief, -1.0, 0.5, openness=0.5)
     assert updated.confidence < belief.confidence, (
-        "Contradictory evidence must reduce confidence; "
-        f"was {belief.confidence}, got {updated.confidence}"
+        f"Contradictory evidence must reduce confidence; was {belief.confidence}, got {updated.confidence}"
     )
 
 
@@ -271,6 +274,7 @@ def test_evidence_count_increments():
 # ---------------------------------------------------------------------------
 # extract_stance tests
 # ---------------------------------------------------------------------------
+
 
 def test_extract_stance_property_positive():
     """Positive property keyword should return positive stance."""
@@ -323,6 +327,7 @@ def test_extract_stance_mixed_signals():
 # ---------------------------------------------------------------------------
 # Async persist/load tests (mock DB)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_persist_beliefs():

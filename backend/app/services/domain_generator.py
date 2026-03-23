@@ -6,6 +6,7 @@ The DomainGenerator calls the LLM twice at most:
 
 Raises ValueError if both attempts produce invalid output.
 """
+
 from __future__ import annotations
 
 import logging
@@ -62,8 +63,7 @@ class DomainGenerator:
             return pack
 
         raise ValueError(
-            "Failed to generate valid domain pack after 2 attempts. "
-            "Please fill in the missing fields manually."
+            "Failed to generate valid domain pack after 2 attempts. Please fill in the missing fields manually."
         )
 
     # ------------------------------------------------------------------

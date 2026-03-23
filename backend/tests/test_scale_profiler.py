@@ -12,10 +12,9 @@ from __future__ import annotations
 
 import time
 
+import aiosqlite
 import pytest
 import pytest_asyncio
-import aiosqlite
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -69,8 +68,8 @@ def test_start_hook_returns_float():
 
 
 def test_end_hook_returns_hook_timing():
-    from backend.app.services.scale_profiler import ScaleProfiler
     from backend.app.models.scale import HookTiming
+    from backend.app.services.scale_profiler import ScaleProfiler
 
     p = ScaleProfiler()
     t0 = p.start_hook("group_1", 1)
@@ -113,8 +112,8 @@ def test_timing_count_increments():
 
 
 def test_get_summary_empty_returns_zero_rounds():
-    from backend.app.services.scale_profiler import ScaleProfiler
     from backend.app.models.scale import BenchmarkResult
+    from backend.app.services.scale_profiler import ScaleProfiler
 
     p = ScaleProfiler()
     result = p.get_summary("standard", 300, 60.0, 512.0)
@@ -149,6 +148,7 @@ def test_get_summary_bottleneck_hook():
     p = ScaleProfiler()
     # Manually inject timings with known durations
     from backend.app.models.scale import HookTiming
+
     p._timings = [
         HookTiming("fast_hook", 1, 5.0),
         HookTiming("slow_hook", 1, 100.0),
@@ -161,8 +161,8 @@ def test_get_summary_bottleneck_hook():
 
 
 def test_get_summary_throughput():
-    from backend.app.services.scale_profiler import ScaleProfiler
     from backend.app.models.scale import HookTiming
+    from backend.app.services.scale_profiler import ScaleProfiler
 
     p = ScaleProfiler()
     p._timings = [HookTiming("g1", 1, 10.0), HookTiming("g1", 2, 10.0)]
@@ -179,8 +179,8 @@ def test_get_summary_throughput():
 
 @pytest.mark.asyncio
 async def test_persist_writes_row(bench_db):
-    from backend.app.services.scale_profiler import ScaleProfiler
     from backend.app.models.scale import HookTiming
+    from backend.app.services.scale_profiler import ScaleProfiler
 
     p = ScaleProfiler()
     p._timings = [HookTiming("group_1", 1, 50.0, agent_count=200)]
@@ -195,8 +195,8 @@ async def test_persist_writes_row(bench_db):
 
 @pytest.mark.asyncio
 async def test_persist_stores_correct_values(bench_db):
-    from backend.app.services.scale_profiler import ScaleProfiler
     from backend.app.models.scale import HookTiming
+    from backend.app.services.scale_profiler import ScaleProfiler
 
     p = ScaleProfiler()
     p._timings = [HookTiming("group_1", 1, 75.0, agent_count=500)]
@@ -204,9 +204,7 @@ async def test_persist_stores_correct_values(bench_db):
 
     await p.persist(result, bench_db)
 
-    cursor = await bench_db.execute(
-        "SELECT target_name, agent_count, total_duration_s FROM scale_benchmarks LIMIT 1"
-    )
+    cursor = await bench_db.execute("SELECT target_name, agent_count, total_duration_s FROM scale_benchmarks LIMIT 1")
     row = await cursor.fetchone()
     assert row["target_name"] == "deep"
     assert row["agent_count"] == 500

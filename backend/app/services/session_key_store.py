@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from typing import Any
 
 from backend.app.utils.db import get_db
 from backend.app.utils.logger import get_logger
@@ -45,8 +44,7 @@ def _get_fernet():
             )
         # Debug mode: ephemeral key with warning
         logger.warning(
-            "No encryption key set — using ephemeral key (DEBUG mode). "
-            "All BYOK API keys will be lost on restart."
+            "No encryption key set — using ephemeral key (DEBUG mode). All BYOK API keys will be lost on restart."
         )
         key = Fernet.generate_key().decode()
     return Fernet(key.encode() if isinstance(key, str) else key)
@@ -78,15 +76,16 @@ class SessionKeyStore:
 
         logger.info(
             "Stored BYOK key for session=%s provider=%s model=%s",
-            session_id, provider, model,
+            session_id,
+            provider,
+            model,
         )
 
     async def retrieve_key(self, session_id: str) -> SessionKeyInfo | None:
         """Decrypt and return the API key for a session, or None."""
         async with get_db() as db:
             cursor = await db.execute(
-                "SELECT encrypted_key, provider, model, base_url "
-                "FROM session_api_keys WHERE session_id = ?",
+                "SELECT encrypted_key, provider, model, base_url FROM session_api_keys WHERE session_id = ?",
                 (session_id,),
             )
             row = await cursor.fetchone()

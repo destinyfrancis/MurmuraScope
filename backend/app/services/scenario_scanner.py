@@ -57,19 +57,21 @@ SCAN_TEMPLATES: dict[str, dict[str, Any]] = {
 # Maximum grid size before switching to LHS
 _LHS_THRESHOLD = 10
 # Column names in simulation_sessions that may be overridden
-_ALLOWED_MACRO_PARAMS = frozenset({
-    "interest_rate",
-    "stamp_duty",
-    "taiwan_strait_risk",
-    "gdp_growth",
-    "unemployment_rate",
-    "consumer_confidence",
-    "hsi_level",
-    "ccl_index",
-    "cpi_yoy",
-    "fed_rate",
-    "china_gdp_growth",
-})
+_ALLOWED_MACRO_PARAMS = frozenset(
+    {
+        "interest_rate",
+        "stamp_duty",
+        "taiwan_strait_risk",
+        "gdp_growth",
+        "unemployment_rate",
+        "consumer_confidence",
+        "hsi_level",
+        "ccl_index",
+        "cpi_yoy",
+        "fed_rate",
+        "china_gdp_growth",
+    }
+)
 
 
 # ---------------------------------------------------------------------------
@@ -136,9 +138,7 @@ class ScenarioScanner:
         unknown = set(parameter_space) - _ALLOWED_MACRO_PARAMS
         if unknown:
             logger.warning("Unknown scan parameters (ignored): %s", unknown)
-            parameter_space = {
-                k: v for k, v in parameter_space.items() if k in _ALLOWED_MACRO_PARAMS
-            }
+            parameter_space = {k: v for k, v in parameter_space.items() if k in _ALLOWED_MACRO_PARAMS}
 
         if not parameter_space:
             raise ValueError("No valid parameters in parameter_space")
@@ -157,19 +157,25 @@ class ScenarioScanner:
 
         logger.info(
             "scan session=%s params=%s grid_size=%d method=%s n_combos=%d",
-            session_id, list(parameter_space), grid_size, method, len(combos),
+            session_id,
+            list(parameter_space),
+            grid_size,
+            method,
+            len(combos),
         )
 
         variants: list[ScanVariant] = []
         for i, combo in enumerate(combos):
             label = self._make_label(label_prefix, i, combo)
             branch_id = await self._create_branch(session_id, combo, label)
-            variants.append(ScanVariant(
-                branch_id=branch_id,
-                parent_session_id=session_id,
-                label=label,
-                parameters=combo,
-            ))
+            variants.append(
+                ScanVariant(
+                    branch_id=branch_id,
+                    parent_session_id=session_id,
+                    label=label,
+                    parameters=combo,
+                )
+            )
 
         return ScanResult(
             parent_session_id=session_id,
@@ -309,13 +315,8 @@ class ScenarioScanner:
             """
         )
         await db.execute("DROP TABLE scenario_branches")
-        await db.execute(
-            "ALTER TABLE scenario_branches_v2 RENAME TO scenario_branches"
-        )
-        await db.execute(
-            "CREATE INDEX IF NOT EXISTS idx_branch_parent "
-            "ON scenario_branches(parent_session_id)"
-        )
+        await db.execute("ALTER TABLE scenario_branches_v2 RENAME TO scenario_branches")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_branch_parent ON scenario_branches(parent_session_id)")
         logger.info("scenario_branches migration complete")
 
     async def _create_branch(
@@ -345,7 +346,9 @@ class ScenarioScanner:
 
         logger.debug(
             "Created branch %s for session %s params=%s",
-            branch_id, parent_session_id, parameter_overrides,
+            branch_id,
+            parent_session_id,
+            parameter_overrides,
         )
         return branch_id
 

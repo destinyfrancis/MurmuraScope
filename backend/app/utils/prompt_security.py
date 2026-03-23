@@ -4,6 +4,7 @@ Sanitizes user-controlled text before insertion into LLM prompts.
 Strategy: Unicode normalization + length truncation + brace escaping +
 XML tag stripping + system-instruction prefix detection.
 """
+
 from __future__ import annotations
 
 import re

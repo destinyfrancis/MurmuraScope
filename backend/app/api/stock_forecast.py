@@ -32,6 +32,7 @@ router = APIRouter(prefix="/stock", tags=["stock"])
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _build_ticker_info(ticker: str) -> TickerInfo:
     meta = TICKER_REGISTRY[ticker]
     return TickerInfo(
@@ -46,6 +47,7 @@ def _build_ticker_info(ticker: str) -> TickerInfo:
 # ---------------------------------------------------------------------------
 # GET /stock/tickers
 # ---------------------------------------------------------------------------
+
 
 @router.get("/tickers", response_model=APIResponse)
 async def list_tickers(
@@ -63,7 +65,7 @@ async def list_tickers(
             success=True,
             data={"tickers": [i.to_dict() for i in infos], "count": len(infos)},
         )
-    except Exception as exc:
+    except Exception:
         logger.exception("list_tickers failed")
         return APIResponse(success=False, error="Failed to list tickers")
 
@@ -71,6 +73,7 @@ async def list_tickers(
 # ---------------------------------------------------------------------------
 # GET /stock/summary
 # ---------------------------------------------------------------------------
+
 
 @router.get("/summary", response_model=APIResponse)
 async def get_summary(
@@ -127,6 +130,7 @@ async def get_summary(
 # GET /stock/forecast/backtest  (MUST be before /forecast)
 # ---------------------------------------------------------------------------
 
+
 @router.get("/forecast/backtest", response_model=APIResponse)
 async def get_forecast_backtest(
     ticker: str = Query(..., description="Ticker symbol e.g. ^HSI or 0700.HK"),
@@ -144,7 +148,7 @@ async def get_forecast_backtest(
     except ValueError as exc:
         logger.warning("Backtest validation error for %s: %s", ticker, exc)
         return APIResponse(success=False, error="Backtest validation error")
-    except Exception as exc:
+    except Exception:
         logger.exception("Backtest failed for %s", ticker)
         return APIResponse(success=False, error="Backtest failed")
 
@@ -152,6 +156,7 @@ async def get_forecast_backtest(
 # ---------------------------------------------------------------------------
 # GET /stock/forecast
 # ---------------------------------------------------------------------------
+
 
 @router.get("/forecast", response_model=APIResponse)
 async def get_forecast(
@@ -190,7 +195,7 @@ async def get_forecast(
     except ValueError as exc:
         logger.warning("Forecast validation error for %s: %s", ticker, exc)
         return APIResponse(success=False, error="Forecast validation error")
-    except Exception as exc:
+    except Exception:
         logger.exception("Forecast failed for %s", ticker)
         return APIResponse(success=False, error="Forecast failed")
 
@@ -199,11 +204,13 @@ async def get_forecast(
 # POST /stock/refresh  (background task — fire and forget)
 # ---------------------------------------------------------------------------
 
+
 async def _download_task() -> None:
     """Background task: re-download all tickers from yfinance."""
     logger.info("stock/refresh: background download started")
     try:
         from backend.data_pipeline.stock_downloader import download_all_stocks
+
         results = await download_all_stocks()
         total = sum(results.values())
         logger.info("stock/refresh: complete — %d rows upserted across %d tickers", total, len(results))
@@ -228,6 +235,6 @@ async def refresh_stock_data(background_tasks: BackgroundTasks) -> APIResponse:
                 "ticker_count": len(TICKER_REGISTRY),
             },
         )
-    except Exception as exc:
+    except Exception:
         logger.exception("Failed to schedule stock refresh")
         return APIResponse(success=False, error="Failed to schedule stock refresh")

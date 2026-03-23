@@ -98,7 +98,8 @@ class CalibratedCoefficients:
             self._source = "file"
             logger.info(
                 "Loaded calibration coefficients from %s (%d indicators)",
-                self._coef_path, len(self._coefficients),
+                self._coef_path,
+                len(self._coefficients),
             )
         else:
             self._coefficients = {k: dict(v) for k, v in _DEFAULTS.items()}
@@ -221,13 +222,12 @@ class CalibratedCoefficients:
         """Return the full coefficient table as a plain dict."""
         if not self._loaded:
             self.load_sync()
-        return {
-            k: dict(v)
-            for k, v in self._coefficients.items()
-        }
+        return {k: dict(v) for k, v in self._coefficients.items()}
 
     def get_extended(
-        self, indicator: str, sentiment_metric: str,
+        self,
+        indicator: str,
+        sentiment_metric: str,
     ) -> dict[str, Any]:
         """Return extended OLS stats for a coefficient pair.
 
@@ -295,9 +295,7 @@ class CalibratedCoefficients:
             Parsed dict, or None if file not found or invalid.
         """
         if not self._coef_path.exists():
-            logger.debug(
-                "Calibration file not found at %s — will use defaults", self._coef_path
-            )
+            logger.debug("Calibration file not found at %s — will use defaults", self._coef_path)
             return None
 
         try:

@@ -56,12 +56,15 @@ def emit(msg_type: str, data: dict[str, Any]) -> None:
 
 
 def emit_progress(platform: str, round_num: int, total: int, detail: str = "") -> None:
-    emit("progress", {
-        "platform": platform,
-        "round": round_num,
-        "total": total,
-        "detail": detail,
-    })
+    emit(
+        "progress",
+        {
+            "platform": platform,
+            "round": round_num,
+            "total": total,
+            "detail": detail,
+        },
+    )
 
 
 def emit_error(message: str, platform: str = "parallel") -> None:
@@ -75,15 +78,17 @@ def emit_complete(platform: str, summary: dict[str, Any]) -> None:
 # ---------------------------------------------------------------------------
 # Config loading and validation
 # ---------------------------------------------------------------------------
-REQUIRED_CONFIG_KEYS = frozenset({
-    "session_id",
-    "agent_csv_path",
-    "round_count",
-    "platforms",
-    "llm_provider",
-    "llm_model",
-    "oasis_db_path",
-})
+REQUIRED_CONFIG_KEYS = frozenset(
+    {
+        "session_id",
+        "agent_csv_path",
+        "round_count",
+        "platforms",
+        "llm_provider",
+        "llm_model",
+        "oasis_db_path",
+    }
+)
 
 
 def load_config(config_path: str) -> dict[str, Any]:
@@ -105,9 +110,7 @@ def load_config(config_path: str) -> dict[str, Any]:
         config = {**config, "llm_api_key": os.environ.get("OPENROUTER_API_KEY", "")}
 
     if not Path(config["agent_csv_path"]).is_file():
-        raise FileNotFoundError(
-            f"Agent profiles file not found: {config['agent_csv_path']}"
-        )
+        raise FileNotFoundError(f"Agent profiles file not found: {config['agent_csv_path']}")
 
     if config.get("round_count", 0) < 1:
         raise ValueError("round_count must be >= 1")
@@ -118,6 +121,7 @@ def load_config(config_path: str) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Subprocess runner for platform simulations
 # ---------------------------------------------------------------------------
+
 
 def _run_platform_subprocess(
     script_name: str,
@@ -211,9 +215,7 @@ def _run_platform_subprocess(
     stderr_output = proc.stderr.read() if proc.stderr else ""
     if proc.returncode != 0:
         logger.error("[%s] exited with code %d: %s", platform, proc.returncode, stderr_output[:500])
-        raise RuntimeError(
-            f"{platform} simulation failed (exit code {proc.returncode}): {stderr_output[:300]}"
-        )
+        raise RuntimeError(f"{platform} simulation failed (exit code {proc.returncode}): {stderr_output[:300]}")
 
     return {
         "platform": platform,
@@ -245,6 +247,7 @@ def _run_platform_thread(
 # Phase 1C: network patch reader
 # ---------------------------------------------------------------------------
 
+
 def _read_and_consume_network_patch(session_id: str) -> list[dict[str, Any]]:
     """Read and delete network_patch.json if it exists.
 
@@ -270,7 +273,8 @@ def _read_and_consume_network_patch(session_id: str) -> list[dict[str, Any]]:
         if follows:
             logger.info(
                 "[network_patch] %d suggested follows for session %s",
-                len(follows), session_id,
+                len(follows),
+                session_id,
             )
         return follows
     except Exception as exc:
@@ -344,18 +348,24 @@ def run_parallel(config: dict[str, Any]) -> None:
 
     # Emit final summary
     if errors:
-        emit("error", {
-            "platform": "parallel",
-            "message": f"Simulation completed with errors: {errors}",
-            "results": results,
-        })
+        emit(
+            "error",
+            {
+                "platform": "parallel",
+                "message": f"Simulation completed with errors: {errors}",
+                "results": results,
+            },
+        )
     else:
-        emit("complete", {
-            "platform": "parallel",
-            "session_id": session_id,
-            "platforms_completed": list(results.keys()),
-            "summaries": results,
-        })
+        emit(
+            "complete",
+            {
+                "platform": "parallel",
+                "session_id": session_id,
+                "platforms_completed": list(results.keys()),
+                "summaries": results,
+            },
+        )
 
     logger.info("Parallel simulation finished. Results: %s, Errors: %s", results, errors)
 
@@ -363,6 +373,7 @@ def run_parallel(config: dict[str, Any]) -> None:
 # ---------------------------------------------------------------------------
 # CLI entry point
 # ---------------------------------------------------------------------------
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="MurmuraScope Parallel Simulation Runner")

@@ -10,6 +10,7 @@ Usage:
         span.set_attribute("key", "value")
         ...
 """
+
 from __future__ import annotations
 
 import os
@@ -36,10 +37,10 @@ def init_telemetry(service_name: str = "murmuroscope") -> None:
 
     try:
         from opentelemetry import trace
-        from opentelemetry.sdk.resources import Resource, SERVICE_NAME
+        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+        from opentelemetry.sdk.resources import SERVICE_NAME, Resource
         from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk.trace.export import BatchSpanProcessor
-        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 
         resource = Resource(attributes={SERVICE_NAME: service_name})
         provider = TracerProvider(resource=resource)
@@ -54,11 +55,13 @@ def init_telemetry(service_name: str = "murmuroscope") -> None:
         pass
 
 
-def get_tracer(name: str) -> "Tracer":
+def get_tracer(name: str) -> Tracer:
     """Return a tracer for *name*. Returns a no-op tracer when OTEL is disabled."""
     try:
         from opentelemetry import trace
+
         return trace.get_tracer(name)
     except ImportError:
         from unittest.mock import MagicMock
+
         return MagicMock()

@@ -10,16 +10,14 @@ import aiosqlite
 import pytest
 
 from backend.app.services.trust_dynamics import (
+    _DELTA_MAX,
+    _TRUST_DECAY_FACTOR,
+    _TRUST_MAX,
+    _TRUST_MIN,
     TrustDynamicsService,
     TrustUpdate,
     _sentiment_alignment_score,
-    _TRUST_DECAY_FACTOR,
-    _DELTA_MAX,
-    _DELTA_MIN,
-    _TRUST_MAX,
-    _TRUST_MIN,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -98,6 +96,7 @@ def tmp_db(tmp_path):
 @pytest.fixture
 def patched_db(tmp_db):
     """Patch get_db to use the temp DB."""
+
     @asynccontextmanager
     async def _fake_get_db():
         async with aiosqlite.connect(str(tmp_db)) as db:
@@ -116,8 +115,11 @@ def patched_db(tmp_db):
 class TestTrustUpdateFrozen:
     def test_is_frozen(self):
         u = TrustUpdate(
-            agent_a_id=1, agent_b_id=2,
-            old_score=0.0, new_score=0.1, reason="test",
+            agent_a_id=1,
+            agent_b_id=2,
+            old_score=0.0,
+            new_score=0.1,
+            reason="test",
         )
         with pytest.raises(Exception):
             u.new_score = 0.5  # type: ignore[misc]
@@ -195,7 +197,6 @@ class TestUpdateTrustFromRound:
     @pytest.mark.asyncio
     async def test_positive_sentiment_increases_trust(self, patched_db):
         """Positive sentiment interaction should increase trust score."""
-        import aiosqlite as _aiosqlite
 
         # Set up: two agents + one interaction
         async with aiosqlite.connect(str(patched_db)) as db:
@@ -286,9 +287,7 @@ class TestUpdateTrustFromRound:
 # Helper for test setup
 async def service_setup(db):
     try:
-        await db.execute(
-            "ALTER TABLE agent_relationships ADD COLUMN trust_score REAL DEFAULT 0.0"
-        )
+        await db.execute("ALTER TABLE agent_relationships ADD COLUMN trust_score REAL DEFAULT 0.0")
         await db.commit()
     except Exception:
         pass
@@ -304,9 +303,7 @@ class TestDecayTrust:
     async def test_decay_reduces_trust_scores(self, patched_db):
         """Trust score should be multiplied by 0.95 after decay."""
         async with aiosqlite.connect(str(patched_db)) as db:
-            await db.execute(
-                "ALTER TABLE agent_relationships ADD COLUMN trust_score REAL DEFAULT 0.0"
-            )
+            await db.execute("ALTER TABLE agent_relationships ADD COLUMN trust_score REAL DEFAULT 0.0")
             await db.execute(
                 "INSERT INTO agent_relationships "
                 "(session_id, agent_a_id, agent_b_id, relationship_type, trust_score)"
@@ -319,9 +316,7 @@ class TestDecayTrust:
         assert count >= 1
 
         async with aiosqlite.connect(str(patched_db)) as db:
-            cursor = await db.execute(
-                "SELECT trust_score FROM agent_relationships WHERE session_id = 'sess_decay'"
-            )
+            cursor = await db.execute("SELECT trust_score FROM agent_relationships WHERE session_id = 'sess_decay'")
             row = await cursor.fetchone()
         assert row is not None
         assert abs(row[0] - 0.5 * _TRUST_DECAY_FACTOR) < 0.001
@@ -330,9 +325,7 @@ class TestDecayTrust:
     async def test_decay_skips_near_zero_scores(self, patched_db):
         """Rows with |trust_score| <= 0.01 should not be updated."""
         async with aiosqlite.connect(str(patched_db)) as db:
-            await db.execute(
-                "ALTER TABLE agent_relationships ADD COLUMN trust_score REAL DEFAULT 0.0"
-            )
+            await db.execute("ALTER TABLE agent_relationships ADD COLUMN trust_score REAL DEFAULT 0.0")
             await db.execute(
                 "INSERT INTO agent_relationships "
                 "(session_id, agent_a_id, agent_b_id, relationship_type, trust_score)"
@@ -360,12 +353,9 @@ class TestGetTrustContext:
     @pytest.mark.asyncio
     async def test_formats_trusted_relationships(self, patched_db):
         async with aiosqlite.connect(str(patched_db)) as db:
+            await db.execute("ALTER TABLE agent_relationships ADD COLUMN trust_score REAL DEFAULT 0.0")
             await db.execute(
-                "ALTER TABLE agent_relationships ADD COLUMN trust_score REAL DEFAULT 0.0"
-            )
-            await db.execute(
-                "INSERT INTO agent_profiles (id, session_id, oasis_username)"
-                " VALUES (100, 'sess_ctx', 'trusted_user')"
+                "INSERT INTO agent_profiles (id, session_id, oasis_username) VALUES (100, 'sess_ctx', 'trusted_user')"
             )
             await db.execute(
                 "INSERT INTO agent_relationships "
@@ -383,9 +373,7 @@ class TestGetTrustContext:
     async def test_returns_empty_for_below_threshold_scores(self, patched_db):
         """Scores between -0.1 and +0.1 should not appear in context."""
         async with aiosqlite.connect(str(patched_db)) as db:
-            await db.execute(
-                "ALTER TABLE agent_relationships ADD COLUMN trust_score REAL DEFAULT 0.0"
-            )
+            await db.execute("ALTER TABLE agent_relationships ADD COLUMN trust_score REAL DEFAULT 0.0")
             await db.execute(
                 "INSERT INTO agent_relationships "
                 "(session_id, agent_a_id, agent_b_id, relationship_type, trust_score)"

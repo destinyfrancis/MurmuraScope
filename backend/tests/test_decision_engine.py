@@ -10,12 +10,10 @@ Tests cover:
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import replace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-import pytest_asyncio
 
 from backend.app.models.decision import AgentDecision, DecisionType
 from backend.app.services.agent_factory import AgentProfile
@@ -42,7 +40,6 @@ from backend.app.services.macro_state import (
     BASELINE_STAMP_DUTY,
     MacroState,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -162,9 +159,7 @@ class TestEligibilityEmigrate:
         profile = _make_profile(neuroticism=0.7, savings=250_000)
         assert is_eligible_emigrate(profile, macro) is True
 
-    def test_geopolitical_stress_requires_minimum_savings(
-        self, baseline_macro: MacroState
-    ) -> None:
+    def test_geopolitical_stress_requires_minimum_savings(self, baseline_macro: MacroState) -> None:
         macro = replace(baseline_macro, taiwan_strait_risk=0.8)
         profile = _make_profile(neuroticism=0.7, savings=100_000)
         assert is_eligible_emigrate(profile, macro) is False
@@ -255,22 +250,16 @@ class TestEligibilityEmploymentChange:
     """Tests for is_eligible_employment_change."""
 
     def test_quit_path_high_neuroticism(self, baseline_macro: MacroState) -> None:
-        profile = _make_profile(
-            age=30, neuroticism=0.7, monthly_income=25_000, savings=400_000
-        )
+        profile = _make_profile(age=30, neuroticism=0.7, monthly_income=25_000, savings=400_000)
         assert is_eligible_employment_change(profile, baseline_macro) is True
 
     def test_strike_path(self, baseline_macro: MacroState) -> None:
         macro = replace(baseline_macro, consumer_confidence=30.0)
-        profile = _make_profile(
-            age=35, political_stance=0.8, monthly_income=25_000
-        )
+        profile = _make_profile(age=35, political_stance=0.8, monthly_income=25_000)
         assert is_eligible_employment_change(profile, macro) is True
 
     def test_lie_flat_path(self, baseline_macro: MacroState) -> None:
-        profile = _make_profile(
-            age=28, openness=0.3, conscientiousness=0.3, monthly_income=20_000
-        )
+        profile = _make_profile(age=28, openness=0.3, conscientiousness=0.3, monthly_income=20_000)
         assert is_eligible_employment_change(profile, baseline_macro) is True
 
     def test_ineligible_student(self, baseline_macro: MacroState) -> None:
@@ -283,9 +272,7 @@ class TestEligibilityRelocate:
 
     def test_eligible_rent_pressure(self, baseline_macro: MacroState) -> None:
         # District price 18_500, income 1_000 → 18_500 > 1_000 * 15
-        profile = _make_profile(
-            district="中西區", monthly_income=1_000, housing_type="私人住宅"
-        )
+        profile = _make_profile(district="中西區", monthly_income=1_000, housing_type="私人住宅")
         assert is_eligible_relocate(profile, baseline_macro) is True
 
     def test_eligible_school_need(self, baseline_macro: MacroState) -> None:
@@ -312,25 +299,25 @@ class TestFilterEligibleAgents:
 
     def test_no_eligible_agents_returns_empty(self, baseline_macro: MacroState) -> None:
         profiles = [_make_profile(monthly_income=0)]
-        result = filter_eligible_agents(
-            profiles, baseline_macro, DecisionType.CHANGE_JOB
-        )
+        result = filter_eligible_agents(profiles, baseline_macro, DecisionType.CHANGE_JOB)
         assert result == []
 
     def test_sampling_cap_respected(self, baseline_macro: MacroState) -> None:
         macro = replace(baseline_macro, cpi_yoy=0.04)
         profiles = [_make_profile(id=i, monthly_income=25_000) for i in range(200)]
-        result = filter_eligible_agents(
-            profiles, macro, DecisionType.ADJUST_SPENDING, max_agents=10, rng_seed=42
-        )
+        result = filter_eligible_agents(profiles, macro, DecisionType.ADJUST_SPENDING, max_agents=10, rng_seed=42)
         assert len(result) <= 10
 
     def test_sample_rate_controls_size(self, baseline_macro: MacroState) -> None:
         macro = replace(baseline_macro, cpi_yoy=0.04)
         profiles = [_make_profile(id=i, monthly_income=25_000) for i in range(100)]
         result = filter_eligible_agents(
-            profiles, macro, DecisionType.ADJUST_SPENDING,
-            sample_rate=0.05, max_agents=50, rng_seed=42,
+            profiles,
+            macro,
+            DecisionType.ADJUST_SPENDING,
+            sample_rate=0.05,
+            max_agents=50,
+            rng_seed=42,
         )
         # 100 eligible * 0.05 = 5 agents
         assert len(result) == 5
@@ -338,12 +325,8 @@ class TestFilterEligibleAgents:
     def test_deterministic_with_seed(self, baseline_macro: MacroState) -> None:
         macro = replace(baseline_macro, cpi_yoy=0.04)
         profiles = [_make_profile(id=i, monthly_income=25_000) for i in range(50)]
-        r1 = filter_eligible_agents(
-            profiles, macro, DecisionType.ADJUST_SPENDING, rng_seed=99
-        )
-        r2 = filter_eligible_agents(
-            profiles, macro, DecisionType.ADJUST_SPENDING, rng_seed=99
-        )
+        r1 = filter_eligible_agents(profiles, macro, DecisionType.ADJUST_SPENDING, rng_seed=99)
+        r2 = filter_eligible_agents(profiles, macro, DecisionType.ADJUST_SPENDING, rng_seed=99)
         assert [p.id for p in r1] == [p.id for p in r2]
 
 
@@ -401,64 +384,43 @@ class TestDeriveMacroAdjustments:
         assert result == {}
 
     def test_net_buyers_increase_ccl(self) -> None:
-        decisions = [
-            AgentDecision("s1", i, 1, "buy_property", "buy", "r", 0.8)
-            for i in range(10)
-        ]
+        decisions = [AgentDecision("s1", i, 1, "buy_property", "buy", "r", 0.8) for i in range(10)]
         result = _derive_macro_adjustments(decisions)
         assert "ccl_index" in result
         assert result["ccl_index"] > 0
 
     def test_net_emigrants_decrease_migration(self) -> None:
-        decisions = [
-            AgentDecision("s1", i, 1, "emigrate", "emigrate", "r", 0.9)
-            for i in range(10)
-        ]
+        decisions = [AgentDecision("s1", i, 1, "emigrate", "emigrate", "r", 0.9) for i in range(10)]
         result = _derive_macro_adjustments(decisions)
         assert "net_migration" in result
         assert result["net_migration"] < 0
 
     def test_net_cutters_decrease_confidence(self) -> None:
-        decisions = [
-            AgentDecision("s1", i, 1, "adjust_spending", "cut_spending", "r", 0.7)
-            for i in range(10)
-        ]
+        decisions = [AgentDecision("s1", i, 1, "adjust_spending", "cut_spending", "r", 0.7) for i in range(10)]
         result = _derive_macro_adjustments(decisions)
         assert "consumer_confidence" in result
         assert result["consumer_confidence"] < 0
 
     def test_births_increase_confidence(self) -> None:
-        decisions = [
-            AgentDecision("s1", i, 1, "have_child", "have_child", "r", 0.8)
-            for i in range(10)
-        ]
+        decisions = [AgentDecision("s1", i, 1, "have_child", "have_child", "r", 0.8) for i in range(10)]
         result = _derive_macro_adjustments(decisions)
         assert "consumer_confidence" in result
         assert result["consumer_confidence"] > 0
 
     def test_quit_increases_unemployment(self) -> None:
-        decisions = [
-            AgentDecision("s1", i, 1, "employment_change", "quit", "r", 0.6)
-            for i in range(5)
-        ]
+        decisions = [AgentDecision("s1", i, 1, "employment_change", "quit", "r", 0.6) for i in range(5)]
         result = _derive_macro_adjustments(decisions)
         assert "unemployment_rate" in result
         assert result["unemployment_rate"] > 0
 
     def test_gba_relocation_decreases_migration(self) -> None:
-        decisions = [
-            AgentDecision("s1", i, 1, "relocate", "relocate_gba", "r", 0.7)
-            for i in range(10)
-        ]
+        decisions = [AgentDecision("s1", i, 1, "relocate", "relocate_gba", "r", 0.7) for i in range(10)]
         result = _derive_macro_adjustments(decisions)
         assert "net_migration" in result
         assert result["net_migration"] < 0
 
     def test_retail_investor_has_zero_hsi_impact(self) -> None:
-        decisions = [
-            AgentDecision("s1", i, 1, "invest", "invest_stocks", "r", 0.8)
-            for i in range(20)
-        ]
+        decisions = [AgentDecision("s1", i, 1, "invest", "invest_stocks", "r", 0.8) for i in range(20)]
         result = _derive_macro_adjustments(decisions)
         assert "hsi_level" not in result  # delta is 0.0
 
@@ -472,16 +434,11 @@ class TestDecisionEngine:
     """Integration tests for the full decision pipeline."""
 
     @pytest.mark.asyncio
-    async def test_process_round_no_eligible_agents(
-        self, baseline_macro: MacroState
-    ) -> None:
+    async def test_process_round_no_eligible_agents(self, baseline_macro: MacroState) -> None:
         """No eligible agents should produce zero decisions."""
         engine = DecisionEngine(llm_client=MagicMock())
         # All profiles are students with no income — ineligible for most types
-        profiles = {
-            i: _make_profile(id=i, occupation="學生", monthly_income=0, savings=0, age=18)
-            for i in range(5)
-        }
+        profiles = {i: _make_profile(id=i, occupation="學生", monthly_income=0, savings=0, age=18) for i in range(5)}
         with patch("backend.app.services.decision_engine.get_db") as mock_db:
             mock_conn = AsyncMock()
             mock_db.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
@@ -497,9 +454,7 @@ class TestDecisionEngine:
         assert summary["total_decisions"] == 0
 
     @pytest.mark.asyncio
-    async def test_process_round_with_decisions(
-        self, baseline_macro: MacroState
-    ) -> None:
+    async def test_process_round_with_decisions(self, baseline_macro: MacroState) -> None:
         """When deliberator returns decisions, they are counted in summary."""
         mock_decisions = [
             AgentDecision("s1", 1, 1, "buy_property", "buy", "good price", 0.8),
@@ -511,10 +466,7 @@ class TestDecisionEngine:
         engine._deliberator.deliberate_batch = AsyncMock(return_value=mock_decisions)
 
         macro_high_inflation = replace(baseline_macro, cpi_yoy=0.04)
-        profiles = {
-            i: _make_profile(id=i, monthly_income=50_000, savings=2_000_000)
-            for i in range(5)
-        }
+        profiles = {i: _make_profile(id=i, monthly_income=50_000, savings=2_000_000) for i in range(5)}
 
         with patch("backend.app.services.decision_engine.get_db") as mock_db:
             mock_conn = AsyncMock()
@@ -531,21 +483,14 @@ class TestDecisionEngine:
         assert summary["total_decisions"] >= 2
 
     @pytest.mark.asyncio
-    async def test_process_round_handles_deliberation_error(
-        self, baseline_macro: MacroState
-    ) -> None:
+    async def test_process_round_handles_deliberation_error(self, baseline_macro: MacroState) -> None:
         """If deliberation raises, it should be caught (not crash the engine)."""
         engine = DecisionEngine(llm_client=MagicMock())
         engine._deliberator = MagicMock()
-        engine._deliberator.deliberate_batch = AsyncMock(
-            side_effect=RuntimeError("LLM timeout")
-        )
+        engine._deliberator.deliberate_batch = AsyncMock(side_effect=RuntimeError("LLM timeout"))
 
         macro = replace(baseline_macro, cpi_yoy=0.04)
-        profiles = {
-            i: _make_profile(id=i, monthly_income=30_000)
-            for i in range(5)
-        }
+        profiles = {i: _make_profile(id=i, monthly_income=30_000) for i in range(5)}
 
         with patch("backend.app.services.decision_engine.get_db") as mock_db:
             mock_conn = AsyncMock()
@@ -564,14 +509,9 @@ class TestDecisionEngine:
         assert summary["total_decisions"] == 0
 
     @pytest.mark.asyncio
-    async def test_macro_updater_called_when_adjustments_exist(
-        self, baseline_macro: MacroState
-    ) -> None:
+    async def test_macro_updater_called_when_adjustments_exist(self, baseline_macro: MacroState) -> None:
         """If decisions produce macro adjustments, the updater callback fires."""
-        mock_decisions = [
-            AgentDecision("s1", i, 1, "emigrate", "emigrate", "leaving", 0.9)
-            for i in range(10)
-        ]
+        mock_decisions = [AgentDecision("s1", i, 1, "emigrate", "emigrate", "leaving", 0.9) for i in range(10)]
 
         engine = DecisionEngine(llm_client=MagicMock())
         engine._deliberator = MagicMock()
@@ -609,6 +549,7 @@ class TestTopicTagsPersistence:
     async def test_stakeholder_decision_persists_topic_tags(self, test_db) -> None:
         """topic_tags and emotional_reaction can be persisted to agent_decisions."""
         import json
+
         from backend.app.services.cognitive_agent_engine import DeliberationResult
 
         deliberation = DeliberationResult(
@@ -633,7 +574,11 @@ class TestTopicTagsPersistence:
                 topic_tags, emotional_reaction)
                VALUES (?,?,?,?,?,?,?,?)""",
             (
-                "sess1", 1, 1, deliberation.decision, deliberation.decision,
+                "sess1",
+                1,
+                1,
+                deliberation.decision,
+                deliberation.decision,
                 deliberation.reasoning,
                 json.dumps(list(deliberation.topic_tags)),
                 deliberation.emotional_reaction,
@@ -641,22 +586,24 @@ class TestTopicTagsPersistence:
         )
         await test_db.commit()
 
-        row = await (await test_db.execute(
-            "SELECT topic_tags, emotional_reaction FROM agent_decisions WHERE agent_id=1"
-        )).fetchone()
+        row = await (
+            await test_db.execute("SELECT topic_tags, emotional_reaction FROM agent_decisions WHERE agent_id=1")
+        ).fetchone()
 
         import json as _json_check
+
         assert _json_check.loads(row["topic_tags"]) == ["移民", "就業"]
         assert row["emotional_reaction"] == "焦慮，對前途感到迷茫"
 
     @pytest.mark.asyncio
     async def test_store_decisions_includes_topic_tags(self, test_db) -> None:
         """DecisionEngine._store_decisions persists topic_tags and emotional_reaction."""
-        import json
         import contextlib
+        import json
         from unittest.mock import patch as _patch
-        from backend.app.services.decision_engine import DecisionEngine
+
         from backend.app.models.decision import AgentDecision
+        from backend.app.services.decision_engine import DecisionEngine
 
         decision = AgentDecision(
             session_id="sess2",
@@ -688,9 +635,9 @@ class TestTopicTagsPersistence:
         with _patch("backend.app.services.decision_engine.get_db", side_effect=_fake_get_db):
             await engine._store_decisions([decision])
 
-        row = await (await test_db.execute(
-            "SELECT topic_tags, emotional_reaction FROM agent_decisions WHERE agent_id=42"
-        )).fetchone()
+        row = await (
+            await test_db.execute("SELECT topic_tags, emotional_reaction FROM agent_decisions WHERE agent_id=42")
+        ).fetchone()
 
         assert row is not None
         assert json.loads(row["topic_tags"]) == ["移民", "自由"]
@@ -701,8 +648,9 @@ class TestTopicTagsPersistence:
         """Passive agents (no topic_tags) store NULL in agent_decisions."""
         import contextlib
         from unittest.mock import patch as _patch
-        from backend.app.services.decision_engine import DecisionEngine
+
         from backend.app.models.decision import AgentDecision
+        from backend.app.services.decision_engine import DecisionEngine
 
         decision = AgentDecision(
             session_id="sess3",
@@ -732,9 +680,9 @@ class TestTopicTagsPersistence:
         with _patch("backend.app.services.decision_engine.get_db", side_effect=_fake_get_db):
             await engine._store_decisions([decision])
 
-        row = await (await test_db.execute(
-            "SELECT topic_tags, emotional_reaction FROM agent_decisions WHERE agent_id=99"
-        )).fetchone()
+        row = await (
+            await test_db.execute("SELECT topic_tags, emotional_reaction FROM agent_decisions WHERE agent_id=99")
+        ).fetchone()
 
         assert row is not None
         assert row["topic_tags"] is None

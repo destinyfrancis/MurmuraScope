@@ -3,6 +3,7 @@
 Async-safe via module-level asyncio.Lock to prevent concurrent cost loss.
 Cost values are approximate (based on provider-reported token counts).
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -44,9 +45,7 @@ async def record_cost(session_id: str, cost_usd: float) -> None:
             total,
         )
 
-    hard_cap = float(
-        os.environ.get("SESSION_COST_HARD_CAP_USD", str(_DEFAULT_HARD_CAP_USD))
-    )
+    hard_cap = float(os.environ.get("SESSION_COST_HARD_CAP_USD", str(_DEFAULT_HARD_CAP_USD)))
     prev_paused = _session_paused.get(session_id, False)
     if total >= hard_cap and not prev_paused:
         _session_paused[session_id] = True

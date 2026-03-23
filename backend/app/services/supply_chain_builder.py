@@ -6,10 +6,8 @@ reflecting the inter-company dependencies present in Hong Kong's economy.
 
 from __future__ import annotations
 
-import math
 import random
 from dataclasses import dataclass
-from typing import Sequence
 
 from backend.app.models.company import CompanyProfile
 from backend.app.utils.db import get_db
@@ -31,11 +29,11 @@ REL_DISTRIBUTES = "DISTRIBUTES"
 # Thresholds for auto-linking
 # ---------------------------------------------------------------------------
 
-_MAX_SUPPLY_LINKS_PER_UPSTREAM = 4   # max buyers per upstream company
+_MAX_SUPPLY_LINKS_PER_UPSTREAM = 4  # max buyers per upstream company
 _MAX_SUPPLY_LINKS_PER_DOWNSTREAM = 3  # max suppliers per downstream company
-_MAX_LOGISTICS_LINKS = 6             # max clients per logistics firm
-_MAX_FINANCE_LINKS = 5               # max portfolio companies per finance firm
-_SAME_DISTRICT_WEIGHT_BONUS = 0.15   # extra edge weight for same-district pair
+_MAX_LOGISTICS_LINKS = 6  # max clients per logistics firm
+_MAX_FINANCE_LINKS = 5  # max portfolio companies per finance firm
+_SAME_DISTRICT_WEIGHT_BONUS = 0.15  # extra edge weight for same-district pair
 _INDUSTRY_PROXIMITY_WEIGHTS: dict[tuple[str, str], float] = {
     ("manufacturing", "import_export"): 0.9,
     ("manufacturing", "logistics"): 0.8,
@@ -177,14 +175,10 @@ class SupplyChainBuilder:
         )
 
         # logistics → everyone (DEPENDS_ON)
-        edges.extend(
-            self._link_logistics(session_id, logistics_firms, non_logistics)
-        )
+        edges.extend(self._link_logistics(session_id, logistics_firms, non_logistics))
 
         # finance → companies (FINANCES)
-        edges.extend(
-            self._link_finance(session_id, finance_firms, companies)
-        )
+        edges.extend(self._link_finance(session_id, finance_firms, companies))
 
         # Store edges in DB
         await self._insert_edges(session_id, graph_prefix, edges)
@@ -272,11 +266,7 @@ class SupplyChainBuilder:
         # Industry proximity lookup (symmetric)
         pair_fwd = (company_a.industry_sector, company_b.industry_sector)
         pair_rev = (company_b.industry_sector, company_a.industry_sector)
-        base_weight = (
-            _INDUSTRY_PROXIMITY_WEIGHTS.get(pair_fwd)
-            or _INDUSTRY_PROXIMITY_WEIGHTS.get(pair_rev)
-            or 0.5
-        )
+        base_weight = _INDUSTRY_PROXIMITY_WEIGHTS.get(pair_fwd) or _INDUSTRY_PROXIMITY_WEIGHTS.get(pair_rev) or 0.5
 
         # District bonus
         bonus = _SAME_DISTRICT_WEIGHT_BONUS if company_a.district == company_b.district else 0.0
@@ -393,9 +383,7 @@ class SupplyChainBuilder:
                             source_company_id=fin.id,
                             target_company_id=client.id,
                             relation_type=REL_FINANCES,
-                            weight=round(
-                                0.5 + 0.3 * client.china_exposure, 3
-                            ),
+                            weight=round(0.5 + 0.3 * client.china_exposure, 3),
                             session_id=session_id,
                         )
                     )

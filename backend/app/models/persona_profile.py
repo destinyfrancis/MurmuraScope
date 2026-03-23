@@ -4,6 +4,7 @@ Allows researchers to upload CSV/JSON files with real participant data
 to initialize agents from actual interview/survey responses rather than
 purely LLM-generated synthetic profiles.
 """
+
 from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, field_validator

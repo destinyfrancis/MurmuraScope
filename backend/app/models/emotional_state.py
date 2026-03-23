@@ -1,7 +1,8 @@
 """Emotional state, belief system, and cognitive dissonance models (Phase 3)."""
+
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
@@ -22,9 +23,9 @@ class EmotionalState:
     agent_id: int
     session_id: str
     round_number: int
-    valence: float = 0.0        # -1 (negative) to +1 (positive)
-    arousal: float = 0.3        # 0 (calm) to 1 (excited)
-    dominance: float = 0.4      # 0 (submissive) to 1 (dominant)
+    valence: float = 0.0  # -1 (negative) to +1 (positive)
+    arousal: float = 0.3  # 0 (calm) to 1 (excited)
+    dominance: float = 0.4  # 0 (submissive) to 1 (dominant)
 
 
 @dataclass(frozen=True)
@@ -39,11 +40,11 @@ class Belief:
         last_updated: Round number when this belief was last updated.
     """
 
-    topic: str                  # one of 6 core topics
-    stance: float = 0.0         # -1 to +1
-    confidence: float = 0.5     # 0 to 1
+    topic: str  # one of 6 core topics
+    stance: float = 0.0  # -1 to +1
+    confidence: float = 0.5  # 0 to 1
     evidence_count: int = 0
-    last_updated: int = 0       # round number
+    last_updated: int = 0  # round number
 
 
 @dataclass(frozen=True)
@@ -62,7 +63,7 @@ class BeliefState:
 
     agent_id: int
     session_id: str
-    beliefs: tuple[Belief, ...] = ()    # max 8 active beliefs
+    beliefs: tuple[Belief, ...] = ()  # max 8 active beliefs
 
 
 @dataclass(frozen=True)
@@ -84,10 +85,10 @@ class CognitiveDissonance:
     agent_id: int
     session_id: str
     round_number: int
-    dissonance_score: float = 0.0                               # 0 to 1
+    dissonance_score: float = 0.0  # 0 to 1
     conflicting_pairs: tuple[tuple[str, str], ...] = ()
     action_belief_gap: float = 0.0
-    resolution_strategy: str = "none"    # denial | rationalization | belief_change | none
+    resolution_strategy: str = "none"  # denial | rationalization | belief_change | none
 
 
 # ---------------------------------------------------------------------------

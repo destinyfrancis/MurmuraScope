@@ -46,8 +46,7 @@ def _timed_block(hook_name: str, session_id: str, round_num: int = 0):
 def _require_path(path: Path, label: str) -> None:
     if not path.exists():
         raise RuntimeError(
-            f"{label} not found at {path}. "
-            "Check that the .venv311 virtual environment is set up correctly."
+            f"{label} not found at {path}. Check that the .venv311 virtual environment is set up correctly."
         )
 
 
@@ -68,9 +67,7 @@ def _build_full_config(config: dict[str, Any], session_id: str) -> dict[str, Any
 
     provider = config.get("llm_provider", "openrouter")
     model = config.get("llm_model", "deepseek/deepseek-v3.2")
-    base_url = config.get(
-        "llm_base_url", "https://openrouter.ai/api/v1"
-    )
+    base_url = config.get("llm_base_url", "https://openrouter.ai/api/v1")
 
     # Strip llm_api_key so it is never written to sim_config.json
     safe_config = {k: v for k, v in config.items() if k != "llm_api_key"}
@@ -89,7 +86,8 @@ def _get_api_key() -> str:
     """Read OpenRouter API key from settings or OS env."""
     try:
         from backend.app.config import get_settings as _get_settings  # noqa: PLC0415
-        key = getattr(_get_settings(), 'OPENROUTER_API_KEY', '') or ""
+
+        key = getattr(_get_settings(), "OPENROUTER_API_KEY", "") or ""
     except Exception:
         key = ""
     if not key:
@@ -120,17 +118,11 @@ def _compute_faction_peer_stance(
     """
     if not faction_id:
         return {}
-    peer_beliefs = [
-        b for aid, b in agent_beliefs.items()
-        if aid != agent_id and agent_factions.get(aid) == faction_id
-    ]
+    peer_beliefs = [b for aid, b in agent_beliefs.items() if aid != agent_id and agent_factions.get(aid) == faction_id]
     if not peer_beliefs:
         return {}
     all_metrics = {m for b in peer_beliefs for m in b}
-    return {
-        m: sum(b.get(m, 0.5) for b in peer_beliefs) / len(peer_beliefs)
-        for m in all_metrics
-    }
+    return {m: sum(b.get(m, 0.5) for b in peer_beliefs) / len(peer_beliefs) for m in all_metrics}
 
 
 def _build_key_relationships(

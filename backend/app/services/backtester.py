@@ -22,7 +22,6 @@ from pathlib import Path
 import numpy as np
 
 from backend.app.services.time_series_forecaster import (
-    METRIC_DB_MAP,
     SUPPORTED_METRICS,
     TimeSeriesForecaster,
     _quarter_label,
@@ -35,9 +34,7 @@ logger = get_logger("backtester")
 # DB path (project root / data / murmuroscope.db)
 # ---------------------------------------------------------------------------
 
-_DB_PATH: Path = (
-    Path(__file__).resolve().parent.parent.parent.parent / "data" / "murmuroscope.db"
-)
+_DB_PATH: Path = Path(__file__).resolve().parent.parent.parent.parent / "data" / "murmuroscope.db"
 
 # ---------------------------------------------------------------------------
 # Result dataclass
@@ -94,8 +91,7 @@ class BacktestResult:
             "crps": round(self.crps, 6),
             "theils_u": round(self.theils_u, 4),
             "predictions": [
-                {"period": p, "predicted": round(pred, 6), "actual": round(act, 6)}
-                for p, pred, act in self.predictions
+                {"period": p, "predicted": round(pred, 6), "actual": round(act, 6)} for p, pred, act in self.predictions
             ],
             "model_used": self.model_used,
             "data_quality_flag": self.data_quality_flag,
@@ -357,10 +353,7 @@ class Backtester:
         # ------------------------------------------------------------------
         full_history = await self._forecaster._load_history(metric)
         if not full_history:
-            raise ValueError(
-                f"No historical data found for metric '{metric}'. "
-                "Populate hk_data_snapshots first."
-            )
+            raise ValueError(f"No historical data found for metric '{metric}'. Populate hk_data_snapshots first.")
 
         # ------------------------------------------------------------------
         # 2. Split into train / test
@@ -368,9 +361,7 @@ class Backtester:
         train_data, test_data = _split_at_period(full_history, train_end, horizon)
 
         if not train_data:
-            raise ValueError(
-                f"No training data on or before '{train_end}' for metric '{metric}'."
-            )
+            raise ValueError(f"No training data on or before '{train_end}' for metric '{metric}'.")
 
         train_start = train_data[0][0]
         actual_train_end = train_data[-1][0]
@@ -378,8 +369,12 @@ class Backtester:
 
         logger.info(
             "Backtest metric=%s train=%s→%s n_train=%d n_test=%d horizon=%d",
-            metric, train_start, actual_train_end,
-            len(train_data), len(test_data), horizon,
+            metric,
+            train_start,
+            actual_train_end,
+            len(train_data),
+            len(test_data),
+            horizon,
         )
 
         # ------------------------------------------------------------------
@@ -444,7 +439,16 @@ class Backtester:
 
         logger.info(
             "Backtest complete metric=%s model=%s mape=%.2f%% rmse=%.4f da=%.2f cov80=%.2f cov95=%.2f crps=%.4f theils_u=%.3f dq=%s",
-            metric, model_used, mape, rmse, dir_acc, cov_80, cov_95, crps, theils_u, data_quality_flag,
+            metric,
+            model_used,
+            mape,
+            rmse,
+            dir_acc,
+            cov_80,
+            cov_95,
+            crps,
+            theils_u,
+            data_quality_flag,
         )
 
         return BacktestResult(

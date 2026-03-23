@@ -9,6 +9,7 @@ Analyses trust score deltas between rounds to identify:
 - TRIADIC_CLOSURE: A→B + B→C → A→C closure opportunity
 - CLUSTER_SHIFT: agent moved to a different cluster
 """
+
 from __future__ import annotations
 
 import json
@@ -77,25 +78,29 @@ class NetworkEvolutionEngine:
             agent_a_id, agent_b_id = pair
 
             if prev_score < self.TIE_FORM_THRESHOLD <= curr_score:
-                events.append(NetworkEvent(
-                    session_id=session_id,
-                    round_number=round_number,
-                    event_type="TIE_FORMED",
-                    agent_a_username=str(agent_a_id),
-                    agent_b_username=str(agent_b_id),
-                    trust_delta=round(curr_score - prev_score, 4),
-                    details={"prev": prev_score, "curr": curr_score},
-                ))
+                events.append(
+                    NetworkEvent(
+                        session_id=session_id,
+                        round_number=round_number,
+                        event_type="TIE_FORMED",
+                        agent_a_username=str(agent_a_id),
+                        agent_b_username=str(agent_b_id),
+                        trust_delta=round(curr_score - prev_score, 4),
+                        details={"prev": prev_score, "curr": curr_score},
+                    )
+                )
             elif prev_score >= self.TIE_DISSOLVE_THRESHOLD > curr_score:
-                events.append(NetworkEvent(
-                    session_id=session_id,
-                    round_number=round_number,
-                    event_type="TIE_DISSOLVED",
-                    agent_a_username=str(agent_a_id),
-                    agent_b_username=str(agent_b_id),
-                    trust_delta=round(curr_score - prev_score, 4),
-                    details={"prev": prev_score, "curr": curr_score},
-                ))
+                events.append(
+                    NetworkEvent(
+                        session_id=session_id,
+                        round_number=round_number,
+                        event_type="TIE_DISSOLVED",
+                        agent_a_username=str(agent_a_id),
+                        agent_b_username=str(agent_b_id),
+                        trust_delta=round(curr_score - prev_score, 4),
+                        details={"prev": prev_score, "curr": curr_score},
+                    )
+                )
 
         # 2. BRIDGE_DETECTED: agent has edges to agents in ≥2 different clusters
         adjacency: dict[str, set[str]] = {}
@@ -105,23 +110,24 @@ class NetworkEvolutionEngine:
                 adjacency.setdefault(str(b_id), set()).add(str(a_id))
 
         for agent_name, neighbors in adjacency.items():
-            neighbor_clusters = {
-                cluster_assignments[n]
-                for n in neighbors
-                if n in cluster_assignments
-            }
+            neighbor_clusters = {cluster_assignments[n] for n in neighbors if n in cluster_assignments}
             if len(neighbor_clusters) >= 2:
-                events.append(NetworkEvent(
-                    session_id=session_id,
-                    round_number=round_number,
-                    event_type="BRIDGE_DETECTED",
-                    agent_a_username=agent_name,
-                    details={"clusters_bridged": list(neighbor_clusters)},
-                ))
+                events.append(
+                    NetworkEvent(
+                        session_id=session_id,
+                        round_number=round_number,
+                        event_type="BRIDGE_DETECTED",
+                        agent_a_username=agent_name,
+                        details={"clusters_bridged": list(neighbor_clusters)},
+                    )
+                )
 
         # 3. TRIADIC_CLOSURE: sample A→B + B→C pairs, suggest A→C
         triadic_events = await self._detect_triadic_closures(
-            session_id, round_number, current_trusts, cluster_assignments,
+            session_id,
+            round_number,
+            current_trusts,
+            cluster_assignments,
         )
         events.extend(triadic_events)
 
@@ -130,20 +136,25 @@ class NetworkEvolutionEngine:
         for agent_name, curr_cluster in cluster_assignments.items():
             prev_cluster = prev_clusters.get(agent_name)
             if prev_cluster is not None and prev_cluster != curr_cluster:
-                events.append(NetworkEvent(
-                    session_id=session_id,
-                    round_number=round_number,
-                    event_type="CLUSTER_SHIFT",
-                    agent_a_username=agent_name,
-                    details={"from_cluster": prev_cluster, "to_cluster": curr_cluster},
-                ))
+                events.append(
+                    NetworkEvent(
+                        session_id=session_id,
+                        round_number=round_number,
+                        event_type="CLUSTER_SHIFT",
+                        agent_a_username=agent_name,
+                        details={"from_cluster": prev_cluster, "to_cluster": curr_cluster},
+                    )
+                )
 
         # Update previous cluster cache
         self._prev_clusters[session_id] = dict(cluster_assignments)
 
         # Compute aggregate stats
         stats = self._compute_stats(
-            session_id, round_number, events, current_trusts,
+            session_id,
+            round_number,
+            events,
+            current_trusts,
         )
         return events, stats
 
@@ -270,12 +281,11 @@ class NetworkEvolutionEngine:
         patch_path.write_text(json.dumps(patch_data, ensure_ascii=False), encoding="utf-8")
         logger.debug(
             "write_network_patch: %d suggestions for session=%s",
-            len(suggested), session_id,
+            len(suggested),
+            session_id,
         )
 
-    async def load_current_trusts(
-        self, session_id: str
-    ) -> dict[tuple[int, int], float]:
+    async def load_current_trusts(self, session_id: str) -> dict[tuple[int, int], float]:
         """Load current trust scores from DB for a session.
 
         Args:
@@ -286,17 +296,14 @@ class NetworkEvolutionEngine:
         """
         async with get_db() as db:
             cursor = await db.execute(
-                "SELECT agent_a_id, agent_b_id, trust_score "
-                "FROM agent_relationships WHERE session_id = ?",
+                "SELECT agent_a_id, agent_b_id, trust_score FROM agent_relationships WHERE session_id = ?",
                 (session_id,),
             )
             rows = await cursor.fetchall()
 
         return {(int(r[0]), int(r[1])): float(r[2]) for r in rows}
 
-    async def load_cluster_assignments(
-        self, session_id: str
-    ) -> dict[str, int]:
+    async def load_cluster_assignments(self, session_id: str) -> dict[str, int]:
         """Load cluster assignments from latest echo_chamber_snapshots row.
 
         Args:
@@ -367,18 +374,20 @@ class NetworkEvolutionEngine:
             stance_c = stances.get(c, 0.5)
             similarity = 1.0 - abs(stance_a - stance_c)
             if similarity >= self.STANCE_SIMILARITY_THRESHOLD:
-                events.append(NetworkEvent(
-                    session_id=session_id,
-                    round_number=round_number,
-                    event_type="TRIADIC_CLOSURE",
-                    agent_a_username=a,
-                    agent_b_username=b,
-                    details={
-                        "suggested_followee": c,
-                        "stance_similarity": round(similarity, 4),
-                        "via_agent": b,
-                    },
-                ))
+                events.append(
+                    NetworkEvent(
+                        session_id=session_id,
+                        round_number=round_number,
+                        event_type="TRIADIC_CLOSURE",
+                        agent_a_username=a,
+                        agent_b_username=b,
+                        details={
+                            "suggested_followee": c,
+                            "stance_similarity": round(similarity, 4),
+                            "via_agent": b,
+                        },
+                    )
+                )
 
         return events
 
@@ -386,8 +395,7 @@ class NetworkEvolutionEngine:
         """Load agent political stances keyed by agent_id string."""
         async with get_db() as db:
             cursor = await db.execute(
-                "SELECT id, political_stance FROM agent_profiles "
-                "WHERE session_id = ? AND political_stance IS NOT NULL",
+                "SELECT id, political_stance FROM agent_profiles WHERE session_id = ? AND political_stance IS NOT NULL",
                 (session_id,),
             )
             rows = await cursor.fetchall()
@@ -408,9 +416,7 @@ class NetworkEvolutionEngine:
         shifts = sum(1 for e in events if e.event_type == "CLUSTER_SHIFT")
 
         n_edges = len(current_trusts)
-        avg_trust = (
-            sum(current_trusts.values()) / n_edges if n_edges > 0 else 0.0
-        )
+        avg_trust = sum(current_trusts.values()) / n_edges if n_edges > 0 else 0.0
 
         # Compute density: unique agent IDs
         agent_ids: set[int] = set()

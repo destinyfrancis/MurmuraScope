@@ -1,11 +1,12 @@
 """Tests for LLM call latency + token logging in llm_client.py."""
+
 from __future__ import annotations
 
 import asyncio
 import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from backend.app.utils.llm_client import LLMClient, LLMResponse
+from backend.app.utils.llm_client import LLMClient
 
 
 def test_openai_compat_logs_latency_and_tokens(caplog):
@@ -39,7 +40,6 @@ def test_openai_compat_logs_latency_and_tokens(caplog):
 
     result = asyncio.get_event_loop().run_until_complete(run())
     assert result.content == "hello"
-    assert any(
-        "tokens" in r.message.lower() or "latency" in r.message.lower()
-        for r in caplog.records
-    ), "Expected latency/token log message"
+    assert any("tokens" in r.message.lower() or "latency" in r.message.lower() for r in caplog.records), (
+        "Expected latency/token log message"
+    )

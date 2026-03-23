@@ -11,21 +11,18 @@ Tests verify that:
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import numpy as np
-import pytest
 
 from backend.app.services.var_forecaster import VARForecaster, VARForecastResult
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_cointegrated_series(
-    n: int = 60, seed: int = 42
-) -> dict[str, list[tuple[str, float]]]:
+
+def _make_cointegrated_series(n: int = 60, seed: int = 42) -> dict[str, list[tuple[str, float]]]:
     """Generate 3 cointegrated series (share a common stochastic trend).
 
     x1 follows a random walk.
@@ -47,9 +44,7 @@ def _make_cointegrated_series(
     }
 
 
-def _make_independent_series(
-    n: int = 60, seed: int = 99
-) -> dict[str, list[tuple[str, float]]]:
+def _make_independent_series(n: int = 60, seed: int = 99) -> dict[str, list[tuple[str, float]]]:
     """Generate 3 independent (non-cointegrated) stationary series."""
     rng = np.random.RandomState(seed)
     x1 = rng.normal(100, 5, n)
@@ -114,7 +109,8 @@ class TestVARFallbackOnVECMFailure:
         series = _make_cointegrated_series(n=60)
 
         with patch.object(
-            forecaster, "_fit_vecm_and_forecast",
+            forecaster,
+            "_fit_vecm_and_forecast",
             side_effect=RuntimeError("VECM singular matrix"),
         ):
             result = forecaster.forecast_group("test_fallback", series, horizon=4)
@@ -188,18 +184,10 @@ class TestCIValidity:
         if result is not None:
             for fr in result.forecasts.values():
                 for pt in fr.points:
-                    assert pt.lower_95 <= pt.lower_80, (
-                        f"lower_95 ({pt.lower_95}) > lower_80 ({pt.lower_80})"
-                    )
-                    assert pt.lower_80 < pt.value, (
-                        f"lower_80 ({pt.lower_80}) >= value ({pt.value})"
-                    )
-                    assert pt.value < pt.upper_80, (
-                        f"value ({pt.value}) >= upper_80 ({pt.upper_80})"
-                    )
-                    assert pt.upper_80 <= pt.upper_95, (
-                        f"upper_80 ({pt.upper_80}) > upper_95 ({pt.upper_95})"
-                    )
+                    assert pt.lower_95 <= pt.lower_80, f"lower_95 ({pt.lower_95}) > lower_80 ({pt.lower_80})"
+                    assert pt.lower_80 < pt.value, f"lower_80 ({pt.lower_80}) >= value ({pt.value})"
+                    assert pt.value < pt.upper_80, f"value ({pt.value}) >= upper_80 ({pt.upper_80})"
+                    assert pt.upper_80 <= pt.upper_95, f"upper_80 ({pt.upper_80}) > upper_95 ({pt.upper_95})"
 
 
 class TestDiagnosticsContainModelType:

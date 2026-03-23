@@ -3,35 +3,34 @@
 from __future__ import annotations
 
 import dataclasses
-import math
+
 import pytest
 
+from backend.app.models.decision import DECISION_ACTIONS, DecisionType
+from backend.app.services.agent_factory import AgentProfile
 from backend.app.services.attention_economy import (
     AttentionBudget,
-    TopicSensitivity,
-    allocate_attention,
-    compute_topic_sensitivity,
     _compute_sensitivity,
     _extract_topics,
     _post_cost,
+    allocate_attention,
+    compute_topic_sensitivity,
 )
-from backend.app.services.wealth_transfer import WealthTransfer
 from backend.app.services.collective_actions import (
     AgentGroup,
     CollectiveAction,
 )
-from backend.app.models.decision import DecisionType, DECISION_ACTIONS
 from backend.app.services.decision_rules import (
     is_eligible_employment_change,
     is_eligible_relocate,
 )
-from backend.app.services.agent_factory import AgentProfile
 from backend.app.services.macro_state import MacroState
-
+from backend.app.services.wealth_transfer import WealthTransfer
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 def _make_profile(**kwargs) -> AgentProfile:
     """Create a minimal AgentProfile with sensible defaults."""
@@ -65,6 +64,7 @@ def _make_macro(**kwargs) -> MacroState:
         BASELINE_AVG_SQFT_PRICE,
         BASELINE_STAMP_DUTY,
     )
+
     defaults = dict(
         hibor_1m=0.045,
         prime_rate=0.0625,
@@ -89,6 +89,7 @@ def _make_macro(**kwargs) -> MacroState:
 # ---------------------------------------------------------------------------
 # Attention Budget Tests
 # ---------------------------------------------------------------------------
+
 
 class TestAttentionBudget:
     def test_frozen_dataclass(self):
@@ -201,6 +202,7 @@ class TestAttentionBudget:
 # Wealth Transfer Tests
 # ---------------------------------------------------------------------------
 
+
 class TestWealthTransfer:
     def test_frozen_dataclass(self):
         wt = WealthTransfer(
@@ -234,6 +236,7 @@ class TestWealthTransfer:
 # ---------------------------------------------------------------------------
 # Employment Change Eligibility Tests
 # ---------------------------------------------------------------------------
+
 
 class TestEmploymentChangeEligibility:
     def test_quit_eligible_low_unemployment(self):
@@ -318,10 +321,10 @@ class TestEmploymentChangeEligibility:
     def test_normal_worker_no_trigger(self):
         """Normal worker with no triggers → not eligible."""
         profile = _make_profile(
-            neuroticism=0.3,         # low neuroticism
-            political_stance=0.4,    # moderate stance
-            openness=0.6,            # high openness (not lie-flat)
-            conscientiousness=0.6,   # high conscientiousness
+            neuroticism=0.3,  # low neuroticism
+            political_stance=0.4,  # moderate stance
+            openness=0.6,  # high openness (not lie-flat)
+            conscientiousness=0.6,  # high conscientiousness
             monthly_income=25_000,
             savings=50_000,
             occupation="輔助專業人員",
@@ -338,13 +341,14 @@ class TestEmploymentChangeEligibility:
 # Relocate Eligibility Tests
 # ---------------------------------------------------------------------------
 
+
 class TestRelocateEligibility:
     def test_rent_pressure_eligible(self):
         # 沙田 avg_sqft_price ~12,800 → 12,800 > 18,000 × 15? No, 12,800 < 270,000
         # Use 中西區 (18,500) and low income
         profile = _make_profile(
             district="中西區",
-            monthly_income=1_000,   # very low income
+            monthly_income=1_000,  # very low income
             housing_type="私人住宅",
         )
         macro = _make_macro()
@@ -365,7 +369,7 @@ class TestRelocateEligibility:
     def test_gentrification_eligible(self):
         profile = _make_profile(
             monthly_income=20_000,  # below 25K threshold
-            district="中西區",      # high price district
+            district="中西區",  # high price district
             housing_type="私人住宅",
         )
         macro = _make_macro()
@@ -383,10 +387,10 @@ class TestRelocateEligibility:
 
     def test_wealthy_low_price_district_not_eligible(self):
         profile = _make_profile(
-            district="屯門",         # low price ~9,200/sqft
-            monthly_income=50_000,   # high income
-            marital_status="未婚",   # not married
-            age=25,                  # young (not school need age)
+            district="屯門",  # low price ~9,200/sqft
+            monthly_income=50_000,  # high income
+            marital_status="未婚",  # not married
+            age=25,  # young (not school need age)
             housing_type="私人住宅",
         )
         macro = _make_macro()
@@ -399,6 +403,7 @@ class TestRelocateEligibility:
 # ---------------------------------------------------------------------------
 # Decision model extension tests
 # ---------------------------------------------------------------------------
+
 
 class TestDecisionModelExtensions:
     def test_employment_change_in_enum(self):
@@ -436,6 +441,7 @@ class TestDecisionModelExtensions:
 # ---------------------------------------------------------------------------
 # Collective Action dataclass tests
 # ---------------------------------------------------------------------------
+
 
 class TestCollectiveActionDataclasses:
     def test_agent_group_frozen(self):

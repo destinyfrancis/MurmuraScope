@@ -12,7 +12,6 @@ Uses an in-memory aiosqlite database patched into get_db.
 
 from __future__ import annotations
 
-import json
 from contextlib import asynccontextmanager
 from dataclasses import FrozenInstanceError
 from unittest.mock import patch
@@ -24,7 +23,6 @@ import pytest_asyncio
 from backend.app.services.kg_graph_updater import (
     KGEvolutionStats,
     KGGraphUpdater,
-    ActivityDescription,
     _describe_decision,
     _describe_post,
     _describe_social_action,
@@ -226,24 +224,16 @@ async def test_persist_nodes_deduplication(db_setup):
     updater = KGGraphUpdater(llm_client=None)
 
     # Seed existing node
-    existing_nodes = [
-        {"id": "sess_ddu_node1", "entity_type": "Person", "title": "李小明", "description": ""}
-    ]
+    existing_nodes = [{"id": "sess_ddu_node1", "entity_type": "Person", "title": "李小明", "description": ""}]
 
     # Try to insert same title again
-    new_nodes = [
-        {"id": "sess_ddu_node2", "entity_type": "Person", "title": "李小明", "description": "更多資料"}
-    ]
+    new_nodes = [{"id": "sess_ddu_node2", "entity_type": "Person", "title": "李小明", "description": "更多資料"}]
 
-    nodes_added, nodes_updated = await updater._persist_nodes(
-        session_id, new_nodes, existing_nodes
-    )
+    nodes_added, nodes_updated = await updater._persist_nodes(session_id, new_nodes, existing_nodes)
 
     # Node with duplicate title must not be inserted
     assert nodes_added == 0
-    cursor = await conn.execute(
-        "SELECT COUNT(*) FROM kg_nodes WHERE session_id = ?", (session_id,)
-    )
+    cursor = await conn.execute("SELECT COUNT(*) FROM kg_nodes WHERE session_id = ?", (session_id,))
     row = await cursor.fetchone()
     assert row[0] == 0  # Nothing was inserted
 
@@ -261,13 +251,11 @@ async def test_persist_new_edges_validates_relation_type(db_setup):
 
     # Insert two valid nodes first
     await conn.execute(
-        "INSERT INTO kg_nodes (id, session_id, entity_type, title, description, properties) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO kg_nodes (id, session_id, entity_type, title, description, properties) VALUES (?, ?, ?, ?, ?, ?)",
         ("node_a", session_id, "Person", "Node A", "", "{}"),
     )
     await conn.execute(
-        "INSERT INTO kg_nodes (id, session_id, entity_type, title, description, properties) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO kg_nodes (id, session_id, entity_type, title, description, properties) VALUES (?, ?, ?, ?, ?, ?)",
         ("node_b", session_id, "Person", "Node B", "", "{}"),
     )
     await conn.commit()
@@ -286,9 +274,7 @@ async def test_persist_new_edges_validates_relation_type(db_setup):
     edges_added = await updater._persist_new_edges(session_id, invalid_edges)
     assert edges_added == 0
 
-    cursor = await conn.execute(
-        "SELECT COUNT(*) FROM kg_edges WHERE session_id = ?", (session_id,)
-    )
+    cursor = await conn.execute("SELECT COUNT(*) FROM kg_edges WHERE session_id = ?", (session_id,))
     row = await cursor.fetchone()
     assert row[0] == 0
 
@@ -300,13 +286,11 @@ async def test_persist_new_edges_clamps_weight(db_setup):
     session_id = "sess_edge_clamp"
 
     await conn.execute(
-        "INSERT INTO kg_nodes (id, session_id, entity_type, title, description, properties) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO kg_nodes (id, session_id, entity_type, title, description, properties) VALUES (?, ?, ?, ?, ?, ?)",
         ("node_x", session_id, "Issue", "Node X", "", "{}"),
     )
     await conn.execute(
-        "INSERT INTO kg_nodes (id, session_id, entity_type, title, description, properties) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO kg_nodes (id, session_id, entity_type, title, description, properties) VALUES (?, ?, ?, ?, ?, ?)",
         ("node_y", session_id, "Issue", "Node Y", "", "{}"),
     )
     await conn.commit()
@@ -378,13 +362,11 @@ async def test_persist_new_edges_writes_round_number(db_setup):
     session_id = "sess_rn"
 
     await conn.execute(
-        "INSERT INTO kg_nodes (id, session_id, entity_type, title, description, properties) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO kg_nodes (id, session_id, entity_type, title, description, properties) VALUES (?, ?, ?, ?, ?, ?)",
         ("node_p", session_id, "Person", "Person P", "", "{}"),
     )
     await conn.execute(
-        "INSERT INTO kg_nodes (id, session_id, entity_type, title, description, properties) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO kg_nodes (id, session_id, entity_type, title, description, properties) VALUES (?, ?, ?, ?, ?, ?)",
         ("node_q", session_id, "Person", "Person Q", "", "{}"),
     )
     await conn.commit()
@@ -403,9 +385,7 @@ async def test_persist_new_edges_writes_round_number(db_setup):
     edges_added = await updater._persist_new_edges(session_id, edges, round_number=7)
     assert edges_added == 1
 
-    cursor = await conn.execute(
-        "SELECT round_number FROM kg_edges WHERE session_id = ?", (session_id,)
-    )
+    cursor = await conn.execute("SELECT round_number FROM kg_edges WHERE session_id = ?", (session_id,))
     row = await cursor.fetchone()
     assert row is not None
     assert row[0] == 7

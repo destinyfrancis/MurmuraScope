@@ -1,6 +1,9 @@
 """Tests for store_universal_agent_profiles."""
-import pytest
+
 from unittest.mock import AsyncMock, patch
+
+import pytest
+
 from backend.app.models.universal_agent_profile import UniversalAgentProfile
 
 
@@ -67,18 +70,18 @@ async def test_store_universal_agent_profiles_field_mapping():
 
     row = mock_db.executemany.call_args[0][1][0]
     # session_id, agent_type, age, sex, district, occupation, ...
-    assert row[0] == "sess-1"             # session_id
-    assert row[1] == "state_leader"       # agent_type = entity_type
-    assert row[2] == 0                    # age
-    assert row[3] == "N/A"               # sex
-    assert row[4] == "state_leader"       # district = entity_type
-    assert row[5] == "Supreme Leader"     # occupation = role
-    assert row[6] == "N/A"               # income_bracket
-    assert row[10] == 0.2                # openness
-    assert row[14] == 0.4                # neuroticism
-    assert row[15] == 0                  # monthly_income
-    assert row[16] == 0                  # savings
-    assert row[17] == profile.persona    # oasis_persona
+    assert row[0] == "sess-1"  # session_id
+    assert row[1] == "state_leader"  # agent_type = entity_type
+    assert row[2] == 0  # age
+    assert row[3] == "N/A"  # sex
+    assert row[4] == "state_leader"  # district = entity_type
+    assert row[5] == "Supreme Leader"  # occupation = role
+    assert row[6] == "N/A"  # income_bracket
+    assert row[10] == 0.2  # openness
+    assert row[14] == 0.4  # neuroticism
+    assert row[15] == 0  # monthly_income
+    assert row[16] == 0  # savings
+    assert row[17] == profile.persona  # oasis_persona
 
 
 @pytest.mark.asyncio

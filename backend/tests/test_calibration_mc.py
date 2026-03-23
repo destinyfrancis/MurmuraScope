@@ -12,10 +12,9 @@ import numpy as np
 import pytest
 from scipy import stats as scipy_stats
 
-from backend.app.models.ensemble import EnsembleResult, DistributionBand
+from backend.app.models.ensemble import EnsembleResult
 from backend.app.services.monte_carlo import MonteCarloEngine
 from backend.data_pipeline.calibration import _apply_fdr_correction
-
 
 # ---------------------------------------------------------------------------
 # C1: Benjamini-Hochberg FDR Tests
@@ -55,8 +54,8 @@ class TestFDRCorrection:
         pairs = [
             ("a", 0.001),
             ("b", 0.005),
-            ("c", 0.015),   # passes BH (threshold=0.025) but NOT Bonferroni (0.00833)
-            ("d", 0.030),   # passes BH (threshold=0.0333) but NOT Bonferroni
+            ("c", 0.015),  # passes BH (threshold=0.025) but NOT Bonferroni (0.00833)
+            ("d", 0.030),  # passes BH (threshold=0.0333) but NOT Bonferroni
             ("e", 0.200),
             ("f", 0.500),
         ]
@@ -167,10 +166,12 @@ class TestTCopula:
         """
         rng = np.random.default_rng(42)
         uniform_samples = rng.random((2000, 2))
-        corr = np.array([
-            [1.0, 0.8],
-            [0.8, 1.0],
-        ])
+        corr = np.array(
+            [
+                [1.0, 0.8],
+                [0.8, 1.0],
+            ]
+        )
         result = MonteCarloEngine._apply_t_copula(uniform_samples, corr, df=5)
         spearman_rho, _ = scipy_stats.spearmanr(result[:, 0], result[:, 1])
         # Rank correlation should be positive and reasonably close to 0.8
@@ -179,10 +180,12 @@ class TestTCopula:
     def test_nearest_pd_returns_positive_definite(self) -> None:
         """_nearest_pd should fix a non-PD matrix."""
         # Create a matrix with a negative eigenvalue
-        bad_matrix = np.array([
-            [1.0, 1.5],
-            [1.5, 1.0],
-        ])
+        bad_matrix = np.array(
+            [
+                [1.0, 1.5],
+                [1.5, 1.0],
+            ]
+        )
         # Verify it is not PD
         eigenvalues = np.linalg.eigvalsh(bad_matrix)
         assert np.any(eigenvalues < 0), "Test matrix should have negative eigenvalues"
@@ -195,10 +198,12 @@ class TestTCopula:
         """t-Copula should handle non-PD correlation matrix via nearest_pd."""
         rng = np.random.default_rng(42)
         uniform_samples = rng.random((50, 2))
-        bad_corr = np.array([
-            [1.0, 1.5],
-            [1.5, 1.0],
-        ])
+        bad_corr = np.array(
+            [
+                [1.0, 1.5],
+                [1.5, 1.0],
+            ]
+        )
         # Should not raise
         result = MonteCarloEngine._apply_t_copula(uniform_samples, bad_corr, df=5)
         assert result.shape == (50, 2)

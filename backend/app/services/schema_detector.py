@@ -1,4 +1,5 @@
 """Auto-detect column types and suggest field mappings."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

@@ -50,17 +50,20 @@ _METRIC_LABELS_ZH: dict[str, str] = {
 }
 
 # Threshold direction: True = higher value triggers the condition (e.g., risk > threshold)
-_THRESHOLD_DIRECTION_POSITIVE: frozenset[str] = frozenset({
-    "hsi_level",
-    "consumer_confidence",
-    "gdp_growth",
-    "china_gdp_growth",
-})
+_THRESHOLD_DIRECTION_POSITIVE: frozenset[str] = frozenset(
+    {
+        "hsi_level",
+        "consumer_confidence",
+        "gdp_growth",
+        "china_gdp_growth",
+    }
+)
 
 
 # ---------------------------------------------------------------------------
 # Frozen dataclass for a single metric's probability statement
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class ProbabilityStatement:
@@ -125,9 +128,7 @@ class EnsembleAnalyzer:
             )
 
         # Aggregate values per metric
-        values_by_metric: dict[str, list[float]] = {
-            field: [] for field in PERTURBABLE_FIELDS
-        }
+        values_by_metric: dict[str, list[float]] = {field: [] for field in PERTURBABLE_FIELDS}
         for macro_dict in trial_macros:
             for field in PERTURBABLE_FIELDS:
                 raw = macro_dict.get(field)
@@ -144,14 +145,16 @@ class EnsembleAnalyzer:
                 continue
             arr = np.array(values, dtype=float)
             p10, p25, p50, p75, p90 = np.percentile(arr, [10, 25, 50, 75, 90])
-            bands.append(DistributionBand(
-                metric_name=field,
-                p10=float(p10),
-                p25=float(p25),
-                p50=float(p50),
-                p75=float(p75),
-                p90=float(p90),
-            ))
+            bands.append(
+                DistributionBand(
+                    metric_name=field,
+                    p10=float(p10),
+                    p25=float(p25),
+                    p50=float(p50),
+                    p75=float(p75),
+                    p90=float(p90),
+                )
+            )
 
         # Persist to ensemble_results table
         await self._persist_bands(session_id, len(trial_session_ids), bands)
@@ -196,15 +199,9 @@ class EnsembleAnalyzer:
         formatted_threshold = _format_threshold(metric, threshold)
 
         if direction == "above":
-            statement_zh = (
-                f"根據模型集成分析，{label_zh} 超過 {formatted_threshold} 嘅概率約為 "
-                f"{probability:.0%}。"
-            )
+            statement_zh = f"根據模型集成分析，{label_zh} 超過 {formatted_threshold} 嘅概率約為 {probability:.0%}。"
         else:
-            statement_zh = (
-                f"根據模型集成分析，{label_zh} 跌破 {formatted_threshold} 嘅概率約為 "
-                f"{probability:.0%}。"
-            )
+            statement_zh = f"根據模型集成分析，{label_zh} 跌破 {formatted_threshold} 嘅概率約為 {probability:.0%}。"
 
         return ProbabilityStatement(
             metric=metric,
@@ -236,17 +233,17 @@ class EnsembleAnalyzer:
             # Threshold: 10% of IQR below/above the median
             threshold = band.p50 - spread * 0.1
             try:
-                stmt = self.generate_probability_statement(
-                    distributions, band.metric_name, threshold
+                stmt = self.generate_probability_statement(distributions, band.metric_name, threshold)
+                results.append(
+                    {
+                        "metric": stmt.metric,
+                        "label_zh": stmt.label_zh,
+                        "threshold": stmt.threshold,
+                        "direction": stmt.direction,
+                        "probability": stmt.probability,
+                        "statement_zh": stmt.statement_zh,
+                    }
                 )
-                results.append({
-                    "metric": stmt.metric,
-                    "label_zh": stmt.label_zh,
-                    "threshold": stmt.threshold,
-                    "direction": stmt.direction,
-                    "probability": stmt.probability,
-                    "statement_zh": stmt.statement_zh,
-                })
             except ValueError:
                 continue
         return results
@@ -372,10 +369,7 @@ class EnsembleAnalyzer:
                     "DELETE FROM ensemble_results WHERE session_id = ?",
                     (session_id,),
                 )
-                rows = [
-                    (session_id, n_trials, b.metric_name, b.p10, b.p25, b.p50, b.p75, b.p90)
-                    for b in bands
-                ]
+                rows = [(session_id, n_trials, b.metric_name, b.p10, b.p25, b.p50, b.p75, b.p90) for b in bands]
                 await db.executemany(
                     """
                     INSERT INTO ensemble_results
@@ -387,7 +381,9 @@ class EnsembleAnalyzer:
                 await db.commit()
             logger.debug(
                 "Persisted %d bands for ensemble session=%s n_trials=%d",
-                len(bands), session_id, n_trials,
+                len(bands),
+                session_id,
+                n_trials,
             )
         except Exception:
             logger.exception("_persist_bands failed session=%s", session_id)
@@ -456,8 +452,7 @@ def _format_threshold(metric: str, value: float) -> str:
     Returns:
         Formatted string (e.g., '4.5%', '16,800', '0.35').
     """
-    if metric in ("hibor_1m", "unemployment_rate", "gdp_growth",
-                  "fed_rate", "china_gdp_growth"):
+    if metric in ("hibor_1m", "unemployment_rate", "gdp_growth", "fed_rate", "china_gdp_growth"):
         return f"{value:.2%}"
     if metric == "taiwan_strait_risk":
         return f"{value:.2f}"

@@ -9,7 +9,6 @@ import pytest
 
 from backend.app.utils.llm_client import LLMClient
 
-
 # ---------------------------------------------------------------------------
 # Helper: build a mock httpx.Response
 # ---------------------------------------------------------------------------

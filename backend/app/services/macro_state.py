@@ -114,17 +114,17 @@ class MacroState:
 
     # ---- External / geopolitical factors ----
     # US Federal Reserve
-    fed_rate: float = 0.053          # Fed Funds Rate upper bound (2024-Q1)
-    usd_hkd: float = 7.82           # USD/HKD exchange rate (linked rate band)
+    fed_rate: float = 0.053  # Fed Funds Rate upper bound (2024-Q1)
+    usd_hkd: float = 7.82  # USD/HKD exchange rate (linked rate band)
 
     # China economy
     china_gdp_growth: float = 0.052  # China real GDP growth (2024 forecast)
-    rmb_hkd: float = 1.076          # RMB/HKD (higher = weaker RMB vs HKD)
+    rmb_hkd: float = 1.076  # RMB/HKD (higher = weaker RMB vs HKD)
     china_property_crisis: float = 0.6  # 0-1 severity (Evergrande aftermath)
     northbound_capital_bn: float = 120.0  # Stock Connect north flow HKD bn/yr
 
     # Geopolitical risk
-    taiwan_strait_risk: float = 0.3   # 0=calm, 1=crisis
+    taiwan_strait_risk: float = 0.3  # 0=calm, 1=crisis
     us_china_trade_tension: float = 0.6  # 0=free trade, 1=full decoupling
 
     # Shenzhen / Greater Bay Area
@@ -133,39 +133,37 @@ class MacroState:
     greater_bay_policy_score: float = 0.55  # 0-1 GBA integration progress
 
     # ---- B2B / Trade factors (Phase 5) ----
-    import_tariff_rate: float = 0.0       # weighted average tariff %
-    export_logistics_cost: float = 1.0    # logistics cost index (1.0 = baseline)
+    import_tariff_rate: float = 0.0  # weighted average tariff %
+    export_logistics_cost: float = 1.0  # logistics cost index (1.0 = baseline)
     supply_chain_disruption: float = 0.0  # 0-1 supply chain disruption severity
-    china_import_demand: float = 0.0      # China import demand change %
+    china_import_demand: float = 0.0  # China import demand change %
 
     # ---- Banking / Credit cycle (Workstream E3) ----
-    bank_ltv_cap: float = 0.60            # HKMA LTV cap (currently 60%)
-    credit_growth_yoy: float = 0.02       # YoY credit growth (2% baseline)
-    interbank_spread: float = 0.005       # interbank spread (50bps baseline)
-    mortgage_delinquency: float = 0.015   # NPL/delinquency ratio (~1.5%)
-    bank_reserve_ratio: float = 0.08      # reserve ratio (8% baseline)
+    bank_ltv_cap: float = 0.60  # HKMA LTV cap (currently 60%)
+    credit_growth_yoy: float = 0.02  # YoY credit growth (2% baseline)
+    interbank_spread: float = 0.005  # interbank spread (50bps baseline)
+    mortgage_delinquency: float = 0.015  # NPL/delinquency ratio (~1.5%)
+    bank_reserve_ratio: float = 0.08  # reserve ratio (8% baseline)
 
     def to_prompt_context(self) -> str:
         """Return a Chinese-language prompt block summarising the full macro environment."""
-        top_3_expensive = sorted(
-            self.avg_sqft_price.items(), key=lambda kv: kv[1], reverse=True
-        )[:3]
-        top_districts = "、".join(
-            f"{d}（${p:,}/呎）" for d, p in top_3_expensive
-        )
+        top_3_expensive = sorted(self.avg_sqft_price.items(), key=lambda kv: kv[1], reverse=True)[:3]
+        top_districts = "、".join(f"{d}（${p:,}/呎）" for d, p in top_3_expensive)
 
-        policy_lines = "\n".join(
-            f"  - {k}: {v}" for k, v in self.policy_flags.items()
-        ) if self.policy_flags else "  （無特殊政策標記）"
+        policy_lines = (
+            "\n".join(f"  - {k}: {v}" for k, v in self.policy_flags.items())
+            if self.policy_flags
+            else "  （無特殊政策標記）"
+        )
 
         taiwan_risk_label = (
-            "高危" if self.taiwan_strait_risk > 0.7
-            else "中等緊張" if self.taiwan_strait_risk > 0.4
-            else "相對穩定"
+            "高危" if self.taiwan_strait_risk > 0.7 else "中等緊張" if self.taiwan_strait_risk > 0.4 else "相對穩定"
         )
         trade_label = (
-            "嚴重對立" if self.us_china_trade_tension > 0.7
-            else "持續摩擦" if self.us_china_trade_tension > 0.4
+            "嚴重對立"
+            if self.us_china_trade_tension > 0.7
+            else "持續摩擦"
+            if self.us_china_trade_tension > 0.4
             else "相對緩和"
         )
 
@@ -196,7 +194,6 @@ class MacroState:
             f"大灣區政策整合進度：{self.greater_bay_policy_score:.0%}\n"
         )
 
-
     def to_brief_context(self) -> str:
         """Return a compact 3-line macro summary for agent persona prompts.
 
@@ -216,9 +213,7 @@ class MacroState:
         )
 
 
-def apply_overrides(
-    state: MacroState, overrides: dict[str, Any]
-) -> MacroState:
+def apply_overrides(state: MacroState, overrides: dict[str, Any]) -> MacroState:
     """Return a new MacroState with *overrides* applied (deep-copy dicts)."""
     safe_overrides: dict[str, Any] = {}
     for key, value in overrides.items():

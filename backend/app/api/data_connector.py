@@ -2,6 +2,7 @@
 
 Prefix: /api/ingest  (mounted under /api in create_app)
 """
+
 from __future__ import annotations
 
 import logging

@@ -41,8 +41,8 @@ logger = logging.getLogger("facebook_simulation")
 try:
     from oasis import oasis
     from oasis.social_agent.agents_generator import generate_agents
-    from oasis.social_platform.typing import DefaultPlatformType, ActionType
     from oasis.social_platform.channel import Channel
+    from oasis.social_platform.typing import ActionType, DefaultPlatformType
 except ImportError as exc:
     logger.error(
         "OASIS framework not installed. "
@@ -52,16 +52,19 @@ except ImportError as exc:
         exc,
     )
     print(
-        json.dumps({
-            "type": "error",
-            "data": {
-                "platform": "facebook",
-                "message": (
-                    "OASIS framework not found. Install it with "
-                    "'pip install oasis-social-sim' or add it to PYTHONPATH."
-                ),
+        json.dumps(
+            {
+                "type": "error",
+                "data": {
+                    "platform": "facebook",
+                    "message": (
+                        "OASIS framework not found. Install it with "
+                        "'pip install oasis-social-sim' or add it to PYTHONPATH."
+                    ),
+                },
             },
-        }, ensure_ascii=False),
+            ensure_ascii=False,
+        ),
         flush=True,
     )
     sys.exit(1)
@@ -71,37 +74,38 @@ try:
     from camel.types import ModelPlatformType
 except ImportError as exc:
     logger.error(
-        "CAMEL-AI not installed. Install via: pip install camel-ai. "
-        "Original error: %s",
+        "CAMEL-AI not installed. Install via: pip install camel-ai. Original error: %s",
         exc,
     )
     print(
-        json.dumps({
-            "type": "error",
-            "data": {
-                "platform": "facebook",
-                "message": "CAMEL-AI not found. Install with 'pip install camel-ai'.",
+        json.dumps(
+            {
+                "type": "error",
+                "data": {
+                    "platform": "facebook",
+                    "message": "CAMEL-AI not found. Install with 'pip install camel-ai'.",
+                },
             },
-        }, ensure_ascii=False),
+            ensure_ascii=False,
+        ),
         flush=True,
     )
     sys.exit(1)
 
 # ManualAction import (best-effort; used for shock injection)
 try:
-    from oasis.environment.env_action import ManualAction, LLMAction  # noqa: F401
+    from oasis.environment.env_action import LLMAction, ManualAction  # noqa: F401
+
     _HAS_MANUAL_ACTION = True
 except ImportError:
     _HAS_MANUAL_ACTION = False
-    logger.warning(
-        "oasis.environment.env_action not found — "
-        "shock injection via ManualAction will be skipped."
-    )
+    logger.warning("oasis.environment.env_action not found — shock injection via ManualAction will be skipped.")
 
 
 # ---------------------------------------------------------------------------
 # JSONL IPC helpers
 # ---------------------------------------------------------------------------
+
 
 def emit(msg_type: str, data: dict[str, Any]) -> None:
     """Write a JSONL message to stdout."""
@@ -111,12 +115,15 @@ def emit(msg_type: str, data: dict[str, Any]) -> None:
 
 
 def emit_progress(round_num: int, total: int, detail: str = "") -> None:
-    emit("progress", {
-        "platform": "facebook",
-        "round": round_num,
-        "total": total,
-        "detail": detail,
-    })
+    emit(
+        "progress",
+        {
+            "platform": "facebook",
+            "round": round_num,
+            "total": total,
+            "detail": detail,
+        },
+    )
 
 
 def emit_new_posts(db_path: str, round_num: int, last_post_id: int) -> int:
@@ -142,13 +149,16 @@ def emit_new_posts(db_path: str, round_num: int, last_post_id: int) -> int:
             content = (row["content"] or "").strip()
             if not content:
                 continue
-            emit("post", {
-                "platform": "facebook",
-                "source": "agent",
-                "username": row["name"] or "Agent",
-                "content": content[:300],
-                "round": round_num,
-            })
+            emit(
+                "post",
+                {
+                    "platform": "facebook",
+                    "source": "agent",
+                    "username": row["name"] or "Agent",
+                    "content": content[:300],
+                    "round": round_num,
+                },
+            )
         if rows:
             return max(row["post_id"] for row in rows)
     except Exception as exc:
@@ -157,16 +167,37 @@ def emit_new_posts(db_path: str, round_num: int, last_post_id: int) -> int:
 
 
 # Content actions whose info payload may contain post text
-_CONTENT_ACTIONS = frozenset({
-    "create_post", "repost", "quote_post", "create_comment",
-})
+_CONTENT_ACTIONS = frozenset(
+    {
+        "create_post",
+        "repost",
+        "quote_post",
+        "create_comment",
+    }
+)
 
-_TRACKED_ACTIONS = frozenset({
-    "create_post", "like_post", "unlike_post", "dislike_post",
-    "follow", "unfollow", "repost", "quote_post", "create_comment",
-    "like_comment", "dislike_comment", "do_nothing", "mute", "unmute",
-    "search_posts", "search_user", "trend", "refresh",
-})
+_TRACKED_ACTIONS = frozenset(
+    {
+        "create_post",
+        "like_post",
+        "unlike_post",
+        "dislike_post",
+        "follow",
+        "unfollow",
+        "repost",
+        "quote_post",
+        "create_comment",
+        "like_comment",
+        "dislike_comment",
+        "do_nothing",
+        "mute",
+        "unmute",
+        "search_posts",
+        "search_user",
+        "trend",
+        "refresh",
+    }
+)
 
 
 def emit_new_actions(db_path: str, round_num: int, last_trace_ts: str) -> str:
@@ -207,14 +238,17 @@ def emit_new_actions(db_path: str, round_num: int, last_trace_ts: str) -> str:
             except (json.JSONDecodeError, TypeError):
                 info = {}
 
-            emit("action", {
-                "platform": "facebook",
-                "source": "agent",
-                "action_type": action,
-                "username": username,
-                "round": round_num,
-                "info": info,
-            })
+            emit(
+                "action",
+                {
+                    "platform": "facebook",
+                    "source": "agent",
+                    "action_type": action,
+                    "username": username,
+                    "round": round_num,
+                    "info": info,
+                },
+            )
 
             ts = row["created_at"] or ""
             if ts > max_ts:
@@ -249,10 +283,7 @@ def build_model(config: dict[str, Any]) -> Any:
     if not api_key:
         logger.warning("OPENROUTER_API_KEY not set — simulation will fail at LLM call")
     if not base_url:
-        raise ValueError(
-            f"No base URL for provider '{provider}'. "
-            "Set llm_base_url in config."
-        )
+        raise ValueError(f"No base URL for provider '{provider}'. Set llm_base_url in config.")
 
     return ModelFactory.create(
         model_platform=ModelPlatformType.OPENAI_COMPATIBLE_MODEL,
@@ -292,9 +323,8 @@ _SHOCK_GROUP_MAP: dict[str, str] = {
 # Shock injection
 # ---------------------------------------------------------------------------
 
-def get_shocks_for_round(
-    shocks: list[dict[str, Any]], round_num: int
-) -> list[dict[str, Any]]:
+
+def get_shocks_for_round(shocks: list[dict[str, Any]], round_num: int) -> list[dict[str, Any]]:
     """Return shocks scheduled for the given round number."""
     return [s for s in shocks if s.get("round_number") == round_num]
 
@@ -335,28 +365,32 @@ async def inject_shock(env: Any, shock: dict[str, Any]) -> None:
             group,
             shock.get("round_number", -1),
         )
-        emit("post", {
-            "platform": "facebook",
-            "source": "shock",
-            "shock_type": shock.get("shock_type", ""),
-            "group": group,
-            "round": shock.get("round_number", -1),
-            "content": post_content[:200],
-        })
+        emit(
+            "post",
+            {
+                "platform": "facebook",
+                "source": "shock",
+                "shock_type": shock.get("shock_type", ""),
+                "group": group,
+                "round": shock.get("round_number", -1),
+                "content": post_content[:200],
+            },
+        )
     except Exception as exc:
         logger.error("Failed to inject shock: %s", exc)
-        emit("error", {
-            "platform": "facebook",
-            "message": (
-                f"Shock injection failed at round "
-                f"{shock.get('round_number')}: {exc}"
-            ),
-        })
+        emit(
+            "error",
+            {
+                "platform": "facebook",
+                "message": (f"Shock injection failed at round {shock.get('round_number')}: {exc}"),
+            },
+        )
 
 
 # ---------------------------------------------------------------------------
 # Round stats extraction
 # ---------------------------------------------------------------------------
+
 
 def _extract_round_stats(env: Any, round_num: int) -> dict[str, Any]:
     """Best-effort extraction of round statistics from the OASIS env."""
@@ -413,7 +447,9 @@ async def run_facebook_simulation(config: dict[str, Any]) -> None:
 
     logger.info(
         "Facebook simulation starting — session=%s, rounds=%d, csv=%s",
-        session_id, round_count, agent_csv_path,
+        session_id,
+        round_count,
+        agent_csv_path,
     )
     emit_progress(0, round_count, "Building OASIS Facebook (Reddit backend) model")
 
@@ -491,11 +527,14 @@ async def run_facebook_simulation(config: dict[str, Any]) -> None:
             last_trace_ts = emit_new_actions(db_path, round_num, last_trace_ts)
         except Exception as exc:
             logger.error("Error in round %d: %s", round_num, exc)
-            emit("error", {
-                "platform": "facebook",
-                "message": f"Round {round_num} failed: {exc}",
-                "round": round_num,
-            })
+            emit(
+                "error",
+                {
+                    "platform": "facebook",
+                    "message": f"Round {round_num} failed: {exc}",
+                    "round": round_num,
+                },
+            )
             continue
 
         round_stats = _extract_round_stats(env, round_num)
@@ -505,7 +544,9 @@ async def run_facebook_simulation(config: dict[str, Any]) -> None:
         emit_progress(round_num, round_count, f"Round {round_num}/{round_count} complete")
         logger.info(
             "Facebook round %d/%d complete — %d actions this round",
-            round_num, round_count, round_action_count,
+            round_num,
+            round_count,
+            round_action_count,
         )
 
     # Final summary
@@ -528,6 +569,7 @@ async def run_facebook_simulation(config: dict[str, Any]) -> None:
 # Config loading
 # ---------------------------------------------------------------------------
 
+
 def load_config(config_path: str) -> dict[str, Any]:
     """Load config JSON from file."""
     path = Path(config_path)
@@ -542,10 +584,9 @@ def load_config(config_path: str) -> dict[str, Any]:
 # CLI entry point
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="MurmuraScope Facebook Simulation (OASIS Reddit backend)"
-    )
+    parser = argparse.ArgumentParser(description="MurmuraScope Facebook Simulation (OASIS Reddit backend)")
     parser.add_argument("--config", required=True, help="Path to config JSON file")
     args = parser.parse_args()
 

@@ -20,6 +20,7 @@ Usage::
     if result.dunbar_violation:
         logger.warning("Avg meaningful degree %s exceeds Dunbar limit", result.avg_meaningful_degree)
 """
+
 from __future__ import annotations
 
 import math
@@ -30,26 +31,27 @@ from backend.app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-_DUNBAR_MEANINGFUL_MIN_INTERACTIONS = 3   # edges with count >= this are "meaningful"
-_DUNBAR_LIMIT = 15.0                       # avg meaningful degree threshold
-_SMALL_WORLD_CC_RATIO = 2.0               # CC must be ≥ 2× random baseline
-_SMALL_WORLD_APL_RATIO = 2.0              # APL must be ≤ 2× random baseline
+_DUNBAR_MEANINGFUL_MIN_INTERACTIONS = 3  # edges with count >= this are "meaningful"
+_DUNBAR_LIMIT = 15.0  # avg meaningful degree threshold
+_SMALL_WORLD_CC_RATIO = 2.0  # CC must be ≥ 2× random baseline
+_SMALL_WORLD_APL_RATIO = 2.0  # APL must be ≤ 2× random baseline
 
 
 @dataclass(frozen=True)
 class RelationshipValidationResult:
     """Result of relationship network structural validation."""
+
     session_id: str
     n_agents: int
     n_edges: int
     avg_meaningful_degree: float
-    dunbar_violation: bool           # True when avg_meaningful_degree > _DUNBAR_LIMIT
-    clustering_coefficient: float    # global transitivity of the relationship graph
-    avg_path_length: float           # mean shortest path length (sampled if large)
-    random_cc_baseline: float        # expected CC for Erdős-Rényi(n, p)
-    random_apl_baseline: float       # expected APL for Erdős-Rényi(n, p)
-    small_world_cc_ok: bool          # True when CC ≥ 2× random baseline
-    small_world_apl_ok: bool         # True when APL ≤ 2× random baseline
+    dunbar_violation: bool  # True when avg_meaningful_degree > _DUNBAR_LIMIT
+    clustering_coefficient: float  # global transitivity of the relationship graph
+    avg_path_length: float  # mean shortest path length (sampled if large)
+    random_cc_baseline: float  # expected CC for Erdős-Rényi(n, p)
+    random_apl_baseline: float  # expected APL for Erdős-Rényi(n, p)
+    small_world_cc_ok: bool  # True when CC ≥ 2× random baseline
+    small_world_apl_ok: bool  # True when APL ≤ 2× random baseline
     summary: str
 
 
@@ -75,7 +77,8 @@ class RelationshipValidator:
         """
         edges = await self._load_edges(session_id)
         return self._compute(
-            session_id, edges,
+            session_id,
+            edges,
             meaningful_min_interactions=meaningful_min_interactions,
             dunbar_limit=dunbar_limit,
         )
@@ -84,9 +87,7 @@ class RelationshipValidator:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    async def _load_edges(
-        self, session_id: str
-    ) -> list[tuple[str, str, int]]:
+    async def _load_edges(self, session_id: str) -> list[tuple[str, str, int]]:
         """Load (agent_id_a, agent_id_b, interaction_count) from DB."""
         async with get_db() as db:
             cursor = await db.execute(
@@ -128,8 +129,7 @@ class RelationshipValidator:
 
         # --- Dunbar check ---
         meaningful_degrees = [
-            sum(1 for _, _, d in G.edges(node, data=True)
-                if d.get("weight", 0) >= meaningful_min_interactions)
+            sum(1 for _, _, d in G.edges(node, data=True) if d.get("weight", 0) >= meaningful_min_interactions)
             for node in G.nodes()
         ]
         avg_meaningful = sum(meaningful_degrees) / n if n > 0 else 0.0
@@ -143,13 +143,9 @@ class RelationshipValidator:
 
         # --- Erdős-Rényi baselines ---
         p_random = (2 * m) / (n * (n - 1)) if n > 1 else 0.0
-        random_cc = p_random                                      # E[CC] ≈ p for ER
+        random_cc = p_random  # E[CC] ≈ p for ER
         # E[APL] ≈ ln(n) / ln(n*p) for connected ER
-        random_apl = (
-            math.log(n) / math.log(max(n * p_random, 2))
-            if n > 1 and p_random > 0
-            else 1.0
-        )
+        random_apl = math.log(n) / math.log(max(n * p_random, 2)) if n > 1 and p_random > 0 else 1.0
 
         # --- Small-world checks ---
         sw_cc_ok = cc >= _SMALL_WORLD_CC_RATIO * random_cc if random_cc > 0 else False
@@ -183,6 +179,7 @@ class RelationshipValidator:
 # ---------------------------------------------------------------------------
 # Module-level helpers
 # ---------------------------------------------------------------------------
+
 
 def _sampled_avg_path_length(G, sample_size: int = 500) -> float:
     """Estimate average shortest path length via random node sampling.

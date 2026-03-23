@@ -7,13 +7,11 @@ table instead of returning hardcoded mock values.
 from __future__ import annotations
 
 import os
-from pathlib import Path
 
 import aiosqlite
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-
 
 # ---------------------------------------------------------------------------
 # Shared fixture: client + writable DB connection pointing at the same file
@@ -29,9 +27,7 @@ async def client_with_db(tmp_path):
     and additionally yields the raw connection so tests can seed data.
     """
     test_db_file = str(tmp_path / "test_api_data.db")
-    schema_path = os.path.join(
-        os.path.dirname(__file__), "..", "database", "schema.sql"
-    )
+    schema_path = os.path.join(os.path.dirname(__file__), "..", "database", "schema.sql")
 
     # Pre-initialise schema
     async with aiosqlite.connect(test_db_file) as init_db:
@@ -45,9 +41,7 @@ async def client_with_db(tmp_path):
         import backend.app.config as config_mod
 
         fresh_settings = config_mod.Settings()
-        with __import__("unittest.mock", fromlist=["patch"]).patch.object(
-            config_mod, "_settings", fresh_settings
-        ):
+        with __import__("unittest.mock", fromlist=["patch"]).patch.object(config_mod, "_settings", fresh_settings):
             from backend.app import create_app
 
             app = create_app()
@@ -78,13 +72,11 @@ async def test_dashboard_returns_db_values(client_with_db):
     client, db = client_with_db
 
     await db.execute(
-        "INSERT INTO hk_data_snapshots (category, metric, value, unit, period, source) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO hk_data_snapshots (category, metric, value, unit, period, source) VALUES (?, ?, ?, ?, ?, ?)",
         ("economy", "gdp_growth", 3.1, "%", "2026-03-15", "test"),
     )
     await db.execute(
-        "INSERT INTO hk_data_snapshots (category, metric, value, unit, period, source) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO hk_data_snapshots (category, metric, value, unit, period, source) VALUES (?, ?, ?, ?, ?, ?)",
         ("employment", "unemployment_rate", 2.8, "%", "2026-03-15", "test"),
     )
     await db.commit()
@@ -125,13 +117,11 @@ async def test_dashboard_latest_update_reflects_newest_period(client_with_db):
     client, db = client_with_db
 
     await db.execute(
-        "INSERT INTO hk_data_snapshots (category, metric, value, unit, period, source) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO hk_data_snapshots (category, metric, value, unit, period, source) VALUES (?, ?, ?, ?, ?, ?)",
         ("economy", "gdp_growth", 1.0, "%", "2026-01-01", "test"),
     )
     await db.execute(
-        "INSERT INTO hk_data_snapshots (category, metric, value, unit, period, source) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO hk_data_snapshots (category, metric, value, unit, period, source) VALUES (?, ?, ?, ?, ?, ?)",
         ("economy", "inflation_rate", 2.0, "%", "2026-03-01", "test"),
     )
     await db.commit()
@@ -154,8 +144,7 @@ async def test_snapshots_returns_db_rows(client_with_db):
     test_client, test_db = client_with_db
     for date, val in [("2026-03-01", 152.3), ("2026-02-01", 153.1), ("2026-01-01", 154.0)]:
         await test_db.execute(
-            "INSERT INTO hk_data_snapshots (category, metric, value, unit, period, source) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO hk_data_snapshots (category, metric, value, unit, period, source) VALUES (?, ?, ?, ?, ?, ?)",
             ("property_market", "ccl_index", val, "points", date, "test"),
         )
     await test_db.commit()
@@ -164,7 +153,7 @@ async def test_snapshots_returns_db_rows(client_with_db):
     assert resp.status_code == 200
     body = resp.json()
     assert body["meta"]["count"] == 2
-    assert body["data"][0]["value"] == 152.3   # most recent first
+    assert body["data"][0]["value"] == 152.3  # most recent first
 
 
 @pytest.mark.integration

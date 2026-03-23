@@ -20,22 +20,22 @@ logger = get_logger("info_warfare")
 # Constants
 # ---------------------------------------------------------------------------
 
-_FACT_CHECK_EDUCATION: str = "學位或以上"       # minimum education to fact-check
-_FACT_CHECK_CONSCIEN_MIN: float = 0.6           # minimum conscientiousness
-_FACT_CHECK_OPENNESS_MIN: float = 0.5           # minimum openness
-_FACT_CHECK_POSTS_PER_ROUND: int = 2            # checks per eligible agent per round
-_FACT_CHECK_BASE_ACCURACY: float = 0.7          # base accuracy rate
-_FACT_CHECK_CONSCIEN_BONUS: float = 0.1         # conscientiousness bonus
-_DEBUNK_SALIENCE_MISLEADING: float = 0.5        # multiply salience of misleading posts
-_DEBUNK_SALIENCE_FABRICATED: float = 0.2        # multiply salience of fabricated posts
-_FABRICATION_SPREAD_BOOST: float = 1.5          # initial spread multiplier
-_FABRICATION_SENTIMENT_SHIFT: float = 0.02      # sentiment shift per reach fraction
+_FACT_CHECK_EDUCATION: str = "學位或以上"  # minimum education to fact-check
+_FACT_CHECK_CONSCIEN_MIN: float = 0.6  # minimum conscientiousness
+_FACT_CHECK_OPENNESS_MIN: float = 0.5  # minimum openness
+_FACT_CHECK_POSTS_PER_ROUND: int = 2  # checks per eligible agent per round
+_FACT_CHECK_BASE_ACCURACY: float = 0.7  # base accuracy rate
+_FACT_CHECK_CONSCIEN_BONUS: float = 0.1  # conscientiousness bonus
+_DEBUNK_SALIENCE_MISLEADING: float = 0.5  # multiply salience of misleading posts
+_DEBUNK_SALIENCE_FABRICATED: float = 0.2  # multiply salience of fabricated posts
+_FABRICATION_SPREAD_BOOST: float = 1.5  # initial spread multiplier
+_FABRICATION_SENTIMENT_SHIFT: float = 0.02  # sentiment shift per reach fraction
 _FABRICATION_DETECT_TRUST_PENALTY: float = 0.3  # trust penalty when operator detected
-_FABRICATION_UNDETECTED_ROUNDS: int = 2         # rounds before undetected → sentiment shift
-_OPERATOR_CHANCE: float = 0.03                  # 3% of agents are influence operators
-_SAMPLE_RATE_CHECKERS: float = 0.05             # 5% of eligible checkers per round
+_FABRICATION_UNDETECTED_ROUNDS: int = 2  # rounds before undetected → sentiment shift
+_OPERATOR_CHANCE: float = 0.03  # 3% of agents are influence operators
+_SAMPLE_RATE_CHECKERS: float = 0.05  # 5% of eligible checkers per round
 _MAX_CHECKERS: int = 20
-_MAX_FABRICATIONS: int = 5                      # max fabrications per round
+_MAX_FABRICATIONS: int = 5  # max fabrications per round
 
 # ---------------------------------------------------------------------------
 # Frozen dataclasses
@@ -49,8 +49,8 @@ class FactCheckResult:
     session_id: str
     checker_agent_id: int
     post_id: str
-    verdict: str                 # "accurate" | "misleading" | "fabricated" | "unverifiable"
-    confidence: float            # 0.0–1.0
+    verdict: str  # "accurate" | "misleading" | "fabricated" | "unverifiable"
+    confidence: float  # 0.0–1.0
     round_number: int
 
 
@@ -62,7 +62,7 @@ class FabricatedPost:
     operator_agent_id: int
     content: str
     target_topic: str
-    target_sentiment: str        # "negative" | "positive" | "neutral"
+    target_sentiment: str  # "negative" | "positive" | "neutral"
     round_number: int
 
 
@@ -95,9 +95,7 @@ async def _ensure_info_warfare_tables(db: Any) -> None:
     await db.execute(_CREATE_FACT_CHECKS_INDEX)
     # Ensure is_fabricated column exists on simulation_actions (graceful alter)
     try:
-        await db.execute(
-            "ALTER TABLE simulation_actions ADD COLUMN is_fabricated INTEGER DEFAULT 0"
-        )
+        await db.execute("ALTER TABLE simulation_actions ADD COLUMN is_fabricated INTEGER DEFAULT 0")
     except Exception:
         pass  # Column already exists
     await db.commit()
@@ -106,6 +104,7 @@ async def _ensure_info_warfare_tables(db: Any) -> None:
 # ---------------------------------------------------------------------------
 # Content generation for influence operators
 # ---------------------------------------------------------------------------
+
 
 async def _generate_fabricated_content(
     target_topic: str,
@@ -145,6 +144,7 @@ async def _generate_fabricated_content(
 # ---------------------------------------------------------------------------
 # Core functions
 # ---------------------------------------------------------------------------
+
 
 async def process_fact_checks(
     session_id: str,
@@ -216,7 +216,7 @@ async def process_fact_checks(
 
         # Run fact checks
         salience_updates: list[tuple[float, str, str]] = []  # (multiplier, session_id, post_id)
-        trust_updates: list[tuple[float, str, int]] = []     # (delta, session_id, operator_id)
+        trust_updates: list[tuple[float, str, int]] = []  # (delta, session_id, operator_id)
 
         rows_to_insert = []
         for checker_id in sampled_checkers:
@@ -253,17 +253,17 @@ async def process_fact_checks(
                     verdict = rng.choice(["accurate", "unverifiable"])
                     confidence = round(rng.uniform(0.4, 0.6), 2)
 
-                results.append(FactCheckResult(
-                    session_id=session_id,
-                    checker_agent_id=checker_id,
-                    post_id=post_id,
-                    verdict=verdict,
-                    confidence=confidence,
-                    round_number=round_num,
-                ))
-                rows_to_insert.append((
-                    session_id, checker_id, post_id, verdict, confidence, round_num
-                ))
+                results.append(
+                    FactCheckResult(
+                        session_id=session_id,
+                        checker_agent_id=checker_id,
+                        post_id=post_id,
+                        verdict=verdict,
+                        confidence=confidence,
+                        round_number=round_num,
+                    )
+                )
+                rows_to_insert.append((session_id, checker_id, post_id, verdict, confidence, round_num))
 
         # Persist fact checks
         if rows_to_insert:
@@ -290,13 +290,14 @@ async def process_fact_checks(
 
         logger.debug(
             "fact_checks session=%s round=%d checkers=%d results=%d",
-            session_id, round_num, len(sampled_checkers), len(results),
+            session_id,
+            round_num,
+            len(sampled_checkers),
+            len(results),
         )
 
     except Exception:
-        logger.exception(
-            "process_fact_checks failed session=%s round=%d", session_id, round_num
-        )
+        logger.exception("process_fact_checks failed session=%s round=%d", session_id, round_num)
 
     return results
 
@@ -344,11 +345,13 @@ async def process_fabrication(
         operators: list[dict[str, Any]] = []
         for agent_id, profile in profiles_by_id.items():
             if getattr(profile, "agent_type", "citizen") == "influence_operator":
-                operators.append({
-                    "id": agent_id,
-                    "target_topic": getattr(profile, "target_topic", rng.choice(_DEFAULT_TOPICS)),
-                    "target_sentiment": getattr(profile, "target_sentiment", rng.choice(_DEFAULT_SENTIMENTS)),
-                })
+                operators.append(
+                    {
+                        "id": agent_id,
+                        "target_topic": getattr(profile, "target_topic", rng.choice(_DEFAULT_TOPICS)),
+                        "target_sentiment": getattr(profile, "target_sentiment", rng.choice(_DEFAULT_SENTIMENTS)),
+                    }
+                )
 
         if not operators:
             return []
@@ -362,31 +365,33 @@ async def process_fabrication(
             target_topic = op["target_topic"]
             target_sentiment = op["target_sentiment"]
 
-            content = await _generate_fabricated_content(
-                target_topic, target_sentiment, llm_client
+            content = await _generate_fabricated_content(target_topic, target_sentiment, llm_client)
+
+            fabrications.append(
+                FabricatedPost(
+                    session_id=session_id,
+                    operator_agent_id=operator_id,
+                    content=content,
+                    target_topic=target_topic,
+                    target_sentiment=target_sentiment,
+                    round_number=round_num,
+                )
             )
 
-            fabrications.append(FabricatedPost(
-                session_id=session_id,
-                operator_agent_id=operator_id,
-                content=content,
-                target_topic=target_topic,
-                target_sentiment=target_sentiment,
-                round_number=round_num,
-            ))
-
             # Log as simulation_action with is_fabricated=1
-            rows_to_insert.append((
-                session_id,
-                round_num,
-                f"operator_{operator_id}",
-                content,
-                "facebook",
-                f"fab_{session_id[:8]}_{round_num}_{operator_id}",
-                "negative" if target_sentiment == "negative" else "positive",
-                target_topic,
-                1,  # is_fabricated
-            ))
+            rows_to_insert.append(
+                (
+                    session_id,
+                    round_num,
+                    f"operator_{operator_id}",
+                    content,
+                    "facebook",
+                    f"fab_{session_id[:8]}_{round_num}_{operator_id}",
+                    "negative" if target_sentiment == "negative" else "positive",
+                    target_topic,
+                    1,  # is_fabricated
+                )
+            )
 
         if rows_to_insert:
             async with get_db() as db:
@@ -406,13 +411,14 @@ async def process_fabrication(
 
         logger.debug(
             "fabrication session=%s round=%d operators=%d posts=%d",
-            session_id, round_num, len(operators), len(fabrications),
+            session_id,
+            round_num,
+            len(operators),
+            len(fabrications),
         )
 
     except Exception:
-        logger.exception(
-            "process_fabrication failed session=%s round=%d", session_id, round_num
-        )
+        logger.exception("process_fabrication failed session=%s round=%d", session_id, round_num)
 
     return fabrications
 
@@ -460,11 +466,14 @@ async def _apply_undetected_fabrication_effects(
         # via the macro_adjustments pattern (we do not mutate MacroState here)
         logger.info(
             "Undetected fabrications: %d posts from round=%d may shift sentiment session=%s",
-            len(undetected_rows), cutoff_round, session_id,
+            len(undetected_rows),
+            cutoff_round,
+            session_id,
         )
 
     except Exception:
         logger.exception(
             "_apply_undetected_fabrication_effects failed session=%s round=%d",
-            session_id, current_round,
+            session_id,
+            current_round,
         )

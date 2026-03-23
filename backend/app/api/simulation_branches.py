@@ -19,6 +19,7 @@ async def create_branch(session_id: str, req: BranchRequest | None = None) -> AP
     """Create a branch from an existing simulation session."""
     import json as _json  # noqa: PLC0415
     import uuid as _uuid  # noqa: PLC0415
+
     from backend.app.utils.db import get_db  # noqa: PLC0415
 
     if req is None:
@@ -57,7 +58,9 @@ async def create_branch(session_id: str, req: BranchRequest | None = None) -> AP
                            ?, ?, ?, ?,
                            '', datetime('now'))""",
                 (
-                    branch_id, branch_label, row["scenario_type"],
+                    branch_id,
+                    branch_label,
+                    row["scenario_type"],
                     _json.dumps(branch_cfg),
                     orig_cfg.get("agent_count", 0),
                     orig_cfg.get("round_count", 0),
@@ -351,6 +354,7 @@ async def list_branches(session_id: str) -> APIResponse:
 async def compare_sessions(session_a: str, session_b: str) -> APIResponse:
     """Compare two simulation sessions."""
     import json as _json  # noqa: PLC0415
+
     from backend.app.utils.db import get_db  # noqa: PLC0415
 
     try:
@@ -497,6 +501,7 @@ async def compare_sessions(session_a: str, session_b: str) -> APIResponse:
 # Scenario Scan endpoint (Phase 2A)
 # ---------------------------------------------------------------------------
 
+
 @router.post("/{session_id}/scan", response_model=APIResponse)
 async def scan_scenarios(session_id: str, body: dict | None = None) -> APIResponse:
     """Auto-scan parameter space and create multiple branches."""
@@ -527,6 +532,7 @@ async def scan_scenarios(session_id: str, body: dict | None = None) -> APIRespon
 # ---------------------------------------------------------------------------
 # Monte Carlo endpoint (Phase 2B)
 # ---------------------------------------------------------------------------
+
 
 @router.post("/{session_id}/monte-carlo", response_model=APIResponse)
 async def run_monte_carlo(session_id: str, body: dict | None = None) -> APIResponse:
@@ -579,11 +585,14 @@ async def run_swarm_ensemble(
 
     async def _run() -> None:
         try:
-            from backend.app.services.swarm_ensemble import SwarmEnsemble  # noqa: PLC0415
             import json as _json  # noqa: PLC0415
 
+            from backend.app.services.swarm_ensemble import SwarmEnsemble  # noqa: PLC0415
+
             cloud = await SwarmEnsemble().run(
-                session_id, n_replicas=n_replicas, fork_round=fork_round,
+                session_id,
+                n_replicas=n_replicas,
+                fork_round=fork_round,
             )
 
             # Persist result
@@ -616,12 +625,8 @@ async def run_swarm_ensemble(
                         cloud.n_replicas,
                         cloud.n_completed,
                         _json.dumps(cloud.outcome_distribution),
-                        _json.dumps({
-                            k: list(v) for k, v in cloud.confidence_intervals.items()
-                        }),
-                        _json.dumps({
-                            k: list(v) for k, v in cloud.belief_cloud.items()
-                        }),
+                        _json.dumps({k: list(v) for k, v in cloud.confidence_intervals.items()}),
+                        _json.dumps({k: list(v) for k, v in cloud.belief_cloud.items()}),
                         cloud.avg_faction_count,
                         cloud.tipping_probability,
                         cloud.avg_polarization,
@@ -683,8 +688,9 @@ async def get_swarm_ensemble_results(session_id: str) -> APIResponse:
 @router.get("/{session_id}/auto-forks", response_model=APIResponse)
 async def get_auto_forks(session_id: str) -> APIResponse:
     """List auto-fork branches created by tipping point detection."""
-    from backend.app.utils.db import get_db  # noqa: PLC0415
     import json as _json  # noqa: PLC0415
+
+    from backend.app.utils.db import get_db  # noqa: PLC0415
 
     try:
         async with get_db() as db:
@@ -704,15 +710,17 @@ async def get_auto_forks(session_id: str) -> APIResponse:
         forks = []
         for row in rows:
             cfg = _json.loads(row["config_json"]) if row["config_json"] else {}
-            forks.append({
-                "branch_session_id": row["branch_session_id"],
-                "label": row["label"],
-                "fork_round": row["fork_round"],
-                "variant": cfg.get("auto_fork_variant", "unknown"),
-                "nudge_direction": cfg.get("belief_nudge_direction"),
-                "status": row["status"],
-                "created_at": row["created_at"],
-            })
+            forks.append(
+                {
+                    "branch_session_id": row["branch_session_id"],
+                    "label": row["label"],
+                    "fork_round": row["fork_round"],
+                    "variant": cfg.get("auto_fork_variant", "unknown"),
+                    "nudge_direction": cfg.get("belief_nudge_direction"),
+                    "status": row["status"],
+                    "created_at": row["created_at"],
+                }
+            )
 
         return APIResponse(
             success=True,
@@ -821,9 +829,9 @@ async def get_real_ensemble_results(session_id: str) -> APIResponse:
           "trial_metadata": [...TrialRecord dicts],
         }
     """
+    from backend.app.models.ensemble import DistributionBand  # noqa: PLC0415
     from backend.app.services.ensemble_analyzer import EnsembleAnalyzer  # noqa: PLC0415
     from backend.app.services.ensemble_runner import EnsembleRunner  # noqa: PLC0415
-    from backend.app.models.ensemble import DistributionBand  # noqa: PLC0415
     from backend.app.utils.db import get_db  # noqa: PLC0415
 
     try:
@@ -865,14 +873,16 @@ async def get_real_ensemble_results(session_id: str) -> APIResponse:
         bands: list[DistributionBand] = []
         for row in rows:
             r = dict(row)
-            bands.append(DistributionBand(
-                metric_name=r["metric_name"],
-                p10=r["p10"] or 0.0,
-                p25=r["p25"] or 0.0,
-                p50=r["p50"] or 0.0,
-                p75=r["p75"] or 0.0,
-                p90=r["p90"] or 0.0,
-            ))
+            bands.append(
+                DistributionBand(
+                    metric_name=r["metric_name"],
+                    p10=r["p10"] or 0.0,
+                    p25=r["p25"] or 0.0,
+                    p50=r["p50"] or 0.0,
+                    p75=r["p75"] or 0.0,
+                    p90=r["p90"] or 0.0,
+                )
+            )
         n_trials: int = rows[0]["n_trials"] if rows else 0
 
         # Generate probability statements

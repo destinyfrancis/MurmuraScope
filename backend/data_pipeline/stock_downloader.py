@@ -106,15 +106,19 @@ def _download_weekly_sync(ticker: str, start_year: int) -> list[WeeklyRecord]:
     raw = raw[list(needed)]
 
     try:
-        weekly = raw.resample("W-FRI").agg(
-            {
-                "Open": "first",
-                "High": "max",
-                "Low": "min",
-                "Close": "last",
-                "Volume": "sum",
-            }
-        ).dropna(subset=["Close"])
+        weekly = (
+            raw.resample("W-FRI")
+            .agg(
+                {
+                    "Open": "first",
+                    "High": "max",
+                    "Low": "min",
+                    "Close": "last",
+                    "Volume": "sum",
+                }
+            )
+            .dropna(subset=["Close"])
+        )
     except Exception as exc:
         logger.warning("Resample failed for %s: %s", ticker, exc)
         return []
@@ -161,9 +165,7 @@ async def upsert_weekly_records(records: list[WeeklyRecord]) -> int:
     async with get_db() as db:
         # Ensure the granularity column exists (may have been added by migration)
         try:
-            await db.execute(
-                "ALTER TABLE market_data ADD COLUMN granularity TEXT DEFAULT 'daily'"
-            )
+            await db.execute("ALTER TABLE market_data ADD COLUMN granularity TEXT DEFAULT 'daily'")
             await db.commit()
         except Exception:
             pass  # Column already exists
@@ -228,7 +230,5 @@ async def download_all_stocks() -> dict[str, int]:
         results[ticker] = count
 
     total = sum(results.values())
-    logger.info(
-        "download_all_stocks complete: %d tickers, %d total rows", len(results), total
-    )
+    logger.info("download_all_stocks complete: %d tickers, %d total rows", len(results), total)
     return results

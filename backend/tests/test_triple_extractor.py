@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import asyncio
 import sqlite3
-from pathlib import Path
 from unittest.mock import patch
 
 import aiosqlite
@@ -16,7 +14,6 @@ from backend.app.services.triple_extractor import (
     _clean,
     _is_plausible_entity,
 )
-
 
 # ---------------------------------------------------------------------------
 # Frozen dataclass tests

@@ -9,11 +9,10 @@ Tasks covered:
 
 from __future__ import annotations
 
-import json
-import os
+from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import Any, AsyncIterator
-from unittest.mock import AsyncMock, MagicMock, patch
+from typing import Any
+from unittest.mock import AsyncMock, patch
 
 import aiosqlite
 import pytest
@@ -186,9 +185,7 @@ class TestBuildFullConfig:
             "agent_csv_path": "/tmp/agents.csv",
         }
         result = _build_full_config(config, "sess-sec")
-        assert "llm_api_key" not in result, (
-            "llm_api_key must never be written to sim_config.json"
-        )
+        assert "llm_api_key" not in result, "llm_api_key must never be written to sim_config.json"
 
     def test_oasis_db_path_uses_session_dir(self) -> None:
         """oasis_db_path must be under data/sessions/<session_id>/."""
@@ -231,8 +228,15 @@ class TestParallelScriptRequiredKeys:
         """Core config keys needed to start a parallel simulation must be listed."""
         from backend.scripts.run_parallel_simulation import REQUIRED_CONFIG_KEYS
 
-        for key in ("session_id", "agent_csv_path", "round_count", "platforms",
-                    "llm_provider", "llm_model", "oasis_db_path"):
+        for key in (
+            "session_id",
+            "agent_csv_path",
+            "round_count",
+            "platforms",
+            "llm_provider",
+            "llm_model",
+            "oasis_db_path",
+        ):
             assert key in REQUIRED_CONFIG_KEYS, f"Expected '{key}' in REQUIRED_CONFIG_KEYS"
 
 
@@ -240,9 +244,7 @@ class TestPlatformScriptSelection:
     """Task 3.1 — platform-aware script selection logic in SimulationRunner.run()."""
 
     @pytest.mark.asyncio
-    async def test_facebook_only_uses_facebook_script(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_facebook_only_uses_facebook_script(self, tmp_path: Path) -> None:
         """Single facebook platform → run_facebook_simulation.py is selected."""
         from backend.app.services import simulation_runner as sr
 
@@ -264,9 +266,7 @@ class TestPlatformScriptSelection:
         }
 
         with patch.object(sr, "_require_path", side_effect=fake_require):
-            with patch.object(
-                sr, "_build_full_config", return_value={**config, "session_id": "s1"}
-            ):
+            with patch.object(sr, "_build_full_config", return_value={**config, "session_id": "s1"}):
                 # Simulate the script-selection logic directly (not the full run)
                 platforms = config.get("platforms", {})
                 facebook_on = platforms.get("facebook", False)
@@ -309,7 +309,6 @@ class TestPlatformScriptSelection:
 
     def test_multiple_platforms_use_parallel_script(self) -> None:
         """Multiple active platforms → parallel script is selected."""
-        from backend.app.services import simulation_runner as sr
 
         platforms = {"twitter": True, "reddit": True}
         enabled_count = sum(1 for v in platforms.values() if v)
@@ -332,19 +331,15 @@ class TestUpdateFromActions:
     ) -> None:
         """Heavy negative sentiment must decrease consumer_confidence."""
         from backend.app.services.macro_controller import MacroController
-        from backend.app.services.macro_state import MacroState, BASELINE_AVG_SQFT_PRICE, BASELINE_STAMP_DUTY
+        from backend.app.services.macro_state import BASELINE_AVG_SQFT_PRICE, BASELINE_STAMP_DUTY, MacroState
 
         session_id = "neg-test-01"
         # Seed 8 negative posts + 2 positive → 80% negative
         rows: list[tuple] = []
         for i in range(8):
-            rows.append(
-                (session_id, 1, None, f"user_{i}", "negative", "[]")
-            )
+            rows.append((session_id, 1, None, f"user_{i}", "negative", "[]"))
         for i in range(2):
-            rows.append(
-                (session_id, 1, None, f"user_pos_{i}", "positive", "[]")
-            )
+            rows.append((session_id, 1, None, f"user_pos_{i}", "positive", "[]"))
         await mem_db.executemany(
             "INSERT INTO simulation_actions "
             "(session_id, round_number, agent_id, oasis_username, sentiment, topics) "
@@ -393,23 +388,17 @@ class TestUpdateFromActions:
         )
 
     @pytest.mark.asyncio
-    async def test_positive_sentiment_increases_consumer_confidence(
-        self, mem_db: aiosqlite.Connection
-    ) -> None:
+    async def test_positive_sentiment_increases_consumer_confidence(self, mem_db: aiosqlite.Connection) -> None:
         """Heavy positive sentiment must increase consumer_confidence."""
         from backend.app.services.macro_controller import MacroController
-        from backend.app.services.macro_state import MacroState, BASELINE_AVG_SQFT_PRICE, BASELINE_STAMP_DUTY
+        from backend.app.services.macro_state import BASELINE_AVG_SQFT_PRICE, BASELINE_STAMP_DUTY, MacroState
 
         session_id = "pos-test-02"
         rows: list[tuple] = []
         for i in range(8):
-            rows.append(
-                (session_id, 1, None, f"user_{i}", "positive", "[]")
-            )
+            rows.append((session_id, 1, None, f"user_{i}", "positive", "[]"))
         for i in range(2):
-            rows.append(
-                (session_id, 1, None, f"user_neg_{i}", "negative", "[]")
-            )
+            rows.append((session_id, 1, None, f"user_neg_{i}", "negative", "[]"))
         await mem_db.executemany(
             "INSERT INTO simulation_actions "
             "(session_id, round_number, agent_id, oasis_username, sentiment, topics) "
@@ -456,12 +445,10 @@ class TestUpdateFromActions:
         )
 
     @pytest.mark.asyncio
-    async def test_empty_actions_returns_unchanged_state(
-        self, mem_db: aiosqlite.Connection
-    ) -> None:
+    async def test_empty_actions_returns_unchanged_state(self, mem_db: aiosqlite.Connection) -> None:
         """No simulation actions → MacroState must be returned unchanged."""
         from backend.app.services.macro_controller import MacroController
-        from backend.app.services.macro_state import MacroState, BASELINE_AVG_SQFT_PRICE, BASELINE_STAMP_DUTY
+        from backend.app.services.macro_state import BASELINE_AVG_SQFT_PRICE, BASELINE_STAMP_DUTY, MacroState
 
         session_id = "empty-actions-99"
 
@@ -500,20 +487,14 @@ class TestUpdateFromActions:
         assert updated is state, "No actions → identical state object expected"
 
     @pytest.mark.asyncio
-    async def test_update_returns_new_frozen_object(
-        self, mem_db: aiosqlite.Connection
-    ) -> None:
+    async def test_update_returns_new_frozen_object(self, mem_db: aiosqlite.Connection) -> None:
         """update_from_actions must return a new MacroState, never mutate original."""
         from backend.app.services.macro_controller import MacroController
-        from backend.app.services.macro_state import MacroState, BASELINE_AVG_SQFT_PRICE, BASELINE_STAMP_DUTY
+        from backend.app.services.macro_state import BASELINE_AVG_SQFT_PRICE, BASELINE_STAMP_DUTY, MacroState
 
         session_id = "immut-test-03"
-        rows = [
-            (session_id, 1, None, f"u{i}", "negative", "[]") for i in range(8)
-        ]
-        rows += [
-            (session_id, 1, None, f"p{i}", "positive", "[]") for i in range(2)
-        ]
+        rows = [(session_id, 1, None, f"u{i}", "negative", "[]") for i in range(8)]
+        rows += [(session_id, 1, None, f"p{i}", "positive", "[]") for i in range(2)]
         await mem_db.executemany(
             "INSERT INTO simulation_actions "
             "(session_id, round_number, agent_id, oasis_username, sentiment, topics) "
@@ -523,13 +504,20 @@ class TestUpdateFromActions:
         await mem_db.commit()
 
         state = MacroState(
-            hibor_1m=0.04, prime_rate=0.055, unemployment_rate=0.032,
-            median_monthly_income=20_800, ccl_index=150.0,
+            hibor_1m=0.04,
+            prime_rate=0.055,
+            unemployment_rate=0.032,
+            median_monthly_income=20_800,
+            ccl_index=150.0,
             avg_sqft_price=dict(BASELINE_AVG_SQFT_PRICE),
             mortgage_cap=0.70,
             stamp_duty_rates=dict(BASELINE_STAMP_DUTY),
-            gdp_growth=0.025, cpi_yoy=0.019, hsi_level=20_060.0,
-            consumer_confidence=50.0, net_migration=2_000, birth_rate=5.3,
+            gdp_growth=0.025,
+            cpi_yoy=0.019,
+            hsi_level=20_060.0,
+            consumer_confidence=50.0,
+            net_migration=2_000,
+            birth_rate=5.3,
             policy_flags={},
         )
         original_confidence = state.consumer_confidence
@@ -542,9 +530,7 @@ class TestUpdateFromActions:
             mock_ctx.__aexit__ = AsyncMock(return_value=False)
             mock_get_db.return_value = mock_ctx
 
-            updated = await mc.update_from_actions(
-                current_state=state, session_id=session_id, round_number=1
-            )
+            updated = await mc.update_from_actions(current_state=state, session_id=session_id, round_number=1)
 
         # Original must be unchanged (frozen dataclass)
         assert state.consumer_confidence == original_confidence
@@ -569,8 +555,10 @@ class TestMonteCarloEngine:
     def test_run_single_trial_returns_expected_metrics(self) -> None:
         """_run_single_trial must return all DEFAULT_METRICS keys."""
         import numpy as np
+
         from backend.app.services.monte_carlo import (
-            MonteCarloEngine, DEFAULT_METRICS,
+            DEFAULT_METRICS,
+            MonteCarloEngine,
         )
 
         rng = np.random.default_rng(seed=42)
@@ -597,6 +585,7 @@ class TestMonteCarloEngine:
     def test_buy_property_rate_clamped_zero_to_one(self) -> None:
         """buy_property_rate must stay in [0, 1] even with extreme params."""
         import numpy as np
+
         from backend.app.services.monte_carlo import MonteCarloEngine
 
         rng = np.random.default_rng(seed=0)
@@ -622,6 +611,7 @@ class TestMonteCarloEngine:
     async def test_run_persists_to_db(self, tmp_path: Path) -> None:
         """MonteCarloEngine.run() must write rows to ensemble_results table."""
         import contextlib
+
         from backend.app.services.monte_carlo import MonteCarloEngine
 
         engine = MonteCarloEngine()
@@ -663,6 +653,7 @@ class TestMonteCarloEngine:
     async def test_distribution_bands_monotone(self, tmp_path: Path) -> None:
         """Each DistributionBand must have p10 <= p25 <= p50 <= p75 <= p90."""
         import contextlib
+
         from backend.app.services.monte_carlo import MonteCarloEngine
 
         engine = MonteCarloEngine()
@@ -715,6 +706,7 @@ class TestEnsembleRunner:
     def test_trial_record_is_frozen(self) -> None:
         """TrialRecord must be a frozen dataclass — direct attribute mutation raises."""
         from dataclasses import FrozenInstanceError
+
         from backend.app.services.ensemble_runner import TrialRecord
 
         record = TrialRecord(
@@ -732,18 +724,26 @@ class TestEnsembleRunner:
     def test_perturb_macro_fields_returns_all_perturbable(self) -> None:
         """_perturb_macro_fields must return a value for each PERTURBABLE_FIELDS entry."""
         import numpy as np
-        from backend.app.services.ensemble_runner import _perturb_macro_fields
+
         from backend.app.services.ensemble_analyzer import PERTURBABLE_FIELDS
-        from backend.app.services.macro_state import MacroState, BASELINE_AVG_SQFT_PRICE, BASELINE_STAMP_DUTY
+        from backend.app.services.ensemble_runner import _perturb_macro_fields
+        from backend.app.services.macro_state import BASELINE_AVG_SQFT_PRICE, BASELINE_STAMP_DUTY, MacroState
 
         state = MacroState(
-            hibor_1m=0.04, prime_rate=0.055, unemployment_rate=0.032,
-            median_monthly_income=20_800, ccl_index=150.0,
+            hibor_1m=0.04,
+            prime_rate=0.055,
+            unemployment_rate=0.032,
+            median_monthly_income=20_800,
+            ccl_index=150.0,
             avg_sqft_price=dict(BASELINE_AVG_SQFT_PRICE),
             mortgage_cap=0.70,
             stamp_duty_rates=dict(BASELINE_STAMP_DUTY),
-            gdp_growth=0.025, cpi_yoy=0.019, hsi_level=20_060.0,
-            consumer_confidence=50.0, net_migration=2_000, birth_rate=5.3,
+            gdp_growth=0.025,
+            cpi_yoy=0.019,
+            hsi_level=20_060.0,
+            consumer_confidence=50.0,
+            net_migration=2_000,
+            birth_rate=5.3,
             policy_flags={},
         )
 
@@ -757,9 +757,7 @@ class TestEnsembleRunner:
     def test_schema_has_ensemble_results_table(self) -> None:
         """ensemble_results table must be defined in schema.sql."""
         schema_text = _SCHEMA_PATH.read_text(encoding="utf-8")
-        assert "ensemble_results" in schema_text, (
-            "ensemble_results table not found in backend/database/schema.sql"
-        )
+        assert "ensemble_results" in schema_text, "ensemble_results table not found in backend/database/schema.sql"
 
 
 # ---------------------------------------------------------------------------
@@ -783,8 +781,8 @@ class TestCompanyFactory:
     @pytest.mark.asyncio
     async def test_profiles_are_frozen_dataclasses(self) -> None:
         """CompanyProfile must be immutable (frozen dataclass)."""
-        from backend.app.services.company_factory import CompanyFactory
         from backend.app.models.company import CompanyProfile
+        from backend.app.services.company_factory import CompanyFactory
 
         factory = CompanyFactory(rng_seed=1)
         profiles = await factory.generate_companies("sess-b2b-02", count=5)
@@ -822,16 +820,13 @@ class TestCompanyFactory:
         names = [p.company_name for p in profiles]
         # Allow very small collision rate but names must be mostly unique
         unique_ratio = len(set(names)) / len(names)
-        assert unique_ratio >= 0.85, (
-            f"Too many duplicate company names: unique_ratio={unique_ratio:.2f}"
-        )
+        assert unique_ratio >= 0.85, f"Too many duplicate company names: unique_ratio={unique_ratio:.2f}"
 
     @pytest.mark.asyncio
-    async def test_store_and_load_roundtrip(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_store_and_load_roundtrip(self, tmp_path: Path) -> None:
         """store_companies() must persist profiles and load_companies() must retrieve them."""
         import contextlib
+
         from backend.app.services.company_factory import CompanyFactory
 
         factory = CompanyFactory(rng_seed=77)
@@ -865,6 +860,7 @@ class TestCompanyFactory:
     async def test_store_sets_session_id(self, tmp_path: Path) -> None:
         """Stored companies must carry the correct session_id."""
         import contextlib
+
         from backend.app.services.company_factory import CompanyFactory
 
         factory = CompanyFactory(rng_seed=123)
@@ -915,9 +911,7 @@ class TestSimulationRunnerDryRun:
         assert runner._dry_run is False
 
     @pytest.mark.asyncio
-    async def test_dry_run_completes_without_subprocess(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_dry_run_completes_without_subprocess(self, tmp_path: Path) -> None:
         """dry_run=True must complete run() without spawning a subprocess."""
         from backend.app.services.simulation_runner import SimulationRunner
 
@@ -939,18 +933,14 @@ class TestSimulationRunnerDryRun:
             mock_spawn.side_effect = AssertionError("subprocess must not be spawned in dry_run")
             # Patch B2B init and ws push_progress to avoid real DB / import issues
             with patch.object(runner, "_init_b2b_companies", new=AsyncMock()):
-                with patch(
-                    "backend.app.api.ws.push_progress", new=AsyncMock()
-                ):
+                with patch("backend.app.api.ws.push_progress", new=AsyncMock()):
                     await runner.run(session_id, config)
 
         # If we reach here without AssertionError, subprocess was not called
         assert not mock_spawn.called
 
     @pytest.mark.asyncio
-    async def test_dry_run_generates_mock_progress_events(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_dry_run_generates_mock_progress_events(self, tmp_path: Path) -> None:
         """dry_run must emit progress and post events via the progress_callback."""
         from backend.app.services.simulation_runner import SimulationRunner
 
@@ -983,9 +973,7 @@ class TestSimulationRunnerDryRun:
         assert len(complete_events) == 1, "Must emit exactly one 'complete' event"
 
     @pytest.mark.asyncio
-    async def test_dry_run_triggers_memory_hook(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_dry_run_triggers_memory_hook(self, tmp_path: Path) -> None:
         """dry_run must call _process_round_memories for each simulated round."""
         from backend.app.services.simulation_runner import SimulationRunner
 
@@ -1011,15 +999,11 @@ class TestSimulationRunnerDryRun:
                 with patch.object(runner, "_process_round_memories", side_effect=mock_memory):
                     await runner.run(session_id, config)
 
-        assert len(memory_rounds) == 3, (
-            f"Expected 3 memory hook calls (one per round), got {memory_rounds}"
-        )
+        assert len(memory_rounds) == 3, f"Expected 3 memory hook calls (one per round), got {memory_rounds}"
         assert memory_rounds == [1, 2, 3]
 
     @pytest.mark.asyncio
-    async def test_dry_run_triggers_decision_hook(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_dry_run_triggers_decision_hook(self, tmp_path: Path) -> None:
         """dry_run must call _process_round_decisions for each simulated round."""
         from backend.app.services.simulation_runner import SimulationRunner
 
@@ -1049,9 +1033,7 @@ class TestSimulationRunnerDryRun:
         assert decision_rounds == [1, 2, 3]
 
     @pytest.mark.asyncio
-    async def test_dry_run_cleans_up_buffers(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_dry_run_cleans_up_buffers(self, tmp_path: Path) -> None:
         """dry_run must clear _posts_buffer and _macro_state after completion."""
         from backend.app.services.simulation_runner import SimulationRunner
 
@@ -1071,12 +1053,8 @@ class TestSimulationRunnerDryRun:
             with patch("backend.app.api.ws.push_progress", new=AsyncMock()):
                 await runner.run(session_id, config)
 
-        assert session_id not in runner._posts_buffer, (
-            "_posts_buffer must be cleared after dry_run"
-        )
-        assert session_id not in runner._macro_state, (
-            "_macro_state must be cleared after dry_run"
-        )
+        assert session_id not in runner._posts_buffer, "_posts_buffer must be cleared after dry_run"
+        assert session_id not in runner._macro_state, "_macro_state must be cleared after dry_run"
 
 
 class TestSimulationRunnerRelativePaths:
@@ -1086,25 +1064,19 @@ class TestSimulationRunnerRelativePaths:
         """_PROJECT_ROOT must point to an existing directory."""
         from backend.app.services import simulation_runner as sr
 
-        assert sr._PROJECT_ROOT.is_dir(), (
-            f"_PROJECT_ROOT does not exist: {sr._PROJECT_ROOT}"
-        )
+        assert sr._PROJECT_ROOT.is_dir(), f"_PROJECT_ROOT does not exist: {sr._PROJECT_ROOT}"
 
     def test_project_root_contains_backend(self) -> None:
         """_PROJECT_ROOT must contain the backend/ subdirectory."""
         from backend.app.services import simulation_runner as sr
 
-        assert (sr._PROJECT_ROOT / "backend").is_dir(), (
-            "_PROJECT_ROOT does not contain a backend/ directory"
-        )
+        assert (sr._PROJECT_ROOT / "backend").is_dir(), "_PROJECT_ROOT does not contain a backend/ directory"
 
     def test_python_bin_path_is_relative(self) -> None:
         """_PYTHON_BIN must be derived from _PROJECT_ROOT, not an absolute literal."""
         from backend.app.services import simulation_runner as sr
 
-        assert str(sr._PYTHON_BIN).startswith(str(sr._PROJECT_ROOT)), (
-            "_PYTHON_BIN must be relative to _PROJECT_ROOT"
-        )
+        assert str(sr._PYTHON_BIN).startswith(str(sr._PROJECT_ROOT)), "_PYTHON_BIN must be relative to _PROJECT_ROOT"
 
     def test_script_paths_are_under_project_root(self) -> None:
         """All simulation script paths must be under _PROJECT_ROOT."""
@@ -1117,26 +1089,20 @@ class TestSimulationRunnerRelativePaths:
             sr._INSTAGRAM_SCRIPT,
         ]
         for script in scripts:
-            assert str(script).startswith(str(sr._PROJECT_ROOT)), (
-                f"Script path not under _PROJECT_ROOT: {script}"
-            )
+            assert str(script).startswith(str(sr._PROJECT_ROOT)), f"Script path not under _PROJECT_ROOT: {script}"
 
     def test_no_hardcoded_absolute_paths(self) -> None:
         """simulation_runner.py must not contain hardcoded /Volumes/... paths."""
         source = Path(__file__).resolve().parent.parent / "app" / "services" / "simulation_runner.py"
         content = source.read_text(encoding="utf-8")
-        assert "/Volumes/4TB/francistam" not in content, (
-            "Found hardcoded absolute path in simulation_runner.py"
-        )
+        assert "/Volumes/4TB/francistam" not in content, "Found hardcoded absolute path in simulation_runner.py"
 
 
 class TestB2BInitInSimulationRunner:
     """Task 3.4 — verify B2B initialization is conditional and non-blocking."""
 
     @pytest.mark.asyncio
-    async def test_b2b_init_skipped_when_companies_exist(
-        self, mem_db: aiosqlite.Connection
-    ) -> None:
+    async def test_b2b_init_skipped_when_companies_exist(self, mem_db: aiosqlite.Connection) -> None:
         """When company_profiles already has rows for the session, factory skips."""
         session_id = "sess-b2b-skip"
 
@@ -1180,9 +1146,7 @@ class TestB2BInitInSimulationRunner:
 
         error_raised = False
         try:
-            with patch.object(
-                factory, "generate_companies", side_effect=RuntimeError("DB down")
-            ):
+            with patch.object(factory, "generate_companies", side_effect=RuntimeError("DB down")):
                 try:
                     await factory.generate_companies("sess-fail", count=10)
                 except RuntimeError:
@@ -1194,9 +1158,7 @@ class TestB2BInitInSimulationRunner:
         assert not error_raised, "B2B errors must be swallowed inside the runner"
 
     @pytest.mark.asyncio
-    async def test_b2b_generates_companies_for_new_session(
-        self, mem_db: aiosqlite.Connection
-    ) -> None:
+    async def test_b2b_generates_companies_for_new_session(self, mem_db: aiosqlite.Connection) -> None:
         """For a new session with zero companies, factory must generate profiles."""
         from backend.app.services.company_factory import CompanyFactory
 

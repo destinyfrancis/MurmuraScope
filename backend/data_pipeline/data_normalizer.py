@@ -7,10 +7,9 @@ records (same category+metric+period) are skipped via INSERT OR IGNORE.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Protocol, Sequence
-
-import aiosqlite
+from typing import Any, Protocol
 
 from backend.app.utils.db import get_db
 from backend.app.utils.logger import get_logger
@@ -92,15 +91,17 @@ def to_snapshot_rows(records: Sequence[Any]) -> list[SnapshotRow]:
         source_url = getattr(rec, "source_url", "") or ""
         # category: not present on FredRecord (uses series_id as metric)
         category = getattr(rec, "category", "") or ""
-        rows.append(SnapshotRow(
-            category=category,
-            metric=rec.metric,
-            value=float(rec.value),
-            unit=_extract_unit(rec),
-            period=str(period),
-            source=rec.source,
-            source_url=source_url,
-        ))
+        rows.append(
+            SnapshotRow(
+                category=category,
+                metric=rec.metric,
+                value=float(rec.value),
+                unit=_extract_unit(rec),
+                period=str(period),
+                source=rec.source,
+                source_url=source_url,
+            )
+        )
     return rows
 
 
@@ -130,16 +131,18 @@ def to_population_rows(
         count = int(rec.value)
         probability = float(rec.value) / computed_total
 
-        rows.append(PopulationRow(
-            category=getattr(rec, "category", "population"),
-            dimension_1=getattr(rec, "dimension_1", ""),
-            dimension_2=getattr(rec, "dimension_2", None),
-            dimension_3=getattr(rec, "dimension_3", None),
-            count=count,
-            probability=round(probability, 8),
-            source_year=source_year,
-            source_dataset=source_dataset,
-        ))
+        rows.append(
+            PopulationRow(
+                category=getattr(rec, "category", "population"),
+                dimension_1=getattr(rec, "dimension_1", ""),
+                dimension_2=getattr(rec, "dimension_2", None),
+                dimension_3=getattr(rec, "dimension_3", None),
+                count=count,
+                probability=round(probability, 8),
+                source_year=source_year,
+                source_dataset=source_dataset,
+            )
+        )
 
     return rows
 
@@ -159,8 +162,7 @@ async def insert_snapshots(rows: Sequence[SnapshotRow]) -> tuple[int, int]:
     async with get_db() as db:
         # Create unique index if not exists (for deduplication)
         await db.execute(
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_snapshot_unique "
-            "ON hk_data_snapshots(category, metric, period)"
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_snapshot_unique ON hk_data_snapshots(category, metric, period)"
         )
 
         for i in range(0, len(rows), BATCH_SIZE):
@@ -171,8 +173,7 @@ async def insert_snapshots(rows: Sequence[SnapshotRow]) -> tuple[int, int]:
                         "INSERT OR IGNORE INTO hk_data_snapshots "
                         "(category, metric, value, unit, period, source, source_url) "
                         "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                        (row.category, row.metric, row.value, row.unit,
-                         row.period, row.source, row.source_url),
+                        (row.category, row.metric, row.value, row.unit, row.period, row.source, row.source_url),
                     )
                     if cursor.rowcount > 0:
                         inserted += 1
@@ -181,7 +182,9 @@ async def insert_snapshots(rows: Sequence[SnapshotRow]) -> tuple[int, int]:
                 except Exception:
                     logger.exception(
                         "Failed to insert snapshot: %s/%s/%s",
-                        row.category, row.metric, row.period,
+                        row.category,
+                        row.metric,
+                        row.period,
                     )
                     skipped += 1
 
@@ -219,9 +222,16 @@ async def insert_populations(rows: Sequence[PopulationRow]) -> tuple[int, int]:
                         "(category, dimension_1, dimension_2, dimension_3, "
                         "count, probability, source_year, source_dataset) "
                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                        (row.category, row.dimension_1, row.dimension_2,
-                         row.dimension_3, row.count, row.probability,
-                         row.source_year, row.source_dataset),
+                        (
+                            row.category,
+                            row.dimension_1,
+                            row.dimension_2,
+                            row.dimension_3,
+                            row.count,
+                            row.probability,
+                            row.source_year,
+                            row.source_dataset,
+                        ),
                     )
                     if cursor.rowcount > 0:
                         inserted += 1
@@ -230,7 +240,9 @@ async def insert_populations(rows: Sequence[PopulationRow]) -> tuple[int, int]:
                 except Exception:
                     logger.exception(
                         "Failed to insert population: %s/%s/%s",
-                        row.category, row.dimension_1, row.dimension_2,
+                        row.category,
+                        row.dimension_1,
+                        row.dimension_2,
                     )
                     skipped += 1
 
@@ -282,6 +294,9 @@ async def normalize_all(
     )
     logger.info(
         "Normalization complete: snapshots=%d/%d, populations=%d/%d (inserted/skipped)",
-        snap_inserted, snap_skipped, pop_inserted, pop_skipped,
+        snap_inserted,
+        snap_skipped,
+        pop_inserted,
+        pop_skipped,
     )
     return result

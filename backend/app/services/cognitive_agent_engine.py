@@ -9,6 +9,7 @@ Phase 2 enrichment: agent_context now accepts optional fields:
 These are injected into the deliberation prompt when present, enabling richer
 character-driven decisions (especially for relationship-oriented scenarios).
 """
+
 from __future__ import annotations
 
 import math
@@ -167,11 +168,7 @@ def _build_deliberation_prompt(
 
     # Goals
     goals = agent_context.get("goals", [])
-    goals_str = (
-        ", ".join(sanitize_agent_field(str(g)) for g in goals[:5])
-        if goals
-        else "none specified"
-    )
+    goals_str = ", ".join(sanitize_agent_field(str(g)) for g in goals[:5]) if goals else "none specified"
 
     # Emotional state block (optional)
     emotional_state = agent_context.get("emotional_state") or {}
@@ -244,8 +241,8 @@ def _compute_risk_appetite(emotional_state: dict[str, Any]) -> float:
     Low arousal → near 0.5 (neutral).  High arousal + negative valence → cautious.
     High arousal + positive valence → bold.  Continuous — no step-function cliffs.
     """
-    valence = float(emotional_state.get("valence", 0.0))   # [-1, 1]
-    arousal = float(emotional_state.get("arousal", 0.3))    # [0, 1]
+    valence = float(emotional_state.get("valence", 0.0))  # [-1, 1]
+    arousal = float(emotional_state.get("arousal", 0.3))  # [0, 1]
 
     # Smooth amplifier: ≈0 when arousal << 0.5, ≈1 when arousal >> 0.5
     # Steepness=-6: smooth gradient (not quasi-binary like -12).
@@ -277,9 +274,7 @@ def _build_relationship_block(
         style = attachment.get("style", "secure")
         anxiety = float(attachment.get("anxiety", 0.2))
         avoidance = float(attachment.get("avoidance", 0.2))
-        lines.append(
-            f"  Attachment style: {style} (anxiety={anxiety:.2f}, avoidance={avoidance:.2f})"
-        )
+        lines.append(f"  Attachment style: {style} (anxiety={anxiety:.2f}, avoidance={avoidance:.2f})")
 
     high_trust = 0
     crisis = 0
@@ -290,8 +285,7 @@ def _build_relationship_block(
         trust = float(rel.get("trust", 0.0))
         commitment = float(rel.get("commitment", 0.1))
         lines.append(
-            f"  - {other} [{rel_type}]: intimacy={intimacy:.2f}, "
-            f"trust={trust:.2f}, commitment={commitment:.2f}"
+            f"  - {other} [{rel_type}]: intimacy={intimacy:.2f}, trust={trust:.2f}, commitment={commitment:.2f}"
         )
         if trust > 0.3:
             high_trust += 1
@@ -308,9 +302,7 @@ def _build_relationship_block(
     else:
         disposition = "neutral"
         directive = "weigh options independently before committing"
-    lines.append(
-        f"  Relationship disposition: {disposition} — {directive}."
-    )
+    lines.append(f"  Relationship disposition: {disposition} — {directive}.")
 
     return "\n".join(lines)
 

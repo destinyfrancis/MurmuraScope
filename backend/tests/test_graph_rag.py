@@ -12,7 +12,6 @@ Covers:
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import FrozenInstanceError
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -20,13 +19,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from backend.app.services.graph_rag import (
+    _MIN_CLUSTER_SIZE,
+    _OPPOSING_PAIRS,
     CommunitySummary,
     GlobalNarrative,
     GraphRAGService,
     SubgraphInsight,
     TripleConflict,
-    _MIN_CLUSTER_SIZE,
-    _OPPOSING_PAIRS,
 )
 
 pytestmark = pytest.mark.unit
@@ -40,9 +39,15 @@ pytestmark = pytest.mark.unit
 def test_community_summary_frozen() -> None:
     """CommunitySummary must be immutable."""
     s = CommunitySummary(
-        id=None, session_id="s1", round_number=5, cluster_id=0,
-        core_narrative="test", shared_anxieties="", main_opposition="",
-        member_count=10, avg_trust=0.5,
+        id=None,
+        session_id="s1",
+        round_number=5,
+        cluster_id=0,
+        core_narrative="test",
+        shared_anxieties="",
+        main_opposition="",
+        member_count=10,
+        avg_trust=0.5,
     )
     with pytest.raises(FrozenInstanceError):
         s.core_narrative = "mutated"  # type: ignore[misc]
@@ -51,8 +56,11 @@ def test_community_summary_frozen() -> None:
 def test_global_narrative_frozen() -> None:
     """GlobalNarrative must be immutable."""
     g = GlobalNarrative(
-        session_id="s1", round_number=5, community_count=0,
-        narrative_text="n/a", fault_lines=[],
+        session_id="s1",
+        round_number=5,
+        community_count=0,
+        narrative_text="n/a",
+        fault_lines=[],
     )
     with pytest.raises(FrozenInstanceError):
         g.narrative_text = "mutated"  # type: ignore[misc]
@@ -61,8 +69,11 @@ def test_global_narrative_frozen() -> None:
 def test_subgraph_insight_frozen() -> None:
     """SubgraphInsight must be immutable."""
     s = SubgraphInsight(
-        query="q", relevant_communities=[1], node_count=5,
-        edge_count=3, insight_report="report",
+        query="q",
+        relevant_communities=[1],
+        node_count=5,
+        edge_count=3,
+        insight_report="report",
     )
     with pytest.raises(FrozenInstanceError):
         s.query = "mutated"  # type: ignore[misc]
@@ -71,9 +82,14 @@ def test_subgraph_insight_frozen() -> None:
 def test_triple_conflict_frozen() -> None:
     """TripleConflict must be immutable."""
     c = TripleConflict(
-        entity="X", predicate_a="supports", object_a="Y",
-        agent_ids_a=[1, 2, 3], predicate_b="opposes", object_b="Z",
-        agent_ids_b=[4, 5, 6], conflict_score=0.5,
+        entity="X",
+        predicate_a="supports",
+        object_a="Y",
+        agent_ids_a=[1, 2, 3],
+        predicate_b="opposes",
+        object_b="Z",
+        agent_ids_b=[4, 5, 6],
+        conflict_score=0.5,
     )
     with pytest.raises(FrozenInstanceError):
         c.entity = "mutated"  # type: ignore[misc]

@@ -5,14 +5,13 @@ from __future__ import annotations
 import pytest
 
 from backend.app.services.media_influence import (
-    DEFAULT_MEDIA_OUTLETS,
-    MediaAgent,
-    MediaInfluenceModel,
     _MAX_SHIFT_PER_ROUND,
     _MIN_RECEPTIVITY,
     _MIN_STANCE_DELTA,
+    DEFAULT_MEDIA_OUTLETS,
+    MediaAgent,
+    MediaInfluenceModel,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -140,11 +139,10 @@ class TestAsymmetricReceptivity:
     """H11: Aligned agents should be more receptive than cross-cutting ones."""
 
     @staticmethod
-    def _receptivity_with_asymmetry(
-        agent_stance: float, media_lean: float, credibility: float
-    ) -> float:
+    def _receptivity_with_asymmetry(agent_stance: float, media_lean: float, credibility: float) -> float:
         """Reproduce the receptivity formula WITH asymmetry adjustment."""
         from backend.app.services.media_influence import compute_receptivity
+
         return compute_receptivity(agent_stance, media_lean, credibility)
 
     def test_aligned_agent_boosted(self) -> None:

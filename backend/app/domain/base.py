@@ -10,10 +10,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-
 # ---------------------------------------------------------------------------
 # Spec types
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class ShockTypeSpec:
@@ -28,15 +28,16 @@ class ShockTypeSpec:
 class MetricSpec:
     """Maps a forecast metric name to its DB location."""
 
-    name: str              # e.g. "ccl_index"
-    db_category: str       # e.g. "property"
-    db_metric: str         # e.g. "ccl_index"
+    name: str  # e.g. "ccl_index"
+    db_category: str  # e.g. "property"
+    db_metric: str  # e.g. "ccl_index"
     seasonal_period: int = 4
 
 
 # ---------------------------------------------------------------------------
 # Threshold / delta containers
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class DecisionThresholds:
@@ -108,6 +109,7 @@ class MacroImpactDeltas:
 # Phase 6 spec types
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class DemographicsSpec:
     """Demographics configuration for agent generation."""
@@ -175,6 +177,7 @@ class MacroFieldSpec:
 # DomainPack
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class DomainPack:
     """Immutable bundle of all domain-specific constants."""
@@ -224,15 +227,20 @@ class DomainPack:
     topic_metric_mapping: dict[str, str] = field(default_factory=dict)
     retirement_age: int = 65
     education_income_multiplier: dict[str, float] = field(default_factory=dict)
-    consensus_weights: dict[str, float] = field(default_factory=lambda: {
-        "belief": 0.40, "decision": 0.35, "sentiment": 0.25,
-    })
+    consensus_weights: dict[str, float] = field(
+        default_factory=lambda: {
+            "belief": 0.40,
+            "decision": 0.35,
+            "sentiment": 0.25,
+        }
+    )
     topic_groups: tuple[tuple[str, ...], ...] = ()  # for scenario matching
 
 
 # ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
+
 
 class DomainPackRegistry:
     """Global registry of available domain packs."""
@@ -249,10 +257,7 @@ class DomainPackRegistry:
     def get(cls, pack_id: str) -> DomainPack:
         """Retrieve a registered pack by id. Raises KeyError if not found."""
         if pack_id not in cls._packs:
-            raise KeyError(
-                f"Unknown domain pack '{pack_id}'. "
-                f"Available: {sorted(cls._packs)}"
-            )
+            raise KeyError(f"Unknown domain pack '{pack_id}'. Available: {sorted(cls._packs)}")
         return cls._packs[pack_id]
 
     @classmethod

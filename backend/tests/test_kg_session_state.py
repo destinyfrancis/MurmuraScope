@@ -5,6 +5,7 @@ Tests:
 - Mutability (fields can be reassigned)
 - No cross-instance contamination (default_factory gives fresh objects)
 """
+
 from __future__ import annotations
 
 import pytest

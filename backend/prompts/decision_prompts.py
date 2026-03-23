@@ -48,7 +48,6 @@ _DECISION_INSTRUCTIONS: dict[str, str] = {
 - 收入相對樓價負擔能力（月供不超過收入 50%）
 - 首期能力（儲蓄 vs 樓價 × 按揭成數）
 - 印花稅政策""",
-
     DecisionType.EMIGRATE: """決策類型：移民決定
 可選 action：["emigrate", "stay", "consider_later"]
 - emigrate: 決定移民離港
@@ -61,7 +60,6 @@ _DECISION_INSTRUCTIONS: dict[str, str] = {
 - 神經質（neuroticism）高 + 台海風險高 → 移民傾向增加
 - 政治環境及生活質素
 - 工作前景""",
-
     DecisionType.CHANGE_JOB: """決策類型：轉工決定
 可選 action：["change_job", "stay", "upskill", "retire_early"]
 - change_job: 主動轉工或跳槽
@@ -74,7 +72,6 @@ _DECISION_INSTRUCTIONS: dict[str, str] = {
 - 外向性（extraversion）高 → 更願意主動轉工
 - 失業率走勢（失業率上升 → 轉工風險增加）
 - 學歷同收入水平""",
-
     DecisionType.INVEST: """決策類型：投資決定
 可選 action：["invest_stocks", "invest_property", "invest_crypto", "hold_cash", "diversify"]
 - invest_stocks: 買入港股或美股
@@ -89,7 +86,6 @@ _DECISION_INSTRUCTIONS: dict[str, str] = {
 - 恒生指數走勢
 - CPI 通脹率（高通脹 → 更傾向投資保值）
 - 消費者信心指數""",
-
     DecisionType.HAVE_CHILD: """決策類型：生育決定
 可選 action：["have_child", "delay", "no_child"]
 - have_child: 決定生育
@@ -102,7 +98,6 @@ _DECISION_INSTRUCTIONS: dict[str, str] = {
 - 月收入超過 15,000 HKD
 - 生活成本（CPI、樓價）
 - 消費者信心""",
-
     DecisionType.ADJUST_SPENDING: """決策類型：消費調整決定
 可選 action：["cut_spending", "maintain", "increase_savings", "spend_more"]
 - cut_spending: 削減非必要開支
@@ -115,7 +110,6 @@ _DECISION_INSTRUCTIONS: dict[str, str] = {
 - 消費者信心指數
 - 個人收入同儲蓄狀況
 - 失業率環境""",
-
     DecisionType.EMPLOYMENT_CHANGE: """決策類型：就業狀態改變
 可選 action：["quit", "strike", "lie_flat", "seek_employment", "maintain"]
 - quit: 辭職離開現時工作（主動選擇）
@@ -131,7 +125,6 @@ _DECISION_INSTRUCTIONS: dict[str, str] = {
 - 開放性同責任感（低開放性 + 低責任感 → 躺平）
 - 年齡（22-35歲較易躺平）
 - 儲蓄是否足夠支撐辭職後生活""",
-
     DecisionType.RELOCATE: """決策類型：區內遷居決定
 可選 action：["relocate_nt", "relocate_kln", "relocate_hk_island", "relocate_gba", "stay"]
 - relocate_nt: 遷往新界（元朗/屯門/沙田/大埔/北區等）
@@ -158,44 +151,37 @@ _FEW_SHOT_EXAMPLES: dict[str, str] = {
   {"agent_id": 42, "action": "wait", "reasoning": "月供佔收入 65%，壓力測試唔過，等HIBOR跌先", "confidence": 0.82},
   {"agent_id": 67, "action": "buy", "reasoning": "儲夠首期，趁CCL回落入市，長線自住", "confidence": 0.71}
 ]""",
-
     DecisionType.EMIGRATE: """示例輸出：
 [
   {"agent_id": 12, "action": "stay", "reasoning": "工作穩定，家庭係香港，冇理由走", "confidence": 0.88},
   {"agent_id": 34, "action": "consider_later", "reasoning": "有移民念頭但儲蓄唔夠，再儲多兩年", "confidence": 0.65}
 ]""",
-
     DecisionType.CHANGE_JOB: """示例輸出：
 [
   {"agent_id": 5, "action": "upskill", "reasoning": "失業率上升，先增值自己再轉工較安全", "confidence": 0.74},
   {"agent_id": 18, "action": "change_job", "reasoning": "外向性高，主動搵新機會，現職無前途", "confidence": 0.79}
 ]""",
-
     DecisionType.INVEST: """示例輸出：
 [
   {"agent_id": 99, "action": "hold_cash", "reasoning": "市場波動大，保留現金等待入市時機", "confidence": 0.80},
   {"agent_id": 103, "action": "invest_stocks", "reasoning": "恒指低位，定期定額買ETF長線增值", "confidence": 0.72}
 ]""",
-
     DecisionType.HAVE_CHILD: """示例輸出：
 [
   {"agent_id": 55, "action": "delay", "reasoning": "樓價貴，育兒開支大，等生活穩定先", "confidence": 0.85},
   {"agent_id": 61, "action": "have_child", "reasoning": "已婚、收入穩定，時機成熟", "confidence": 0.78}
 ]""",
-
     DecisionType.ADJUST_SPENDING: """示例輸出：
 [
   {"agent_id": 7, "action": "cut_spending", "reasoning": "通脹高，削減娛樂開支，優先儲蓄", "confidence": 0.83},
   {"agent_id": 22, "action": "maintain", "reasoning": "收入穩定，消費習慣唔變", "confidence": 0.70}
 ]""",
-
     DecisionType.EMPLOYMENT_CHANGE: """示例輸出：
 [
   {"agent_id": 31, "action": "quit", "reasoning": "神經質高，儲蓄夠三年，趁失業率低辭職休息", "confidence": 0.75},
   {"agent_id": 48, "action": "lie_flat", "reasoning": "28歲，對未來冇期望，決定躺平唔拚搏", "confidence": 0.68},
   {"agent_id": 77, "action": "seek_employment", "reasoning": "失業中，積極搵工，需要收入支持家庭", "confidence": 0.85}
 ]""",
-
     DecisionType.RELOCATE: """示例輸出：
 [
   {"agent_id": 14, "action": "relocate_nt", "reasoning": "港島租金太貴，決定搬去沙田，減輕租金壓力", "confidence": 0.79},
@@ -208,6 +194,7 @@ _FEW_SHOT_EXAMPLES: dict[str, str] = {
 # ---------------------------------------------------------------------------
 # Prompt builder
 # ---------------------------------------------------------------------------
+
 
 def build_deliberation_prompt(
     agents_batch: list[AgentProfile],
@@ -335,7 +322,6 @@ Factors to consider:
 - Income vs monthly mortgage payment (keep under 43% DTI)
 - Down payment availability (savings vs price × LTV)
 - Tax implications""",
-
     DecisionType.EMIGRATE: """Decision type: Emigration Decision
 Available actions: ["emigrate", "stay", "consider_later"]
 - emigrate: Decide to emigrate
@@ -348,7 +334,6 @@ Factors to consider:
 - High neuroticism + geopolitical risk → increased emigration tendency
 - Career prospects and quality of life abroad
 - Family ties""",
-
     DecisionType.CHANGE_JOB: """Decision type: Job Change Decision
 Available actions: ["change_job", "stay", "upskill", "retire_early"]
 - change_job: Actively switch jobs or get promoted elsewhere
@@ -361,7 +346,6 @@ Factors to consider:
 - High extraversion → more likely to proactively job-hunt
 - Unemployment rate trends (rising rate = higher risk)
 - Education level and current compensation""",
-
     DecisionType.INVEST: """Decision type: Investment Decision
 Available actions: ["invest_stocks", "invest_property", "invest_crypto", "hold_cash", "diversify"]
 - invest_stocks: Buy equities (S&P 500, ETFs, individual stocks)
@@ -376,7 +360,6 @@ Factors to consider:
 - Equity index trends (SPX, NDX)
 - CPI inflation rate (high inflation → seek inflation hedges)
 - Consumer confidence index""",
-
     DecisionType.HAVE_CHILD: """Decision type: Childbearing Decision
 Available actions: ["have_child", "delay", "no_child"]
 - have_child: Decide to have a child
@@ -389,7 +372,6 @@ Factors to consider:
 - Monthly income above $3,500 USD
 - Cost of living (CPI, housing costs)
 - Consumer confidence""",
-
     DecisionType.ADJUST_SPENDING: """Decision type: Spending Adjustment
 Available actions: ["cut_spending", "maintain", "increase_savings", "spend_more"]
 - cut_spending: Reduce non-essential expenditure
@@ -402,7 +384,6 @@ Factors to consider:
 - Consumer confidence index
 - Personal income and savings level
 - Unemployment environment""",
-
     DecisionType.EMPLOYMENT_CHANGE: """Decision type: Employment Status Change
 Available actions: ["quit", "strike", "lie_flat", "seek_employment", "maintain"]
 - quit: Voluntarily leave current job
@@ -418,7 +399,6 @@ Factors to consider:
 - Openness and conscientiousness (low both → lie flat)
 - Age 18-35 more susceptible to lying flat
 - Savings sufficient to sustain quitting""",
-
     DecisionType.RELOCATE: """Decision type: Residential Relocation
 Available actions: ["relocate_urban", "relocate_suburban", "relocate_rural", "relocate_abroad", "stay"]
 - relocate_urban: Move to a major city centre
@@ -441,44 +421,37 @@ _FEW_SHOT_EXAMPLES_EN: dict[str, str] = {
   {"agent_id": 42, "action": "wait", "reasoning": "Mortgage payment 65% of income, fails stress test", "confidence": 0.82},
   {"agent_id": 67, "action": "buy", "reasoning": "Saved enough for down payment, prices dipping", "confidence": 0.71}
 ]""",
-
     DecisionType.EMIGRATE: """Example output:
 [
   {"agent_id": 12, "action": "stay", "reasoning": "Stable career and family here, no reason to leave", "confidence": 0.88},
   {"agent_id": 34, "action": "consider_later", "reasoning": "Wants to emigrate but savings insufficient", "confidence": 0.65}
 ]""",
-
     DecisionType.CHANGE_JOB: """Example output:
 [
   {"agent_id": 5, "action": "upskill", "reasoning": "Unemployment rising, safer to reskill first", "confidence": 0.74},
   {"agent_id": 18, "action": "change_job", "reasoning": "High extraversion, proactively hunting better role", "confidence": 0.79}
 ]""",
-
     DecisionType.INVEST: """Example output:
 [
   {"agent_id": 99, "action": "hold_cash", "reasoning": "High volatility, waiting for clearer entry", "confidence": 0.80},
   {"agent_id": 103, "action": "invest_stocks", "reasoning": "SPX dip, dollar-cost averaging into ETF", "confidence": 0.72}
 ]""",
-
     DecisionType.HAVE_CHILD: """Example output:
 [
   {"agent_id": 55, "action": "delay", "reasoning": "Housing unaffordable, childcare costs too high", "confidence": 0.85},
   {"agent_id": 61, "action": "have_child", "reasoning": "Married, income stable, timing feels right", "confidence": 0.78}
 ]""",
-
     DecisionType.ADJUST_SPENDING: """Example output:
 [
   {"agent_id": 7, "action": "cut_spending", "reasoning": "Inflation high, cutting entertainment to save", "confidence": 0.83},
   {"agent_id": 22, "action": "maintain", "reasoning": "Income stable, no reason to change habits", "confidence": 0.70}
 ]""",
-
     DecisionType.EMPLOYMENT_CHANGE: """Example output:
 [
   {"agent_id": 31, "action": "quit", "reasoning": "High neuroticism, savings cover 3 years, low unemployment", "confidence": 0.75},
   {"agent_id": 48, "action": "lie_flat", "reasoning": "27 years old, burnt out, stepping back from hustle", "confidence": 0.68},
   {"agent_id": 77, "action": "seek_employment", "reasoning": "Currently unemployed, actively job hunting", "confidence": 0.85}
 ]""",
-
     DecisionType.RELOCATE: """Example output:
 [
   {"agent_id": 14, "action": "relocate_suburban", "reasoning": "City rent too high, suburban has better value", "confidence": 0.79},

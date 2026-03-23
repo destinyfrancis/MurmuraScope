@@ -1,4 +1,5 @@
 """Validation confidence API."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter
@@ -15,8 +16,7 @@ async def get_validation(session_id: str) -> dict:
     async with get_db() as db:
         # Fetch MC ensemble results
         cursor = await db.execute(
-            "SELECT p25, p75, median FROM ensemble_results "
-            "WHERE session_id=? ORDER BY id DESC LIMIT 1",
+            "SELECT p25, p75, median FROM ensemble_results WHERE session_id=? ORDER BY id DESC LIMIT 1",
             (session_id,),
         )
         mc_row = await cursor.fetchone()
@@ -31,8 +31,7 @@ async def get_validation(session_id: str) -> dict:
 
         # Compute agent consensus from decisions
         cursor3 = await db.execute(
-            "SELECT COUNT(*), COUNT(DISTINCT action) FROM agent_decisions "
-            "WHERE session_id=?",
+            "SELECT COUNT(*), COUNT(DISTINCT action) FROM agent_decisions WHERE session_id=?",
             (session_id,),
         )
         consensus_row = await cursor3.fetchone()

@@ -28,7 +28,7 @@ import json
 import random
 from typing import Any
 
-from backend.app.services.calibration_config import CalibrationParams, DEFAULT_CALIBRATION
+from backend.app.services.calibration_config import DEFAULT_CALIBRATION, CalibrationParams
 from backend.app.utils.db import get_db
 from backend.app.utils.logger import get_logger
 
@@ -115,9 +115,7 @@ class ParameterCalibrator:
         macro_by_period = await self._load_macro_history()
         sentiment_by_period = await self._load_sentiment_history()
 
-        common_periods = sorted(
-            set(macro_by_period) & set(sentiment_by_period)
-        )
+        common_periods = sorted(set(macro_by_period) & set(sentiment_by_period))
 
         if len(common_periods) < 2:
             logger.warning(
@@ -160,21 +158,23 @@ class ParameterCalibrator:
             mig_prev = float(prev_macro.get("net_migration", -12000))
             mig_curr = float(curr_macro.get("net_migration", -12000))
 
-            points.append(HistoricalDataPoint(
-                period=curr_period,
-                neg_ratio=neg_ratio,
-                pos_ratio=pos_ratio,
-                emigration_freq=emigration_freq,
-                property_neg=property_neg,
-                employment_neg=employment_neg,
-                stock_pos=stock_pos,
-                observed_confidence_delta=conf_curr - conf_prev,
-                observed_gdp_delta=gdp_curr - gdp_prev,
-                observed_hsi_pct_change=(hsi_curr - hsi_prev) / max(hsi_prev, 1.0),
-                observed_ccl_pct_change=(ccl_curr - ccl_prev) / max(ccl_prev, 1.0),
-                observed_unemployment_delta=unemp_curr - unemp_prev,
-                observed_net_migration_delta=mig_curr - mig_prev,
-            ))
+            points.append(
+                HistoricalDataPoint(
+                    period=curr_period,
+                    neg_ratio=neg_ratio,
+                    pos_ratio=pos_ratio,
+                    emigration_freq=emigration_freq,
+                    property_neg=property_neg,
+                    employment_neg=employment_neg,
+                    stock_pos=stock_pos,
+                    observed_confidence_delta=conf_curr - conf_prev,
+                    observed_gdp_delta=gdp_curr - gdp_prev,
+                    observed_hsi_pct_change=(hsi_curr - hsi_prev) / max(hsi_prev, 1.0),
+                    observed_ccl_pct_change=(ccl_curr - ccl_prev) / max(ccl_prev, 1.0),
+                    observed_unemployment_delta=unemp_curr - unemp_prev,
+                    observed_net_migration_delta=mig_curr - mig_prev,
+                )
+            )
 
         logger.info("Loaded %d historical data points for calibration", len(points))
         return points
@@ -265,7 +265,9 @@ class ParameterCalibrator:
 
         logger.info(
             "Saved calibration results id=%s label=%s rmse=%.6f",
-            row_id, label, rmse,
+            row_id,
+            label,
+            rmse,
         )
         return row_id or 0
 
@@ -288,9 +290,7 @@ class ParameterCalibrator:
                     )
                     """
                 )
-                cursor = await db.execute(
-                    "SELECT params_json FROM calibration_results ORDER BY rmse ASC LIMIT 1"
-                )
+                cursor = await db.execute("SELECT params_json FROM calibration_results ORDER BY rmse ASC LIMIT 1")
                 row = await cursor.fetchone()
         except Exception:
             logger.warning("Could not load calibration_results — using defaults")
@@ -405,15 +405,17 @@ class ParameterCalibrator:
             _EMIGRATION_THRESHOLD_GRID,
         ):
             neg_t, pos_t, conf_neg, conf_pos, gdp_neg, emig_t = combo
-            candidates.append(dataclasses.replace(
-                DEFAULT_CALIBRATION,
-                neg_threshold=neg_t,
-                pos_threshold=pos_t,
-                confidence_delta_neg=conf_neg,
-                confidence_delta_pos=conf_pos,
-                gdp_delta_neg=gdp_neg,
-                emigration_threshold=emig_t,
-            ))
+            candidates.append(
+                dataclasses.replace(
+                    DEFAULT_CALIBRATION,
+                    neg_threshold=neg_t,
+                    pos_threshold=pos_t,
+                    confidence_delta_neg=conf_neg,
+                    confidence_delta_pos=conf_pos,
+                    gdp_delta_neg=gdp_neg,
+                    emigration_threshold=emig_t,
+                )
+            )
         return candidates
 
     @staticmethod
@@ -422,15 +424,17 @@ class ParameterCalibrator:
         rng = random.Random(42)  # deterministic seed for reproducibility
         candidates: list[CalibrationParams] = []
         for _ in range(n):
-            candidates.append(dataclasses.replace(
-                DEFAULT_CALIBRATION,
-                neg_threshold=rng.choice(_NEG_THRESHOLD_GRID),
-                pos_threshold=rng.choice(_POS_THRESHOLD_GRID),
-                confidence_delta_neg=rng.choice(_CONFIDENCE_DELTA_NEG_GRID),
-                confidence_delta_pos=rng.choice(_CONFIDENCE_DELTA_POS_GRID),
-                gdp_delta_neg=rng.choice(_GDP_DELTA_NEG_GRID),
-                emigration_threshold=rng.choice(_EMIGRATION_THRESHOLD_GRID),
-            ))
+            candidates.append(
+                dataclasses.replace(
+                    DEFAULT_CALIBRATION,
+                    neg_threshold=rng.choice(_NEG_THRESHOLD_GRID),
+                    pos_threshold=rng.choice(_POS_THRESHOLD_GRID),
+                    confidence_delta_neg=rng.choice(_CONFIDENCE_DELTA_NEG_GRID),
+                    confidence_delta_pos=rng.choice(_CONFIDENCE_DELTA_POS_GRID),
+                    gdp_delta_neg=rng.choice(_GDP_DELTA_NEG_GRID),
+                    emigration_threshold=rng.choice(_EMIGRATION_THRESHOLD_GRID),
+                )
+            )
         return candidates
 
     async def _load_macro_history(self) -> dict[str, dict[str, float]]:
@@ -493,13 +497,19 @@ class ParameterCalibrator:
                     period = str(row[0] if isinstance(row, (list, tuple)) else row["period"])
                     if period not in result:
                         result[period] = {}
-                    result[period].update({
-                        "category": str(row[1] if isinstance(row, (list, tuple)) else row["category"]),
-                        "positive_ratio": float(row[2] if isinstance(row, (list, tuple)) else row["positive_ratio"]),
-                        "negative_ratio": float(row[3] if isinstance(row, (list, tuple)) else row["negative_ratio"]),
-                        "neutral_ratio": float(row[4] if isinstance(row, (list, tuple)) else row["neutral_ratio"]),
-                        "emigration_freq": 0.0,  # approximation; refined by topic analysis
-                    })
+                    result[period].update(
+                        {
+                            "category": str(row[1] if isinstance(row, (list, tuple)) else row["category"]),
+                            "positive_ratio": float(
+                                row[2] if isinstance(row, (list, tuple)) else row["positive_ratio"]
+                            ),
+                            "negative_ratio": float(
+                                row[3] if isinstance(row, (list, tuple)) else row["negative_ratio"]
+                            ),
+                            "neutral_ratio": float(row[4] if isinstance(row, (list, tuple)) else row["neutral_ratio"]),
+                            "emigration_freq": 0.0,  # approximation; refined by topic analysis
+                        }
+                    )
         except Exception:
             logger.warning("Could not load social_sentiment for calibration")
         return result
@@ -513,58 +523,107 @@ class ParameterCalibrator:
         return [
             HistoricalDataPoint(
                 period="2022-Q2",
-                neg_ratio=0.62, pos_ratio=0.25, emigration_freq=0.22,
-                property_neg=True, employment_neg=False, stock_pos=False,
-                observed_confidence_delta=-0.4, observed_gdp_delta=-0.002,
-                observed_hsi_pct_change=-0.015, observed_ccl_pct_change=-0.008,
-                observed_unemployment_delta=0.001, observed_net_migration_delta=-150.0,
+                neg_ratio=0.62,
+                pos_ratio=0.25,
+                emigration_freq=0.22,
+                property_neg=True,
+                employment_neg=False,
+                stock_pos=False,
+                observed_confidence_delta=-0.4,
+                observed_gdp_delta=-0.002,
+                observed_hsi_pct_change=-0.015,
+                observed_ccl_pct_change=-0.008,
+                observed_unemployment_delta=0.001,
+                observed_net_migration_delta=-150.0,
             ),
             HistoricalDataPoint(
                 period="2022-Q3",
-                neg_ratio=0.58, pos_ratio=0.28, emigration_freq=0.18,
-                property_neg=True, employment_neg=False, stock_pos=False,
-                observed_confidence_delta=-0.2, observed_gdp_delta=-0.001,
-                observed_hsi_pct_change=-0.010, observed_ccl_pct_change=-0.005,
-                observed_unemployment_delta=0.0005, observed_net_migration_delta=-80.0,
+                neg_ratio=0.58,
+                pos_ratio=0.28,
+                emigration_freq=0.18,
+                property_neg=True,
+                employment_neg=False,
+                stock_pos=False,
+                observed_confidence_delta=-0.2,
+                observed_gdp_delta=-0.001,
+                observed_hsi_pct_change=-0.010,
+                observed_ccl_pct_change=-0.005,
+                observed_unemployment_delta=0.0005,
+                observed_net_migration_delta=-80.0,
             ),
             HistoricalDataPoint(
                 period="2022-Q4",
-                neg_ratio=0.55, pos_ratio=0.32, emigration_freq=0.15,
-                property_neg=False, employment_neg=True, stock_pos=False,
-                observed_confidence_delta=-0.1, observed_gdp_delta=0.0,
-                observed_hsi_pct_change=0.005, observed_ccl_pct_change=-0.002,
-                observed_unemployment_delta=0.0008, observed_net_migration_delta=-60.0,
+                neg_ratio=0.55,
+                pos_ratio=0.32,
+                emigration_freq=0.15,
+                property_neg=False,
+                employment_neg=True,
+                stock_pos=False,
+                observed_confidence_delta=-0.1,
+                observed_gdp_delta=0.0,
+                observed_hsi_pct_change=0.005,
+                observed_ccl_pct_change=-0.002,
+                observed_unemployment_delta=0.0008,
+                observed_net_migration_delta=-60.0,
             ),
             HistoricalDataPoint(
                 period="2023-Q1",
-                neg_ratio=0.48, pos_ratio=0.38, emigration_freq=0.12,
-                property_neg=False, employment_neg=False, stock_pos=True,
-                observed_confidence_delta=0.15, observed_gdp_delta=0.001,
-                observed_hsi_pct_change=0.012, observed_ccl_pct_change=0.003,
-                observed_unemployment_delta=-0.0005, observed_net_migration_delta=50.0,
+                neg_ratio=0.48,
+                pos_ratio=0.38,
+                emigration_freq=0.12,
+                property_neg=False,
+                employment_neg=False,
+                stock_pos=True,
+                observed_confidence_delta=0.15,
+                observed_gdp_delta=0.001,
+                observed_hsi_pct_change=0.012,
+                observed_ccl_pct_change=0.003,
+                observed_unemployment_delta=-0.0005,
+                observed_net_migration_delta=50.0,
             ),
             HistoricalDataPoint(
                 period="2023-Q2",
-                neg_ratio=0.45, pos_ratio=0.42, emigration_freq=0.10,
-                property_neg=False, employment_neg=False, stock_pos=True,
-                observed_confidence_delta=0.18, observed_gdp_delta=0.0015,
-                observed_hsi_pct_change=0.015, observed_ccl_pct_change=0.005,
-                observed_unemployment_delta=-0.001, observed_net_migration_delta=80.0,
+                neg_ratio=0.45,
+                pos_ratio=0.42,
+                emigration_freq=0.10,
+                property_neg=False,
+                employment_neg=False,
+                stock_pos=True,
+                observed_confidence_delta=0.18,
+                observed_gdp_delta=0.0015,
+                observed_hsi_pct_change=0.015,
+                observed_ccl_pct_change=0.005,
+                observed_unemployment_delta=-0.001,
+                observed_net_migration_delta=80.0,
             ),
             HistoricalDataPoint(
                 period="2023-Q3",
-                neg_ratio=0.52, pos_ratio=0.35, emigration_freq=0.14,
-                property_neg=True, employment_neg=False, stock_pos=False,
-                observed_confidence_delta=-0.15, observed_gdp_delta=-0.0008,
-                observed_hsi_pct_change=-0.008, observed_ccl_pct_change=-0.004,
-                observed_unemployment_delta=0.0003, observed_net_migration_delta=-40.0,
+                neg_ratio=0.52,
+                pos_ratio=0.35,
+                emigration_freq=0.14,
+                property_neg=True,
+                employment_neg=False,
+                stock_pos=False,
+                observed_confidence_delta=-0.15,
+                observed_gdp_delta=-0.0008,
+                observed_hsi_pct_change=-0.008,
+                observed_ccl_pct_change=-0.004,
+                observed_unemployment_delta=0.0003,
+                observed_net_migration_delta=-40.0,
             ),
             HistoricalDataPoint(
                 period="2024-Q1",
-                neg_ratio=0.50, pos_ratio=0.37, emigration_freq=0.12,
-                property_neg=False, employment_neg=False, stock_pos=False,
-                observed_confidence_delta=0.05, observed_gdp_delta=0.0005,
-                observed_hsi_pct_change=0.003, observed_ccl_pct_change=0.001,
-                observed_unemployment_delta=-0.0002, observed_net_migration_delta=20.0,
+                neg_ratio=0.50,
+                pos_ratio=0.37,
+                emigration_freq=0.12,
+                property_neg=False,
+                employment_neg=False,
+                stock_pos=False,
+                observed_confidence_delta=0.05,
+                observed_gdp_delta=0.0005,
+                observed_hsi_pct_change=0.003,
+                observed_ccl_pct_change=0.001,
+                observed_unemployment_delta=-0.0002,
+                observed_net_migration_delta=20.0,
             ),
         ]

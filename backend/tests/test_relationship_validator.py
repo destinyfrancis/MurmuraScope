@@ -1,10 +1,16 @@
 # backend/tests/test_relationship_validator.py
 """Tests for RelationshipValidator — Dunbar + small-world network checks."""
+
 from __future__ import annotations
-import pytest
+
 from unittest.mock import AsyncMock, patch
+
+import pytest
+
 from backend.app.services.relationship_validator import (
-    RelationshipValidator, RelationshipValidationResult, _sampled_avg_path_length
+    RelationshipValidationResult,
+    RelationshipValidator,
+    _sampled_avg_path_length,
 )
 
 
@@ -15,7 +21,7 @@ def _make_edges(n_agents: int = 20, clique_size: int = 5) -> list[tuple[str, str
     for clique_start in range(0, n_agents, clique_size):
         clique = list(range(clique_start, min(clique_start + clique_size, n_agents)))
         for i, a in enumerate(clique):
-            for b in clique[i + 1:]:
+            for b in clique[i + 1 :]:
                 edges.append((f"agent_{a}", f"agent_{b}", 5))  # meaningful edges
     # Bridge between cliques (low interaction = not meaningful)
     for clique_start in range(0, n_agents - clique_size, clique_size):
@@ -69,10 +75,7 @@ async def test_dunbar_violation_when_avg_degree_exceeds_limit():
     """Star graph where every agent connects to all others → avg degree = n-1 > 15."""
     validator = RelationshipValidator()
     # Complete graph of 20 agents — avg meaningful degree = 19
-    edges = [
-        (f"agent_{i}", f"agent_{j}", 10)
-        for i in range(20) for j in range(i + 1, 20)
-    ]
+    edges = [(f"agent_{i}", f"agent_{j}", 10) for i in range(20) for j in range(i + 1, 20)]
     with _patch_db(edges):
         result = await validator.validate("session_star", dunbar_limit=15.0)
     assert result.dunbar_violation is True
@@ -114,6 +117,7 @@ async def test_summary_string_populated():
 def test_sampled_avg_path_length_small_graph():
     """_sampled_avg_path_length on a small complete graph should return > 0."""
     import networkx as nx
+
     G = nx.complete_graph(5)
     apl = _sampled_avg_path_length(G)
     assert apl == pytest.approx(1.0)  # all nodes directly connected

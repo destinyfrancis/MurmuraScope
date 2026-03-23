@@ -76,13 +76,15 @@ def _parse_hko_records(raw_rows: list[dict]) -> list[WeatherRecord]:
             val = row.get(temp_key)
             if val is not None:
                 try:
-                    records.append(WeatherRecord(
-                        date=period,
-                        category="weather",
-                        metric="monthly_mean_temp_c",
-                        value=round(float(val), 1),
-                        unit="celsius",
-                    ))
+                    records.append(
+                        WeatherRecord(
+                            date=period,
+                            category="weather",
+                            metric="monthly_mean_temp_c",
+                            value=round(float(val), 1),
+                            unit="celsius",
+                        )
+                    )
                 except (ValueError, TypeError):
                     pass
                 break
@@ -92,13 +94,15 @@ def _parse_hko_records(raw_rows: list[dict]) -> list[WeatherRecord]:
             val = row.get(rain_key)
             if val is not None:
                 try:
-                    records.append(WeatherRecord(
-                        date=period,
-                        category="weather",
-                        metric="monthly_rainfall_mm",
-                        value=round(float(val), 1),
-                        unit="mm",
-                    ))
+                    records.append(
+                        WeatherRecord(
+                            date=period,
+                            category="weather",
+                            metric="monthly_rainfall_mm",
+                            value=round(float(val), 1),
+                            unit="mm",
+                        )
+                    )
                 except (ValueError, TypeError):
                     pass
                 break
@@ -129,8 +133,10 @@ async def download_all_weather(
         return [WeatherDownloadResult(records=(), row_count=0, error="HKO data format unrecognised")]
 
     logger.info("Weather data: %d records from HKO CKAN", len(records))
-    return [WeatherDownloadResult(
-        records=tuple(records),
-        row_count=len(records),
-        error=None,
-    )]
+    return [
+        WeatherDownloadResult(
+            records=tuple(records),
+            row_count=len(records),
+            error=None,
+        )
+    ]

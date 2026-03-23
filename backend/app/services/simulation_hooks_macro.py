@@ -25,7 +25,10 @@ class MacroHooksMixin:
     """Periodic hooks for macro-economic phenomena."""
 
     async def _fetch_external_feed(
-        self, session_id: str, *, force_refresh: bool = False,
+        self,
+        session_id: str,
+        *,
+        force_refresh: bool = False,
     ) -> dict[str, float]:
         """Fetch external macro data with per-session caching.
 
@@ -44,6 +47,7 @@ class MacroHooksMixin:
 
         try:
             from backend.app.services.external_data_feed import ExternalDataFeed  # noqa: PLC0415
+
             feed = ExternalDataFeed()
             data = await feed.fetch_with_db_fallback()
 
@@ -51,6 +55,7 @@ class MacroHooksMixin:
             prev = _external_feed_cache.get(session_id, {})
             if prev and data:
                 from backend.app.services.external_data_feed import detect_significant_changes  # noqa: PLC0415
+
                 changes = detect_significant_changes(prev, data)
                 if changes:
                     logger.warning(
@@ -116,28 +121,23 @@ class MacroHooksMixin:
                 # Failures are non-fatal and never crash the simulation.
                 if os.environ.get("EXTERNAL_FEED_ENABLED", "false").lower() == "true":
                     refresh_interval = int(os.environ.get("EXTERNAL_FEED_REFRESH_ROUNDS", "10"))
-                    should_refresh = (
-                        round_number % refresh_interval == 0
-                    ) or session_id not in _external_feed_cache
+                    should_refresh = (round_number % refresh_interval == 0) or session_id not in _external_feed_cache
                     external_data = await self._fetch_external_feed(
-                        session_id, force_refresh=should_refresh,
+                        session_id,
+                        force_refresh=should_refresh,
                     )
                     if external_data:
                         import dataclasses as _dc  # noqa: PLC0415
+
                         valid_fields = {f.name for f in _dc.fields(updated_state)}
                         overrides: dict[str, Any] = {}
                         for field_name, value in external_data.items():
                             if field_name in valid_fields and isinstance(value, (int, float)):
-                                overrides[field_name] = type(
-                                    getattr(updated_state, field_name)
-                                )(value)
+                                overrides[field_name] = type(getattr(updated_state, field_name))(value)
                         if overrides:
-                            updated_state = self._clamp_macro_state(
-                                dataclasses.replace(updated_state, **overrides)
-                            )
+                            updated_state = self._clamp_macro_state(dataclasses.replace(updated_state, **overrides))
                             logger.debug(
-                                "ExternalDataFeed merged into MacroState session=%s "
-                                "round=%d fields=%s",
+                                "ExternalDataFeed merged into MacroState session=%s round=%d fields=%s",
                                 session_id,
                                 round_number,
                                 sorted(overrides.keys()),
@@ -148,8 +148,7 @@ class MacroHooksMixin:
             await self._persist_macro_state(session_id, round_number, updated_state)
 
             logger.info(
-                "Macro feedback applied session=%s round=%d "
-                "confidence=%.1f hsi=%.0f unemployment=%.3f ccl=%.1f",
+                "Macro feedback applied session=%s round=%d confidence=%.1f hsi=%.0f unemployment=%.3f ccl=%.1f",
                 session_id,
                 round_number,
                 updated_state.consumer_confidence,
@@ -188,7 +187,8 @@ class MacroHooksMixin:
             if session_id not in self._macro_state:
                 fields = {k: float(v) for k, v in kg_state.active_metrics.items()}
                 self._macro_state[session_id] = GenericMacroState(
-                    fields=fields, round_number=round_number,
+                    fields=fields,
+                    round_number=round_number,
                 )
 
             current_state = self._macro_state[session_id]
@@ -225,32 +225,38 @@ class MacroHooksMixin:
             # Apply small adjustments to each field based on sentiment
             _FEEDBACK_RATE = 0.02
             updates = {
-                k: v + net_polarity * _FEEDBACK_RATE * max(abs(v), 0.01)
-                for k, v in current_state.fields.items()
+                k: v + net_polarity * _FEEDBACK_RATE * max(abs(v), 0.01) for k, v in current_state.fields.items()
             }
             updated_state = GenericMacroState(
-                fields=updates, round_number=round_number,
+                fields=updates,
+                round_number=round_number,
             )
             self._macro_state[session_id] = updated_state
 
         # Persist as macro snapshot (best-effort)
         try:
             from backend.app.services.macro_history import MacroHistoryService  # noqa: PLC0415
+
             if self._macro_history is None:
                 self._macro_history = MacroHistoryService()
             await self._macro_history.save_snapshot(
-                session_id, round_number, updated_state.to_dict(),
+                session_id,
+                round_number,
+                updated_state.to_dict(),
             )
         except Exception:
             logger.debug(
                 "_process_generic_macro_feedback: persist failed session=%s round=%d",
-                session_id, round_number,
+                session_id,
+                round_number,
             )
 
         logger.info(
-            "Generic macro feedback applied session=%s round=%d "
-            "net_polarity=%.3f fields=%d",
-            session_id, round_number, net_polarity, len(updates),
+            "Generic macro feedback applied session=%s round=%d net_polarity=%.3f fields=%d",
+            session_id,
+            round_number,
+            net_polarity,
+            len(updates),
         )
 
     async def _persist_macro_state(
@@ -262,20 +268,21 @@ class MacroHooksMixin:
         """Persist current macro state to macro_snapshots for restart recovery."""
         try:
             from backend.app.services.macro_history import MacroHistoryService  # noqa: PLC0415
+
             if self._macro_history is None:
                 self._macro_history = MacroHistoryService()
             await self._macro_history.save_snapshot(session_id, round_number, macro_state)
         except Exception:
             logger.exception(
                 "_persist_macro_state failed session=%s round=%d",
-                session_id, round_number,
+                session_id,
+                round_number,
             )
 
     async def _restore_macro_state(self, session_id: str) -> Any:
         """Restore MacroState from the latest macro_snapshot if available."""
         try:
             from backend.app.services.macro_history import MacroHistoryService  # noqa: PLC0415
-            from backend.app.services.macro_state import MacroState  # noqa: PLC0415
 
             if self._macro_history is None:
                 self._macro_history = MacroHistoryService()
@@ -290,6 +297,7 @@ class MacroHooksMixin:
                 return None
 
             from backend.app.services.macro_controller import MacroController  # noqa: PLC0415
+
             mc = MacroController()
             baseline = await mc.get_baseline()
 
@@ -303,7 +311,9 @@ class MacroHooksMixin:
                 restored = dataclasses.replace(baseline, **overrides)
                 logger.info(
                     "Restored macro state session=%s from round=%d (%d fields)",
-                    session_id, last_round, len(overrides),
+                    session_id,
+                    last_round,
+                    len(overrides),
                 )
                 return restored
             return None
@@ -352,7 +362,7 @@ class MacroHooksMixin:
             if self._kg_mode.get(session_id):
                 return  # kg_driven: HK macro metrics not applicable
 
-            from backend.app.services.bank_agent import BankAgent, BankState  # noqa: PLC0415
+            from backend.app.services.bank_agent import BankAgent  # noqa: PLC0415
 
             if self._bank_agent is None:
                 self._bank_agent = BankAgent()
@@ -365,13 +375,12 @@ class MacroHooksMixin:
                 macro_state = self._macro_state.get(session_id)
             if macro_state is None:
                 from backend.app.services.macro_controller import MacroController  # noqa: PLC0415
+
                 mc = MacroController()
                 macro_state = await mc.get_baseline()
 
             new_bank_state = self._bank_agent.update_credit_cycle(macro_state)
-            adjustments = self._bank_agent.compute_macro_feedback(
-                new_bank_state, macro_state
-            )
+            adjustments = self._bank_agent.compute_macro_feedback(new_bank_state, macro_state)
 
             if adjustments and session_id in self._macro_state:
                 if session_id not in self._macro_locks:
@@ -384,16 +393,11 @@ class MacroHooksMixin:
                         if current_val is not None and isinstance(current_val, (int, float)):
                             updates[field] = type(current_val)(current_val + delta)
                     if updates:
-                        new_state = self._clamp_macro_state(
-                            dataclasses.replace(current, **updates)
-                        )
+                        new_state = self._clamp_macro_state(dataclasses.replace(current, **updates))
                         self._macro_state[session_id] = new_state
-                    await self._persist_macro_state(
-                        session_id, round_number, new_state
-                    )
+                    await self._persist_macro_state(session_id, round_number, new_state)
                     logger.info(
-                        "Credit cycle applied session=%s round=%d "
-                        "npl=%.3f credit_growth=%.3f impulse=%.4f fields=%s",
+                        "Credit cycle applied session=%s round=%d npl=%.3f credit_growth=%.3f impulse=%.4f fields=%s",
                         session_id,
                         round_number,
                         new_bank_state.npl_ratio,
@@ -416,8 +420,9 @@ class MacroHooksMixin:
         """Fetch the latest real-world headline and inject as structured shock."""
         try:
             import aiosqlite as _aiosqlite  # noqa: PLC0415
-            from backend.app.utils.db import get_db  # noqa: PLC0415
+
             from backend.app.services.triple_extractor import TripleExtractor  # noqa: PLC0415
+            from backend.app.utils.db import get_db  # noqa: PLC0415
 
             # 1. Fetch latest unprocessed headline
             async with get_db() as db:
@@ -435,7 +440,8 @@ class MacroHooksMixin:
             if row is None:
                 logger.debug(
                     "No news_headlines available for shock injection session=%s round=%d",
-                    session_id, round_number,
+                    session_id,
+                    round_number,
                 )
                 return
 
@@ -453,11 +459,7 @@ class MacroHooksMixin:
                 triple_lines = [f"  {t.subject} → {t.predicate} → {t.object}" for t in triples]
                 triple_summary = "\n" + "\n".join(triple_lines)
 
-            shock_content = (
-                f"【突發新聞 BREAKING NEWS】({source} | {category})\n"
-                f"{title}"
-                f"{triple_summary}"
-            )
+            shock_content = f"【突發新聞 BREAKING NEWS】({source} | {category})\n{title}{triple_summary}"
 
             # 3. Store as simulation_action
             async with get_db() as db:
@@ -497,16 +499,18 @@ class MacroHooksMixin:
                 triple_rows = []
                 for agent_id in agent_ids.values():
                     for t in triples:
-                        triple_rows.append((
-                            None,
-                            session_id,
-                            agent_id,
-                            round_number,
-                            t.subject,
-                            t.predicate,
-                            t.object,
-                            t.confidence * 0.9,
-                        ))
+                        triple_rows.append(
+                            (
+                                None,
+                                session_id,
+                                agent_id,
+                                round_number,
+                                t.subject,
+                                t.predicate,
+                                t.object,
+                                t.confidence * 0.9,
+                            )
+                        )
                 if triple_rows:
                     async with get_db() as db:
                         await db.executemany(
@@ -523,26 +527,28 @@ class MacroHooksMixin:
             # 5. Push to WebSocket
             try:
                 from backend.app.api.ws import push_progress  # noqa: PLC0415
-                await push_progress(session_id, {
-                    "type": "news_shock",
-                    "data": {
-                        "round": round_number,
-                        "headline": title,
-                        "source": source,
-                        "category": category,
-                        "triples": [
-                            {"subject": t.subject, "predicate": t.predicate, "object": t.object}
-                            for t in triples
-                        ],
-                        "agents_injected": len(agent_ids),
+
+                await push_progress(
+                    session_id,
+                    {
+                        "type": "news_shock",
+                        "data": {
+                            "round": round_number,
+                            "headline": title,
+                            "source": source,
+                            "category": category,
+                            "triples": [
+                                {"subject": t.subject, "predicate": t.predicate, "object": t.object} for t in triples
+                            ],
+                            "agents_injected": len(agent_ids),
+                        },
                     },
-                })
+                )
             except Exception:
                 logger.debug("WebSocket push for news_shock failed (best-effort)")
 
             logger.info(
-                "News shock injected session=%s round=%d headline='%.60s' "
-                "triples=%d agents=%d",
+                "News shock injected session=%s round=%d headline='%.60s' triples=%d agents=%d",
                 session_id,
                 round_number,
                 title,
@@ -631,6 +637,7 @@ class MacroHooksMixin:
             macro_state = self._macro_state.get(session_id)
             if macro_state is None:
                 from backend.app.services.macro_controller import MacroController  # noqa: PLC0415
+
                 mc = MacroController()
                 macro_state = await mc.get_baseline()
 
@@ -645,10 +652,7 @@ class MacroHooksMixin:
                             round_number=round_number,
                             decision_type=dt.value,
                             action=dt.value,
-                            reasoning=(
-                                f"Macro conditions triggered {dt.value} "
-                                f"for {company.company_name}"
-                            ),
+                            reasoning=(f"Macro conditions triggered {dt.value} for {company.company_name}"),
                             confidence=0.7,
                             impact_employees=0,
                             impact_revenue_pct=0.0,
@@ -699,23 +703,20 @@ class MacroHooksMixin:
 
             hire_count = type_counts.get(CompanyDecisionType.HIRE.value, 0)
             if hire_count >= 3:
-                macro_adjustments["unemployment_rate"] = (
-                    macro_adjustments.get("unemployment_rate", 0.0)
-                    - round(hire_count * 0.0008, 4)
+                macro_adjustments["unemployment_rate"] = macro_adjustments.get("unemployment_rate", 0.0) - round(
+                    hire_count * 0.0008, 4
                 )
 
             expand_count = type_counts.get(CompanyDecisionType.EXPAND.value, 0)
             if expand_count >= 2:
                 macro_adjustments["gdp_growth"] = round(expand_count * 0.001, 4)
 
-            contract_count = (
-                type_counts.get(CompanyDecisionType.CONTRACT.value, 0)
-                + type_counts.get(CompanyDecisionType.EXIT_MARKET.value, 0)
+            contract_count = type_counts.get(CompanyDecisionType.CONTRACT.value, 0) + type_counts.get(
+                CompanyDecisionType.EXIT_MARKET.value, 0
             )
             if contract_count >= 2:
-                macro_adjustments["gdp_growth"] = (
-                    macro_adjustments.get("gdp_growth", 0.0)
-                    - round(contract_count * 0.0015, 4)
+                macro_adjustments["gdp_growth"] = macro_adjustments.get("gdp_growth", 0.0) - round(
+                    contract_count * 0.0015, 4
                 )
 
             relocate_count = type_counts.get(CompanyDecisionType.RELOCATE.value, 0)
@@ -733,9 +734,7 @@ class MacroHooksMixin:
                         if current_val is not None and isinstance(current_val, (int, float)):
                             updates[field] = type(current_val)(current_val + delta)
                     if updates:
-                        new_state = self._clamp_macro_state(
-                            dataclasses.replace(current, **updates)
-                        )
+                        new_state = self._clamp_macro_state(dataclasses.replace(current, **updates))
                         self._macro_state[session_id] = new_state
                         await self._persist_macro_state(session_id, round_number, new_state)
                         logger.info(

@@ -29,6 +29,7 @@ logger = get_logger("signal_extractor")
 # SimulationSignals — frozen dataclass with 32 float signal fields
 # ---------------------------------------------------------------------------
 
+
 @dataclasses.dataclass(frozen=True)
 class SimulationSignals:
     """All extracted simulation signals for one session."""
@@ -37,53 +38,54 @@ class SimulationSignals:
     extraction_ts: str
 
     # --- Group 1: Sentiment (8) ---
-    sentiment_net: float = 0.0           # net positive ratio across all rounds
-    sentiment_momentum: float = 0.0      # late-round minus early-round sentiment
-    negative_virality: float = 0.0       # avg virality index of negative posts
-    property_sentiment: float = 0.0      # net sentiment on property-topic posts
-    finance_sentiment: float = 0.0       # net sentiment on finance-topic posts
-    emotional_valence: float = 0.0       # avg valence from emotional_states
-    arousal_concentration: float = 0.0   # avg arousal (high = volatile)
-    contagion_velocity: float = 0.0      # avg virality velocity
+    sentiment_net: float = 0.0  # net positive ratio across all rounds
+    sentiment_momentum: float = 0.0  # late-round minus early-round sentiment
+    negative_virality: float = 0.0  # avg virality index of negative posts
+    property_sentiment: float = 0.0  # net sentiment on property-topic posts
+    finance_sentiment: float = 0.0  # net sentiment on finance-topic posts
+    emotional_valence: float = 0.0  # avg valence from emotional_states
+    arousal_concentration: float = 0.0  # avg arousal (high = volatile)
+    contagion_velocity: float = 0.0  # avg virality velocity
 
     # --- Group 2: Behavioural (6) ---
-    buy_property_ratio: float = 0.0      # fraction of agents deciding to buy property
-    emigration_rate: float = 0.0         # fraction choosing to emigrate
-    invest_ratio: float = 0.0            # fraction making investment decisions
-    spending_cut_ratio: float = 0.0      # fraction cutting spending
-    employment_quit_ratio: float = 0.0   # fraction quitting employment
-    decision_entropy: float = 0.0        # Shannon entropy of decision distribution
+    buy_property_ratio: float = 0.0  # fraction of agents deciding to buy property
+    emigration_rate: float = 0.0  # fraction choosing to emigrate
+    invest_ratio: float = 0.0  # fraction making investment decisions
+    spending_cut_ratio: float = 0.0  # fraction cutting spending
+    employment_quit_ratio: float = 0.0  # fraction quitting employment
+    decision_entropy: float = 0.0  # Shannon entropy of decision distribution
 
     # --- Group 3: Network (5) ---
-    polarization_index: float = 0.0      # latest polarization score [0,1]
-    echo_chamber_modularity: float = 0.0 # latest Louvain modularity
+    polarization_index: float = 0.0  # latest polarization score [0,1]
+    echo_chamber_modularity: float = 0.0  # latest Louvain modularity
     filter_bubble_severity: float = 0.0  # avg bubble score
-    cross_cluster_reach: float = 0.0     # avg cross-cluster reach of viral posts
-    trust_erosion_rate: float = 0.0      # negative trust delta rate
+    cross_cluster_reach: float = 0.0  # avg cross-cluster reach of viral posts
+    trust_erosion_rate: float = 0.0  # negative trust delta rate
 
     # --- Group 4: Macro (6) ---
-    hsi_sim_change: float = 0.0          # simulated HSI level change %
-    ccl_sim_change: float = 0.0          # simulated CCL change %
+    hsi_sim_change: float = 0.0  # simulated HSI level change %
+    ccl_sim_change: float = 0.0  # simulated CCL change %
     unemployment_sim_delta: float = 0.0  # unemployment change pp
-    consumer_confidence_sim: float = 0.0 # final consumer confidence level
-    credit_stress: float = 0.0           # credit stress index
-    taiwan_strait_risk: float = 0.0      # geopolitical risk level [0,1]
+    consumer_confidence_sim: float = 0.0  # final consumer confidence level
+    credit_stress: float = 0.0  # credit stress index
+    taiwan_strait_risk: float = 0.0  # geopolitical risk level [0,1]
 
     # --- Group 5: Consumption (3) ---
-    discretionary_ratio: float = 0.0     # discretionary vs necessities ratio
-    savings_acceleration: float = 0.0    # acceleration in savings rate
-    housing_spend_share: float = 0.0     # housing spend as share of total
+    discretionary_ratio: float = 0.0  # discretionary vs necessities ratio
+    savings_acceleration: float = 0.0  # acceleration in savings rate
+    housing_spend_share: float = 0.0  # housing spend as share of total
 
     # --- Group 6: Forward (4) ---
-    ensemble_hsi_p50: float = 0.0        # Monte Carlo median HSI forecast
-    ensemble_skew: float = 0.0           # p75 - p25 asymmetry
-    ensemble_ci_width: float = 0.0       # p95 - p05 width normalised
-    data_integrity_score: float = 1.0    # fraction of signals with real data
+    ensemble_hsi_p50: float = 0.0  # Monte Carlo median HSI forecast
+    ensemble_skew: float = 0.0  # p75 - p25 asymmetry
+    ensemble_ci_width: float = 0.0  # p95 - p05 width normalised
+    data_integrity_score: float = 1.0  # fraction of signals with real data
 
 
 # ---------------------------------------------------------------------------
 # SimulationSignalExtractor
 # ---------------------------------------------------------------------------
+
 
 class SimulationSignalExtractor:
     """Extracts simulation signals from DB for a given session_id."""
@@ -109,9 +111,7 @@ class SimulationSignalExtractor:
                 real_signal_count += sum(1 for v in group.values() if v != 0.0)
                 results.append(group)
             except Exception as exc:
-                logger.warning(
-                    "Signal extractor group failed for session %s: %s", session_id, exc
-                )
+                logger.warning("Signal extractor group failed for session %s: %s", session_id, exc)
                 results.append({})
 
         merged: dict[str, float] = {}
@@ -230,10 +230,17 @@ class SimulationSignalExtractor:
                 )
                 total = int(row_total[0] or 0) if row_total else 0
                 if total == 0:
-                    return {k: 0.0 for k in [
-                        "buy_property_ratio", "emigration_rate", "invest_ratio",
-                        "spending_cut_ratio", "employment_quit_ratio", "decision_entropy",
-                    ]}
+                    return {
+                        k: 0.0
+                        for k in [
+                            "buy_property_ratio",
+                            "emigration_rate",
+                            "invest_ratio",
+                            "spending_cut_ratio",
+                            "employment_quit_ratio",
+                            "decision_entropy",
+                        ]
+                    }
 
                 # Per-type counts
                 rows = await db.execute_fetchall(
@@ -337,6 +344,7 @@ class SimulationSignalExtractor:
                 )
 
                 if row_first and row_last:
+
                     def _pct_change(first: Any, last: Any) -> float:
                         f, la = float(first or 0.0), float(last or 0.0)
                         return (la - f) / abs(f) if abs(f) > 1e-9 else 0.0
@@ -348,14 +356,26 @@ class SimulationSignalExtractor:
                     out["credit_stress"] = float(row_last[4] or 0.0)
                     out["taiwan_strait_risk"] = float(row_last[5] or 0.0)
                 else:
-                    for k in ["hsi_sim_change", "ccl_sim_change", "unemployment_sim_delta",
-                               "consumer_confidence_sim", "credit_stress", "taiwan_strait_risk"]:
+                    for k in [
+                        "hsi_sim_change",
+                        "ccl_sim_change",
+                        "unemployment_sim_delta",
+                        "consumer_confidence_sim",
+                        "credit_stress",
+                        "taiwan_strait_risk",
+                    ]:
                         out[k] = 0.0
 
         except Exception as exc:
             logger.warning("Macro signal extraction failed for %s: %s", session_id, exc)
-            for k in ["hsi_sim_change", "ccl_sim_change", "unemployment_sim_delta",
-                       "consumer_confidence_sim", "credit_stress", "taiwan_strait_risk"]:
+            for k in [
+                "hsi_sim_change",
+                "ccl_sim_change",
+                "unemployment_sim_delta",
+                "consumer_confidence_sim",
+                "credit_stress",
+                "taiwan_strait_risk",
+            ]:
                 out.setdefault(k, 0.0)
 
         return out
@@ -383,6 +403,7 @@ class SimulationSignalExtractor:
                     return out
 
                 import json
+
                 housing_total = 0.0
                 discretionary_total = 0.0
                 necessity_total = 0.0
@@ -455,6 +476,5 @@ class SimulationSignalExtractor:
 
 # Fields of SimulationSignals excluding non-signal fields
 _SIGNAL_FIELDS: frozenset[str] = frozenset(
-    f.name for f in dataclasses.fields(SimulationSignals)
-    if f.name not in ("session_id", "extraction_ts")
+    f.name for f in dataclasses.fields(SimulationSignals) if f.name not in ("session_id", "extraction_ts")
 )

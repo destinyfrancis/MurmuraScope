@@ -85,16 +85,63 @@ US_DEMOGRAPHICS = DemographicsSpec(
         "Separated": 0.02,
     },
     surnames=(
-        "Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller",
-        "Davis", "Rodriguez", "Martinez", "Hernandez", "Lopez", "Gonzalez",
-        "Wilson", "Anderson", "Thomas", "Taylor", "Moore", "Jackson", "Martin",
-        "Lee", "Perez", "Thompson", "White", "Harris", "Sanchez", "Clark",
-        "Ramirez", "Lewis", "Robinson", "Walker", "Young", "Allen", "King",
+        "Smith",
+        "Johnson",
+        "Williams",
+        "Brown",
+        "Jones",
+        "Garcia",
+        "Miller",
+        "Davis",
+        "Rodriguez",
+        "Martinez",
+        "Hernandez",
+        "Lopez",
+        "Gonzalez",
+        "Wilson",
+        "Anderson",
+        "Thomas",
+        "Taylor",
+        "Moore",
+        "Jackson",
+        "Martin",
+        "Lee",
+        "Perez",
+        "Thompson",
+        "White",
+        "Harris",
+        "Sanchez",
+        "Clark",
+        "Ramirez",
+        "Lewis",
+        "Robinson",
+        "Walker",
+        "Young",
+        "Allen",
+        "King",
     ),
     username_parts=(
-        "investor", "trader", "bull", "bear", "hodl", "wsb", "tendies",
-        "stocks", "market", "alpha", "theta", "gamma", "profit", "gains",
-        "diamond", "hands", "moon", "rocket", "dip", "buy", "yolo",
+        "investor",
+        "trader",
+        "bull",
+        "bear",
+        "hodl",
+        "wsb",
+        "tendies",
+        "stocks",
+        "market",
+        "alpha",
+        "theta",
+        "gamma",
+        "profit",
+        "gains",
+        "diamond",
+        "hands",
+        "moon",
+        "rocket",
+        "dip",
+        "buy",
+        "yolo",
     ),
     currency_symbol="$",
     currency_code="USD",
@@ -214,7 +261,7 @@ _US_SCENARIOS: tuple[dict[str, str], ...] = (
 
 _US_DECISION_THRESHOLDS = DecisionThresholds(
     min_months_down_payment=24,
-    stress_test_dti=0.43,           # US conventional mortgage max DTI
+    stress_test_dti=0.43,  # US conventional mortgage max DTI
     max_borrower_age_plus_tenor=80,  # US mortgages can run to 30yr + older borrowers
     emigration_savings_by_destination=(
         ("canada", 30_000),
@@ -224,11 +271,11 @@ _US_DECISION_THRESHOLDS = DecisionThresholds(
         ("japan", 20_000),
     ),
     emigration_savings_default=25_000,
-    invest_min_savings=10_000,       # $10K USD threshold for retail investment
+    invest_min_savings=10_000,  # $10K USD threshold for retail investment
     invest_min_openness=0.40,
     child_min_age=20,
     child_max_age=45,
-    child_min_income=3_500,         # Monthly USD
+    child_min_income=3_500,  # Monthly USD
     job_min_age=18,
     job_max_age=65,
     job_min_extraversion=0.50,
@@ -272,15 +319,15 @@ _US_MACRO_IMPACT_DELTAS = MacroImpactDeltas(
 # ---------------------------------------------------------------------------
 
 _US_MACRO_BASELINES: dict[str, float] = {
-    "consumer_confidence": 55.0,      # Conference Board CCI (neutral ~50-60)
-    "unemployment_rate": 0.040,        # ~4% US unemployment
-    "gdp_growth": 0.025,               # ~2.5% US GDP growth
-    "cpi_yoy": 0.030,                  # ~3% CPI
+    "consumer_confidence": 55.0,  # Conference Board CCI (neutral ~50-60)
+    "unemployment_rate": 0.040,  # ~4% US unemployment
+    "gdp_growth": 0.025,  # ~2.5% US GDP growth
+    "cpi_yoy": 0.030,  # ~3% CPI
     "supply_chain_disruption": 0.20,  # Low baseline disruption
-    "import_tariff_rate": 0.025,      # ~2.5% average US tariff
-    "credit_growth_yoy": 0.06,        # ~6% credit growth
-    "interbank_spread": 0.005,        # Low spread baseline
-    "mortgage_delinquency": 0.02,     # ~2% delinquency
+    "import_tariff_rate": 0.025,  # ~2.5% average US tariff
+    "credit_growth_yoy": 0.06,  # ~6% credit growth
+    "interbank_spread": 0.005,  # Low spread baseline
+    "mortgage_delinquency": 0.02,  # ~2% delinquency
 }
 
 # ---------------------------------------------------------------------------
@@ -308,14 +355,20 @@ US_MARKETS_PACK = DomainPack(
     macro_fields=_US_MACRO_FIELDS,
     scenarios=_US_SCENARIOS,
     keywords=(
-        "美股", "wall street", "nasdaq", "s&p", "fed", "inflation",
-        "dow jones", "treasury", "us market", "sp500",
+        "美股",
+        "wall street",
+        "nasdaq",
+        "s&p",
+        "fed",
+        "inflation",
+        "dow jones",
+        "treasury",
+        "us market",
+        "sp500",
     ),
     topic_groups=(
-        ("trump", "biden", "election", "congress", "senate", "republican",
-         "democrat", "tariff"),
-        ("fed", "federal reserve", "rate cut", "rate hike", "fomc", "powell",
-         "interest rate"),
+        ("trump", "biden", "election", "congress", "senate", "republican", "democrat", "tariff"),
+        ("fed", "federal reserve", "rate cut", "rate hike", "fomc", "powell", "interest rate"),
     ),
 )
 

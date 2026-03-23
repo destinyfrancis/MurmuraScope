@@ -42,9 +42,7 @@ _HK_SHOCK_SPECS: tuple[ShockTypeSpec, ...] = (
     ShockTypeSpec("rcep_benefit", "RCEP利好", "RCEP Benefit"),
 )
 
-_HK_VALID_SHOCK_TYPES: frozenset[str] = frozenset(
-    spec.id for spec in _HK_SHOCK_SPECS
-)
+_HK_VALID_SHOCK_TYPES: frozenset[str] = frozenset(spec.id for spec in _HK_SHOCK_SPECS)
 
 # ---------------------------------------------------------------------------
 # Metric specs (source: time_series_forecaster.py L46-58)
@@ -64,16 +62,17 @@ _HK_METRICS: tuple[MetricSpec, ...] = (
     MetricSpec("tourist_arrivals", "tourism", "tourist_arrivals", 4),
 )
 
-_HK_DEFAULT_FORECAST_METRICS: tuple[str, ...] = tuple(
-    m.name for m in _HK_METRICS
-)
+_HK_DEFAULT_FORECAST_METRICS: tuple[str, ...] = tuple(m.name for m in _HK_METRICS)
 
 # ---------------------------------------------------------------------------
 # Monte Carlo constants (source: monte_carlo.py L32, L58-66)
 # ---------------------------------------------------------------------------
 
 _HK_CORRELATED_VARS: tuple[str, ...] = (
-    "gdp_growth", "unemployment_rate", "consumer_confidence", "hsi_level",
+    "gdp_growth",
+    "unemployment_rate",
+    "consumer_confidence",
+    "hsi_level",
 )
 
 _HK_MC_DEFAULT_METRICS: tuple[str, ...] = (
@@ -196,8 +195,7 @@ _HK_HOUSING_CONTEXT: dict[str, str] = {
     "資助出售房屋": "住喺居屋或其他資助出售房屋，以折扣價購入，有轉售限制",
     "私人住宅": "住喺私人物業，可能正在供樓或租住，居住成本較高",
     "臨時／其他": (
-        "居住環境較為不穩定，可能住喺劏房或臨時住所。"
-        "部分居民可能係係輪候公屋嘅申請人，暫時租住私樓或板間房。"
+        "居住環境較為不穩定，可能住喺劏房或臨時住所。部分居民可能係係輪候公屋嘅申請人，暫時租住私樓或板間房。"
     ),
 }
 
@@ -253,12 +251,35 @@ HK_CITY_PACK = DomainPack(
     prompt_locale=ZH_HK_LOCALE,
     sentiment_lexicon=ZH_HK_SENTIMENT,
     keywords=(
-        "香港", "樓市", "property", "移民", "emigration", "生育", "fertility",
-        "hk", "hong kong", "ccl", "hsi", "恒指", "公屋",
+        "香港",
+        "樓市",
+        "property",
+        "移民",
+        "emigration",
+        "生育",
+        "fertility",
+        "hk",
+        "hong kong",
+        "ccl",
+        "hsi",
+        "恒指",
+        "公屋",
     ),
     topic_groups=(
-        ("hong kong", "hkd", "property", "ccl", "emigration", "national security",
-         "article 23", "linked exchange", "mpf", "樓市", "移民", "香港"),
+        (
+            "hong kong",
+            "hkd",
+            "property",
+            "ccl",
+            "emigration",
+            "national security",
+            "article 23",
+            "linked exchange",
+            "mpf",
+            "樓市",
+            "移民",
+            "香港",
+        ),
     ),
 )
 

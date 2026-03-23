@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import dataclasses
-from unittest.mock import AsyncMock, patch, MagicMock
 from contextlib import asynccontextmanager
+from unittest.mock import patch
 
 import aiosqlite
 import pytest
 
+from backend.app.services.consensus_estimator import (
+    ConsensusEstimate,
+    ConsensusEstimator,
+)
 from backend.app.services.polymarket_client import (
-    PolymarketClient,
     PolymarketContract,
     _parse_contract,
 )
@@ -18,15 +21,10 @@ from backend.app.services.scenario_matcher import (
     ContractMatch,
     ScenarioMatcher,
 )
-from backend.app.services.consensus_estimator import (
-    ConsensusEstimate,
-    ConsensusEstimator,
-)
 from backend.app.services.signal_generator import (
     SignalGenerator,
     TradingSignal,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -102,8 +100,10 @@ async def db_setup():
     async def mock_get_db():
         yield db
 
-    with patch("backend.app.services.consensus_estimator.get_db", mock_get_db), \
-         patch("backend.app.services.signal_generator.get_db", mock_get_db):
+    with (
+        patch("backend.app.services.consensus_estimator.get_db", mock_get_db),
+        patch("backend.app.services.signal_generator.get_db", mock_get_db),
+    ):
         yield db
 
     await db.close()
@@ -126,7 +126,7 @@ class TestPolymarketContract:
             "question": "Will BTC hit 100k?",
             "description": "Bitcoin price prediction",
             "outcomes": '["Yes","No"]',
-            "outcomePrices": '[0.72,0.28]',
+            "outcomePrices": "[0.72,0.28]",
             "volume": "500000",
             "liquidity": "200000",
             "slug": "btc-100k",
@@ -191,8 +191,10 @@ class TestScenarioMatcher:
     def test_match_contract_frozen(self):
         c = _make_contract()
         match = ContractMatch(
-            contract=c, relevance_score=0.8,
-            matched_keywords=("fed",), matched_topics=("fed_rates",),
+            contract=c,
+            relevance_score=0.8,
+            matched_keywords=("fed",),
+            matched_topics=("fed_rates",),
         )
         with pytest.raises(dataclasses.FrozenInstanceError):
             match.relevance_score = 0.5  # type: ignore[misc]
@@ -227,9 +229,7 @@ class TestConsensusEstimator:
         await db.commit()
 
         estimator = ConsensusEstimator()
-        result = await estimator.estimate_probability(
-            session_id, "Will the economy enter recession?"
-        )
+        result = await estimator.estimate_probability(session_id, "Will the economy enter recession?")
         assert isinstance(result, ConsensusEstimate)
         assert result.probability > 0.5  # positive beliefs = higher prob
         assert result.belief_signal > 0
@@ -247,7 +247,7 @@ class TestConsensusEstimator:
         for i in range(2):
             await db.execute(
                 "INSERT INTO agent_decisions (session_id, round_number, agent_id, decision_type, action, reasoning, oasis_username) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (session_id, 1, 10+i, "invest", "invest_stocks", "bullish", f"agent_{10+i}"),
+                (session_id, 1, 10 + i, "invest", "invest_stocks", "bullish", f"agent_{10 + i}"),
             )
         await db.commit()
 
@@ -279,9 +279,14 @@ class TestConsensusEstimator:
 
     def test_consensus_estimate_frozen(self):
         est = ConsensusEstimate(
-            probability=0.6, confidence=0.5, supporting_agents=10,
-            opposing_agents=5, neutral_agents=3, belief_signal=0.3,
-            decision_signal=0.1, sentiment_signal=0.2,
+            probability=0.6,
+            confidence=0.5,
+            supporting_agents=10,
+            opposing_agents=5,
+            neutral_agents=3,
+            belief_signal=0.3,
+            decision_signal=0.1,
+            sentiment_signal=0.2,
             evidence_summary="test",
         )
         with pytest.raises(dataclasses.FrozenInstanceError):
@@ -311,8 +316,10 @@ class TestSignalGenerator:
             outcome_prices=(0.30, 0.70),  # market says 30% YES
         )
         match = ContractMatch(
-            contract=contract, relevance_score=0.8,
-            matched_keywords=("economy",), matched_topics=("markets",),
+            contract=contract,
+            relevance_score=0.8,
+            matched_keywords=("economy",),
+            matched_topics=("markets",),
         )
 
         generator = SignalGenerator()
@@ -328,8 +335,10 @@ class TestSignalGenerator:
             outcome_prices=(0.50, 0.50),
         )
         match = ContractMatch(
-            contract=contract, relevance_score=0.5,
-            matched_keywords=(), matched_topics=(),
+            contract=contract,
+            relevance_score=0.5,
+            matched_keywords=(),
+            matched_topics=(),
         )
 
         generator = SignalGenerator()
@@ -340,11 +349,17 @@ class TestSignalGenerator:
 
     def test_trading_signal_frozen(self):
         sig = TradingSignal(
-            contract_id="1", contract_question="Test?",
-            market_price=0.5, engine_probability=0.7,
-            alpha=0.2, direction="BUY_YES", strength="strong",
-            strength_score=0.8, confidence=0.9,
-            supporting_agents=10, opposing_agents=3,
+            contract_id="1",
+            contract_question="Test?",
+            market_price=0.5,
+            engine_probability=0.7,
+            alpha=0.2,
+            direction="BUY_YES",
+            strength="strong",
+            strength_score=0.8,
+            confidence=0.9,
+            supporting_agents=10,
+            opposing_agents=3,
             reasoning="test",
         )
         with pytest.raises(dataclasses.FrozenInstanceError):
@@ -357,8 +372,10 @@ class TestSignalGenerator:
             outcome_prices=(0.40, 0.60),
         )
         match = ContractMatch(
-            contract=contract, relevance_score=0.8,
-            matched_keywords=("economy",), matched_topics=("markets",),
+            contract=contract,
+            relevance_score=0.8,
+            matched_keywords=("economy",),
+            matched_topics=("markets",),
         )
 
         generator = SignalGenerator()
@@ -375,8 +392,7 @@ class TestSignalGenerator:
             _make_contract(id="2", question="Another economy question?", outcome_prices=(0.45, 0.55)),
         ]
         matches = [
-            ContractMatch(contract=c, relevance_score=0.5, matched_keywords=(), matched_topics=())
-            for c in contracts
+            ContractMatch(contract=c, relevance_score=0.5, matched_keywords=(), matched_topics=()) for c in contracts
         ]
 
         generator = SignalGenerator()

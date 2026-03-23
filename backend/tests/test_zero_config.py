@@ -1,4 +1,5 @@
 """Tests for ZeroConfigService and quick-start endpoint."""
+
 from __future__ import annotations
 
 import sys
@@ -9,9 +10,7 @@ import pytest
 from backend.app.services.zero_config import (
     ZeroConfigResult,
     ZeroConfigService,
-    _DOMAIN_KEYWORDS,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -103,24 +102,36 @@ class TestInferDomain:
         assert self.svc.infer_domain("輿論走向與民意變化") == "public_narrative"
 
     def test_english_real_estate(self) -> None:
-        assert self.svc.infer_domain(
-            "Real estate mortgage rates rising in the housing market",
-        ) == "real_estate"
+        assert (
+            self.svc.infer_domain(
+                "Real estate mortgage rates rising in the housing market",
+            )
+            == "real_estate"
+        )
 
     def test_community_movement(self) -> None:
-        assert self.svc.infer_domain(
-            "grassroots community activism movement",
-        ) == "community_movement"
+        assert (
+            self.svc.infer_domain(
+                "grassroots community activism movement",
+            )
+            == "community_movement"
+        )
 
     def test_company_competitor(self) -> None:
-        assert self.svc.infer_domain(
-            "company competitor market share analysis",
-        ) == "company_competitor"
+        assert (
+            self.svc.infer_domain(
+                "company competitor market share analysis",
+            )
+            == "company_competitor"
+        )
 
     def test_global_macro(self) -> None:
-        assert self.svc.infer_domain(
-            "global recession trade war commodity prices",
-        ) == "global_macro"
+        assert (
+            self.svc.infer_domain(
+                "global recession trade war commodity prices",
+            )
+            == "global_macro"
+        )
 
     def test_no_keywords_defaults(self) -> None:
         assert self.svc.infer_domain("completely unrelated text xyz123") == "hk_city"

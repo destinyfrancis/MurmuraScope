@@ -7,7 +7,6 @@ a probability estimate for Polymarket contract outcomes.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 from backend.app.utils.db import get_db
 from backend.app.utils.logger import get_logger
@@ -44,15 +43,16 @@ _BEARISH_DECISIONS = frozenset({"emigrate", "cut_spending", "hold_cash", "quit",
 @dataclass(frozen=True)
 class ConsensusEstimate:
     """Immutable probability estimate from agent consensus."""
-    probability: float          # P(YES) ∈ [0, 1]
-    confidence: float           # [0, 1] — how confident the estimate is
-    supporting_agents: int      # agents supporting YES
-    opposing_agents: int        # agents supporting NO
-    neutral_agents: int         # undecided agents
-    belief_signal: float        # [-1, 1] from belief system
-    decision_signal: float      # [-1, 1] from agent decisions
-    sentiment_signal: float     # [-1, 1] from sentiment ratio
-    evidence_summary: str       # human-readable explanation
+
+    probability: float  # P(YES) ∈ [0, 1]
+    confidence: float  # [0, 1] — how confident the estimate is
+    supporting_agents: int  # agents supporting YES
+    opposing_agents: int  # agents supporting NO
+    neutral_agents: int  # undecided agents
+    belief_signal: float  # [-1, 1] from belief system
+    decision_signal: float  # [-1, 1] from agent decisions
+    sentiment_signal: float  # [-1, 1] from sentiment ratio
+    evidence_summary: str  # human-readable explanation
 
 
 class ConsensusEstimator:
@@ -102,13 +102,9 @@ class ConsensusEstimator:
         confidence = (same_direction / 3) * min(1.0, abs(raw_signal) * 2)
 
         # Count agents by direction
-        supporting, opposing, neutral = await self._count_agent_directions(
-            session_id, contract_question
-        )
+        supporting, opposing, neutral = await self._count_agent_directions(session_id, contract_question)
 
-        evidence = self._build_evidence_summary(
-            belief_signal, decision_signal, sentiment_signal, probability
-        )
+        evidence = self._build_evidence_summary(belief_signal, decision_signal, sentiment_signal, probability)
 
         return ConsensusEstimate(
             probability=round(probability, 4),
@@ -130,6 +126,7 @@ class ConsensusEstimator:
             return _defaults
         try:
             from backend.app.domain.base import DomainPackRegistry  # noqa: PLC0415
+
             pack = DomainPackRegistry.get(domain_pack_id)
             if pack.consensus_weights:
                 return dict(pack.consensus_weights)
@@ -137,9 +134,7 @@ class ConsensusEstimator:
             logger.debug("Could not load consensus_weights for pack=%s", domain_pack_id)
         return _defaults
 
-    async def _compute_belief_signal(
-        self, session_id: str, question: str
-    ) -> float:
+    async def _compute_belief_signal(self, session_id: str, question: str) -> float:
         """Extract belief signal from agent belief_states table."""
         question_lower = question.lower()
 
@@ -227,9 +222,7 @@ class ConsensusEstimator:
 
         return (pos - neg) / total
 
-    async def _count_agent_directions(
-        self, session_id: str, question: str
-    ) -> tuple[int, int, int]:
+    async def _count_agent_directions(self, session_id: str, question: str) -> tuple[int, int, int]:
         """Count agents by directional alignment."""
         question_lower = question.lower()
         matched_topic = None
@@ -258,9 +251,7 @@ class ConsensusEstimator:
         return supporting, opposing, neutral
 
     @staticmethod
-    def _build_evidence_summary(
-        belief: float, decision: float, sentiment: float, prob: float
-    ) -> str:
+    def _build_evidence_summary(belief: float, decision: float, sentiment: float, prob: float) -> str:
         """Build human-readable evidence summary."""
         parts: list[str] = []
 

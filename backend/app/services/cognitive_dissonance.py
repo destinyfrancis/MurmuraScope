@@ -4,6 +4,7 @@ Detects when agent beliefs are internally inconsistent or contradict recent
 actions, then selects and applies a resolution strategy modulated by the
 agent's Big Five personality traits.
 """
+
 from __future__ import annotations
 
 import json
@@ -48,7 +49,7 @@ class DissonanceDetector:
 
     BELIEF_CONFLICT_WEIGHT: float = 0.6
     ACTION_BELIEF_WEIGHT: float = 0.4
-    CONFLICT_THRESHOLD: float = 0.3        # Minimum stance diff × correlation to flag
+    CONFLICT_THRESHOLD: float = 0.3  # Minimum stance diff × correlation to flag
 
     # Base resolution probabilities (modulated by personality)
     BASE_DENIAL_PROB: float = 0.4
@@ -105,9 +106,7 @@ class DissonanceDetector:
                 conflict_scores.append(conflict_contribution)
                 conflicting_pairs.append((topic_a, topic_b))
 
-        belief_conflict_score = (
-            sum(conflict_scores) / len(conflict_scores) if conflict_scores else 0.0
-        )
+        belief_conflict_score = sum(conflict_scores) / len(conflict_scores) if conflict_scores else 0.0
         belief_conflict_score = _clamp(belief_conflict_score, 0.0, 1.0)
 
         # --- Action-belief gap ---
@@ -128,15 +127,12 @@ class DissonanceDetector:
                     gap = (conflict_threshold_stance - belief.stance) * belief.confidence
                     action_gap_scores.append(_clamp(gap, 0.0, 1.0))
 
-        action_belief_gap = (
-            sum(action_gap_scores) / len(action_gap_scores) if action_gap_scores else 0.0
-        )
+        action_belief_gap = sum(action_gap_scores) / len(action_gap_scores) if action_gap_scores else 0.0
         action_belief_gap = _clamp(action_belief_gap, 0.0, 1.0)
 
         # --- Composite dissonance score ---
         dissonance_score = _clamp(
-            self.BELIEF_CONFLICT_WEIGHT * belief_conflict_score
-            + self.ACTION_BELIEF_WEIGHT * action_belief_gap,
+            self.BELIEF_CONFLICT_WEIGHT * belief_conflict_score + self.ACTION_BELIEF_WEIGHT * action_belief_gap,
             0.0,
             1.0,
         )
@@ -265,6 +261,7 @@ class DissonanceDetector:
             if belief_a is not None and belief_b is not None:
                 # Shift weaker belief toward the direction consistent with the pair correlation
                 from backend.app.models.emotional_state import BELIEF_CORRELATIONS  # noqa: PLC0415
+
                 expected_corr = BELIEF_CORRELATIONS.get(
                     (topic_a, topic_b),
                     BELIEF_CORRELATIONS.get((topic_b, topic_a), 0.0),

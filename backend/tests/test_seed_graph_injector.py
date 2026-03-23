@@ -2,14 +2,8 @@
 
 from __future__ import annotations
 
-import asyncio
-import json
-import os
-import tempfile
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -82,13 +76,12 @@ def _make_seed(
 # ---------------------------------------------------------------------------
 
 from backend.app.services.seed_graph_injector import (  # noqa: E402
-    SeedGraphInjector,
     SeedGraphEdge,
+    SeedGraphInjector,
     SeedGraphNode,
     _normalize_name,
     _slug,
 )
-
 
 # ---------------------------------------------------------------------------
 # Unit tests — helper functions
@@ -169,6 +162,7 @@ def tmp_db(tmp_path):
     db_path = tmp_path / "test.db"
 
     import sqlite3
+
     conn = sqlite3.connect(str(db_path))
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS kg_nodes (
@@ -199,8 +193,9 @@ def tmp_db(tmp_path):
 @pytest.fixture
 def patched_db(tmp_db):
     """Patch get_db to use the temp DB file."""
-    import aiosqlite
     from contextlib import asynccontextmanager
+
+    import aiosqlite
 
     @asynccontextmanager
     async def _fake_get_db():
@@ -223,6 +218,7 @@ class TestSeedGraphInjectorEntityNodes:
         assert result["seed_nodes"] == 1
 
         import aiosqlite
+
         async with aiosqlite.connect(str(patched_db)) as db:
             cursor = await db.execute("SELECT entity_type FROM kg_nodes WHERE title = '張三'")
             row = await cursor.fetchone()
@@ -236,6 +232,7 @@ class TestSeedGraphInjectorEntityNodes:
         await injector.inject("aabbccdd-1122-3344-5566-778899001122", seed)
 
         import aiosqlite
+
         async with aiosqlite.connect(str(patched_db)) as db:
             cursor = await db.execute("SELECT entity_type FROM kg_nodes WHERE title = '滙豐銀行'")
             row = await cursor.fetchone()
@@ -248,6 +245,7 @@ class TestSeedGraphInjectorEntityNodes:
         await injector.inject("aabbccdd-1122-3344-5566-778899001122", seed)
 
         import aiosqlite
+
         async with aiosqlite.connect(str(patched_db)) as db:
             cursor = await db.execute("SELECT entity_type FROM kg_nodes WHERE title = '沙田'")
             row = await cursor.fetchone()
@@ -260,6 +258,7 @@ class TestSeedGraphInjectorEntityNodes:
         await injector.inject("aabbccdd-1122-3344-5566-778899001122", seed)
 
         import aiosqlite
+
         async with aiosqlite.connect(str(patched_db)) as db:
             cursor = await db.execute("SELECT entity_type FROM kg_nodes WHERE title = '印花稅'")
             row = await cursor.fetchone()
@@ -272,6 +271,7 @@ class TestSeedGraphInjectorEntityNodes:
         await injector.inject("aabbccdd-1122-3344-5566-778899001122", seed)
 
         import aiosqlite
+
         async with aiosqlite.connect(str(patched_db)) as db:
             cursor = await db.execute("SELECT entity_type FROM kg_nodes WHERE title = 'HIBOR'")
             row = await cursor.fetchone()
@@ -284,6 +284,7 @@ class TestSeedGraphInjectorEntityNodes:
         await injector.inject("aabbccdd-1122-3344-5566-778899001122", seed)
 
         import aiosqlite
+
         async with aiosqlite.connect(str(patched_db)) as db:
             cursor = await db.execute("SELECT entity_type FROM kg_nodes WHERE title = '撤辣事件'")
             row = await cursor.fetchone()
@@ -303,10 +304,9 @@ class TestStakeholderNodes:
         assert result["seed_nodes"] >= 2  # entity + stakeholder
 
         import aiosqlite
+
         async with aiosqlite.connect(str(patched_db)) as db:
-            cursor = await db.execute(
-                "SELECT entity_type FROM kg_nodes WHERE title = '首置買家'"
-            )
+            cursor = await db.execute("SELECT entity_type FROM kg_nodes WHERE title = '首置買家'")
             row = await cursor.fetchone()
         assert row is not None
         assert row[0] == "StakeholderGroup"
@@ -392,10 +392,9 @@ class TestEdgeCases:
         await injector.inject("aabbccdd-1122-3344-5566-778899001122", seed)
 
         import aiosqlite
+
         async with aiosqlite.connect(str(patched_db)) as db:
-            cursor = await db.execute(
-                "SELECT id FROM kg_nodes WHERE title = '測試機構'"
-            )
+            cursor = await db.execute("SELECT id FROM kg_nodes WHERE title = '測試機構'")
             row = await cursor.fetchone()
         assert row is not None
         # Node ID must start with 8-char hex prefix from graph_id

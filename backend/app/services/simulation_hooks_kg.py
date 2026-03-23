@@ -6,8 +6,6 @@ All methods access SimulationRunner state via ``self`` (cooperative MRO).
 
 from __future__ import annotations
 
-from typing import Any
-
 from backend.app.utils.logger import get_logger
 
 logger = get_logger("simulation_hooks.kg")
@@ -35,7 +33,8 @@ class KGHooksMixin:
         except Exception:
             logger.exception(
                 "_process_kg_evolution failed session=%s round=%d",
-                session_id, round_number,
+                session_id,
+                round_number,
             )
 
     async def _process_kg_snapshot(self, session_id: str, round_number: int) -> None:
@@ -54,22 +53,23 @@ class KGHooksMixin:
                 )
                 rows = await cursor.fetchall()
 
-            actions = [
-                {"action_type": r[0], "oasis_username": r[1]}
-                for r in rows
-            ]
+            actions = [{"action_type": r[0], "oasis_username": r[1]} for r in rows]
 
             updated = await graph_builder.update_weights_from_actions(session_id, actions)
             saved = await graph_builder.take_snapshot(session_id, round_number)
 
             logger.debug(
                 "KG snapshot session=%s round=%d edges_updated=%d saved=%s",
-                session_id, round_number, updated, saved,
+                session_id,
+                round_number,
+                updated,
+                saved,
             )
         except Exception:
             logger.exception(
                 "_process_kg_snapshot failed session=%s round=%d",
-                session_id, round_number,
+                session_id,
+                round_number,
             )
 
     async def _init_b2b_companies(self, session_id: str) -> None:
@@ -144,7 +144,8 @@ class KGHooksMixin:
                 if row and row[0] > 0:
                     logger.debug(
                         "Social network init skipped — %d relationships already exist for session=%s",
-                        row[0], session_id,
+                        row[0],
+                        session_id,
                     )
                     return
 
@@ -169,13 +170,16 @@ class KGHooksMixin:
             ]
 
             from backend.app.services.social_network import SocialNetworkBuilder  # noqa: PLC0415
+
             if self._social_network is None:
                 self._social_network = SocialNetworkBuilder()
 
             network = await self._social_network.build_network(session_id, profiles)
             logger.info(
                 "Social network init: %d relationships, %d leaders for session=%s",
-                network.edge_count, len(network.opinion_leaders), session_id,
+                network.edge_count,
+                len(network.opinion_leaders),
+                session_id,
             )
         except Exception:
             logger.exception(
@@ -183,9 +187,7 @@ class KGHooksMixin:
                 session_id,
             )
 
-    async def _process_supply_chain_cascade(
-        self, session_id: str, round_number: int
-    ) -> None:
+    async def _process_supply_chain_cascade(self, session_id: str, round_number: int) -> None:
         """Group 3 periodic: propagate supply chain disruption through KG edges.
 
         Fires every macro_feedback_interval rounds (default 5) for kg_driven
@@ -193,10 +195,10 @@ class KGHooksMixin:
         cascades revenue impacts to downstream entities.
         """
         try:
-            from backend.app.utils.db import get_db  # noqa: PLC0415
             from backend.app.services.supply_chain_cascade import (  # noqa: PLC0415
                 propagate_supply_chain_shock,
             )
+            from backend.app.utils.db import get_db  # noqa: PLC0415
 
             # Find entities currently under disruption (supply_chain_disruption > 0.3)
             async with get_db() as db:

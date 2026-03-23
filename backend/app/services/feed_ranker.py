@@ -3,6 +3,7 @@
 Ranks posts for each agent using configurable algorithms, computes
 filter bubble indices, and persists feed snapshots.
 """
+
 from __future__ import annotations
 
 import math
@@ -28,7 +29,7 @@ class FeedRankingEngine:
     """
 
     FEED_SIZE: int = 20
-    RECENCY_HALF_LIFE: float = 3.0     # rounds
+    RECENCY_HALF_LIFE: float = 3.0  # rounds
     MAX_CANDIDATES: int = 100
 
     # Stance bucket boundaries for Shannon entropy computation
@@ -314,6 +315,7 @@ class FeedRankingEngine:
         close_db = False
         if db is None:
             from backend.app.utils.db import get_db  # noqa: PLC0415
+
             db = await get_db().__aenter__()
             close_db = True
         try:
@@ -359,14 +361,16 @@ class FeedRankingEngine:
         rows = []
         for agent_id, posts in feeds.items():
             for rank, post in enumerate(posts):
-                rows.append((
-                    session_id,
-                    agent_id,
-                    post.get("round_number", 0),
-                    str(post.get("id", "")),
-                    rank + 1,
-                    float(post.get("score", 0.0)),
-                ))
+                rows.append(
+                    (
+                        session_id,
+                        agent_id,
+                        post.get("round_number", 0),
+                        str(post.get("id", "")),
+                        rank + 1,
+                        float(post.get("score", 0.0)),
+                    )
+                )
 
         if rows:
             await db.executemany(

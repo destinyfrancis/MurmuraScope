@@ -202,8 +202,7 @@ Return ONLY valid JSON:
 # ---------------------------------------------------------------------------
 
 COMMUNITY_SUMMARY_SYSTEM = (
-    "You are a community analyst for networks and communities. "
-    "Summarise clusters of related entities."
+    "You are a community analyst for networks and communities. Summarise clusters of related entities."
 )
 
 COMMUNITY_SUMMARY_USER = """\

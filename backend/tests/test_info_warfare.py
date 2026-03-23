@@ -3,23 +3,24 @@
 from __future__ import annotations
 
 import dataclasses
+
 import pytest
 
+from backend.app.services.agent_factory import AgentProfile
 from backend.app.services.info_warfare import (
-    FactCheckResult,
-    FabricatedPost,
-    _FACT_CHECK_EDUCATION,
-    _FACT_CHECK_CONSCIEN_MIN,
-    _FACT_CHECK_OPENNESS_MIN,
     _FACT_CHECK_BASE_ACCURACY,
     _FACT_CHECK_CONSCIEN_BONUS,
+    _FACT_CHECK_CONSCIEN_MIN,
+    _FACT_CHECK_EDUCATION,
+    _FACT_CHECK_OPENNESS_MIN,
+    FabricatedPost,
+    FactCheckResult,
 )
-from backend.app.services.agent_factory import AgentProfile
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_profile(**kwargs) -> AgentProfile:
     defaults = dict(
@@ -49,6 +50,7 @@ def _make_profile(**kwargs) -> AgentProfile:
 # ---------------------------------------------------------------------------
 # FactCheckResult frozen dataclass tests
 # ---------------------------------------------------------------------------
+
 
 class TestFactCheckResult:
     def test_frozen_dataclass(self):
@@ -93,6 +95,7 @@ class TestFactCheckResult:
 # FabricatedPost frozen dataclass tests
 # ---------------------------------------------------------------------------
 
+
 class TestFabricatedPost:
     def test_frozen_dataclass(self):
         fp = FabricatedPost(
@@ -124,6 +127,7 @@ class TestFabricatedPost:
 # ---------------------------------------------------------------------------
 # Fact-check eligibility constants
 # ---------------------------------------------------------------------------
+
 
 class TestFactCheckEligibility:
     def test_education_threshold(self):
@@ -183,6 +187,7 @@ class TestFactCheckEligibility:
 # ---------------------------------------------------------------------------
 # Influence operator agent type tests
 # ---------------------------------------------------------------------------
+
 
 class TestInfluenceOperator:
     def test_influence_operator_agent_type(self):

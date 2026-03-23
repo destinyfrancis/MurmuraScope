@@ -4,11 +4,11 @@
 Replaces BeliefSystem keyword matching with cosine similarity + cognitive
 fingerprint modulation. Active in kg_driven mode only.
 """
+
 from __future__ import annotations
 
 import asyncio
 import math
-from typing import Any
 
 from backend.app.models.cognitive_fingerprint import CognitiveFingerprint
 from backend.app.models.world_event import WorldEvent
@@ -29,6 +29,7 @@ async def get_embedding(text: str) -> list[float]:
     so we wrap it in asyncio.to_thread to avoid blocking the event loop.
     """
     from backend.app.services.embedding_provider import EmbeddingProvider  # noqa: PLC0415
+
     provider = EmbeddingProvider()
     result = await asyncio.to_thread(provider.embed_single, text)
     return result.tolist()
@@ -160,17 +161,14 @@ class BeliefPropagationEngine:
         Returns:
             Additional deltas for each affected neighbour agent.
         """
-        _SHIFT_THRESHOLD = 0.1   # minimum shift magnitude to trigger cascade
-        _CASCADE_FACTOR = 0.3    # base: neighbour receives 30% of the original shift
+        _SHIFT_THRESHOLD = 0.1  # minimum shift magnitude to trigger cascade
+        _CASCADE_FACTOR = 0.3  # base: neighbour receives 30% of the original shift
         _LEADERSHIP_BOOST = 0.5  # max additional factor for high-influence agents
 
         # Pre-compute out-degree for opinion leadership: agents with more
         # connections exert proportionally stronger cascade influence.
         # Degree is normalised to [0, 1] relative to the maximum in the graph.
-        all_degrees = {
-            agent_id: len(neighbours)
-            for agent_id, neighbours in interaction_graph.items()
-        }
+        all_degrees = {agent_id: len(neighbours) for agent_id, neighbours in interaction_graph.items()}
         max_degree = max(all_degrees.values()) if all_degrees else 1
         max_degree = max(max_degree, 1)  # guard against empty graph
 

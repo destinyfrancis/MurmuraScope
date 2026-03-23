@@ -9,7 +9,7 @@ deliberation.
 from __future__ import annotations
 
 import random
-from typing import Sequence
+from collections.abc import Sequence
 
 from backend.app.models.decision import DecisionType
 from backend.app.services.agent_factory import AgentProfile
@@ -24,21 +24,21 @@ logger = get_logger("decision_rules")
 
 # Fraction of eligible agents to sample (cap at MAX_PER_TYPE for cost control)
 _ELIGIBLE_SAMPLE_RATE: float = 0.10
-_MAX_PER_TYPE: int = 50   # hard cap per decision type per round
+_MAX_PER_TYPE: int = 50  # hard cap per decision type per round
 
 # Property thresholds — mortgage rate derived from real HKMA BLR (best lending rate)
-_MIN_MONTHS_DOWN_PAYMENT: int = 24         # must have ≥ 24 months income saved
-_STRESS_TEST_DTI: float = 0.50             # monthly payment ≤ 50% of income
+_MIN_MONTHS_DOWN_PAYMENT: int = 24  # must have ≥ 24 months income saved
+_STRESS_TEST_DTI: float = 0.50  # monthly payment ≤ 50% of income
 # HKMA rule: loan maturity + borrower age ≤ 75 (conservative)
 _MAX_BORROWER_AGE_PLUS_TENOR: int = 75
 
 # Emigration thresholds — tiered by destination (HKD savings required)
 # Source: CIC/ImmD settlement fund requirements + cost-of-living estimates
 _EMIGRATION_SAVINGS_BY_DESTINATION: dict[str, int] = {
-    "uk": 500_000,        # UK BN(O) visa — high cost of living
-    "canada": 500_000,    # Canada PR — settlement fund requirement
-    "australia": 500_000, # Australia skilled visa — settlement fund
-    "taiwan": 200_000,    # Taiwan investment/work — lower cost of living
+    "uk": 500_000,  # UK BN(O) visa — high cost of living
+    "canada": 500_000,  # Canada PR — settlement fund requirement
+    "australia": 500_000,  # Australia skilled visa — settlement fund
+    "taiwan": 200_000,  # Taiwan investment/work — lower cost of living
     "malaysia": 200_000,  # MM2H — lower cost of living
 }
 _EMIGRATION_SAVINGS_DEFAULT: int = 350_000  # weighted average for unknown destination
@@ -65,10 +65,10 @@ _SPENDING_ADJUST_CONFIDENCE_LOW: float = 45.0  # confidence < 45 → likely cut
 
 # Employment change thresholds (Phase 18)
 _EMPLOYMENT_QUIT_NEUROTICISM: float = 0.6
-_EMPLOYMENT_QUIT_SAVINGS_ALT: int = 300_000     # can quit if this savings even with high unemployment
-_EMPLOYMENT_QUIT_UNEMPLOY_CAP: float = 0.05     # below this → safe to quit
-_EMPLOYMENT_STRIKE_STANCE: float = 0.6          # political stance threshold for strike
-_EMPLOYMENT_STRIKE_CONFIDENCE: float = 40.0     # consumer confidence below this → strike
+_EMPLOYMENT_QUIT_SAVINGS_ALT: int = 300_000  # can quit if this savings even with high unemployment
+_EMPLOYMENT_QUIT_UNEMPLOY_CAP: float = 0.05  # below this → safe to quit
+_EMPLOYMENT_STRIKE_STANCE: float = 0.6  # political stance threshold for strike
+_EMPLOYMENT_STRIKE_CONFIDENCE: float = 40.0  # consumer confidence below this → strike
 _EMPLOYMENT_LIE_FLAT_MAX_AGE: int = 35
 _EMPLOYMENT_LIE_FLAT_MIN_AGE: int = 22
 _EMPLOYMENT_LIE_FLAT_OPENNESS: float = 0.4
@@ -77,11 +77,11 @@ _EMPLOYMENT_SAMPLE_RATE: float = 0.05
 _EMPLOYMENT_MAX_PER_ROUND: int = 30
 
 # Relocate thresholds (Phase 18)
-_RELOCATE_PRICE_INCOME_RATIO: int = 15          # avg sqft price > income × this ratio
+_RELOCATE_PRICE_INCOME_RATIO: int = 15  # avg sqft price > income × this ratio
 _RELOCATE_SCHOOL_MIN_AGE: int = 30
 _RELOCATE_SCHOOL_MAX_AGE: int = 50
 _RELOCATE_GENTRIFY_INCOME_CAP: int = 25_000
-_RELOCATE_GENTRIFY_PRICE_FLOOR: int = 15_000   # sqft price threshold for gentrification
+_RELOCATE_GENTRIFY_PRICE_FLOOR: int = 15_000  # sqft price threshold for gentrification
 _RELOCATE_SAMPLE_RATE: float = 0.08
 _RELOCATE_MAX_PER_ROUND: int = 40
 
@@ -89,6 +89,7 @@ _RELOCATE_MAX_PER_ROUND: int = 40
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _get_mortgage_rate(macro_state: MacroState) -> float:
     """Derive mortgage rate from HKMA BLR (best lending rate).
@@ -159,9 +160,8 @@ def _entry_level_flat_size_sqft(income: int) -> float:
 # Eligibility functions (pure)
 # ---------------------------------------------------------------------------
 
-def is_eligible_buy_property(
-    profile: AgentProfile, macro_state: MacroState
-) -> bool:
+
+def is_eligible_buy_property(profile: AgentProfile, macro_state: MacroState) -> bool:
     """Return True if the agent meets basic property purchase criteria.
 
     Criteria:
@@ -194,7 +194,10 @@ def is_eligible_buy_property(
     # Loan tenor follows HKMA rule: borrower age + tenor ≤ 75
     rate = _get_mortgage_rate(macro_state)
     monthly_payment = _monthly_mortgage_payment(
-        property_price, macro_state.mortgage_cap, rate, agent_age=profile.age,
+        property_price,
+        macro_state.mortgage_cap,
+        rate,
+        agent_age=profile.age,
     )
     if monthly_payment > profile.monthly_income * _STRESS_TEST_DTI:
         return False
@@ -202,9 +205,7 @@ def is_eligible_buy_property(
     return True
 
 
-def is_eligible_emigrate(
-    profile: AgentProfile, macro_state: MacroState
-) -> bool:
+def is_eligible_emigrate(profile: AgentProfile, macro_state: MacroState) -> bool:
     """Return True if the agent has material motivation and means to emigrate.
 
     Criteria:
@@ -250,9 +251,7 @@ def is_eligible_emigrate(
     return True
 
 
-def is_eligible_change_job(
-    profile: AgentProfile, macro_state: MacroState
-) -> bool:
+def is_eligible_change_job(profile: AgentProfile, macro_state: MacroState) -> bool:
     """Return True if the agent is in working age and has job-change motivation.
 
     Criteria:
@@ -273,9 +272,7 @@ def is_eligible_change_job(
     return proactive or market_stress
 
 
-def is_eligible_invest(
-    profile: AgentProfile, macro_state: MacroState
-) -> bool:
+def is_eligible_invest(profile: AgentProfile, macro_state: MacroState) -> bool:
     """Return True if the agent has surplus savings and openness to invest.
 
     Criteria:
@@ -293,9 +290,7 @@ def is_eligible_invest(
     return True
 
 
-def is_eligible_have_child(
-    profile: AgentProfile, macro_state: MacroState
-) -> bool:
+def is_eligible_have_child(profile: AgentProfile, macro_state: MacroState) -> bool:
     """Return True if the agent is in child-bearing age with financial means.
 
     Criteria:
@@ -312,9 +307,7 @@ def is_eligible_have_child(
     return True
 
 
-def is_eligible_adjust_spending(
-    profile: AgentProfile, macro_state: MacroState
-) -> bool:
+def is_eligible_adjust_spending(profile: AgentProfile, macro_state: MacroState) -> bool:
     """Return True if macro conditions suggest spending adjustment is relevant.
 
     Most agents can adjust spending; we filter to those most likely to act:
@@ -333,9 +326,7 @@ def is_eligible_adjust_spending(
     return high_inflation or low_confidence or high_confidence
 
 
-def is_eligible_employment_change(
-    profile: AgentProfile, macro_state: MacroState
-) -> bool:
+def is_eligible_employment_change(profile: AgentProfile, macro_state: MacroState) -> bool:
     """Return True if the agent is eligible for an employment change decision.
 
     Covers quit, strike, lie-flat, seek employment, and maintain actions.
@@ -391,9 +382,7 @@ def is_eligible_employment_change(
     return False
 
 
-def is_eligible_relocate(
-    profile: AgentProfile, macro_state: MacroState
-) -> bool:
+def is_eligible_relocate(profile: AgentProfile, macro_state: MacroState) -> bool:
     """Return True if the agent is eligible for an intra-HK relocation decision.
 
     Criteria (any one triggers eligibility):
@@ -417,17 +406,11 @@ def is_eligible_relocate(
             return True
 
     # School need path
-    if (
-        profile.marital_status == "已婚"
-        and _RELOCATE_SCHOOL_MIN_AGE <= profile.age <= _RELOCATE_SCHOOL_MAX_AGE
-    ):
+    if profile.marital_status == "已婚" and _RELOCATE_SCHOOL_MIN_AGE <= profile.age <= _RELOCATE_SCHOOL_MAX_AGE:
         return True
 
     # Gentrification displacement path
-    if (
-        profile.monthly_income < _RELOCATE_GENTRIFY_INCOME_CAP
-        and district_price > _RELOCATE_GENTRIFY_PRICE_FLOOR
-    ):
+    if profile.monthly_income < _RELOCATE_GENTRIFY_INCOME_CAP and district_price > _RELOCATE_GENTRIFY_PRICE_FLOOR:
         return True
 
     return False
@@ -482,7 +465,8 @@ def filter_eligible_agents(
         return []
 
     eligible: list[AgentProfile] = [
-        p for p in profiles
+        p
+        for p in profiles
         if check_fn(p, macro_state)  # type: ignore[operator]
     ]
 

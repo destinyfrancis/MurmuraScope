@@ -9,9 +9,11 @@ Covers:
 - RelationshipEngine.batch_update pattern
 - infer_attachment_style pure function (Big Five → style)
 """
+
 from __future__ import annotations
 
 import dataclasses
+
 import pytest
 
 from backend.app.models.relationship_state import (
@@ -22,7 +24,6 @@ from backend.app.services.relationship_engine import (
     RelationshipEngine,
     infer_attachment_style,
 )
-
 
 # ---------------------------------------------------------------------------
 # RelationshipState
@@ -189,16 +190,12 @@ class TestRelationshipEngine:
         assert rs.agent_b_id == "bob"
 
     def test_initialize_from_description_romantic(self):
-        rs = self.engine.initialize_relationship(
-            "alice", "bob", edge_description="romantic partner"
-        )
+        rs = self.engine.initialize_relationship("alice", "bob", edge_description="romantic partner")
         assert rs.intimacy > 0.0  # romantic → elevated intimacy
         assert rs.passion > 0.0
 
     def test_initialize_from_description_enemy(self):
-        rs = self.engine.initialize_relationship(
-            "alice", "bob", edge_description="bitter enemy"
-        )
+        rs = self.engine.initialize_relationship("alice", "bob", edge_description="bitter enemy")
         assert rs.trust < 0.0  # enemy → negative trust
 
     def test_update_from_interaction_returns_new_state(self):
@@ -239,8 +236,10 @@ class TestRelationshipEngine:
         intimacy 0.997 (5-year half-life) — Sprecher & Regan 1998.
         """
         rs = RelationshipState(
-            agent_a_id="alice", agent_b_id="bob",
-            intimacy=0.8, passion=0.8,
+            agent_a_id="alice",
+            agent_b_id="bob",
+            intimacy=0.8,
+            passion=0.8,
         )
         updated = self.engine.update_from_interaction(
             state=rs,
@@ -280,12 +279,16 @@ class TestRelationshipEngine:
         profile = {"agreeableness": 0.5, "neuroticism": 0.5}
 
         updated_secure = self.engine.update_from_interaction(
-            state=rs, interaction_valence=-0.5,
-            profile_a=profile, attachment_style_a=secure_att,
+            state=rs,
+            interaction_valence=-0.5,
+            profile_a=profile,
+            attachment_style_a=secure_att,
         )
         updated_anxious = self.engine.update_from_interaction(
-            state=rs, interaction_valence=-0.5,
-            profile_a=profile, attachment_style_a=anxious_att,
+            state=rs,
+            interaction_valence=-0.5,
+            profile_a=profile,
+            attachment_style_a=anxious_att,
         )
         # Anxious attachment amplifies negative interaction effect on trust
         assert updated_anxious.trust <= updated_secure.trust
@@ -416,6 +419,7 @@ class TestCommitmentDecayHalfLife:
             _BASE_COMMITMENT_DECAY_PER_WEEK,
             _BASE_TRUST_DECAY_PER_WEEK,
         )
+
         assert _BASE_COMMITMENT_DECAY_PER_WEEK > _BASE_TRUST_DECAY_PER_WEEK
 
     def test_commitment_not_equal_old_value(self) -> None:

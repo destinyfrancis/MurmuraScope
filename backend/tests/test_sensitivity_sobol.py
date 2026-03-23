@@ -1,11 +1,13 @@
 # backend/tests/test_sensitivity_sobol.py
 """Tests for Sobol sensitivity analysis extension."""
+
 from __future__ import annotations
+
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from backend.app.services.sensitivity_analyzer import (
-    SensitivityAnalyzer, SobolResult
-)
+
+from backend.app.services.sensitivity_analyzer import SensitivityAnalyzer, SobolResult
 
 
 def _mock_coefficients():
@@ -25,9 +27,11 @@ def _mock_validator(vary_output: bool = False):
             'Constant values encountered' edge case that causes analyze to fail).
     """
     v = MagicMock()
-    v._load_historical_series = AsyncMock(return_value={
-        "ccl_index": [("2021-Q1", 160.0), ("2021-Q2", 162.0), ("2021-Q3", 158.0)],
-    })
+    v._load_historical_series = AsyncMock(
+        return_value={
+            "ccl_index": [("2021-Q1", 160.0), ("2021-Q2", 162.0), ("2021-Q3", 158.0)],
+        }
+    )
     v._generate_trajectory = MagicMock(return_value=[160.0, 162.0, 159.0])
     if vary_output:
         # Cycle through [0.4, 0.5, 0.6, 0.7, 0.8] to give SALib non-constant Y
@@ -55,6 +59,7 @@ async def test_run_sobol_returns_sobol_result():
 
     import backend.app.services.calibrated_coefficients as cc_mod
     import backend.app.services.retrospective_validator as rv_mod
+
     original_cc = cc_mod.CalibratedCoefficients
     original_rv = rv_mod.RetrospectiveValidator
     cc_mod.CalibratedCoefficients = lambda: coeff  # type: ignore[assignment]
@@ -79,6 +84,7 @@ async def test_run_sobol_indices_in_range():
 
     import backend.app.services.calibrated_coefficients as cc_mod
     import backend.app.services.retrospective_validator as rv_mod
+
     original_cc = cc_mod.CalibratedCoefficients
     original_rv = rv_mod.RetrospectiveValidator
     cc_mod.CalibratedCoefficients = lambda: coeff  # type: ignore[assignment]
@@ -107,6 +113,7 @@ async def test_run_sobol_empty_on_no_data():
 
     import backend.app.services.calibrated_coefficients as cc_mod
     import backend.app.services.retrospective_validator as rv_mod
+
     original_cc = cc_mod.CalibratedCoefficients
     original_rv = rv_mod.RetrospectiveValidator
     cc_mod.CalibratedCoefficients = lambda: coeff  # type: ignore[assignment]

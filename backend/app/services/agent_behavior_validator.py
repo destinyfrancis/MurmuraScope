@@ -14,6 +14,7 @@ Usage::
     result = await validator.validate("session_abc", sample_size=10)
     print(result.mode_collapse_warning, result.avg_consistency_score)
 """
+
 from __future__ import annotations
 
 import math
@@ -46,11 +47,12 @@ Reply with a single integer (1, 2, 3, 4, or 5) and nothing else."""
 @dataclass(frozen=True)
 class BehaviorValidationResult:
     """Behavioral validation output for one simulation session."""
+
     session_id: str
     decisions_sampled: int
-    action_diversity_entropy: float   # Shannon entropy; 0 = mode collapse
-    mode_collapse_warning: bool       # True if entropy < threshold
-    avg_consistency_score: float      # 1–5 LLM-as-judge mean; 0.0 if no LLM sample
+    action_diversity_entropy: float  # Shannon entropy; 0 = mode collapse
+    mode_collapse_warning: bool  # True if entropy < threshold
+    avg_consistency_score: float  # 1–5 LLM-as-judge mean; 0.0 if no LLM sample
     consistency_scores: tuple[float, ...]
     summary: str
 
@@ -71,11 +73,7 @@ class AgentBehaviorValidator:
             return 0.0
         counts = Counter(decisions)
         total = len(decisions)
-        return -sum(
-            (c / total) * math.log2(c / total)
-            for c in counts.values()
-            if c > 0
-        )
+        return -sum((c / total) * math.log2(c / total) for c in counts.values() if c > 0)
 
     def _check_mode_collapse(self, decisions: list[str]) -> bool:
         """Return True if entropy below collapse threshold."""
@@ -90,6 +88,7 @@ class AgentBehaviorValidator:
     ) -> float:
         """Call LLM to rate decision consistency. Returns 1–5 float."""
         from backend.app.utils.llm_client import get_default_client  # noqa: PLC0415
+
         client = get_default_client()
         prompt = _LLM_JUDGE_PROMPT.format(
             persona=persona[:300],
@@ -178,10 +177,7 @@ class AgentBehaviorValidator:
                 if score > 0.0:
                     consistency_scores.append(score)
 
-        avg_score = (
-            sum(consistency_scores) / len(consistency_scores)
-            if consistency_scores else 0.0
-        )
+        avg_score = sum(consistency_scores) / len(consistency_scores) if consistency_scores else 0.0
 
         summary_parts = [
             f"Session {session_id}: {len(decisions)} stakeholder decisions.",

@@ -18,6 +18,7 @@ Security notes:
   - Use ``python -c "import secrets, base64; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())"``
     to generate a valid 32-byte key.
 """
+
 from __future__ import annotations
 
 import base64
@@ -34,20 +35,13 @@ def _get_key() -> bytes:
     """
     raw = os.environ.get("DATA_ENCRYPTION_KEY", "")
     if not raw:
-        raise RuntimeError(
-            "DATA_ENCRYPTION_KEY env var is required for data connector"
-        )
+        raise RuntimeError("DATA_ENCRYPTION_KEY env var is required for data connector")
     try:
         key_bytes = base64.urlsafe_b64decode(raw + "==")  # pad for safety
     except Exception as exc:
-        raise RuntimeError(
-            "DATA_ENCRYPTION_KEY must be base64url-encoded"
-        ) from exc
+        raise RuntimeError("DATA_ENCRYPTION_KEY must be base64url-encoded") from exc
     if len(key_bytes) != 32:
-        raise RuntimeError(
-            f"DATA_ENCRYPTION_KEY must decode to exactly 32 bytes "
-            f"(got {len(key_bytes)})"
-        )
+        raise RuntimeError(f"DATA_ENCRYPTION_KEY must decode to exactly 32 bytes (got {len(key_bytes)})")
     # Fernet requires the key to be 32-byte base64url-encoded
     return base64.urlsafe_b64encode(key_bytes)
 

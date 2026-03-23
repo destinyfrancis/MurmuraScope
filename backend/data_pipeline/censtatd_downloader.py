@@ -13,6 +13,7 @@ Data strategy:
 
 Raw JSON saved to data/raw/censtatd/.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -34,19 +35,29 @@ _BACKOFF_BASE_S = 1.0
 
 # World Bank indicator IDs for Hong Kong
 _WB_INDICATORS: dict[str, str] = {
-    "unemployment": "SL.UEM.TOTL.ZS",          # Unemployment rate (%)
-    "cpi": "FP.CPI.TOTL",                       # CPI (2010 = 100)
-    "gdp": "NY.GDP.MKTP.KD.ZG",                 # GDP growth (annual %)
-    "gdp_current": "NY.GDP.MKTP.CD",            # GDP current USD
-    "retail_sales": "NE.CON.PRVT.KD.ZG",        # Household consumption growth (proxy for retail)
-    "visitor_arrivals": "ST.INT.ARVL",           # International tourism arrivals
-    "population": "SP.POP.TOTL",                 # Total population
-    "net_migration": "SM.POP.NETM",              # Net migration
+    "unemployment": "SL.UEM.TOTL.ZS",  # Unemployment rate (%)
+    "cpi": "FP.CPI.TOTL",  # CPI (2010 = 100)
+    "gdp": "NY.GDP.MKTP.KD.ZG",  # GDP growth (annual %)
+    "gdp_current": "NY.GDP.MKTP.CD",  # GDP current USD
+    "retail_sales": "NE.CON.PRVT.KD.ZG",  # Household consumption growth (proxy for retail)
+    "visitor_arrivals": "ST.INT.ARVL",  # International tourism arrivals
+    "population": "SP.POP.TOTL",  # Total population
+    "net_migration": "SM.POP.NETM",  # Net migration
 }
 
 _QUARTER_FOR_MONTH: dict[int, str] = {
-    1: "Q1", 2: "Q1", 3: "Q1", 4: "Q2", 5: "Q2", 6: "Q2",
-    7: "Q3", 8: "Q3", 9: "Q3", 10: "Q4", 11: "Q4", 12: "Q4",
+    1: "Q1",
+    2: "Q1",
+    3: "Q1",
+    4: "Q2",
+    5: "Q2",
+    6: "Q2",
+    7: "Q3",
+    8: "Q3",
+    9: "Q3",
+    10: "Q4",
+    11: "Q4",
+    12: "Q4",
 }
 
 # ---------------------------------------------------------------------------
@@ -57,7 +68,8 @@ _QUARTER_FOR_MONTH: dict[int, str] = {
 @dataclass(frozen=True)
 class CenstatdRecord:
     """Immutable record for a single C&SD data point."""
-    period: str       # "YYYY-QN" or "YYYY-MM"
+
+    period: str  # "YYYY-QN" or "YYYY-MM"
     metric: str
     value: float
     unit: str
@@ -68,6 +80,7 @@ class CenstatdRecord:
 @dataclass(frozen=True)
 class DownloadResult:
     """Immutable result of a censtatd download operation."""
+
     category: str
     row_count: int
     records: tuple[CenstatdRecord, ...]
@@ -134,7 +147,7 @@ async def _fetch_wb_indicator(
         except (json.JSONDecodeError, ValueError):
             return []
         if attempt < _MAX_RETRIES - 1:
-            await asyncio.sleep(_BACKOFF_BASE_S * (2 ** attempt))
+            await asyncio.sleep(_BACKOFF_BASE_S * (2**attempt))
     return []
 
 
@@ -161,9 +174,16 @@ def _parse_wb_records(
         period = _year_to_q4(year)
         if normalize_fn:
             val = normalize_fn(val)
-        records.append(CenstatdRecord(
-            period, metric, round(val, 4), unit, "World Bank", source_url,
-        ))
+        records.append(
+            CenstatdRecord(
+                period,
+                metric,
+                round(val, 4),
+                unit,
+                "World Bank",
+                source_url,
+            )
+        )
     return records
 
 
@@ -179,18 +199,19 @@ async def _download_wb_simple(
     """Generic World Bank downloader for a single indicator."""
     indicator_id = _WB_INDICATORS.get(indicator_key)
     if not indicator_id:
-        return DownloadResult(category=category, row_count=0, records=(),
-                              error=f"No World Bank indicator ID for {indicator_key}")
+        return DownloadResult(
+            category=category, row_count=0, records=(), error=f"No World Bank indicator ID for {indicator_key}"
+        )
 
     source_url = f"{_WB_BASE}/{indicator_id}"
     raw_rows = await _fetch_wb_indicator(client, indicator_id)
     if not raw_rows:
-        return DownloadResult(category=category, row_count=0, records=(),
-                              error=f"No data from World Bank for {indicator_id}")
+        return DownloadResult(
+            category=category, row_count=0, records=(), error=f"No data from World Bank for {indicator_id}"
+        )
 
     _save_raw(f"{indicator_key}_raw.json", raw_rows)
-    records = _parse_wb_records(raw_rows, category, metric, unit, source_url,
-                                 normalize_fn=normalize_fn)
+    records = _parse_wb_records(raw_rows, category, metric, unit, source_url, normalize_fn=normalize_fn)
 
     logger.info("%s: parsed %d records from World Bank", indicator_key, len(records))
     return DownloadResult(category=category, row_count=len(records), records=tuple(records))
@@ -204,31 +225,48 @@ async def _download_wb_simple(
 async def download_unemployment_historical(client: httpx.AsyncClient) -> DownloadResult:
     """Download unemployment rate for HK from World Bank. Returns annual Q4 records."""
     return await _download_wb_simple(
-        client, "unemployment", "unemployment", "unemployment_rate", "percent",
+        client,
+        "unemployment",
+        "unemployment",
+        "unemployment_rate",
+        "percent",
     )
 
 
 async def download_cpi_historical(client: httpx.AsyncClient) -> DownloadResult:
     """Download CPI index (2010=100) for HK from World Bank. Returns annual Q4 records."""
     return await _download_wb_simple(
-        client, "cpi", "price_index", "cpi_composite", "index",
+        client,
+        "cpi",
+        "price_index",
+        "cpi_composite",
+        "index",
     )
 
 
 async def download_retail_sales_historical(client: httpx.AsyncClient) -> DownloadResult:
     """Download household final consumption growth (retail proxy) from World Bank."""
     return await _download_wb_simple(
-        client, "retail_sales", "retail_tourism", "retail_sales_index", "percent_change",
+        client,
+        "retail_sales",
+        "retail_tourism",
+        "retail_sales_index",
+        "percent_change",
     )
 
 
 async def download_visitor_arrivals_historical(client: httpx.AsyncClient) -> DownloadResult:
     """Download international tourism arrivals for HK from World Bank."""
+
     def _to_thousands(val: float) -> float:
         return round(val / 1000.0, 2) if val > 10_000 else round(val, 2)
 
     return await _download_wb_simple(
-        client, "visitor_arrivals", "retail_tourism", "tourist_arrivals", "thousands",
+        client,
+        "visitor_arrivals",
+        "retail_tourism",
+        "tourist_arrivals",
+        "thousands",
         normalize_fn=_to_thousands,
     )
 
@@ -250,8 +288,7 @@ async def download_gdp_historical(client: httpx.AsyncClient) -> DownloadResult:
         if not year or val is None:
             continue
         period = _year_to_q4(year)
-        records.append(CenstatdRecord(period, "gdp_growth_rate", round(val, 4),
-                                       "percent", "World Bank", source_url))
+        records.append(CenstatdRecord(period, "gdp_growth_rate", round(val, 4), "percent", "World Bank", source_url))
 
     logger.info("GDP: parsed %d records", len(records))
     return DownloadResult("gdp", len(records), tuple(records))
@@ -280,10 +317,16 @@ async def download_net_migration(client: httpx.AsyncClient) -> DownloadResult:
         # Convert to thousands and split quarterly
         quarterly = round(val / 4_000.0, 2) if abs(val) > 1000 else round(val / 4.0, 2)
         for q in ("Q1", "Q2", "Q3", "Q4"):
-            records.append(CenstatdRecord(
-                f"{year}-{q}", "net_migration", quarterly, "thousands",
-                "World Bank", source_url,
-            ))
+            records.append(
+                CenstatdRecord(
+                    f"{year}-{q}",
+                    "net_migration",
+                    quarterly,
+                    "thousands",
+                    "World Bank",
+                    source_url,
+                )
+            )
 
     logger.info("Net migration: %d quarterly records", len(records))
     return DownloadResult("migration", len(records), tuple(records))
@@ -309,8 +352,11 @@ def compute_consumer_confidence_proxy(
     """
     retail_by_q = {r.period: r.value for r in retail_records if r.metric == "retail_sales_index"}
     unemp_by_q = {r.period: r.value for r in unemp_records if r.metric == "unemployment_rate"}
-    hsi_by_q = {r.period: r.value for r in hsi_records
-                if "hsi" in r.metric.lower() or r.metric in ("hsi_level", "hang_seng_index")}
+    hsi_by_q = {
+        r.period: r.value
+        for r in hsi_records
+        if "hsi" in r.metric.lower() or r.metric in ("hsi_level", "hang_seng_index")
+    }
 
     # Retail YoY change
     retail_yoy: dict[str, float] = {}
@@ -337,13 +383,17 @@ def compute_consumer_confidence_proxy(
     overlap = set(retail_yoy) & set(unemp_norm) & set(hsi_return)
     records: list[CenstatdRecord] = []
     for period in sorted(overlap):
-        confidence = (0.4 * retail_yoy[period]
-                      + 0.3 * (1.0 - unemp_norm[period]) * 100.0
-                      + 0.3 * hsi_return[period])
-        records.append(CenstatdRecord(
-            period, "consumer_confidence_proxy", round(confidence, 2),
-            "index", "derived_proxy", "composite: retail+employment+hsi",
-        ))
+        confidence = 0.4 * retail_yoy[period] + 0.3 * (1.0 - unemp_norm[period]) * 100.0 + 0.3 * hsi_return[period]
+        records.append(
+            CenstatdRecord(
+                period,
+                "consumer_confidence_proxy",
+                round(confidence, 2),
+                "index",
+                "derived_proxy",
+                "composite: retail+employment+hsi",
+            )
+        )
 
     logger.info("Consumer confidence proxy: %d records", len(records))
     return DownloadResult("consumer_confidence", len(records), tuple(records))

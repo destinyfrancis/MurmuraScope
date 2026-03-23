@@ -58,17 +58,19 @@ async def download_exchange_rates(
             data = resp.json()
             result_list = data.get("result", {}).get("dataSet", [])
             for item in result_list[:120]:  # Up to 10 years monthly
-                records.append(MarketRecord(
-                    date=str(item.get("end_of_period", "")),
-                    asset_type="fx",
-                    ticker="USD/HKD",
-                    open=None,
-                    close=float(item.get("hkd_usd_spot_rate", 0)),
-                    high=None,
-                    low=None,
-                    volume=None,
-                    source="hkma",
-                ))
+                records.append(
+                    MarketRecord(
+                        date=str(item.get("end_of_period", "")),
+                        asset_type="fx",
+                        ticker="USD/HKD",
+                        open=None,
+                        close=float(item.get("hkd_usd_spot_rate", 0)),
+                        high=None,
+                        low=None,
+                        volume=None,
+                        source="hkma",
+                    )
+                )
     except Exception:
         logger.warning("HKMA FX API failed — no fallback available")
 

@@ -6,7 +6,7 @@ stakeholders, sentiment, and scenario suggestions from user-provided seed text.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from backend.app.utils.llm_client import LLMClient, get_agent_provider_model
 from backend.app.utils.logger import get_logger
@@ -20,24 +20,62 @@ from backend.prompts.text_processor_prompts import (
 
 logger = get_logger("text_processor")
 
-_HK_SCENARIOS = frozenset([
-    "property", "emigration", "fertility", "career",
-    "education", "b2b", "macro",
-])
+_HK_SCENARIOS = frozenset(
+    [
+        "property",
+        "emigration",
+        "fertility",
+        "career",
+        "education",
+        "b2b",
+        "macro",
+    ]
+)
 
-_VALID_ENTITY_TYPES = frozenset([
-    "person", "org", "location", "policy", "economic", "event",
-    "faction", "creature", "artifact", "magical", "military",
-    "media", "institution", "family", "technology",
-])
+_VALID_ENTITY_TYPES = frozenset(
+    [
+        "person",
+        "org",
+        "location",
+        "policy",
+        "economic",
+        "event",
+        "faction",
+        "creature",
+        "artifact",
+        "magical",
+        "military",
+        "media",
+        "institution",
+        "family",
+        "technology",
+    ]
+)
 
 _VALID_SENTIMENTS = frozenset(["positive", "negative", "neutral", "mixed"])
 
-_HK_DISTRICTS = frozenset([
-    "中西區", "灣仔", "東區", "南區", "油尖旺", "深水埗",
-    "九龍城", "黃大仙", "觀塘", "葵青", "荃灣", "屯門",
-    "元朗", "北區", "大埔", "沙田", "西貢", "離島",
-])
+_HK_DISTRICTS = frozenset(
+    [
+        "中西區",
+        "灣仔",
+        "東區",
+        "南區",
+        "油尖旺",
+        "深水埗",
+        "九龍城",
+        "黃大仙",
+        "觀塘",
+        "葵青",
+        "荃灣",
+        "屯門",
+        "元朗",
+        "北區",
+        "大埔",
+        "沙田",
+        "西貢",
+        "離島",
+    ]
+)
 
 
 @dataclass(frozen=True)
@@ -140,9 +178,7 @@ def _parse_processed_seed(data: dict) -> ProcessedSeed:
         for s in (data.get("stakeholders") or [])[:20]
         if s.get("group")
     )
-    key_claims = tuple(
-        str(c) for c in (data.get("key_claims") or [])[:15] if c
-    )
+    key_claims = tuple(str(c) for c in (data.get("key_claims") or [])[:15] if c)
 
     return ProcessedSeed(
         language=str(data.get("language", "zh-HK")),
@@ -152,9 +188,7 @@ def _parse_processed_seed(data: dict) -> ProcessedSeed:
         sentiment=_validate_sentiment(data.get("sentiment", "neutral")),
         key_claims=key_claims,
         suggested_scenario=_validate_scenario(data.get("suggested_scenario", "general")),
-        suggested_regions=_validate_regions(
-            data.get("suggested_regions") or data.get("suggested_districts") or []
-        ),
+        suggested_regions=_validate_regions(data.get("suggested_regions") or data.get("suggested_districts") or []),
         confidence=float(min(1.0, max(0.0, data.get("confidence", 0.7)))),
     )
 
@@ -219,9 +253,7 @@ class TextProcessor:
         Returns:
             List of agent suggestion dicts with agent_type, proportion, etc.
         """
-        stakeholders_text = "; ".join(
-            f"{s.group}（{s.impact}）" for s in seed.stakeholders
-        )
+        stakeholders_text = "; ".join(f"{s.group}（{s.impact}）" for s in seed.stakeholders)
         districts_text = ", ".join(seed.suggested_regions) or "全域"
 
         messages = [

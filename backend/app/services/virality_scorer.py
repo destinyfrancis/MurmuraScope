@@ -3,6 +3,7 @@
 Computes cascade depth, breadth, velocity, R₀, and cross-cluster reach
 for each root post in a simulation session, then persists virality scores.
 """
+
 from __future__ import annotations
 
 import json
@@ -144,22 +145,20 @@ class ViralityScorer:
             velocity_norm = min(1.0, velocity / 10.0)
             # Normalize R₀ (cap at 1.0)
             r0_norm = min(1.0, reproduction_number)
-            virality_index = (
-                0.3 * velocity_norm
-                + 0.3 * r0_norm
-                + 0.4 * cross_cluster_reach
-            )
+            virality_index = 0.3 * velocity_norm + 0.3 * r0_norm + 0.4 * cross_cluster_reach
 
-            scores.append(ViralityScore(
-                post_id=str(root_id),
-                session_id=session_id,
-                cascade_depth=cascade_depth,
-                cascade_breadth=cascade_breadth,
-                velocity=round(velocity, 4),
-                reproduction_number=round(reproduction_number, 4),
-                cross_cluster_reach=round(cross_cluster_reach, 4),
-                virality_index=round(virality_index, 4),
-            ))
+            scores.append(
+                ViralityScore(
+                    post_id=str(root_id),
+                    session_id=session_id,
+                    cascade_depth=cascade_depth,
+                    cascade_breadth=cascade_breadth,
+                    velocity=round(velocity, 4),
+                    reproduction_number=round(reproduction_number, 4),
+                    cross_cluster_reach=round(cross_cluster_reach, 4),
+                    virality_index=round(virality_index, 4),
+                )
+            )
 
         return scores
 
@@ -215,9 +214,7 @@ class ViralityScorer:
     # Private helpers
     # ------------------------------------------------------------------
 
-    async def _load_clusters(
-        self, session_id: str, db: Any
-    ) -> dict[str, int]:
+    async def _load_clusters(self, session_id: str, db: Any) -> dict[str, int]:
         """Load agent → cluster mapping from latest echo chamber snapshot."""
         try:
             cursor = await db.execute(

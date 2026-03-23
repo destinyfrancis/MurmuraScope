@@ -20,15 +20,15 @@ logger = get_logger("wealth_transfer")
 # Constants
 # ---------------------------------------------------------------------------
 
-_MIN_SAVINGS: int = 50_000           # donor must have ≥ 50,000 HKD savings
-_MIN_INCOME: int = 15_000            # donor must earn ≥ 15,000 HKD/month
-_TRUST_THRESHOLD: float = 0.5        # donor must trust KOL at this level
+_MIN_SAVINGS: int = 50_000  # donor must have ≥ 50,000 HKD savings
+_MIN_INCOME: int = 15_000  # donor must earn ≥ 15,000 HKD/month
+_TRUST_THRESHOLD: float = 0.5  # donor must trust KOL at this level
 _KOL_EXTRAVERSION_THRESHOLD: float = 0.7  # KOL must have high extraversion
-_MAX_AMOUNT_SAVINGS_RATIO: float = 0.02   # max 2% of savings per transfer
-_MAX_AMOUNT_INCOME_RATIO: float = 0.5     # max 50% of monthly income per transfer
-_SAMPLE_RATE: float = 0.05           # 5% of eligible donors
-_MAX_PER_ROUND: int = 20             # hard cap per round
-_INFLUENCE_BOOST: float = 0.05       # KOL influence boost per received transfer
+_MAX_AMOUNT_SAVINGS_RATIO: float = 0.02  # max 2% of savings per transfer
+_MAX_AMOUNT_INCOME_RATIO: float = 0.5  # max 50% of monthly income per transfer
+_SAMPLE_RATE: float = 0.05  # 5% of eligible donors
+_MAX_PER_ROUND: int = 20  # hard cap per round
+_INFLUENCE_BOOST: float = 0.05  # KOL influence boost per received transfer
 
 # ---------------------------------------------------------------------------
 # Frozen dataclass
@@ -41,9 +41,9 @@ class WealthTransfer:
 
     session_id: str
     from_agent_id: int
-    to_agent_id: int | None       # recipient agent (if peer-to-peer)
-    to_entity: str | None         # named entity recipient (e.g. community fund)
-    amount: int                   # transfer amount in HKD
+    to_agent_id: int | None  # recipient agent (if peer-to-peer)
+    to_entity: str | None  # named entity recipient (e.g. community fund)
+    amount: int  # transfer amount in HKD
     reason: str
     round_number: int
 
@@ -82,6 +82,7 @@ async def _ensure_transfers_table(db: Any) -> None:
 # ---------------------------------------------------------------------------
 # Core processing function
 # ---------------------------------------------------------------------------
+
 
 async def process_wealth_transfers(
     session_id: str,
@@ -170,7 +171,7 @@ async def process_wealth_transfers(
         sampled_donors = rng.sample(eligible_donors, k)
 
         # Compute transfers
-        savings_deltas: dict[int, int] = {}   # agent_id → negative delta
+        savings_deltas: dict[int, int] = {}  # agent_id → negative delta
         influence_boosts: list[tuple[int, int]] = []  # (donor_id, kol_id)
 
         for donor_id in sampled_donors:
@@ -179,25 +180,29 @@ async def process_wealth_transfers(
             income = getattr(profile, "monthly_income", 0)
 
             # Transfer amount: min of 2% savings vs 50% monthly income
-            amount = int(min(
-                savings * _MAX_AMOUNT_SAVINGS_RATIO,
-                income * _MAX_AMOUNT_INCOME_RATIO,
-            ))
+            amount = int(
+                min(
+                    savings * _MAX_AMOUNT_SAVINGS_RATIO,
+                    income * _MAX_AMOUNT_INCOME_RATIO,
+                )
+            )
             if amount <= 0:
                 continue
 
             # Pick the highest-trust KOL
             kol_id = rng.choice(trusted_kols[donor_id])
 
-            transfers.append(WealthTransfer(
-                session_id=session_id,
-                from_agent_id=donor_id,
-                to_agent_id=kol_id,
-                to_entity=None,
-                amount=amount,
-                reason="KOL support donation",
-                round_number=round_num,
-            ))
+            transfers.append(
+                WealthTransfer(
+                    session_id=session_id,
+                    from_agent_id=donor_id,
+                    to_agent_id=kol_id,
+                    to_entity=None,
+                    amount=amount,
+                    reason="KOL support donation",
+                    round_number=round_num,
+                )
+            )
             savings_deltas[donor_id] = savings_deltas.get(donor_id, 0) - amount
             influence_boosts.append((donor_id, kol_id))
 
@@ -205,15 +210,9 @@ async def process_wealth_transfers(
             return []
 
         # Batch-UPDATE donor savings
-        savings_updates = [
-            (savings_deltas[aid], session_id, aid)
-            for aid in savings_deltas
-        ]
+        savings_updates = [(savings_deltas[aid], session_id, aid) for aid in savings_deltas]
         # Batch-UPDATE KOL influence_weight
-        influence_updates = [
-            (_INFLUENCE_BOOST, session_id, donor_id, kol_id)
-            for donor_id, kol_id in influence_boosts
-        ]
+        influence_updates = [(_INFLUENCE_BOOST, session_id, donor_id, kol_id) for donor_id, kol_id in influence_boosts]
 
         # Persist transfers
         transfer_rows = [
@@ -264,14 +263,17 @@ async def process_wealth_transfers(
 
         logger.info(
             "wealth_transfers session=%s round=%d count=%d total_hkd=%d",
-            session_id, round_num, len(transfers),
+            session_id,
+            round_num,
+            len(transfers),
             sum(t.amount for t in transfers),
         )
 
     except Exception:
         logger.exception(
             "process_wealth_transfers failed session=%s round=%d",
-            session_id, round_num,
+            session_id,
+            round_num,
         )
 
     return transfers

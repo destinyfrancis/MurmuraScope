@@ -14,12 +14,11 @@ Usage (standalone):
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Sequence
-
-import aiosqlite
+from typing import Any
 
 from backend.app.utils.cantonese_lexicon import detect_sentiment as _detect_sentiment
 from backend.app.utils.db import get_db
@@ -34,12 +33,13 @@ _RAW_DIR = Path("data/raw/social/lihkg")
 # Data models
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class SocialSentimentRecord:
     """Immutable aggregated sentiment record for one LIHKG category period."""
 
-    period: str          # e.g. "2024-01"
-    category: str        # e.g. "吹水台"
+    period: str  # e.g. "2024-01"
+    category: str  # e.g. "吹水台"
     positive_ratio: float
     negative_ratio: float
     neutral_ratio: float
@@ -51,6 +51,7 @@ class SocialSentimentRecord:
 # ---------------------------------------------------------------------------
 # Raw file loading
 # ---------------------------------------------------------------------------
+
 
 def _load_raw_files() -> list[dict]:
     """Load all raw LIHKG JSON files from the raw data directory.
@@ -70,7 +71,7 @@ def _load_raw_files() -> list[dict]:
     loaded: list[dict] = []
     for path in raw_files:
         try:
-            with open(path, "r", encoding="utf-8") as fh:
+            with open(path, encoding="utf-8") as fh:
                 data = json.load(fh)
             loaded.append(data)
         except (json.JSONDecodeError, OSError) as exc:
@@ -88,6 +89,7 @@ def _extract_threads(raw_data: dict) -> list[dict]:
 # ---------------------------------------------------------------------------
 # Sentiment aggregation
 # ---------------------------------------------------------------------------
+
 
 def _aggregate_sentiment(
     threads: Sequence[dict],
@@ -135,6 +137,7 @@ def _aggregate_sentiment(
 # DB persistence
 # ---------------------------------------------------------------------------
 
+
 async def _persist_to_db(records: list[SocialSentimentRecord]) -> None:
     """Write sentiment records into the social_sentiment and hk_data_snapshots tables."""
     if not records:
@@ -151,9 +154,14 @@ async def _persist_to_db(records: list[SocialSentimentRecord]) -> None:
             """,
             [
                 (
-                    r.period, r.category,
-                    r.positive_ratio, r.negative_ratio, r.neutral_ratio,
-                    r.thread_count, r.total_engagement, r.source,
+                    r.period,
+                    r.category,
+                    r.positive_ratio,
+                    r.negative_ratio,
+                    r.neutral_ratio,
+                    r.thread_count,
+                    r.total_engagement,
+                    r.source,
                 )
                 for r in records
             ],
@@ -162,16 +170,46 @@ async def _persist_to_db(records: list[SocialSentimentRecord]) -> None:
         # hk_data_snapshots for backward-compatible data lake queries
         snapshot_rows: list[tuple] = []
         for r in records:
-            snapshot_rows.extend([
-                ("social_sentiment", f"lihkg_{r.category}_positive_ratio",
-                 r.positive_ratio, "ratio", r.period, r.source, None),
-                ("social_sentiment", f"lihkg_{r.category}_negative_ratio",
-                 r.negative_ratio, "ratio", r.period, r.source, None),
-                ("social_sentiment", f"lihkg_{r.category}_thread_count",
-                 float(r.thread_count), "count", r.period, r.source, None),
-                ("social_sentiment", f"lihkg_{r.category}_engagement",
-                 float(r.total_engagement), "count", r.period, r.source, None),
-            ])
+            snapshot_rows.extend(
+                [
+                    (
+                        "social_sentiment",
+                        f"lihkg_{r.category}_positive_ratio",
+                        r.positive_ratio,
+                        "ratio",
+                        r.period,
+                        r.source,
+                        None,
+                    ),
+                    (
+                        "social_sentiment",
+                        f"lihkg_{r.category}_negative_ratio",
+                        r.negative_ratio,
+                        "ratio",
+                        r.period,
+                        r.source,
+                        None,
+                    ),
+                    (
+                        "social_sentiment",
+                        f"lihkg_{r.category}_thread_count",
+                        float(r.thread_count),
+                        "count",
+                        r.period,
+                        r.source,
+                        None,
+                    ),
+                    (
+                        "social_sentiment",
+                        f"lihkg_{r.category}_engagement",
+                        float(r.total_engagement),
+                        "count",
+                        r.period,
+                        r.source,
+                        None,
+                    ),
+                ]
+            )
 
         await db.executemany(
             """
@@ -191,6 +229,7 @@ async def _persist_to_db(records: list[SocialSentimentRecord]) -> None:
 # Public export
 # ---------------------------------------------------------------------------
 
+
 async def _load_news_sentiment() -> SocialSentimentRecord | None:
     """Aggregate sentiment from news_headlines table (populated by news_rss_downloader).
 
@@ -198,9 +237,7 @@ async def _load_news_sentiment() -> SocialSentimentRecord | None:
     """
     try:
         async with get_db() as db:
-            cursor = await db.execute(
-                "SELECT title, sentiment FROM news_headlines ORDER BY created_at DESC LIMIT 200"
-            )
+            cursor = await db.execute("SELECT title, sentiment FROM news_headlines ORDER BY created_at DESC LIMIT 200")
             rows = await cursor.fetchall()
     except Exception:
         logger.debug("news_headlines table not available")
@@ -339,6 +376,7 @@ async def process_social_sentiment() -> list[SocialSentimentRecord]:
     lihkg_composite: SocialSentimentRecord | None = None
     if raw_files:
         from collections import defaultdict
+
         category_threads: dict[str, list[dict]] = defaultdict(list)
 
         for raw in raw_files:
@@ -354,8 +392,10 @@ async def process_social_sentiment() -> list[SocialSentimentRecord]:
             avg_pos = sum(r.positive_ratio for r in records) / len(records)
             avg_neg = sum(r.negative_ratio for r in records) / len(records)
             lihkg_composite = SocialSentimentRecord(
-                period=period, category="lihkg_composite",
-                positive_ratio=avg_pos, negative_ratio=avg_neg,
+                period=period,
+                category="lihkg_composite",
+                positive_ratio=avg_pos,
+                negative_ratio=avg_neg,
                 neutral_ratio=round(max(0.0, 1.0 - avg_pos - avg_neg), 4),
                 thread_count=sum(r.thread_count for r in records),
                 total_engagement=sum(r.total_engagement for r in records),
@@ -366,6 +406,7 @@ async def process_social_sentiment() -> list[SocialSentimentRecord]:
     # 2. HKGolden
     try:
         from backend.data_pipeline.hkgolden_downloader import HKGoldenDownloader
+
         golden_posts = await HKGoldenDownloader().download()
         golden_rec = await _load_forum_sentiment("hkgolden", golden_posts, period)
         if golden_rec:
@@ -377,7 +418,8 @@ async def process_social_sentiment() -> list[SocialSentimentRecord]:
 
     # 3. Discuss.com.hk + Baby Kingdom
     try:
-        from backend.data_pipeline.discuz_forum_scraper import DiscuzForumScraper, DISCUSS_FORUMS, BK_FORUMS
+        from backend.data_pipeline.discuz_forum_scraper import DiscuzForumScraper
+
         all_discuz_posts = await DiscuzForumScraper().download()
         discuss_posts = tuple(p for p in all_discuz_posts if p.platform == "discuss")
         bk_posts = tuple(p for p in all_discuz_posts if p.platform == "baby_kingdom")
@@ -434,7 +476,8 @@ async def process_social_sentiment() -> list[SocialSentimentRecord]:
 
         logger.info(
             "Multi-source composite: +%.1f%% -%.1f%% sources=%s",
-            composite.positive_ratio * 100, composite.negative_ratio * 100,
+            composite.positive_ratio * 100,
+            composite.negative_ratio * 100,
             list(available.keys()),
         )
     else:

@@ -5,25 +5,25 @@ from __future__ import annotations
 from typing import Any
 
 from backend.app.services.macro_state import (
-    MacroState,
-    SHOCK_INTEREST_RATE_HIKE,
-    SHOCK_PROPERTY_CRASH,
-    SHOCK_UNEMPLOYMENT_SPIKE,
-    SHOCK_POLICY_CHANGE,
-    SHOCK_MARKET_RALLY,
-    SHOCK_EMIGRATION_WAVE,
-    SHOCK_FED_RATE_HIKE,
-    SHOCK_FED_RATE_CUT,
+    SHOCK_CHINA_DEMAND_COLLAPSE,
     SHOCK_CHINA_SLOWDOWN,
     SHOCK_CHINA_STIMULUS,
-    SHOCK_TAIWAN_STRAIT_TENSION,
-    SHOCK_TAIWAN_STRAIT_EASE,
-    SHOCK_SHENZHEN_MAGNET,
+    SHOCK_EMIGRATION_WAVE,
+    SHOCK_FED_RATE_CUT,
+    SHOCK_FED_RATE_HIKE,
     SHOCK_GREATER_BAY_BOOST,
-    SHOCK_TARIFF_INCREASE,
-    SHOCK_SUPPLY_CHAIN_DISRUPTION,
-    SHOCK_CHINA_DEMAND_COLLAPSE,
+    SHOCK_INTEREST_RATE_HIKE,
+    SHOCK_MARKET_RALLY,
+    SHOCK_POLICY_CHANGE,
+    SHOCK_PROPERTY_CRASH,
     SHOCK_RCEP_BENEFIT,
+    SHOCK_SHENZHEN_MAGNET,
+    SHOCK_SUPPLY_CHAIN_DISRUPTION,
+    SHOCK_TAIWAN_STRAIT_EASE,
+    SHOCK_TAIWAN_STRAIT_TENSION,
+    SHOCK_TARIFF_INCREASE,
+    SHOCK_UNEMPLOYMENT_SPIKE,
+    MacroState,
 )
 
 
@@ -60,9 +60,7 @@ def _post_unemployment_spike(state: MacroState) -> str:
 
 
 def _post_policy_change(state: MacroState) -> str:
-    flags_str = "、".join(
-        f"{k}" for k, v in state.policy_flags.items() if v is True
-    )
+    flags_str = "、".join(f"{k}" for k, v in state.policy_flags.items() if v is True)
     return (
         f"【施政報告】政府宣佈多項房屋及經濟政策調整。"
         f"按揭成數上限調整至 {state.mortgage_cap:.0%}。"
@@ -134,9 +132,7 @@ def _post_china_stimulus(state: MacroState) -> str:
 
 def _post_taiwan_strait_tension(state: MacroState) -> str:
     risk_desc = (
-        "極度緊張" if state.taiwan_strait_risk > 0.7
-        else "明顯升溫" if state.taiwan_strait_risk > 0.5
-        else "有所升溫"
+        "極度緊張" if state.taiwan_strait_risk > 0.7 else "明顯升溫" if state.taiwan_strait_risk > 0.5 else "有所升溫"
     )
     return (
         f"【台海局勢{risk_desc}】台海緊張局勢升級，地緣政治風險指數升至 {state.taiwan_strait_risk:.1f}。"

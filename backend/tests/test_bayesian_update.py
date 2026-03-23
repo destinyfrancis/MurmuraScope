@@ -6,10 +6,10 @@ Covers:
 - bayesian_update: full pipeline on [-1,+1] stance scale
 - compute_likelihood_ratio: LR computation with confirmation bias
 """
+
 from __future__ import annotations
 
 import pytest
-from dataclasses import replace
 
 from backend.app.models.emotional_state import Belief
 from backend.app.services.belief_system import BeliefSystem

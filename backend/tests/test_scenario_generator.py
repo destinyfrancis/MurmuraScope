@@ -12,10 +12,11 @@ Coverage:
 - Lookup helpers on UniversalScenarioConfig
 - Prompt strings are domain-agnostic (no HK references)
 """
+
 from __future__ import annotations
 
 import dataclasses
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -180,9 +181,7 @@ class TestUniversalMetric:
     def test_fields_accessible(self) -> None:
         from backend.app.models.universal_scenario import UniversalMetric
 
-        m = UniversalMetric(
-            id="oil_price", label="油價", description="crude oil", initial_value=75.0, unit="USD"
-        )
+        m = UniversalMetric(id="oil_price", label="油價", description="crude oil", initial_value=75.0, unit="USD")
         assert m.id == "oil_price"
         assert m.initial_value == 75.0
         assert m.unit == "USD"
@@ -327,9 +326,7 @@ class TestUniversalScenarioConfig:
             description="form alliances",
             possible_actions=("ally", "refuse"),
         )
-        metric = UniversalMetric(
-            id="power_balance", label="勢力", description="power", initial_value=50.0
-        )
+        metric = UniversalMetric(id="power_balance", label="勢力", description="power", initial_value=50.0)
         shock = UniversalShockType(
             id="imperial_decree",
             label="旨意",
@@ -390,9 +387,7 @@ class TestUniversalScenarioConfig:
             UniversalScenarioConfig,
         )
 
-        dt = UniversalDecisionType(
-            id="real_decision", label="L", description="d", possible_actions=("act",)
-        )
+        dt = UniversalDecisionType(id="real_decision", label="L", description="d", possible_actions=("act",))
         metric = UniversalMetric(id="m", label="L", description="d", initial_value=50.0)
         bad_rule = UniversalImpactRule(
             decision_type_id="nonexistent_decision",
@@ -419,9 +414,7 @@ class TestUniversalScenarioConfig:
             UniversalScenarioConfig,
         )
 
-        dt = UniversalDecisionType(
-            id="dt", label="L", description="d", possible_actions=("act",)
-        )
+        dt = UniversalDecisionType(id="dt", label="L", description="d", possible_actions=("act",))
         metric = UniversalMetric(id="real_metric", label="L", description="d", initial_value=50.0)
         bad_rule = UniversalImpactRule(
             decision_type_id="dt",
@@ -448,9 +441,7 @@ class TestUniversalScenarioConfig:
             UniversalScenarioConfig,
         )
 
-        dt = UniversalDecisionType(
-            id="dt", label="L", description="d", possible_actions=("real_action",)
-        )
+        dt = UniversalDecisionType(id="dt", label="L", description="d", possible_actions=("real_action",))
         metric = UniversalMetric(id="m", label="L", description="d", initial_value=50.0)
         bad_rule = UniversalImpactRule(
             decision_type_id="dt",
@@ -597,9 +588,7 @@ class TestScenarioGeneratorGenerate:
     async def test_generate_missing_scenario_name_raises(self) -> None:
         from backend.app.services.scenario_generator import ScenarioGenerator
 
-        bad_response = {
-            k: v for k, v in _MINIMAL_LLM_RESPONSE.items() if k != "scenario_name"
-        }
+        bad_response = {k: v for k, v in _MINIMAL_LLM_RESPONSE.items() if k != "scenario_name"}
         mock_llm = MagicMock()
         mock_llm.chat_json = AsyncMock(return_value=bad_response)
 
@@ -772,9 +761,13 @@ class TestScenarioPromptsDomainAgnostic:
 
 def test_implied_actor_is_frozen():
     from backend.app.models.universal_scenario import ImpliedActor
+
     actor = ImpliedActor(
-        id="eu", name="歐盟", entity_type="Organization",
-        role="energy policy", relevance_reason="gas supply cut",
+        id="eu",
+        name="歐盟",
+        entity_type="Organization",
+        role="energy policy",
+        relevance_reason="gas supply cut",
     )
     with pytest.raises((dataclasses.FrozenInstanceError, AttributeError)):
         actor.id = "other"  # type: ignore[misc]
@@ -782,13 +775,20 @@ def test_implied_actor_is_frozen():
 
 def test_universal_scenario_config_has_implied_actors_field():
     from backend.app.models.universal_scenario import (
-        ImpliedActor, UniversalScenarioConfig,
-        UniversalDecisionType, UniversalMetric,
-        UniversalShockType, UniversalImpactRule,
+        ImpliedActor,
+        UniversalDecisionType,
+        UniversalImpactRule,
+        UniversalMetric,
+        UniversalScenarioConfig,
+        UniversalShockType,
     )
+
     actor = ImpliedActor(
-        id="eu", name="歐盟", entity_type="Organization",
-        role="energy policy", relevance_reason="gas supply cut",
+        id="eu",
+        name="歐盟",
+        entity_type="Organization",
+        role="energy policy",
+        relevance_reason="gas supply cut",
     )
     config = UniversalScenarioConfig(
         scenario_id="test",
@@ -805,9 +805,18 @@ def test_universal_scenario_config_has_implied_actors_field():
 
 
 def test_universal_scenario_config_implied_actors_defaults_empty():
-    from backend.app.models.universal_scenario import UniversalScenarioConfig, UniversalDecisionType, UniversalMetric, UniversalShockType, UniversalImpactRule
+    from backend.app.models.universal_scenario import (
+        UniversalDecisionType,
+        UniversalImpactRule,
+        UniversalMetric,
+        UniversalScenarioConfig,
+        UniversalShockType,
+    )
+
     config = UniversalScenarioConfig(
-        scenario_id="x", scenario_name="x", scenario_description="x",
+        scenario_id="x",
+        scenario_name="x",
+        scenario_description="x",
         decision_types=(UniversalDecisionType(**_MINIMAL_DECISION),),
         metrics=(UniversalMetric(**_MINIMAL_METRIC),),
         shock_types=(UniversalShockType(**_MINIMAL_SHOCK),),
@@ -843,8 +852,8 @@ _MINIMAL_RESPONSE_WITH_IMPLIED = {
 
 @pytest.mark.asyncio
 async def test_generate_parses_implied_actors():
-    from backend.app.services.scenario_generator import ScenarioGenerator
     from backend.app.models.universal_scenario import ImpliedActor
+    from backend.app.services.scenario_generator import ScenarioGenerator
 
     llm = MagicMock()
     llm.chat_json = AsyncMock(return_value=_MINIMAL_RESPONSE_WITH_IMPLIED)
@@ -862,8 +871,7 @@ async def test_generate_handles_missing_implied_actors_key():
     """LLM responses without implied_actors key should not fail."""
     from backend.app.services.scenario_generator import ScenarioGenerator
 
-    response_without_key = {k: v for k, v in _MINIMAL_RESPONSE_WITH_IMPLIED.items()
-                            if k != "implied_actors"}
+    response_without_key = {k: v for k, v in _MINIMAL_RESPONSE_WITH_IMPLIED.items() if k != "implied_actors"}
     llm = MagicMock()
     llm.chat_json = AsyncMock(return_value=response_without_key)
     gen = ScenarioGenerator(llm_client=llm)
@@ -874,5 +882,6 @@ async def test_generate_handles_missing_implied_actors_key():
 
 def test_scenario_generation_system_prompt_includes_implied_actors_schema():
     from backend.prompts.scenario_generation_prompts import SCENARIO_GENERATION_SYSTEM
+
     assert "implied_actors" in SCENARIO_GENERATION_SYSTEM
     assert "relevance_reason" in SCENARIO_GENERATION_SYSTEM

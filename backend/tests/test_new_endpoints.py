@@ -1,7 +1,10 @@
 """Tests for POST /multi-run and GET /world-events endpoints."""
-import pytest
+
 from unittest.mock import AsyncMock, patch
+
+import pytest
 from httpx import ASGITransport, AsyncClient
+
 from backend.app import create_app
 
 
@@ -14,8 +17,7 @@ class TestMultiRunPost:
             mock_cursor = AsyncMock()
             mock_cursor.fetchone.return_value = fake_session
             mock_db.return_value.__aenter__.return_value.execute = AsyncMock(return_value=mock_cursor)
-            with patch("backend.app.api.simulation.asyncio.create_task",
-                       side_effect=lambda coro: coro.close()):
+            with patch("backend.app.api.simulation.asyncio.create_task", side_effect=lambda coro: coro.close()):
                 app = create_app()
                 async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
                     r = await client.post("/api/simulation/sess-001/multi-run")
@@ -39,10 +41,17 @@ class TestWorldEventsGet:
     async def test_returns_events_list(self):
         """GET /world-events returns list of world events."""
         fake_rows = [
-            {"id": "e1", "simulation_id": "sess-001", "round_number": 3,
-             "content": "Oil price spike", "event_type": "shock",
-             "reach_json": "[]", "impact_vector_json": "{}", "credibility": 0.9,
-             "created_at": "2026-03-17T00:00:00"}
+            {
+                "id": "e1",
+                "simulation_id": "sess-001",
+                "round_number": 3,
+                "content": "Oil price spike",
+                "event_type": "shock",
+                "reach_json": "[]",
+                "impact_vector_json": "{}",
+                "credibility": 0.9,
+                "created_at": "2026-03-17T00:00:00",
+            }
         ]
         with patch("backend.app.api.simulation.get_db") as mock_db:
             mock_cursor = AsyncMock()

@@ -70,14 +70,10 @@ class GraphBuilderService:
         logger.info("Building graph %s for session %s", graph_id, session_id)
 
         # Step 1 — Ontology
-        entity_types, relation_types = await self._ontology_gen.generate(
-            scenario_type, seed_text
-        )
+        entity_types, relation_types = await self._ontology_gen.generate(scenario_type, seed_text)
 
         # Step 2 — Entity extraction
-        nodes, edges = await self._entity_ext.extract(
-            seed_text, hk_data, entity_types, relation_types
-        )
+        nodes, edges = await self._entity_ext.extract(seed_text, hk_data, entity_types, relation_types)
 
         if not nodes:
             logger.warning("No entities extracted for session %s", session_id)
@@ -131,18 +127,15 @@ class GraphBuilderService:
 
         async with get_db() as db:
             node_rows = await db.execute_fetchall(
-                "SELECT id, entity_type, title, description, properties "
-                "FROM kg_nodes WHERE session_id = ?",
+                "SELECT id, entity_type, title, description, properties FROM kg_nodes WHERE session_id = ?",
                 (session_id,),
             )
             edge_rows = await db.execute_fetchall(
-                "SELECT source_id, target_id, relation_type, description, weight "
-                "FROM kg_edges WHERE session_id = ?",
+                "SELECT source_id, target_id, relation_type, description, weight FROM kg_edges WHERE session_id = ?",
                 (session_id,),
             )
             community_rows = await db.execute_fetchall(
-                "SELECT id, title, summary, member_ids "
-                "FROM kg_communities WHERE session_id = ?",
+                "SELECT id, title, summary, member_ids FROM kg_communities WHERE session_id = ?",
                 (session_id,),
             )
 
@@ -197,9 +190,7 @@ class GraphBuilderService:
 
         async with get_db() as db:
             # Fetch candidate nodes via LIKE on title/description
-            conditions = " OR ".join(
-                ["LOWER(title) LIKE ? OR LOWER(description) LIKE ?"] * len(keywords)
-            )
+            conditions = " OR ".join(["LOWER(title) LIKE ? OR LOWER(description) LIKE ?"] * len(keywords))
             params: list[str] = []
             for kw in keywords:
                 pattern = f"%{kw}%"
@@ -238,16 +229,18 @@ class GraphBuilderService:
                 for e in edge_rows
                 if e[0] == node_id or e[1] == node_id
             ]
-            results.append({
-                "node": {
-                    "id": node_id,
-                    "entity_type": r[1],
-                    "title": r[2],
-                    "description": r[3],
-                    "properties": json.loads(r[4]) if r[4] else {},
-                },
-                "edges": connected_edges,
-            })
+            results.append(
+                {
+                    "node": {
+                        "id": node_id,
+                        "entity_type": r[1],
+                        "title": r[2],
+                        "description": r[3],
+                        "properties": json.loads(r[4]) if r[4] else {},
+                    },
+                    "edges": connected_edges,
+                }
+            )
 
         return results
 
@@ -272,8 +265,7 @@ class GraphBuilderService:
         # Fetch current nodes
         async with get_db() as db:
             rows = await db.execute_fetchall(
-                "SELECT id, entity_type, title, description, properties "
-                "FROM kg_nodes WHERE session_id = ?",
+                "SELECT id, entity_type, title, description, properties FROM kg_nodes WHERE session_id = ?",
                 (session_id,),
             )
         existing_nodes = [
@@ -291,10 +283,17 @@ class GraphBuilderService:
             logger.warning("No nodes found for session %s, skipping update", session_id)
             return
 
-        relation_types = round_data.get("relation_types", [
-            "SUPPORTS", "OPPOSES", "COMMENTS_ON", "AFFILIATED_WITH",
-            "REGULATES", "COMPETES_WITH",
-        ])
+        relation_types = round_data.get(
+            "relation_types",
+            [
+                "SUPPORTS",
+                "OPPOSES",
+                "COMMENTS_ON",
+                "AFFILIATED_WITH",
+                "REGULATES",
+                "COMPETES_WITH",
+            ],
+        )
         round_context = round_data.get("events", "")
 
         new_edges, updated_edges = await self._entity_ext.extract_from_round(
@@ -465,18 +464,19 @@ class GraphBuilderService:
             community_id = f"comm_{uuid.uuid4().hex[:8]}"
             members = [node_lookup[nid] for nid in component if nid in node_lookup]
             community_edges = [
-                e for e in edges
-                if e["source_id"] in set(component) and e["target_id"] in set(component)
+                e for e in edges if e["source_id"] in set(component) and e["target_id"] in set(component)
             ]
 
             summary = await self._summarise_community(members, community_edges)
 
-            communities.append({
-                "id": community_id,
-                "title": summary.get("title", f"Community {community_id}"),
-                "summary": summary.get("summary", ""),
-                "member_ids": component,
-            })
+            communities.append(
+                {
+                    "id": community_id,
+                    "title": summary.get("title", f"Community {community_id}"),
+                    "summary": summary.get("summary", ""),
+                    "member_ids": component,
+                }
+            )
 
         return communities
 
@@ -486,10 +486,7 @@ class GraphBuilderService:
         edges: list[dict[str, Any]],
     ) -> dict[str, str]:
         """Use LLM to generate a title and summary for a community."""
-        members_brief = [
-            {"id": m["id"], "title": m["title"], "entity_type": m["entity_type"]}
-            for m in members
-        ]
+        members_brief = [{"id": m["id"], "title": m["title"], "entity_type": m["entity_type"]} for m in members]
         edges_brief = [
             {
                 "source": e["source_id"],
@@ -598,9 +595,7 @@ class GraphBuilderService:
                 row = await cursor.fetchone()
                 return row[0] if row else 0
         except Exception:
-            logger.exception(
-                "update_weights_from_actions failed session=%s", session_id
-            )
+            logger.exception("update_weights_from_actions failed session=%s", session_id)
             return 0
 
     async def take_snapshot(
@@ -624,15 +619,13 @@ class GraphBuilderService:
                 # Fetch current nodes and edges
                 node_rows = await (
                     await db.execute(
-                        "SELECT id, entity_type, title, description, properties"
-                        " FROM kg_nodes WHERE session_id = ?",
+                        "SELECT id, entity_type, title, description, properties FROM kg_nodes WHERE session_id = ?",
                         (session_id,),
                     )
                 ).fetchall()
                 edge_rows = await (
                     await db.execute(
-                        "SELECT source_id, target_id, relation_type, weight"
-                        " FROM kg_edges WHERE session_id = ?",
+                        "SELECT source_id, target_id, relation_type, weight FROM kg_edges WHERE session_id = ?",
                         (session_id,),
                     )
                 ).fetchall()
@@ -682,13 +675,14 @@ class GraphBuilderService:
 
             logger.info(
                 "KG snapshot saved: session=%s round=%d nodes=%d edges=%d",
-                session_id, round_number, node_count, edge_count,
+                session_id,
+                round_number,
+                node_count,
+                edge_count,
             )
             return True
         except Exception:
-            logger.exception(
-                "take_snapshot failed session=%s round=%d", session_id, round_number
-            )
+            logger.exception("take_snapshot failed session=%s round=%d", session_id, round_number)
             return False
 
     async def get_snapshot(
@@ -720,9 +714,7 @@ class GraphBuilderService:
                 return {}
             return json.loads(row[0] or "{}")
         except Exception:
-            logger.exception(
-                "get_snapshot failed session=%s round=%d", session_id, round_number
-            )
+            logger.exception("get_snapshot failed session=%s round=%d", session_id, round_number)
             return {}
 
 

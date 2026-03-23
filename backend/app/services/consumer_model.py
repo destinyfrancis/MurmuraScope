@@ -6,8 +6,8 @@ retail forecasts based on agent profiles and macro-economic conditions.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
-from typing import Sequence
 
 from backend.app.services.agent_factory import AgentProfile
 from backend.app.services.macro_state import MacroState
@@ -38,16 +38,13 @@ _PRICE_ELASTICITY: dict[str, float] = {
     "education": -0.3,
 }
 
-_DISCRETIONARY_CATEGORIES: frozenset[str] = frozenset(
-    {"entertainment", "education"}
-)
-_NECESSITY_CATEGORIES: frozenset[str] = frozenset(
-    {"food", "housing", "transport", "healthcare"}
-)
+_DISCRETIONARY_CATEGORIES: frozenset[str] = frozenset({"entertainment", "education"})
+_NECESSITY_CATEGORIES: frozenset[str] = frozenset({"food", "housing", "transport", "healthcare"})
 
 # ---------------------------------------------------------------------------
 # SpendingProfile
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class SpendingProfile:
@@ -57,36 +54,32 @@ class SpendingProfile:
     with ``savings_rate`` representing the portion not consumed.
     """
 
-    food: float             # Food & beverages
-    housing: float          # Rent / mortgage payment + utilities
-    transport: float        # Public transport, car, taxi
-    entertainment: float    # Dining out, leisure, travel
-    education: float        # Tuition, courses, books
-    healthcare: float       # Medical, insurance premiums
-    savings_rate: float     # Fraction saved / invested (residual)
+    food: float  # Food & beverages
+    housing: float  # Rent / mortgage payment + utilities
+    transport: float  # Public transport, car, taxi
+    entertainment: float  # Dining out, leisure, travel
+    education: float  # Tuition, courses, books
+    healthcare: float  # Medical, insurance premiums
+    savings_rate: float  # Fraction saved / invested (residual)
 
     def __post_init__(self) -> None:
         for field_name in (
-            "food", "housing", "transport", "entertainment",
-            "education", "healthcare", "savings_rate",
+            "food",
+            "housing",
+            "transport",
+            "entertainment",
+            "education",
+            "healthcare",
+            "savings_rate",
         ):
             val = getattr(self, field_name)
             if not (0.0 <= val <= 1.0):
-                raise ValueError(
-                    f"SpendingProfile.{field_name} must be in [0, 1], got {val}"
-                )
+                raise ValueError(f"SpendingProfile.{field_name} must be in [0, 1], got {val}")
 
     @property
     def total_consumption_rate(self) -> float:
         """Sum of non-savings fractions."""
-        return (
-            self.food
-            + self.housing
-            + self.transport
-            + self.entertainment
-            + self.education
-            + self.healthcare
-        )
+        return self.food + self.housing + self.transport + self.entertainment + self.education + self.healthcare
 
     def monthly_amounts(self, monthly_income: int) -> dict[str, float]:
         """Return absolute monthly spend (HKD) per category."""
@@ -109,12 +102,12 @@ class SpendingProfile:
 # Format: (food, housing, transport, entertainment, education, healthcare, savings)
 # Keyed by income floor (HKD); agent income mapped to closest bracket via _income_bracket()
 _HK_EXPENDITURE_BY_INCOME: dict[int, tuple[float, float, float, float, float, float, float]] = {
-    0:      (0.35, 0.25, 0.08, 0.05, 0.02, 0.05, 0.20),
-    8000:   (0.32, 0.28, 0.10, 0.06, 0.03, 0.04, 0.17),
-    15000:  (0.28, 0.30, 0.10, 0.08, 0.04, 0.04, 0.16),
-    25000:  (0.24, 0.30, 0.10, 0.10, 0.05, 0.04, 0.17),
-    40000:  (0.20, 0.28, 0.10, 0.12, 0.06, 0.04, 0.20),
-    60000:  (0.16, 0.25, 0.09, 0.14, 0.07, 0.05, 0.24),
+    0: (0.35, 0.25, 0.08, 0.05, 0.02, 0.05, 0.20),
+    8000: (0.32, 0.28, 0.10, 0.06, 0.03, 0.04, 0.17),
+    15000: (0.28, 0.30, 0.10, 0.08, 0.04, 0.04, 0.16),
+    25000: (0.24, 0.30, 0.10, 0.10, 0.05, 0.04, 0.17),
+    40000: (0.20, 0.28, 0.10, 0.12, 0.06, 0.04, 0.20),
+    60000: (0.16, 0.25, 0.09, 0.14, 0.07, 0.05, 0.24),
     100000: (0.12, 0.20, 0.08, 0.15, 0.08, 0.06, 0.31),
 }
 
@@ -123,20 +116,20 @@ _INCOME_THRESHOLDS: tuple[int, ...] = tuple(sorted(_HK_EXPENDITURE_BY_INCOME.key
 
 # Legacy bracket-name mapping (for backward compat with AgentProfile.income_bracket)
 _BRACKET_NAME_TO_INCOME: dict[str, int] = {
-    "無收入":           0,
-    "<$8,000":          0,
-    "$8,000-$14,999":   8000,
-    "$15,000-$24,999":  15000,
-    "$25,000-$39,999":  25000,
-    "$40,000-$59,999":  40000,
-    "$60,000+":         100000,
+    "無收入": 0,
+    "<$8,000": 0,
+    "$8,000-$14,999": 8000,
+    "$15,000-$24,999": 15000,
+    "$25,000-$39,999": 25000,
+    "$40,000-$59,999": 40000,
+    "$60,000+": 100000,
 }
 
 _DEFAULT_BASE = _HK_EXPENDITURE_BY_INCOME[15000]
 
 # Housing adjustments by housing type
 _HOUSING_TYPE_ADJ: dict[str, float] = {
-    "公屋": -0.08,           # subsidised rent → lower housing fraction
+    "公屋": -0.08,  # subsidised rent → lower housing fraction
     "資助出售房屋": -0.04,
     "私人住宅": 0.0,
     "臨時／其他": -0.06,
@@ -144,13 +137,13 @@ _HOUSING_TYPE_ADJ: dict[str, float] = {
 
 # Age-based spending adjustments (additive to entertainment / education)
 _AGE_ENTERTAINMENT_ADJ: dict[str, float] = {
-    "young":  0.03,   # 18–34
-    "middle": 0.00,   # 35–54
+    "young": 0.03,  # 18–34
+    "middle": 0.00,  # 35–54
     "senior": -0.04,  # 55+
 }
 _AGE_EDUCATION_ADJ: dict[str, float] = {
-    "young":  0.02,   # more courses / self-improvement
-    "middle": 0.03,   # children's education
+    "young": 0.02,  # more courses / self-improvement
+    "middle": 0.03,  # children's education
     "senior": -0.02,
 }
 
@@ -159,6 +152,7 @@ _AGE_EDUCATION_ADJ: dict[str, float] = {
 # ConsumerModel
 # ---------------------------------------------------------------------------
 
+
 class ConsumerModel:
     """Models individual household spending and produces retail forecasts."""
 
@@ -166,9 +160,7 @@ class ConsumerModel:
     # Core methods
     # -----------------------------------------------------------------------
 
-    def generate_spending_profile(
-        self, profile: AgentProfile, macro_state: MacroState
-    ) -> SpendingProfile:
+    def generate_spending_profile(self, profile: AgentProfile, macro_state: MacroState) -> SpendingProfile:
         """Generate a baseline spending profile for a given agent.
 
         Uses income bracket as starting point, adjusts for housing type,
@@ -187,7 +179,7 @@ class ConsumerModel:
         # Housing-type adjustment
         housing_adj = _HOUSING_TYPE_ADJ.get(profile.housing_type, 0.0)
         housing = _clamp(housing + housing_adj)
-        savings = _clamp(savings - housing_adj)   # offset savings
+        savings = _clamp(savings - housing_adj)  # offset savings
 
         # Age group adjustments
         age_band = _age_band(profile.age)
@@ -451,13 +443,13 @@ def _lifecycle_mpc(age: int) -> float:
         MPC scalar (>1 means spending exceeds income, i.e. dissaving).
     """
     if age < 30:
-        return 1.05   # young, spend more than earn
+        return 1.05  # young, spend more than earn
     elif age < 45:
         return 0.88
     elif age < 60:
         return 0.78
     else:
-        return 0.92   # elderly, higher asset drawdown
+        return 0.92  # elderly, higher asset drawdown
 
 
 def compute_spending(
@@ -517,6 +509,7 @@ def compute_spending(
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _clamp(val: float, lo: float = 0.0, hi: float = 1.0) -> float:
     return max(lo, min(hi, val))

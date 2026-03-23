@@ -9,12 +9,10 @@ available yet.
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-import pytest_asyncio
 
 from backend.app.models.universal_agent_profile import UniversalAgentProfile
 from backend.app.services.universal_decision_engine import (
@@ -26,7 +24,6 @@ from backend.app.services.universal_decision_engine import (
     _filter_by_entity_type,
     _sample_agents,
 )
-
 
 # ---------------------------------------------------------------------------
 # Mock scenario model types (stand-ins until parallel agent delivers models)
@@ -232,9 +229,7 @@ class TestUniversalRoundResult:
 
 
 class TestFilterByEntityType:
-    def test_military_agent_eligible_for_military_decision(
-        self, military_agent: UniversalAgentProfile
-    ) -> None:
+    def test_military_agent_eligible_for_military_decision(self, military_agent: UniversalAgentProfile) -> None:
         dt = MockDecisionType(
             id="mil",
             label="",
@@ -245,9 +240,7 @@ class TestFilterByEntityType:
         result = _filter_by_entity_type([military_agent], dt)
         assert result == [military_agent]
 
-    def test_media_agent_not_eligible_for_military_decision(
-        self, media_agent: UniversalAgentProfile
-    ) -> None:
+    def test_media_agent_not_eligible_for_military_decision(self, media_agent: UniversalAgentProfile) -> None:
         dt = MockDecisionType(
             id="mil",
             label="",
@@ -268,7 +261,7 @@ class TestFilterByEntityType:
             label="",
             description="",
             possible_actions=("act",),
-            applicable_entity_types=(),   # empty → all eligible
+            applicable_entity_types=(),  # empty → all eligible
         )
         result = _filter_by_entity_type([military_agent, media_agent], dt)
         assert len(result) == 2
@@ -328,9 +321,7 @@ class TestSampleAgents:
 
 class TestDeliberateBatch:
     @pytest.mark.asyncio
-    async def test_returns_valid_decisions_for_matching_agents(
-        self, military_agent: UniversalAgentProfile
-    ) -> None:
+    async def test_returns_valid_decisions_for_matching_agents(self, military_agent: UniversalAgentProfile) -> None:
         dt = MockDecisionType(
             id="mil_action",
             label="Military Action",
@@ -366,9 +357,7 @@ class TestDeliberateBatch:
         assert results[0].confidence == 0.65
 
     @pytest.mark.asyncio
-    async def test_invalid_action_from_llm_is_filtered_out(
-        self, military_agent: UniversalAgentProfile
-    ) -> None:
+    async def test_invalid_action_from_llm_is_filtered_out(self, military_agent: UniversalAgentProfile) -> None:
         dt = MockDecisionType(
             id="mil_action",
             label="Military Action",
@@ -401,9 +390,7 @@ class TestDeliberateBatch:
         assert results == []
 
     @pytest.mark.asyncio
-    async def test_unknown_agent_id_from_llm_is_filtered_out(
-        self, military_agent: UniversalAgentProfile
-    ) -> None:
+    async def test_unknown_agent_id_from_llm_is_filtered_out(self, military_agent: UniversalAgentProfile) -> None:
         dt = MockDecisionType(
             id="mil_action",
             label="",
@@ -436,9 +423,7 @@ class TestDeliberateBatch:
         assert results == []
 
     @pytest.mark.asyncio
-    async def test_confidence_is_clamped_to_valid_range(
-        self, military_agent: UniversalAgentProfile
-    ) -> None:
+    async def test_confidence_is_clamped_to_valid_range(self, military_agent: UniversalAgentProfile) -> None:
         dt = MockDecisionType(
             id="dt",
             label="",
@@ -504,10 +489,9 @@ class TestComputeMetricDeltas:
         assert deltas["tension_level"] == pytest.approx(2.0, abs=1e-6)
 
     def test_multiple_rules_same_metric_are_summed(self) -> None:
-        decisions = (
-            [self._make_decision("mil", "strike") for _ in range(10)]
-            + [self._make_decision("mil", "retreat") for _ in range(5)]
-        )
+        decisions = [self._make_decision("mil", "strike") for _ in range(10)] + [
+            self._make_decision("mil", "retreat") for _ in range(5)
+        ]
         rules = [
             MockImpactRule("mil", "strike", "tension_level", 2.0),
             MockImpactRule("mil", "retreat", "tension_level", -1.0),
@@ -606,9 +590,7 @@ class TestProcessRoundDecisions:
         assert result.decisions[0].session_id == "sess2"
         assert result.decisions[0].round_number == 3
         # 1 strike: (1/10)*3.0 = 0.3
-        assert result.metric_deltas.get("conflict_intensity", 0.0) == pytest.approx(
-            0.3, abs=1e-4
-        )
+        assert result.metric_deltas.get("conflict_intensity", 0.0) == pytest.approx(0.3, abs=1e-4)
 
     @pytest.mark.asyncio
     async def test_no_eligible_agents_for_entity_type_skips_llm(self) -> None:
@@ -734,8 +716,8 @@ class TestStoreDecisions:
         call_args = mock_db.executemany.call_args
         rows = call_args[0][1]
         assert len(rows) == 1
-        assert rows[0][1] == "agent_a"   # agent_id column
-        assert rows[0][4] == "act1"      # action column
+        assert rows[0][1] == "agent_a"  # agent_id column
+        assert rows[0][4] == "act1"  # action column
 
     @pytest.mark.asyncio
     async def test_store_decisions_with_empty_list_does_nothing(self) -> None:

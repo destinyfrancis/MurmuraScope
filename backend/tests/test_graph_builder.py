@@ -7,7 +7,6 @@ import uuid
 
 import pytest
 
-
 # ======================================================================
 # Graph node and edge creation
 # ======================================================================
@@ -152,7 +151,10 @@ class TestEntityExtractorFindsEntities:
 
         result = await mock_llm_client.chat_json(
             messages=[
-                {"role": "user", "content": "Extract entities from: Tseung Kwan O first-time buyers benefit from stamp duty cut."},
+                {
+                    "role": "user",
+                    "content": "Extract entities from: Tseung Kwan O first-time buyers benefit from stamp duty cut.",
+                },
             ]
         )
 
@@ -183,9 +185,7 @@ class TestGraphQueryReturnsResults:
     async def test_query_nodes_by_type(self, test_db):
         session_id = str(uuid.uuid4())
 
-        for i, (etype, title) in enumerate(
-            [("district", "Central"), ("district", "Wan Chai"), ("person", "Agent A")]
-        ):
+        for i, (etype, title) in enumerate([("district", "Central"), ("district", "Wan Chai"), ("person", "Agent A")]):
             await test_db.execute(
                 """INSERT INTO kg_nodes (id, session_id, entity_type, title, properties)
                    VALUES (?, ?, ?, ?, '{}')""",
@@ -218,9 +218,7 @@ class TestGraphQueryReturnsResults:
         )
         await test_db.commit()
 
-        cursor = await test_db.execute(
-            "SELECT * FROM kg_edges WHERE source_id = ?", ("src-1",)
-        )
+        cursor = await test_db.execute("SELECT * FROM kg_edges WHERE source_id = ?", ("src-1",))
         rows = await cursor.fetchall()
         assert len(rows) == 1
         assert rows[0]["relation_type"] == "lives_in"
@@ -248,9 +246,7 @@ class TestCommunityDetection:
         )
         await test_db.commit()
 
-        cursor = await test_db.execute(
-            "SELECT * FROM kg_communities WHERE session_id = ?", (session_id,)
-        )
+        cursor = await test_db.execute("SELECT * FROM kg_communities WHERE session_id = ?", (session_id,))
         rows = await cursor.fetchall()
         assert len(rows) == 1
 

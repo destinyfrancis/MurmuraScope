@@ -121,16 +121,16 @@ MARITAL_WEIGHTS: dict[str, float] = {
 # ---------------------------------------------------------------------------
 INCOME_BY_OCCUPATION: dict[str, dict[str, Any]] = {
     "經理及行政人員": {"median": 50_000, "std": 22_000, "unemployed_pct": 0.02},
-    "專業人員":       {"median": 42_000, "std": 18_000, "unemployed_pct": 0.02},
-    "輔助專業人員":   {"median": 24_000, "std": 8_000,  "unemployed_pct": 0.03},
-    "文員":           {"median": 16_000, "std": 4_000,  "unemployed_pct": 0.04},
-    "服務及銷售人員": {"median": 14_500, "std": 4_000,  "unemployed_pct": 0.05},
-    "工藝及有關人員": {"median": 16_500, "std": 5_000,  "unemployed_pct": 0.04},
+    "專業人員": {"median": 42_000, "std": 18_000, "unemployed_pct": 0.02},
+    "輔助專業人員": {"median": 24_000, "std": 8_000, "unemployed_pct": 0.03},
+    "文員": {"median": 16_000, "std": 4_000, "unemployed_pct": 0.04},
+    "服務及銷售人員": {"median": 14_500, "std": 4_000, "unemployed_pct": 0.05},
+    "工藝及有關人員": {"median": 16_500, "std": 5_000, "unemployed_pct": 0.04},
     "機台及機器操作員": {"median": 15_500, "std": 4_000, "unemployed_pct": 0.04},
-    "非技術工人":     {"median": 12_500, "std": 3_000,  "unemployed_pct": 0.07},
+    "非技術工人": {"median": 12_500, "std": 3_000, "unemployed_pct": 0.07},
     # Non-employed categories — income set by _clamp_income_for_occupation()
-    "學生":           {"median": 0,      "std": 0,      "unemployed_pct": 1.0},
-    "退休":           {"median": 0,      "std": 0,      "unemployed_pct": 1.0},
+    "學生": {"median": 0, "std": 0, "unemployed_pct": 1.0},
+    "退休": {"median": 0, "std": 0, "unemployed_pct": 1.0},
 }
 
 # ---------------------------------------------------------------------------
@@ -142,24 +142,24 @@ INCOME_BY_OCCUPATION: dict[str, dict[str, Any]] = {
 # districts (SSP, WTS, Kwun Tong) score lower.
 # ---------------------------------------------------------------------------
 DISTRICT_INCOME_MODIFIER: dict[str, float] = {
-    "中西區":  1.30,  # commercial/finance hub, many professionals
-    "灣仔":    1.25,
-    "西貢":    1.20,  # affluent NT East corridor
-    "沙田":    1.08,
-    "大埔":    1.02,
-    "東區":    1.00,
-    "南區":    1.05,
-    "九龍城":  1.02,
-    "荃灣":    0.98,
-    "葵青":    0.92,
-    "屯門":    0.90,
-    "元朗":    0.90,
-    "油尖旺":  0.95,
-    "北區":    0.88,
-    "黃大仙":  0.88,
-    "觀塘":    0.87,
-    "深水埗":  0.85,  # historically lowest-income urban district
-    "離島":    0.93,
+    "中西區": 1.30,  # commercial/finance hub, many professionals
+    "灣仔": 1.25,
+    "西貢": 1.20,  # affluent NT East corridor
+    "沙田": 1.08,
+    "大埔": 1.02,
+    "東區": 1.00,
+    "南區": 1.05,
+    "九龍城": 1.02,
+    "荃灣": 0.98,
+    "葵青": 0.92,
+    "屯門": 0.90,
+    "元朗": 0.90,
+    "油尖旺": 0.95,
+    "北區": 0.88,
+    "黃大仙": 0.88,
+    "觀塘": 0.87,
+    "深水埗": 0.85,  # historically lowest-income urban district
+    "離島": 0.93,
 }
 
 # ---------------------------------------------------------------------------
@@ -179,7 +179,7 @@ _AGE_EXPERIENCE_MULTIPLIER: dict[tuple[int, int], float] = {
 # Education-based income multipliers (within same occupation)
 EDUCATION_INCOME_MULTIPLIER: dict[str, float] = {
     "小學或以下": 0.80,
-    "中學":       0.90,
+    "中學": 0.90,
     "專上非學位": 1.05,
     "學位或以上": 1.20,
 }
@@ -200,26 +200,77 @@ INCOME_BY_AGE: dict[str, dict[str, Any]] = {
 }
 
 # Influence operator configuration (Phase 18)
-_OPERATOR_CHANCE: float = 0.03   # 3% of agents are covert influence operators
+_OPERATOR_CHANCE: float = 0.03  # 3% of agents are covert influence operators
 _OPERATOR_TOPICS: tuple[str, ...] = (
-    "政府政策", "房地產市場", "移民問題", "經濟前景",
-    "社會穩定", "選舉制度", "示威抗議", "大灣區",
+    "政府政策",
+    "房地產市場",
+    "移民問題",
+    "經濟前景",
+    "社會穩定",
+    "選舉制度",
+    "示威抗議",
+    "大灣區",
 )
 _OPERATOR_SENTIMENTS: tuple[str, ...] = ("negative", "positive")
 
 # Cantonese surname pool (common HK surnames)
 _SURNAMES: tuple[str, ...] = (
-    "陳", "李", "張", "黃", "王", "林", "劉", "吳", "楊", "蔡",
-    "鄭", "何", "梁", "曾", "許", "謝", "周", "郭", "馬", "羅",
-    "趙", "盧", "蕭", "葉", "朱", "鄧", "徐", "方", "潘", "余",
+    "陳",
+    "李",
+    "張",
+    "黃",
+    "王",
+    "林",
+    "劉",
+    "吳",
+    "楊",
+    "蔡",
+    "鄭",
+    "何",
+    "梁",
+    "曾",
+    "許",
+    "謝",
+    "周",
+    "郭",
+    "馬",
+    "羅",
+    "趙",
+    "盧",
+    "蕭",
+    "葉",
+    "朱",
+    "鄧",
+    "徐",
+    "方",
+    "潘",
+    "余",
 )
 
 # Cantonese-flavored username parts
 _USERNAME_PARTS: tuple[str, ...] = (
-    "大佬", "靚仔", "靚女", "港人", "打工仔", "巴打",
-    "師兄", "師姐", "街坊", "業主", "租客", "炒家",
-    "HKer", "lihkg", "hkgal", "kowloon", "ntboy",
-    "tst", "cwb", "mk", "ssp", "yk",
+    "大佬",
+    "靚仔",
+    "靚女",
+    "港人",
+    "打工仔",
+    "巴打",
+    "師兄",
+    "師姐",
+    "街坊",
+    "業主",
+    "租客",
+    "炒家",
+    "HKer",
+    "lihkg",
+    "hkgal",
+    "kowloon",
+    "ntboy",
+    "tst",
+    "cwb",
+    "mk",
+    "ssp",
+    "yk",
 )
 
 # Minimum monthly income floor per occupation (HKD).
@@ -265,6 +316,7 @@ def _parse_age_bracket_ranges(brackets: dict[str, float]) -> dict[str, tuple[int
 # AgentProfile (frozen dataclass)
 # =========================================================================
 
+
 @dataclass(frozen=True)
 class AgentProfile:
     """Immutable agent profile for OASIS simulation."""
@@ -286,9 +338,9 @@ class AgentProfile:
     neuroticism: float
     monthly_income: int
     savings: int
-    political_stance: float = 0.5   # Phase 6: 0=建制派, 0.5=中間派, 1=民主派
-    target_topic: str = ""          # Phase 18: influence_operator target topic
-    target_sentiment: str = ""      # Phase 18: influence_operator target sentiment
+    political_stance: float = 0.5  # Phase 6: 0=建制派, 0.5=中間派, 1=民主派
+    target_topic: str = ""  # Phase 18: influence_operator target topic
+    target_sentiment: str = ""  # Phase 18: influence_operator target sentiment
 
 
 # =========================================================================
@@ -330,11 +382,21 @@ def _infer_fingerprint_from_demographics(
 # =========================================================================
 
 # Occupations whose holders are classified as key decision-makers in HK mode
-_STAKEHOLDER_OCCUPATIONS: frozenset[str] = frozenset({
-    "政府官員", "議員", "地產商", "銀行家", "記者", "教授", "律師", "醫生",
-    # Census categories that map to these roles
-    "經理及行政人員", "專業人員",
-})
+_STAKEHOLDER_OCCUPATIONS: frozenset[str] = frozenset(
+    {
+        "政府官員",
+        "議員",
+        "地產商",
+        "銀行家",
+        "記者",
+        "教授",
+        "律師",
+        "醫生",
+        # Census categories that map to these roles
+        "經理及行政人員",
+        "專業人員",
+    }
+)
 
 
 def _infer_behavioral_params(
@@ -389,6 +451,7 @@ def _infer_behavioral_params(
 # =========================================================================
 # AgentFactory
 # =========================================================================
+
 
 class AgentFactory:
     """Generate census-calibrated agent profiles for the HK simulation."""
@@ -462,8 +525,13 @@ class AgentFactory:
         profiles: list[AgentProfile] = []
         for _ in range(count):
             profile = self._generate_single_npc(
-                districts, ages, sexes, educations,
-                housings, occupations, maritals,
+                districts,
+                ages,
+                sexes,
+                educations,
+                housings,
+                occupations,
+                maritals,
             )
             profiles.append(profile)
 
@@ -509,9 +577,7 @@ class AgentFactory:
             savings=self._estimate_savings(age, income),
         )
 
-    def generate_crm_agents(
-        self, crm_data: list[dict[str, Any]]
-    ) -> list[AgentProfile]:
+    def generate_crm_agents(self, crm_data: list[dict[str, Any]]) -> list[AgentProfile]:
         """Generate agents from CRM customer records.
 
         Each dict in *crm_data* should contain customer demographic fields.
@@ -564,15 +630,11 @@ class AgentFactory:
         multiple calls for the same profile always return the same username.
         This is critical for matching agents between agents.csv and agent_profiles.
         """
-        seed_val = int(hashlib.md5(
-            f"{profile.id}-{profile.district}".encode()
-        ).hexdigest(), 16)
+        seed_val = int(hashlib.md5(f"{profile.id}-{profile.district}".encode()).hexdigest(), 16)
         det_rng = __import__("random").Random(seed_val)
         surname = det_rng.choice(self._surnames)
         part = det_rng.choice(self._username_parts)
-        suffix = hashlib.md5(
-            f"{profile.id}-{profile.district}".encode()
-        ).hexdigest()[:4]
+        suffix = hashlib.md5(f"{profile.id}-{profile.district}".encode()).hexdigest()[:4]
         return f"{surname}{part}_{suffix}"
 
     # -- internal helpers --------------------------------------------------
@@ -607,9 +669,7 @@ class AgentFactory:
         savings = self._estimate_savings(age, income)
         # Housing-income coherence: fix employed adults with zero income and
         # downgrade private housing when no viable means of payment.
-        housing, income, savings = self._apply_housing_income_coherence(
-            housing, occupation, age, income, savings
-        )
+        housing, income, savings = self._apply_housing_income_coherence(housing, occupation, age, income, savings)
         bracket = self._income_to_bracket(income)
         ocean = self._generate_ocean()
 
@@ -659,6 +719,7 @@ class AgentFactory:
 
         Values are 0.0–1.0.  Mean ~0.5, SD ~0.15 gives realistic spread.
         """
+
         def _trait() -> float:
             val = self._rng.gauss(0.50, 0.15)
             return round(max(0.0, min(1.0, val)), 2)
@@ -727,9 +788,7 @@ class AgentFactory:
 
         return income
 
-    def _clamp_income_for_occupation(
-        self, occupation: str, age: int, income: int
-    ) -> int:
+    def _clamp_income_for_occupation(self, occupation: str, age: int, income: int) -> int:
         """Ensure income is consistent with occupation.
 
         Rules:
@@ -844,20 +903,20 @@ class AgentFactory:
         return housing, income, savings
 
     # Professional occupations that are inappropriate for very young or very old agents
-    _PROFESSIONAL_OCCUPATIONS: frozenset[str] = frozenset({
-        "經理及行政人員",
-        "專業人員",
-        "輔助專業人員",
-        "文員",
-        "服務及銷售人員",
-        "工藝及有關人員",
-        "機台及機器操作員",
-        "非技術工人",
-    })
+    _PROFESSIONAL_OCCUPATIONS: frozenset[str] = frozenset(
+        {
+            "經理及行政人員",
+            "專業人員",
+            "輔助專業人員",
+            "文員",
+            "服務及銷售人員",
+            "工藝及有關人員",
+            "機台及機器操作員",
+            "非技術工人",
+        }
+    )
 
-    def _pick_occupation_for_age(
-        self, age: int, occupations: dict[str, float]
-    ) -> str:
+    def _pick_occupation_for_age(self, age: int, occupations: dict[str, float]) -> str:
         """Pick an occupation consistent with the agent's age.
 
         Hard constraints (enforced before any weighted sampling):
@@ -880,8 +939,10 @@ class AgentFactory:
         if age < 22:
             # Exclude all professional/managerial categories + retirement
             allowed = {
-                k: v for k, v in occupations.items()
-                if k not in (
+                k: v
+                for k, v in occupations.items()
+                if k
+                not in (
                     "經理及行政人員",
                     "專業人員",
                     "輔助專業人員",
@@ -910,9 +971,7 @@ class AgentFactory:
 
         return self._weighted_choice(adjusted)
 
-    def _pick_marital_for_age(
-        self, age: int, maritals: dict[str, float]
-    ) -> str:
+    def _pick_marital_for_age(self, age: int, maritals: dict[str, float]) -> str:
         """Adjust marital status probabilities based on age.
 
         Fix HIGH #4: Widowhood is extremely rare under 55 in HK.

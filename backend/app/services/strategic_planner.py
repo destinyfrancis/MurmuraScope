@@ -19,6 +19,7 @@ Usage::
     await planner.update_plans(kg_state, stakeholder_agents, round_num, scenario_description)
     # kg_state.agent_strategies is updated in-place
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -69,9 +70,9 @@ class AgentStrategy:
     round_1_intent: str
     round_2_intent: str
     round_3_intent: str
-    information_posture: str   # "transparent" | "strategic" | "adversarial"
+    information_posture: str  # "transparent" | "strategic" | "adversarial"
     created_round: int
-    is_contested: bool         # True if trust score < _DISTRUST_THRESHOLD
+    is_contested: bool  # True if trust score < _DISTRUST_THRESHOLD
 
 
 class StrategicPlanner:
@@ -82,7 +83,7 @@ class StrategicPlanner:
 
     async def update_plans(
         self,
-        kg_state: Any,           # KGSessionState
+        kg_state: Any,  # KGSessionState
         stakeholder_agents: list[dict[str, Any]],
         round_num: int,
         scenario_description: str,
@@ -123,7 +124,8 @@ class StrategicPlanner:
 
         logger.info(
             "StrategicPlanner: updated plans for %d stakeholder agents at round %d",
-            len(stakeholder_agents), round_num,
+            len(stakeholder_agents),
+            round_num,
         )
 
     def get_strategy_context(

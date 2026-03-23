@@ -14,6 +14,7 @@ Covers:
 from __future__ import annotations
 
 import dataclasses
+
 import pytest
 
 from backend.app.services.bank_agent import (
@@ -23,10 +24,10 @@ from backend.app.services.bank_agent import (
     CreditDecision,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 class _MacroStub:
     """Lightweight macro stub — only provides attributes used by BankAgent."""
@@ -65,10 +66,10 @@ def _crisis_macro() -> _MacroStub:
     """Severe stress scenario: high unemployment, crashed property & HSI."""
     return _MacroStub(
         hibor_1m=0.08,
-        unemployment_rate=0.10,   # 10%
-        ccl_index=80.0,           # ~47% drop from 150
-        hsi_level=10_000.0,       # -50% from 20k
-        gdp_growth=-0.05,         # -5%
+        unemployment_rate=0.10,  # 10%
+        ccl_index=80.0,  # ~47% drop from 150
+        hsi_level=10_000.0,  # -50% from 20k
+        gdp_growth=-0.05,  # -5%
         consumer_confidence=15.0,
     )
 
@@ -76,6 +77,7 @@ def _crisis_macro() -> _MacroStub:
 # ---------------------------------------------------------------------------
 # BankState immutability
 # ---------------------------------------------------------------------------
+
 
 def test_bank_state_is_frozen() -> None:
     """BankState must be frozen (immutable)."""
@@ -98,14 +100,22 @@ def test_bank_state_default_fields() -> None:
 def test_bank_state_to_dict_includes_all_keys() -> None:
     """to_dict() must include key fields for serialisation."""
     d = BankState().to_dict()
-    for key in ("ltv_cap", "npl_ratio", "reserve_ratio", "credit_growth_yoy",
-                "interbank_spread", "bank_id", "systemic_risk_score"):
+    for key in (
+        "ltv_cap",
+        "npl_ratio",
+        "reserve_ratio",
+        "credit_growth_yoy",
+        "interbank_spread",
+        "bank_id",
+        "systemic_risk_score",
+    ):
         assert key in d, f"Missing key: {key}"
 
 
 # ---------------------------------------------------------------------------
 # update_credit_cycle — normal macro
 # ---------------------------------------------------------------------------
+
 
 def test_normal_macro_gives_full_ltv() -> None:
     """Under benign macro the bank's LTV cap should remain near 0.60 (default)."""
@@ -136,6 +146,7 @@ def test_credit_cycle_updates_internal_state() -> None:
 # ---------------------------------------------------------------------------
 # update_credit_cycle — crisis macro
 # ---------------------------------------------------------------------------
+
 
 def test_crisis_macro_tightens_ltv() -> None:
     """Under crisis conditions the LTV cap must tighten below the normal 60%."""
@@ -191,6 +202,7 @@ def test_systemic_risk_higher_in_crisis() -> None:
 # ---------------------------------------------------------------------------
 # assess_mortgage
 # ---------------------------------------------------------------------------
+
 
 def test_mortgage_approved_low_dsr() -> None:
     """High income vs moderate loan → DSR < 50% → approved."""
@@ -265,6 +277,7 @@ def test_mortgage_systemic_risk_propagated() -> None:
 # update_from_macro — credit crunch signalling
 # ---------------------------------------------------------------------------
 
+
 def test_credit_crunch_signal_emitted_on_tightening() -> None:
     """When LTV tightens >5pp in a single step, a CreditCrunchSignal is returned."""
     # Force a large NPL by providing extreme crisis macro; then call update_from_macro
@@ -306,13 +319,10 @@ def test_crunch_signal_is_frozen() -> None:
 
 def test_crunch_severity_levels() -> None:
     """Verify severity thresholds are correctly applied to CreditCrunchSignal."""
+
     # We construct signals directly to test severity logic
     def _make_signal(reduction: float) -> CreditCrunchSignal:
-        severity = (
-            "severe" if reduction > 0.15
-            else "moderate" if reduction > 0.08
-            else "mild"
-        )
+        severity = "severe" if reduction > 0.15 else "moderate" if reduction > 0.08 else "mild"
         return CreditCrunchSignal(
             bank_id="test",
             severity=severity,
@@ -328,6 +338,7 @@ def test_crunch_severity_levels() -> None:
 # ---------------------------------------------------------------------------
 # compute_macro_feedback
 # ---------------------------------------------------------------------------
+
 
 def test_macro_feedback_empty_under_neutral_state() -> None:
     """With baseline bank state and baseline macro, feedback deltas should be near-zero."""
@@ -365,6 +376,7 @@ def test_macro_feedback_returns_dict() -> None:
 # ---------------------------------------------------------------------------
 # BankAgent custom bank_id
 # ---------------------------------------------------------------------------
+
 
 def test_custom_bank_id_stored_in_state() -> None:
     """BankAgent created with custom bank_id propagates it to BankState."""

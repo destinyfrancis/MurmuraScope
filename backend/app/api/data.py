@@ -10,17 +10,19 @@ logger = get_logger("api.data")
 
 router = APIRouter(prefix="/data", tags=["data"])
 
-_ALLOWED_SNAPSHOT_METRICS = frozenset({
-    "ccl_index",
-    "hsi_level",
-    "gdp_growth",
-    "unemployment_rate",
-    "consumer_confidence",
-    "inflation_rate",
-    "median_income",
-    "avg_price_psf",
-    "rental_yield",
-})
+_ALLOWED_SNAPSHOT_METRICS = frozenset(
+    {
+        "ccl_index",
+        "hsi_level",
+        "gdp_growth",
+        "unemployment_rate",
+        "consumer_confidence",
+        "inflation_rate",
+        "median_income",
+        "avg_price_psf",
+        "rental_yield",
+    }
+)
 
 # Metrics to surface per category.  Extend this dict as new metrics are stored.
 _DASHBOARD_METRICS: dict[str, list[str]] = {
@@ -50,7 +52,7 @@ async def get_dashboard() -> APIResponse:
                     result[category][metric] = float(row["value"]) if row else 0.0
                     if row and row["period"] > latest_update:
                         latest_update = row["period"]
-    except Exception as e:
+    except Exception:
         logger.exception("Failed to fetch dashboard data")
         return APIResponse(success=False, data=None, error="Failed to fetch dashboard data")
 
@@ -90,7 +92,7 @@ async def get_snapshots(
         async with get_db() as db:
             cursor = await db.execute(sql, params)
             rows = await cursor.fetchall()
-    except Exception as e:
+    except Exception:
         logger.exception("Failed to fetch snapshots for metric=%s", metric)
         return APIResponse(success=False, data=None, error="Failed to fetch snapshot data")
 

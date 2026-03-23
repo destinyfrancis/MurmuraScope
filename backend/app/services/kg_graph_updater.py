@@ -44,17 +44,36 @@ _LLM_BATCH_SIZE = 10
 _MIN_CONTENT_LENGTH = 15
 
 # Action types that produce meaningful activity descriptions
-_CONTENT_ACTIONS = frozenset({
-    "post", "create_post", "repost", "quote_post", "create_comment",
-})
-_SOCIAL_ACTIONS = frozenset({
-    "follow", "unfollow", "like_post", "like", "dislike_post",
-    "mute", "unmute",
-})
-_DECISION_ACTIONS = frozenset({
-    "buy_property", "emigrate", "invest", "have_child",
-    "adjust_spending", "employment_change",
-})
+_CONTENT_ACTIONS = frozenset(
+    {
+        "post",
+        "create_post",
+        "repost",
+        "quote_post",
+        "create_comment",
+    }
+)
+_SOCIAL_ACTIONS = frozenset(
+    {
+        "follow",
+        "unfollow",
+        "like_post",
+        "like",
+        "dislike_post",
+        "mute",
+        "unmute",
+    }
+)
+_DECISION_ACTIONS = frozenset(
+    {
+        "buy_property",
+        "emigrate",
+        "invest",
+        "have_child",
+        "adjust_spending",
+        "employment_change",
+    }
+)
 
 # Relation types discoverable from agent activities
 _ACTIVITY_RELATION_TYPES = (
@@ -110,15 +129,10 @@ class KGEvolutionStats:
 def _describe_post(username: str, content: str, sentiment: str, topics: list[str]) -> str:
     """Generate natural-language description of a post activity."""
     topic_str = "、".join(topics) if topics else "一般話題"
-    sentiment_zh = {"positive": "正面", "negative": "負面", "neutral": "中立"}.get(
-        sentiment, "中立"
-    )
+    sentiment_zh = {"positive": "正面", "negative": "負面", "neutral": "中立"}.get(sentiment, "中立")
     # Truncate content for LLM context efficiency
     short_content = content[:200] + "..." if len(content) > 200 else content
-    return (
-        f"{username} 發佈了一則{sentiment_zh}帖文，"
-        f"討論{topic_str}：「{short_content}」"
-    )
+    return f"{username} 發佈了一則{sentiment_zh}帖文，討論{topic_str}：「{short_content}」"
 
 
 def _describe_social_action(
@@ -163,17 +177,26 @@ def _describe_decision(
     }.get(decision_type, "生活決策")
 
     action_zh = {
-        "buy": "決定買樓", "wait": "決定觀望", "sell": "決定賣樓",
+        "buy": "決定買樓",
+        "wait": "決定觀望",
+        "sell": "決定賣樓",
         "rent_more": "決定繼續租樓",
-        "emigrate": "決定移民", "stay": "決定留港",
-        "invest_stocks": "決定投資股票", "diversify": "決定分散投資",
+        "emigrate": "決定移民",
+        "stay": "決定留港",
+        "invest_stocks": "決定投資股票",
+        "diversify": "決定分散投資",
         "hold_cash": "決定持有現金",
-        "have_child": "決定生育", "delay": "決定推遲生育",
+        "have_child": "決定生育",
+        "delay": "決定推遲生育",
         "no_child": "決定不生育",
-        "cut_spending": "決定減少開支", "save_more": "決定增加儲蓄",
-        "spend_more": "決定增加消費", "upgrade": "決定消費升級",
-        "quit": "決定辭職", "strike": "決定罷工",
-        "lie_flat": "決定躺平", "seek_promotion": "決定爭取晉升",
+        "cut_spending": "決定減少開支",
+        "save_more": "決定增加儲蓄",
+        "spend_more": "決定增加消費",
+        "upgrade": "決定消費升級",
+        "quit": "決定辭職",
+        "strike": "決定罷工",
+        "lie_flat": "決定躺平",
+        "seek_promotion": "決定爭取晉升",
     }.get(action_taken, action_taken)
 
     short_reason = reasoning[:150] + "..." if len(reasoning) > 150 else reasoning
@@ -251,6 +274,7 @@ class KGGraphUpdater:
         """Lazy-load LLM client to avoid circular imports."""
         if self._llm is None:
             from backend.app.utils.llm_client import get_default_client  # noqa: PLC0415
+
             self._llm = get_default_client()
         return self._llm
 
@@ -303,32 +327,25 @@ class KGGraphUpdater:
         all_updated_edges: list[dict[str, Any]] = []
 
         for batch_start in range(0, len(descriptions), _LLM_BATCH_SIZE):
-            batch = descriptions[batch_start:batch_start + _LLM_BATCH_SIZE]
-            batch_text = "\n".join(
-                f"- {d.description}" for d in batch
-            )
+            batch = descriptions[batch_start : batch_start + _LLM_BATCH_SIZE]
+            batch_text = "\n".join(f"- {d.description}" for d in batch)
 
             try:
-                result = await self._extract_entities(
-                    existing_nodes, batch_text, session_id
-                )
+                result = await self._extract_entities(existing_nodes, batch_text, session_id)
                 all_new_nodes.extend(result.get("new_nodes", []))
                 all_new_edges.extend(result.get("new_edges", []))
                 all_updated_edges.extend(result.get("updated_edges", []))
             except Exception:
                 logger.exception(
                     "LLM extraction failed for batch session=%s round=%d",
-                    session_id, round_number,
+                    session_id,
+                    round_number,
                 )
 
         # Step 6: Persist to DB
-        nodes_added, nodes_updated = await self._persist_nodes(
-            session_id, all_new_nodes, existing_nodes
-        )
+        nodes_added, nodes_updated = await self._persist_nodes(session_id, all_new_nodes, existing_nodes)
         edges_added = await self._persist_new_edges(session_id, all_new_edges, round_number=round_number)
-        edges_updated = await self._persist_edge_updates(
-            session_id, all_updated_edges
-        )
+        edges_updated = await self._persist_edge_updates(session_id, all_updated_edges)
 
         stats = KGEvolutionStats(
             round_number=round_number,
@@ -342,7 +359,11 @@ class KGGraphUpdater:
 
         logger.info(
             "KG evolution session=%s round=%d: +%d nodes, +%d edges, ~%d edge updates",
-            session_id, round_number, nodes_added, edges_added, edges_updated,
+            session_id,
+            round_number,
+            nodes_added,
+            edges_added,
+            edges_updated,
         )
 
         return stats
@@ -351,9 +372,7 @@ class KGGraphUpdater:
     # Data loading
     # ------------------------------------------------------------------
 
-    async def _load_round_actions(
-        self, session_id: str, round_number: int
-    ) -> list[dict[str, Any]]:
+    async def _load_round_actions(self, session_id: str, round_number: int) -> list[dict[str, Any]]:
         """Load simulation_actions for the given round."""
         try:
             async with get_db() as db:
@@ -382,13 +401,12 @@ class KGGraphUpdater:
         except Exception:
             logger.exception(
                 "_load_round_actions failed session=%s round=%d",
-                session_id, round_number,
+                session_id,
+                round_number,
             )
             return []
 
-    async def _load_round_decisions(
-        self, session_id: str, round_number: int
-    ) -> list[dict[str, Any]]:
+    async def _load_round_decisions(self, session_id: str, round_number: int) -> list[dict[str, Any]]:
         """Load agent_decisions for the given round."""
         try:
             async with get_db() as db:
@@ -412,29 +430,25 @@ class KGGraphUpdater:
         except Exception:
             logger.debug(
                 "_load_round_decisions failed (table may not exist) session=%s round=%d",
-                session_id, round_number,
+                session_id,
+                round_number,
             )
             return []
 
-    async def _load_existing_nodes(
-        self, session_id: str
-    ) -> list[dict[str, Any]]:
+    async def _load_existing_nodes(self, session_id: str) -> list[dict[str, Any]]:
         """Load all existing kg_nodes for dedup context."""
         try:
             async with get_db() as db:
                 cursor = await db.execute(
-                    "SELECT id, entity_type, title, description "
-                    "FROM kg_nodes WHERE session_id = ? LIMIT 200",
+                    "SELECT id, entity_type, title, description FROM kg_nodes WHERE session_id = ? LIMIT 200",
                     (session_id,),
                 )
                 rows = await cursor.fetchall()
-            return [
-                {"id": r[0], "entity_type": r[1], "title": r[2], "description": r[3] or ""}
-                for r in rows
-            ]
+            return [{"id": r[0], "entity_type": r[1], "title": r[2], "description": r[3] or ""} for r in rows]
         except Exception:
             logger.exception(
-                "_load_existing_nodes failed session=%s", session_id,
+                "_load_existing_nodes failed session=%s",
+                session_id,
             )
             return []
 
@@ -461,28 +475,30 @@ class KGGraphUpdater:
 
             if action_type in _CONTENT_ACTIONS and len(content) >= _MIN_CONTENT_LENGTH:
                 desc_text = _describe_post(username, content, sentiment, topics)
-                descriptions.append(ActivityDescription(
-                    agent_username=username,
-                    agent_id=action.get("agent_id"),
-                    round_number=round_number,
-                    action_type=action_type,
-                    description=desc_text,
-                    sentiment=sentiment,
-                    topics=topics,
-                ))
-            elif action_type in _SOCIAL_ACTIONS and target:
-                desc_text = _describe_social_action(
-                    username, action_type, target, content
+                descriptions.append(
+                    ActivityDescription(
+                        agent_username=username,
+                        agent_id=action.get("agent_id"),
+                        round_number=round_number,
+                        action_type=action_type,
+                        description=desc_text,
+                        sentiment=sentiment,
+                        topics=topics,
+                    )
                 )
-                descriptions.append(ActivityDescription(
-                    agent_username=username,
-                    agent_id=action.get("agent_id"),
-                    round_number=round_number,
-                    action_type=action_type,
-                    description=desc_text,
-                    sentiment=sentiment,
-                    topics=topics,
-                ))
+            elif action_type in _SOCIAL_ACTIONS and target:
+                desc_text = _describe_social_action(username, action_type, target, content)
+                descriptions.append(
+                    ActivityDescription(
+                        agent_username=username,
+                        agent_id=action.get("agent_id"),
+                        round_number=round_number,
+                        action_type=action_type,
+                        description=desc_text,
+                        sentiment=sentiment,
+                        topics=topics,
+                    )
+                )
 
         for decision in decisions:
             desc_text = _describe_decision(
@@ -491,15 +507,17 @@ class KGGraphUpdater:
                 decision["action"],
                 decision["reasoning"],
             )
-            descriptions.append(ActivityDescription(
-                agent_username=decision["username"],
-                agent_id=decision["agent_id"],
-                round_number=round_number,
-                action_type=decision["decision_type"],
-                description=desc_text,
-                sentiment="neutral",
-                topics=[decision["decision_type"]],
-            ))
+            descriptions.append(
+                ActivityDescription(
+                    agent_username=decision["username"],
+                    agent_id=decision["agent_id"],
+                    round_number=round_number,
+                    action_type=decision["decision_type"],
+                    description=desc_text,
+                    sentiment="neutral",
+                    topics=[decision["decision_type"]],
+                )
+            )
 
         return descriptions
 
@@ -524,9 +542,7 @@ class KGGraphUpdater:
             {
                 "role": "user",
                 "content": _EXTRACTION_USER_TEMPLATE.format(
-                    existing_nodes_json=json.dumps(
-                        existing_summary, ensure_ascii=False, indent=2
-                    ),
+                    existing_nodes_json=json.dumps(existing_summary, ensure_ascii=False, indent=2),
                     activity_descriptions=activity_text,
                 ),
             },
@@ -604,12 +620,14 @@ class KGGraphUpdater:
             if node_id in existing_ids:
                 node_id = f"{node_id}_{uuid.uuid4().hex[:6]}"
 
-            to_insert.append({
-                "id": node_id,
-                "entity_type": entity_type,
-                "title": title,
-                "description": description,
-            })
+            to_insert.append(
+                {
+                    "id": node_id,
+                    "entity_type": entity_type,
+                    "title": title,
+                    "description": description,
+                }
+            )
             existing_titles.add(title.lower())
             existing_ids.add(node_id)
 
@@ -620,11 +638,7 @@ class KGGraphUpdater:
                         """INSERT OR IGNORE INTO kg_nodes
                            (id, session_id, entity_type, title, description, properties)
                            VALUES (?, ?, ?, ?, ?, '{}')""",
-                        [
-                            (n["id"], session_id, n["entity_type"],
-                             n["title"], n["description"])
-                            for n in to_insert
-                        ],
+                        [(n["id"], session_id, n["entity_type"], n["title"], n["description"]) for n in to_insert],
                     )
                     await db.commit()
             except Exception:
@@ -678,10 +692,18 @@ class KGGraphUpdater:
                 weight = 0.5
             weight = max(0.1, min(1.0, float(weight)))
 
-            validated.append((
-                session_id, src, tgt, rel,
-                edge.get("description", ""), weight, round_number, round_number,
-            ))
+            validated.append(
+                (
+                    session_id,
+                    src,
+                    tgt,
+                    rel,
+                    edge.get("description", ""),
+                    weight,
+                    round_number,
+                    round_number,
+                )
+            )
 
         if not validated:
             return 0
@@ -734,9 +756,7 @@ class KGGraphUpdater:
                         count += 1
                 await db.commit()
         except Exception:
-            logger.exception(
-                "_persist_edge_updates failed session=%s", session_id
-            )
+            logger.exception("_persist_edge_updates failed session=%s", session_id)
 
         return count
 

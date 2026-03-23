@@ -16,17 +16,15 @@ import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
-import pytest_asyncio
 
 from backend.app.services.calibration_config import (
-    CalibrationParams,
     DEFAULT_CALIBRATION,
+    CalibrationParams,
 )
 from backend.app.services.parameter_calibrator import (
     HistoricalDataPoint,
     ParameterCalibrator,
 )
-
 
 # ===========================================================================
 # CalibrationParams unit tests
@@ -128,20 +126,22 @@ class TestComputeRmse:
 
     def test_rmse_lower_for_better_params(self):
         """A near-perfect parameter set should have lower RMSE than random."""
-        data = [self._make_point(
-            neg_ratio=0.65,
-            pos_ratio=0.20,
-            emigration_freq=0.25,
-            property_neg=True,
-            employment_neg=False,
-            stock_pos=False,
-            observed_confidence_delta=-0.3,
-            observed_gdp_delta=-0.001,
-            observed_hsi_pct_change=0.0,
-            observed_ccl_pct_change=-0.001,
-            observed_unemployment_delta=0.0,
-            observed_net_migration_delta=-100.0,
-        )]
+        data = [
+            self._make_point(
+                neg_ratio=0.65,
+                pos_ratio=0.20,
+                emigration_freq=0.25,
+                property_neg=True,
+                employment_neg=False,
+                stock_pos=False,
+                observed_confidence_delta=-0.3,
+                observed_gdp_delta=-0.001,
+                observed_hsi_pct_change=0.0,
+                observed_ccl_pct_change=-0.001,
+                observed_unemployment_delta=0.0,
+                observed_net_migration_delta=-100.0,
+            )
+        ]
         # Params closely matching the observed data
         good_params = dataclasses.replace(
             DEFAULT_CALIBRATION,
@@ -168,10 +168,7 @@ class TestComputeRmse:
 
     def test_rmse_multiple_points(self):
         """RMSE should remain finite and non-negative for many data points."""
-        data = [
-            self._make_point(neg_ratio=0.6 + i * 0.01, period=f"2024-Q{i + 1}")
-            for i in range(5)
-        ]
+        data = [self._make_point(neg_ratio=0.6 + i * 0.01, period=f"2024-Q{i + 1}") for i in range(5)]
         rmse = ParameterCalibrator._compute_rmse(DEFAULT_CALIBRATION, data)
         assert 0.0 <= rmse < float("inf")
 
@@ -281,9 +278,7 @@ class TestSaveLoadCalibration:
         with patch("backend.app.services.parameter_calibrator.get_db") as mock_get_db:
             # Create a real async context manager backed by the test DB
             mock_get_db.return_value = _AsyncDbContextManager(test_db)
-            row_id = await calibrator.save_calibration(
-                custom, label="test_run", rmse=0.042, data_period="2022-2024"
-            )
+            row_id = await calibrator.save_calibration(custom, label="test_run", rmse=0.042, data_period="2022-2024")
             assert row_id > 0
 
             loaded = await calibrator.load_best_calibration()
@@ -339,12 +334,21 @@ class TestMacroControllerAcceptsCalibration:
         from backend.app.services.macro_state import MacroState
 
         state = MacroState(
-            hibor_1m=0.04, prime_rate=0.0575,
-            unemployment_rate=0.029, median_monthly_income=20_000,
-            ccl_index=152.3, avg_sqft_price={}, mortgage_cap=0.70,
-            stamp_duty_rates={}, gdp_growth=0.032, cpi_yoy=0.021,
-            hsi_level=16_800.0, consumer_confidence=88.5,
-            net_migration=-12_000, birth_rate=5.8, policy_flags={},
+            hibor_1m=0.04,
+            prime_rate=0.0575,
+            unemployment_rate=0.029,
+            median_monthly_income=20_000,
+            ccl_index=152.3,
+            avg_sqft_price={},
+            mortgage_cap=0.70,
+            stamp_duty_rates={},
+            gdp_growth=0.032,
+            cpi_yoy=0.021,
+            hsi_level=16_800.0,
+            consumer_confidence=88.5,
+            net_migration=-12_000,
+            birth_rate=5.8,
+            policy_flags={},
         )
 
         # 65% negative posts → with default threshold (0.60) triggers reduction
@@ -365,9 +369,7 @@ class TestMacroControllerAcceptsCalibration:
             mock_get_db.return_value.__aexit__ = AsyncMock(return_value=False)
 
             # Default params: 65% neg > 60% threshold → confidence should drop
-            updated_default = await mc.update_from_actions(
-                state, "sess1", 5, calibration=DEFAULT_CALIBRATION
-            )
+            updated_default = await mc.update_from_actions(state, "sess1", 5, calibration=DEFAULT_CALIBRATION)
 
         with patch("backend.app.utils.db.get_db") as mock_get_db:
             mock_cursor = AsyncMock()
@@ -378,9 +380,7 @@ class TestMacroControllerAcceptsCalibration:
             mock_get_db.return_value.__aexit__ = AsyncMock(return_value=False)
 
             # Tight params: 65% neg < 70% threshold → no change
-            updated_tight = await mc.update_from_actions(
-                state, "sess1", 5, calibration=tight_params
-            )
+            updated_tight = await mc.update_from_actions(state, "sess1", 5, calibration=tight_params)
 
         assert updated_default.consumer_confidence < state.consumer_confidence
         assert updated_tight.consumer_confidence == state.consumer_confidence
@@ -392,12 +392,21 @@ class TestMacroControllerAcceptsCalibration:
         from backend.app.services.macro_state import MacroState
 
         state = MacroState(
-            hibor_1m=0.04, prime_rate=0.0575,
-            unemployment_rate=0.029, median_monthly_income=20_000,
-            ccl_index=152.3, avg_sqft_price={}, mortgage_cap=0.70,
-            stamp_duty_rates={}, gdp_growth=0.032, cpi_yoy=0.021,
-            hsi_level=16_800.0, consumer_confidence=119.8,
-            net_migration=-12_000, birth_rate=5.8, policy_flags={},
+            hibor_1m=0.04,
+            prime_rate=0.0575,
+            unemployment_rate=0.029,
+            median_monthly_income=20_000,
+            ccl_index=152.3,
+            avg_sqft_price={},
+            mortgage_cap=0.70,
+            stamp_duty_rates={},
+            gdp_growth=0.032,
+            cpi_yoy=0.021,
+            hsi_level=16_800.0,
+            consumer_confidence=119.8,
+            net_migration=-12_000,
+            birth_rate=5.8,
+            policy_flags={},
         )
 
         # Very low cap: max confidence = 100
@@ -416,9 +425,7 @@ class TestMacroControllerAcceptsCalibration:
             mock_get_db.return_value.__aenter__ = AsyncMock(return_value=mock_db)
             mock_get_db.return_value.__aexit__ = AsyncMock(return_value=False)
 
-            updated = await mc.update_from_actions(
-                state, "sess1", 5, calibration=capped_params
-            )
+            updated = await mc.update_from_actions(state, "sess1", 5, calibration=capped_params)
 
         assert updated.consumer_confidence <= 100.0
 

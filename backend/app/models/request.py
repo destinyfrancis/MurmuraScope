@@ -14,8 +14,13 @@ class GraphBuildRequest(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     scenario_type: Literal[
-        "property", "emigration", "fertility",
-        "career", "education", "b2b", "macro",
+        "property",
+        "emigration",
+        "fertility",
+        "career",
+        "education",
+        "b2b",
+        "macro",
     ]
     seed_text: str = ""
     upload_files: list[str] | None = None

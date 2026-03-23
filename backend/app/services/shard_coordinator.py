@@ -4,15 +4,16 @@ Splits agent population across N subprocess shards so each shard handles a
 partition of agents.  A shared JSONL queue merges all shard outputs for the
 main simulation runner to consume.
 """
+
 from __future__ import annotations
 
 import asyncio
 import json
 import os
 import tempfile
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import AsyncIterator
 
 from backend.app.utils.logger import get_logger
 
@@ -52,9 +53,7 @@ class ShardState:
     failed: bool = False
 
     # Per-shard queue that feeds the merged stream
-    _queue: asyncio.Queue[dict | None] = field(
-        default_factory=asyncio.Queue, repr=False
-    )
+    _queue: asyncio.Queue[dict | None] = field(default_factory=asyncio.Queue, repr=False)
 
 
 # ---------------------------------------------------------------------------
@@ -94,9 +93,7 @@ class ShardCoordinator:
         # Track reader tasks so they can be cancelled on shutdown
         self._reader_tasks: list[asyncio.Task] = []
         # Patch file shared across shards
-        self._patch_file: Path = Path(
-            tempfile.mktemp(prefix=f"hksim_patch_{session_id}_", suffix=".json")
-        )
+        self._patch_file: Path = Path(tempfile.mktemp(prefix=f"hksim_patch_{session_id}_", suffix=".json"))
 
     # ------------------------------------------------------------------
     # Public API
@@ -154,9 +151,7 @@ class ShardCoordinator:
         On timeout, the timed-out shard is marked as failed and execution
         continues with partial quorum.
         """
-        active = [
-            sid for sid, s in self._shards.items() if not s.failed
-        ]
+        active = [sid for sid, s in self._shards.items() if not s.failed]
         tasks = []
         for sid in active:
             event = self._sync_events.get(sid)
@@ -166,20 +161,12 @@ class ShardCoordinator:
         if not tasks:
             return
 
-        done, pending = await asyncio.wait(
-            tasks, timeout=timeout, return_when=asyncio.ALL_COMPLETED
-        )
+        done, pending = await asyncio.wait(tasks, timeout=timeout, return_when=asyncio.ALL_COMPLETED)
         if pending:
-            timed_out = [
-                sid
-                for sid, s in self._shards.items()
-                if not self._sync_events[sid].is_set() and not s.failed
-            ]
+            timed_out = [sid for sid, s in self._shards.items() if not self._sync_events[sid].is_set() and not s.failed]
             for sid in timed_out:
                 self._shards[sid].failed = True
-                logger.error(
-                    "Shard %d timed out at round barrier — marking failed", sid
-                )
+                logger.error("Shard %d timed out at round barrier — marking failed", sid)
             for task in pending:
                 task.cancel()
 
@@ -210,9 +197,7 @@ class ShardCoordinator:
                     try:
                         await asyncio.wait_for(state.process.wait(), timeout=3.0)
                     except asyncio.TimeoutError:
-                        logger.warning(
-                            "Shard %d did not exit within 3s after kill", shard_id
-                        )
+                        logger.warning("Shard %d did not exit within 3s after kill", shard_id)
                 except OSError:
                     pass  # Process already dead or otherwise inaccessible
                 logger.info("Shard %d terminated", shard_id)

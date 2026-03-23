@@ -3,9 +3,9 @@
 import json
 
 from fastapi import APIRouter, HTTPException, Request
-from backend.app.api.auth import _limiter
 from pydantic import BaseModel as _BaseModel
 
+from backend.app.api.auth import _limiter
 from backend.app.models.request import (
     AgentInterviewRequest,
     ReportChatRequest,
@@ -13,7 +13,6 @@ from backend.app.models.request import (
 )
 from backend.app.models.response import APIResponse
 from backend.app.services.report_agent import ReportAgent
-from backend.app.services.simulation_ipc import SimulationIPC
 from backend.app.services.simulation_manager import get_simulation_manager
 from backend.app.utils.db import get_db
 from backend.app.utils.logger import get_logger
@@ -30,6 +29,7 @@ async def _release_subprocess(session_id: str) -> None:
         await mgr._runner._subprocess_mgr.release_after_report(session_id)
     except Exception:
         logger.debug("release_subprocess: no-op for session %s", session_id)
+
 
 _CHAT_AGENT_SYSTEM = """You are roleplaying as a simulation agent in a social simulation.
 Stay in character based on your demographic profile, personality, and memories.
@@ -104,15 +104,11 @@ async def get_report(report_id: str) -> APIResponse:
     """Retrieve a previously generated report."""
     try:
         async with get_db() as db:
-            cursor = await db.execute(
-                "SELECT * FROM reports WHERE id = ?", (report_id,)
-            )
+            cursor = await db.execute("SELECT * FROM reports WHERE id = ?", (report_id,))
             row = await cursor.fetchone()
 
         if row is None:
-            raise HTTPException(
-                status_code=404, detail=f"Report {report_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Report {report_id} not found")
 
         report = {
             "report_id": row["id"],
@@ -209,9 +205,7 @@ async def interview_agent(req: AgentInterviewRequest) -> APIResponse:
                     )
                 ).fetchall()
             if mem_rows:
-                memory_ctx = "近期記憶：\n" + "\n".join(
-                    f"- {r['memory_text']}" for r in mem_rows
-                )
+                memory_ctx = "近期記憶：\n" + "\n".join(f"- {r['memory_text']}" for r in mem_rows)
         except Exception:
             logger.debug("Could not load memories for agent %s", req.agent_id)
 
@@ -230,8 +224,7 @@ async def interview_agent(req: AgentInterviewRequest) -> APIResponse:
                 ).fetchall()
             if action_rows:
                 action_ctx = "最近發帖：\n" + "\n".join(
-                    f"- [第{r['round_number']}輪/{r['sentiment']}] {r['content'][:100]}"
-                    for r in action_rows
+                    f"- [第{r['round_number']}輪/{r['sentiment']}] {r['content'][:100]}" for r in action_rows
                 )
         except Exception:
             logger.debug("Could not load actions for agent %s", req.agent_id)
@@ -239,10 +232,7 @@ async def interview_agent(req: AgentInterviewRequest) -> APIResponse:
         # Build enriched system prompt
         enriched_system = _CHAT_AGENT_SYSTEM
         if profile_ctx or memory_ctx or action_ctx:
-            enriched_system += (
-                f"\n\n你的角色資料：\n{profile_ctx}"
-                f"\n{memory_ctx}\n{action_ctx}"
-            )
+            enriched_system += f"\n\n你的角色資料：\n{profile_ctx}\n{memory_ctx}\n{action_ctx}"
 
         # Call LLM with enriched context
         from backend.app.services.report_agent import _call_llm  # noqa: PLC0415
@@ -275,8 +265,8 @@ async def interview_agent(req: AgentInterviewRequest) -> APIResponse:
 @router.get("/{report_id}/pdf")
 async def export_report_pdf(report_id: str):
     """Export report as PDF"""
-    import io
     import re
+
     try:
         from weasyprint import HTML
     except ImportError:
@@ -327,6 +317,7 @@ async def export_report_pdf(report_id: str):
             await _release_subprocess(sid)
 
         from fastapi.responses import Response  # noqa: PLC0415
+
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
@@ -343,6 +334,7 @@ async def export_report_pdf(report_id: str):
 async def share_report(report_id: str) -> APIResponse:
     """Generate a share token for public access to a report."""
     import secrets
+
     try:
         token = secrets.token_urlsafe(16)
         async with get_db() as db:
@@ -393,6 +385,7 @@ async def release_session_subprocess(session_id: str) -> APIResponse:
 # XAI tool interactive endpoint
 # ---------------------------------------------------------------------------
 
+
 class XAIToolRequest(_BaseModel):
     tool_name: str
     params: dict = {}
@@ -401,7 +394,7 @@ class XAIToolRequest(_BaseModel):
 @router.post("/{session_id}/xai-tool", response_model=APIResponse)
 async def invoke_xai_tool(session_id: str, req: XAIToolRequest) -> APIResponse:
     """Invoke a single named XAI tool and return its output."""
-    from backend.app.services.report_agent import TOOLS, _TOOL_HANDLERS
+    from backend.app.services.report_agent import _TOOL_HANDLERS, TOOLS
 
     if req.tool_name not in TOOLS:
         raise HTTPException(
@@ -419,6 +412,6 @@ async def invoke_xai_tool(session_id: str, req: XAIToolRequest) -> APIResponse:
         return APIResponse(success=True, data={"tool": req.tool_name, "result": result})
     except HTTPException:
         raise
-    except Exception as exc:
+    except Exception:
         logger.exception("invoke_xai_tool failed: tool=%s session=%s", req.tool_name, session_id)
         return APIResponse(success=False, data=None, error="Internal server error")

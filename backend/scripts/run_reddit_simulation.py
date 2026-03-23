@@ -38,8 +38,8 @@ logger = logging.getLogger("reddit_simulation")
 try:
     from oasis import oasis
     from oasis.social_agent.agents_generator import generate_agents
-    from oasis.social_platform.typing import DefaultPlatformType, ActionType
     from oasis.social_platform.channel import Channel
+    from oasis.social_platform.typing import ActionType, DefaultPlatformType
 except ImportError as exc:
     logger.error(
         "OASIS framework not installed. "
@@ -49,16 +49,18 @@ except ImportError as exc:
         exc,
     )
     print(
-        json.dumps({
-            "type": "error",
-            "data": {
-                "platform": "reddit",
-                "message": (
-                    "OASIS framework not found. Install it with "
-                    "'pip install oasis-social-sim' or add it to PYTHONPATH."
-                ),
-            },
-        }),
+        json.dumps(
+            {
+                "type": "error",
+                "data": {
+                    "platform": "reddit",
+                    "message": (
+                        "OASIS framework not found. Install it with "
+                        "'pip install oasis-social-sim' or add it to PYTHONPATH."
+                    ),
+                },
+            }
+        ),
         flush=True,
     )
     sys.exit(1)
@@ -68,37 +70,37 @@ try:
     from camel.types import ModelPlatformType
 except ImportError as exc:
     logger.error(
-        "CAMEL-AI not installed. Install via: pip install camel-ai. "
-        "Original error: %s",
+        "CAMEL-AI not installed. Install via: pip install camel-ai. Original error: %s",
         exc,
     )
     print(
-        json.dumps({
-            "type": "error",
-            "data": {
-                "platform": "reddit",
-                "message": "CAMEL-AI not found. Install with 'pip install camel-ai'.",
-            },
-        }),
+        json.dumps(
+            {
+                "type": "error",
+                "data": {
+                    "platform": "reddit",
+                    "message": "CAMEL-AI not found. Install with 'pip install camel-ai'.",
+                },
+            }
+        ),
         flush=True,
     )
     sys.exit(1)
 
 # ManualAction import (best-effort; used for shock injection)
 try:
-    from oasis.environment.env_action import ManualAction, LLMAction  # noqa: F401
+    from oasis.environment.env_action import LLMAction, ManualAction  # noqa: F401
+
     _HAS_MANUAL_ACTION = True
 except ImportError:
     _HAS_MANUAL_ACTION = False
-    logger.warning(
-        "oasis.environment.env_action not found — "
-        "shock injection via ManualAction will be skipped."
-    )
+    logger.warning("oasis.environment.env_action not found — shock injection via ManualAction will be skipped.")
 
 
 # ---------------------------------------------------------------------------
 # JSONL IPC helpers
 # ---------------------------------------------------------------------------
+
 
 def emit(msg_type: str, data: dict[str, Any]) -> None:
     """Write a JSONL message to stdout."""
@@ -108,12 +110,15 @@ def emit(msg_type: str, data: dict[str, Any]) -> None:
 
 
 def emit_progress(round_num: int, total: int, detail: str = "") -> None:
-    emit("progress", {
-        "platform": "reddit",
-        "round": round_num,
-        "total": total,
-        "detail": detail,
-    })
+    emit(
+        "progress",
+        {
+            "platform": "reddit",
+            "round": round_num,
+            "total": total,
+            "detail": detail,
+        },
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -139,10 +144,7 @@ def build_model(config: dict[str, Any]) -> Any:
     if not api_key:
         raise ValueError("llm_api_key is required")
     if not base_url:
-        raise ValueError(
-            f"No base URL for provider '{provider}'. "
-            "Set llm_base_url in config."
-        )
+        raise ValueError(f"No base URL for provider '{provider}'. Set llm_base_url in config.")
 
     return ModelFactory.create(
         model_platform=ModelPlatformType.OPENAI_COMPATIBLE_MODEL,
@@ -182,9 +184,8 @@ _SHOCK_SUBREDDIT_MAP: dict[str, str] = {
 # Shock injection
 # ---------------------------------------------------------------------------
 
-def get_shocks_for_round(
-    shocks: list[dict[str, Any]], round_num: int
-) -> list[dict[str, Any]]:
+
+def get_shocks_for_round(shocks: list[dict[str, Any]], round_num: int) -> list[dict[str, Any]]:
     """Return shocks scheduled for the given round number."""
     return [s for s in shocks if s.get("round_number") == round_num]
 
@@ -210,9 +211,7 @@ async def inject_shock(env: Any, shock: dict[str, Any]) -> None:
         )
         return
 
-    subreddit = _SHOCK_SUBREDDIT_MAP.get(
-        shock.get("shock_type", ""), "HongKong"
-    )
+    subreddit = _SHOCK_SUBREDDIT_MAP.get(shock.get("shock_type", ""), "HongKong")
 
     try:
         manual = ManualAction(
@@ -227,28 +226,32 @@ async def inject_shock(env: Any, shock: dict[str, Any]) -> None:
             subreddit,
             shock.get("round_number", -1),
         )
-        emit("post", {
-            "platform": "reddit",
-            "source": "shock",
-            "shock_type": shock.get("shock_type", ""),
-            "subreddit": subreddit,
-            "round": shock.get("round_number", -1),
-            "content": post_content[:200],
-        })
+        emit(
+            "post",
+            {
+                "platform": "reddit",
+                "source": "shock",
+                "shock_type": shock.get("shock_type", ""),
+                "subreddit": subreddit,
+                "round": shock.get("round_number", -1),
+                "content": post_content[:200],
+            },
+        )
     except Exception as exc:
         logger.error("Failed to inject shock: %s", exc)
-        emit("error", {
-            "platform": "reddit",
-            "message": (
-                f"Shock injection failed at round "
-                f"{shock.get('round_number')}: {exc}"
-            ),
-        })
+        emit(
+            "error",
+            {
+                "platform": "reddit",
+                "message": (f"Shock injection failed at round {shock.get('round_number')}: {exc}"),
+            },
+        )
 
 
 # ---------------------------------------------------------------------------
 # Round stats extraction
 # ---------------------------------------------------------------------------
+
 
 def _extract_round_stats(env: Any, round_num: int) -> dict[str, Any]:
     """Best-effort extraction of round statistics from the OASIS env."""
@@ -298,7 +301,9 @@ async def run_reddit_simulation(config: dict[str, Any]) -> None:
 
     logger.info(
         "Reddit simulation starting — session=%s, rounds=%d, csv=%s",
-        session_id, round_count, agent_csv_path,
+        session_id,
+        round_count,
+        agent_csv_path,
     )
     emit_progress(0, round_count, "Building OASIS Reddit model")
 
@@ -363,11 +368,14 @@ async def run_reddit_simulation(config: dict[str, Any]) -> None:
             await env.step()
         except Exception as exc:
             logger.error("Error in round %d: %s", round_num, exc)
-            emit("error", {
-                "platform": "reddit",
-                "message": f"Round {round_num} failed: {exc}",
-                "round": round_num,
-            })
+            emit(
+                "error",
+                {
+                    "platform": "reddit",
+                    "message": f"Round {round_num} failed: {exc}",
+                    "round": round_num,
+                },
+            )
             continue
 
         round_stats = _extract_round_stats(env, round_num)
@@ -377,7 +385,9 @@ async def run_reddit_simulation(config: dict[str, Any]) -> None:
         emit_progress(round_num, round_count, f"Round {round_num}/{round_count} complete")
         logger.info(
             "Reddit round %d/%d complete — %d actions this round",
-            round_num, round_count, round_action_count,
+            round_num,
+            round_count,
+            round_action_count,
         )
 
     # Final summary
@@ -400,6 +410,7 @@ async def run_reddit_simulation(config: dict[str, Any]) -> None:
 # Config loading
 # ---------------------------------------------------------------------------
 
+
 def load_config(config_path: str) -> dict[str, Any]:
     """Load config JSON from file."""
     path = Path(config_path)
@@ -414,10 +425,9 @@ def load_config(config_path: str) -> dict[str, Any]:
 # CLI entry point
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="MurmuraScope Reddit Simulation (OASIS)"
-    )
+    parser = argparse.ArgumentParser(description="MurmuraScope Reddit Simulation (OASIS)")
     parser.add_argument("--config", required=True, help="Path to config JSON file")
     args = parser.parse_args()
 

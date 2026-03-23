@@ -9,23 +9,21 @@
 - detect_backend env var logic
 - fallback chain on primary failure
 """
+
 from __future__ import annotations
 
-import asyncio
-import os
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
-import pytest
 import httpx
+import pytest
 
 from backend.app.services.local_inference import (
-    InferenceBackend,
-    LocalInferenceAdapter,
     _DEFAULT_OLLAMA_URL,
     _DEFAULT_OPENROUTER_URL,
     _DEFAULT_VLLM_URL,
+    InferenceBackend,
+    LocalInferenceAdapter,
 )
-
 
 # ---------------------------------------------------------------------------
 # InferenceBackend (frozen)
@@ -235,7 +233,6 @@ class TestChatBatch:
 class TestDetectBackend:
     def test_detect_fallback_to_openrouter_when_no_local(self, monkeypatch):
         # urllib.request.urlopen will raise on any URL → both local backends fail
-        import urllib.request
 
         def raise_error(req, timeout=None):
             raise Exception("Connection refused")
@@ -245,7 +242,6 @@ class TestDetectBackend:
         assert backend.name == "openrouter"
 
     def test_detect_prefers_vllm_when_available(self, monkeypatch):
-        import urllib.request
 
         call_count = {"n": 0}
 

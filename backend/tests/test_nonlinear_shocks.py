@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -69,10 +68,10 @@ def test_detect_regime_crisis():
 
     state = _MockState(
         unemployment_rate=7.5,  # > 6.0 ✓
-        hsi_level=14_000,        # < 15_000 ✓
-        ccl_index=110,           # < 120 ✓
+        hsi_level=14_000,  # < 15_000 ✓
+        ccl_index=110,  # < 120 ✓
         consumer_confidence=30,  # < 35 ✓
-        gdp_growth=-3.0,         # < -2.0 ✓
+        gdp_growth=-3.0,  # < -2.0 ✓
     )
     assert _detect_regime(state) == "crisis"
 
@@ -83,8 +82,8 @@ def test_detect_regime_crisis_exactly_three_signals():
 
     state = _MockState(
         unemployment_rate=6.5,  # > 6.0 ✓
-        hsi_level=14_000,        # < 15_000 ✓
-        ccl_index=110,           # < 120 ✓
+        hsi_level=14_000,  # < 15_000 ✓
+        ccl_index=110,  # < 120 ✓
     )
     assert _detect_regime(state) == "crisis"
 
@@ -221,10 +220,10 @@ def test_nonlinear_engine_crisis_amplifies():
 
     state = _MockState(
         unemployment_rate=7.5,  # > 6.0 ✓
-        hsi_level=14_000,        # < 15_000 ✓
-        ccl_index=110,           # < 120 ✓
+        hsi_level=14_000,  # < 15_000 ✓
+        ccl_index=110,  # < 120 ✓
         consumer_confidence=30,  # < 35 ✓
-        gdp_growth=-3.0,         # < -2.0 ✓
+        gdp_growth=-3.0,  # < -2.0 ✓
     )
 
     result = engine.apply_shock(state, shock_delta=-1.0)

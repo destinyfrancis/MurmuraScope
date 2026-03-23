@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import os
-import pytest
-import pytest_asyncio
+from unittest.mock import AsyncMock, patch
+
 import aiosqlite
-from unittest.mock import patch, AsyncMock
+import pytest
 
 # Ensure a test encryption key is set before importing
 os.environ.setdefault("SESSION_ENCRYPTION_KEY", "")
@@ -19,6 +19,7 @@ class TestSessionKeyStore:
     def _setup_encryption_key(self, monkeypatch):
         """Set a valid Fernet key for tests."""
         from cryptography.fernet import Fernet
+
         key = Fernet.generate_key().decode()
         monkeypatch.setenv("SESSION_ENCRYPTION_KEY", key)
 
@@ -28,6 +29,7 @@ class TestSessionKeyStore:
         db_path = str(tmp_path / "test.db")
 
         import sqlite3
+
         conn = sqlite3.connect(db_path)
         conn.execute(
             "CREATE TABLE session_api_keys ("
@@ -184,8 +186,12 @@ class TestCostEstimator:
         from backend.app.services.cost_estimator import CostBreakdown
 
         breakdown = CostBreakdown(
-            provider="test", model="m", agent_count=10, round_count=5,
-            estimated_input_tokens=100, estimated_output_tokens=50,
+            provider="test",
+            model="m",
+            agent_count=10,
+            round_count=5,
+            estimated_input_tokens=100,
+            estimated_output_tokens=50,
             estimated_cost_usd=0.01,
         )
         with pytest.raises(AttributeError):
@@ -303,8 +309,8 @@ class TestGeneralizedEngine:
 
     def test_agent_factory_with_demographics(self):
         """AgentFactory should use demographics when provided."""
-        from backend.app.services.agent_factory import AgentFactory
         from backend.app.domain.base import DemographicsSpec
+        from backend.app.services.agent_factory import AgentFactory
 
         demographics = DemographicsSpec(
             regions={"Manhattan": 0.5, "Brooklyn": 0.5},
@@ -336,7 +342,7 @@ class TestGeneralizedEngine:
 
     def test_agent_factory_without_demographics_uses_hk(self):
         """AgentFactory without demographics should use HK constants."""
-        from backend.app.services.agent_factory import AgentFactory, DISTRICT_WEIGHTS
+        from backend.app.services.agent_factory import DISTRICT_WEIGHTS, AgentFactory
 
         factory = AgentFactory(seed=42)
         profiles = factory.generate_population(5)
@@ -447,8 +453,9 @@ class TestGeneralizedEngine:
 
     def test_consensus_estimator_accepts_weights(self):
         """ConsensusEstimator.estimate_probability should accept signal_weights."""
-        from backend.app.services.consensus_estimator import ConsensusEstimator
         import inspect
+
+        from backend.app.services.consensus_estimator import ConsensusEstimator
 
         sig = inspect.signature(ConsensusEstimator.estimate_probability)
         assert "signal_weights" in sig.parameters
@@ -462,8 +469,9 @@ class TestGeneralizedEngine:
 
     def test_llm_client_chat_accepts_api_key(self):
         """LLMClient.chat() should accept api_key and base_url overrides."""
-        from backend.app.utils.llm_client import LLMClient
         import inspect
+
+        from backend.app.utils.llm_client import LLMClient
 
         sig = inspect.signature(LLMClient.chat)
         assert "api_key" in sig.parameters
@@ -471,8 +479,9 @@ class TestGeneralizedEngine:
 
     def test_llm_client_chat_batch_accepts_api_key(self):
         """LLMClient.chat_batch() should accept api_key and base_url overrides."""
-        from backend.app.utils.llm_client import LLMClient
         import inspect
+
+        from backend.app.utils.llm_client import LLMClient
 
         sig = inspect.signature(LLMClient.chat_batch)
         assert "api_key" in sig.parameters

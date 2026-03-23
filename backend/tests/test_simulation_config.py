@@ -1,12 +1,13 @@
 """Tests for HookConfig, SimPreset, and service integration."""
+
 import pytest
 
 from backend.app.models.simulation_config import (
-    HookConfig,
-    SimPreset,
+    PRESET_DEEP,
     PRESET_FAST,
     PRESET_STANDARD,
-    PRESET_DEEP,
+    HookConfig,
+    SimPreset,
 )
 
 
@@ -104,7 +105,7 @@ def test_scaled_hook_config_emergence_always_enabled():
     cfg_large = HookConfig.scaled(5001)
     cfg_xlarge = HookConfig.scaled(10000)
     assert cfg_small.emergence_enabled is True
-    assert cfg_large.emergence_enabled is True   # was False before fix
+    assert cfg_large.emergence_enabled is True  # was False before fix
     assert cfg_xlarge.emergence_enabled is True  # was False before fix
 
 

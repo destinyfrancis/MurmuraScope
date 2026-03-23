@@ -1,10 +1,11 @@
 """Tests for NarrativeEngine and narrative models."""
-import pytest
+
 from unittest.mock import AsyncMock
 
-from backend.app.services.narrative_engine import NarrativeEngine
-from backend.app.models.narrative import TrendNarrative, TrendBlock
+import pytest
 
+from backend.app.models.narrative import TrendBlock, TrendNarrative
+from backend.app.services.narrative_engine import NarrativeEngine
 
 MOCK_NARRATIVE_RESPONSE = {
     "executive_summary": "未來6個月樓價大概率下跌，主要由加息壓力及移民潮驅動。",
@@ -123,13 +124,15 @@ def test_trend_narrative_is_frozen():
 async def test_generate_handles_malformed_trend_gracefully():
     """A malformed trend block should be skipped, not crash the engine."""
     mock_llm = AsyncMock()
-    mock_llm.chat_json = AsyncMock(return_value={
-        "executive_summary": "test",
-        "trends": [
-            {"title": "valid", "direction": "up", "confidence": "high", "narrative": "ok"},
-            {"bad_field": "no direction"},  # malformed — missing required fields
-        ],
-    })
+    mock_llm.chat_json = AsyncMock(
+        return_value={
+            "executive_summary": "test",
+            "trends": [
+                {"title": "valid", "direction": "up", "confidence": "high", "narrative": "ok"},
+                {"bad_field": "no direction"},  # malformed — missing required fields
+            ],
+        }
+    )
 
     engine = NarrativeEngine(llm_client=mock_llm)
     result = await engine.generate(report_artifacts={})

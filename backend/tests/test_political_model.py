@@ -5,15 +5,14 @@ from __future__ import annotations
 import pytest
 
 from backend.app.services.political_model import (
-    PoliticalModel,
-    PoliticalProfile,
-    StanceReport,
+    _DEMOCRACY_MIN,
     _DISTRICT_LEAN,
     _EDUCATION_LEAN,
     _ESTABLISHMENT_MAX,
-    _DEMOCRACY_MIN,
+    PoliticalModel,
+    PoliticalProfile,
+    StanceReport,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -37,7 +36,9 @@ class TestFrozenDataclasses:
             p.political_stance = 0.8  # type: ignore[misc]
 
     def test_stance_report_frozen(self) -> None:
-        r = StanceReport(mean=0.5, std=0.1, skewness=0.0, polarization_index=0.3, extremism_ratio=0.05, alert_level="normal")
+        r = StanceReport(
+            mean=0.5, std=0.1, skewness=0.0, polarization_index=0.3, extremism_ratio=0.05, alert_level="normal"
+        )
         with pytest.raises(AttributeError):
             r.alert_level = "critical"  # type: ignore[misc]
 
@@ -75,16 +76,24 @@ class TestAssignPoliticalStance:
     def test_result_bounded_0_to_1(self, model: PoliticalModel) -> None:
         for _ in range(50):
             stance = model.assign_political_stance(
-                age=25, district="深水埗", education_level="學位或以上",
-                occupation="學生", openness=0.9, neuroticism=0.2,
+                age=25,
+                district="深水埗",
+                education_level="學位或以上",
+                occupation="學生",
+                openness=0.9,
+                neuroticism=0.2,
             )
             assert 0.0 <= stance <= 1.0
 
     def test_young_agent_leans_pro_democracy(self, model: PoliticalModel) -> None:
         stances = [
             model.assign_political_stance(
-                age=25, district="沙田", education_level="學位或以上",
-                occupation="IT", openness=0.7, neuroticism=0.3,
+                age=25,
+                district="沙田",
+                education_level="學位或以上",
+                occupation="IT",
+                openness=0.7,
+                neuroticism=0.3,
             )
             for _ in range(100)
         ]
@@ -95,8 +104,12 @@ class TestAssignPoliticalStance:
     def test_old_agent_leans_establishment(self, model: PoliticalModel) -> None:
         stances = [
             model.assign_political_stance(
-                age=65, district="元朗", education_level="小學或以下",
-                occupation="退休", openness=0.3, neuroticism=0.6,
+                age=65,
+                district="元朗",
+                education_level="小學或以下",
+                occupation="退休",
+                openness=0.3,
+                neuroticism=0.6,
             )
             for _ in range(100)
         ]
@@ -120,26 +133,37 @@ class TestAssignPoliticalStance:
         # With reduced multipliers (0.05 and 0.02), total ≈ 0.012
         # Must be < 0.05 for moderate traits
         base_stance = model.assign_political_stance(
-            age=40, district="沙田", education_level="中學",
-            occupation="Clerk", openness=0.5, neuroticism=0.5,
+            age=40,
+            district="沙田",
+            education_level="中學",
+            occupation="Clerk",
+            openness=0.5,
+            neuroticism=0.5,
         )
         high_personality_stances = [
             model.assign_political_stance(
-                age=40, district="沙田", education_level="中學",
-                occupation="Clerk", openness=0.7, neuroticism=0.6,
+                age=40,
+                district="沙田",
+                education_level="中學",
+                occupation="Clerk",
+                openness=0.7,
+                neuroticism=0.6,
             )
             for _ in range(200)
         ]
         base_stances = [
             model.assign_political_stance(
-                age=40, district="沙田", education_level="中學",
-                occupation="Clerk", openness=0.5, neuroticism=0.5,
+                age=40,
+                district="沙田",
+                education_level="中學",
+                occupation="Clerk",
+                openness=0.5,
+                neuroticism=0.5,
             )
             for _ in range(200)
         ]
         avg_diff = abs(
-            sum(high_personality_stances) / len(high_personality_stances)
-            - sum(base_stances) / len(base_stances)
+            sum(high_personality_stances) / len(high_personality_stances) - sum(base_stances) / len(base_stances)
         )
         # Personality contribution for moderate traits must be < 0.02
         # (reduced multipliers to avoid double-counting with belief system)
@@ -147,8 +171,12 @@ class TestAssignPoliticalStance:
 
     def test_unknown_district_no_error(self, model: PoliticalModel) -> None:
         stance = model.assign_political_stance(
-            age=40, district="UnknownDistrict", education_level="中學",
-            occupation="Clerk", openness=0.5, neuroticism=0.5,
+            age=40,
+            district="UnknownDistrict",
+            education_level="中學",
+            occupation="Clerk",
+            openness=0.5,
+            neuroticism=0.5,
         )
         assert 0.0 <= stance <= 1.0
 

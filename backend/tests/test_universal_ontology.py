@@ -7,6 +7,7 @@ Covers:
 - ZeroConfigService.detect_mode() classifies HK vs geopolitical text.
 - ZeroConfigResult includes a ``mode`` field with correct default.
 """
+
 from __future__ import annotations
 
 import sys
@@ -216,9 +217,7 @@ class TestOntologyGeneratorDomainHint:
         from backend.prompts.ontology_prompts import DEFAULT_GENERIC_ENTITY_TYPES
 
         mock_llm = MagicMock()
-        mock_llm.chat_json = AsyncMock(
-            return_value={"entity_types": [], "relation_types": []}
-        )
+        mock_llm.chat_json = AsyncMock(return_value={"entity_types": [], "relation_types": []})
         gen = OntologyGenerator(llm_client=mock_llm)
         entities, _ = await gen.generate("unknown", "mystery text", domain_hint="auto")
 
@@ -235,6 +234,7 @@ class TestDetectMode:
 
     def setup_method(self) -> None:
         from backend.app.services.zero_config import ZeroConfigService
+
         self.svc = ZeroConfigService()
 
     # HK detection ---------------------------------------------------------

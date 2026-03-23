@@ -28,6 +28,7 @@ logger = get_logger("api.workspace")
 # Request models
 # ---------------------------------------------------------------------------
 
+
 class CreateWorkspaceRequest(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -45,6 +46,7 @@ class InviteRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # POST /workspace — create workspace
 # ---------------------------------------------------------------------------
+
 
 @router.post("", response_model=APIResponse)
 async def create_workspace(
@@ -86,6 +88,7 @@ async def create_workspace(
 # GET /workspace/{id} — get workspace + members
 # ---------------------------------------------------------------------------
 
+
 @router.get("/{workspace_id}", response_model=APIResponse)
 async def get_workspace(
     workspace_id: str,
@@ -124,10 +127,7 @@ async def get_workspace(
         "description": row["description"],
         "owner_id": row["owner_id"],
         "created_at": row["created_at"],
-        "members": [
-            {"user_id": m["user_id"], "role": m["role"], "joined_at": m["joined_at"]}
-            for m in members_rows
-        ],
+        "members": [{"user_id": m["user_id"], "role": m["role"], "joined_at": m["joined_at"]} for m in members_rows],
     }
     return APIResponse(success=True, data=workspace)
 
@@ -135,6 +135,7 @@ async def get_workspace(
 # ---------------------------------------------------------------------------
 # POST /workspace/{id}/invite — invite user by email
 # ---------------------------------------------------------------------------
+
 
 @router.post("/{workspace_id}/invite", response_model=APIResponse)
 async def invite_to_workspace(
@@ -200,6 +201,7 @@ async def invite_to_workspace(
 # GET /workspace/{id}/predictions — shared sessions in workspace
 # ---------------------------------------------------------------------------
 
+
 @router.get("/{workspace_id}/predictions", response_model=APIResponse)
 async def get_workspace_predictions(
     workspace_id: str,
@@ -255,6 +257,7 @@ async def get_workspace_predictions(
 # ---------------------------------------------------------------------------
 # POST /workspace/{id}/sessions/{session_id} — add session to workspace
 # ---------------------------------------------------------------------------
+
 
 @router.post("/{workspace_id}/sessions/{session_id}", response_model=APIResponse)
 async def add_session_to_workspace(

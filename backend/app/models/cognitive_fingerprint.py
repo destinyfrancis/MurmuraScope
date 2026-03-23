@@ -1,6 +1,8 @@
 # backend/app/models/cognitive_fingerprint.py
 """Cognitive fingerprint model for kg_driven simulation agents."""
+
 from __future__ import annotations
+
 from dataclasses import dataclass
 
 
@@ -37,21 +39,13 @@ class CognitiveFingerprint:
 
     def __post_init__(self) -> None:
         if not (3 <= len(self.values) <= 12):
-            raise ValueError(
-                f"values must have 3–12 keys, got {len(self.values)}"
-            )
+            raise ValueError(f"values must have 3–12 keys, got {len(self.values)}")
         for k, v in self.values.items():
             if not (0.0 <= v <= 1.0):
-                raise ValueError(
-                    f"values must be in [0, 1]; key '{k}' has value {v}"
-                )
+                raise ValueError(f"values must be in [0, 1]; key '{k}' has value {v}")
         if not self.info_diet:
             raise ValueError("info_diet must not be empty")
         if not (0.0 <= self.confirmation_bias <= 1.0):
-            raise ValueError(
-                f"confirmation_bias must be in [0, 1], got {self.confirmation_bias}"
-            )
+            raise ValueError(f"confirmation_bias must be in [0, 1], got {self.confirmation_bias}")
         if not (0.0 <= self.conformity <= 1.0):
-            raise ValueError(
-                f"conformity must be in [0, 1], got {self.conformity}"
-            )
+            raise ValueError(f"conformity must be in [0, 1], got {self.conformity}")

@@ -11,34 +11,29 @@ Covers:
 - SensitivityAnalyzer._PatchedCoefficients
 - TimeSeriesForecaster: _MIN_ARIMA_POINTS guard
 """
+
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
-import numpy as np
 import pytest
 
 from backend.app.services.calibrated_coefficients import CalibratedCoefficients
-from backend.app.services.retrospective_validator import (
-    RetrospectiveValidator,
-    ValidationResult,
-    _enumerate_periods,
-    _find_best_timing_offset,
-    _parse_period,
-    _period_to_sortable,
-)
-from backend.app.services.sensitivity_analyzer import (
-    SensitivityAnalyzer,
-    SensitivityRow,
-    _make_grid,
-    _make_summary,
-    _PatchedCoefficients,
-)
 from backend.app.services.relationship_engine import (
     _HORSEMAN_CONTEMPT_SCALE,
     _HORSEMAN_CRIT_SCALE,
     _HORSEMAN_DEF_SCALE,
     _HORSEMAN_STONE_SCALE,
+)
+from backend.app.services.retrospective_validator import (
+    RetrospectiveValidator,
+    ValidationResult,
+)
+from backend.app.services.sensitivity_analyzer import (
+    SensitivityRow,
+    _make_grid,
+    _make_summary,
+    _PatchedCoefficients,
 )
 from backend.app.services.validation_reporter import (
     ValidationReporter,
@@ -47,30 +42,32 @@ from backend.app.services.validation_reporter import (
     _score_metric,
 )
 
-
 # ---------------------------------------------------------------------------
 # 3.1 — Calibration R² threshold
 # ---------------------------------------------------------------------------
 
+
 def test_calibration_r2_threshold_is_30_percent() -> None:
     import backend.data_pipeline.calibration as cal_module  # noqa: PLC0415
-    assert cal_module._R_SQUARED_THRESHOLD == 0.30, (
-        "R² threshold must be 0.30 (was raised from 0.10 in Phase 3)"
-    )
+
+    assert cal_module._R_SQUARED_THRESHOLD == 0.30, "R² threshold must be 0.30 (was raised from 0.10 in Phase 3)"
 
 
 # ---------------------------------------------------------------------------
 # 3.x — TimeSeriesForecaster min ARIMA points guard
 # ---------------------------------------------------------------------------
 
+
 def test_min_arima_points_is_16() -> None:
     import backend.app.services.time_series_forecaster as ts  # noqa: PLC0415
+
     assert ts._MIN_ARIMA_POINTS == 16
 
 
 # ---------------------------------------------------------------------------
 # ValidationReporter helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_result(**kwargs) -> ValidationResult:
     defaults = dict(
@@ -172,6 +169,7 @@ class TestValidationReporterGenerate:
 # RetrospectiveValidator bootstrap_ci
 # ---------------------------------------------------------------------------
 
+
 class TestBootstrapCI:
     def test_empty_input(self) -> None:
         ci = RetrospectiveValidator.bootstrap_ci([])
@@ -198,6 +196,7 @@ class TestBootstrapCI:
 # RetrospectiveValidator kfold_validate
 # ---------------------------------------------------------------------------
 
+
 class TestKfoldValidate:
     @pytest.mark.asyncio
     async def test_k_too_small_raises(self) -> None:
@@ -222,6 +221,7 @@ class TestKfoldValidate:
 # ---------------------------------------------------------------------------
 # SensitivityAnalyzer helpers
 # ---------------------------------------------------------------------------
+
 
 class TestMakeGrid:
     def test_grid_has_correct_length(self) -> None:
@@ -280,6 +280,7 @@ class TestPatchedCoefficients:
 # Brier skill score integration in _score_metric
 # ---------------------------------------------------------------------------
 
+
 class TestBrierScoreIntegration:
     """_score_metric must include Brier skill score in composite."""
 
@@ -301,9 +302,7 @@ class TestBrierScoreIntegration:
         base = dict(directional_accuracy=0.6, pearson_r=0.5, mape=0.2)
         perfect = _score_metric(self._make_result(**base, brier_score=0.0))
         baseline = _score_metric(self._make_result(**base, brier_score=0.25))
-        assert perfect > baseline, (
-            f"Perfect Brier score ({perfect:.4f}) should exceed uninformative ({baseline:.4f})"
-        )
+        assert perfect > baseline, f"Perfect Brier score ({perfect:.4f}) should exceed uninformative ({baseline:.4f})"
 
     def test_uninformative_brier_contributes_zero_skill(self):
         """Brier=0.25 (uninformative) must contribute 0 to composite."""
@@ -321,6 +320,7 @@ class TestBrierScoreIntegration:
 # ---------------------------------------------------------------------------
 # CalibratedCoefficients.get_all_by_sentiment (Phase 3 addition)
 # ---------------------------------------------------------------------------
+
 
 class TestGetAllBySentiment:
     def test_returns_dict(self) -> None:
@@ -444,10 +444,12 @@ class TestConsensusDebateDeltaCap:
 
     def _make_engine(self):
         from backend.app.services.consensus_debate_engine import ConsensusDebateEngine
+
         return ConsensusDebateEngine()
 
     def _make_exchange(self, a_id, b_id, topic, a_delta, b_delta):
         from backend.app.services.consensus_debate_engine import DebateExchange
+
         return DebateExchange(
             agent_a_id=a_id,
             agent_b_id=b_id,
@@ -462,6 +464,7 @@ class TestConsensusDebateDeltaCap:
 
     def _make_result(self, exchanges):
         from backend.app.services.consensus_debate_engine import DebateRoundResult
+
         return DebateRoundResult(
             round_number=1,
             exchanges=tuple(exchanges),
@@ -483,23 +486,15 @@ class TestConsensusDebateDeltaCap:
         """Three exchanges of +0.15 each should be clamped to +0.20, not +0.45."""
         engine = self._make_engine()
         # Agent A receives 0.15 × 3 = 0.45 across 3 debates on the same topic
-        exchanges = [
-            self._make_exchange("A", f"B{i}", "topic_X", 0.15, -0.10)
-            for i in range(3)
-        ]
+        exchanges = [self._make_exchange("A", f"B{i}", "topic_X", 0.15, -0.10) for i in range(3)]
         result = self._make_result(exchanges)
         deltas = engine.get_belief_deltas(result)
-        assert deltas["A"]["topic_X"] == pytest.approx(0.20), (
-            "Accumulated delta should be clamped to 0.20, not 0.45"
-        )
+        assert deltas["A"]["topic_X"] == pytest.approx(0.20), "Accumulated delta should be clamped to 0.20, not 0.45"
 
     def test_negative_accumulated_delta_clamped_to_minus_0_20(self) -> None:
         """Accumulated negative deltas should be clamped to -0.20."""
         engine = self._make_engine()
-        exchanges = [
-            self._make_exchange("A", f"B{i}", "topic_Y", -0.15, 0.10)
-            for i in range(3)
-        ]
+        exchanges = [self._make_exchange("A", f"B{i}", "topic_Y", -0.15, 0.10) for i in range(3)]
         result = self._make_result(exchanges)
         deltas = engine.get_belief_deltas(result)
         assert deltas["A"]["topic_Y"] == pytest.approx(-0.20)
@@ -523,4 +518,5 @@ class TestConsensusDebateDeltaCap:
         from backend.app.services.consensus_debate_engine import (
             _MAX_TOTAL_DELTA_PER_TOPIC_PER_ROUND,
         )
+
         assert _MAX_TOTAL_DELTA_PER_TOPIC_PER_ROUND == pytest.approx(0.20)

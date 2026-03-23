@@ -57,55 +57,241 @@ _REQUEST_HEADERS = {
 # ---------------------------------------------------------------------------
 
 # Positive sentiment terms (Cantonese + Traditional Chinese)
-_POSITIVE_TERMS: frozenset[str] = frozenset({
-    # Standard positive
-    "好", "靚", "正", "勁", "棒", "讚", "優秀", "出色", "卓越", "滿意",
-    "開心", "快樂", "高興", "喜悅", "欣喜", "愉快", "幸福", "美好",
-    "支持", "認同", "贊成", "同意", "推薦", "鼓勵", "感謝", "多謝",
-    "進步", "改善", "提升", "增長", "發展", "成功", "勝利", "達成",
-    # Cantonese slang / internet speak
-    "正㗎", "好正", "勁正", "核突", "型", "巴閉", "威", "掂", "叻",
-    "頂癮", "好爽", "爽歪歪", "無得頂", "一流", "超正", "係掂",
-    "贏", "有hope", "搏到", "升", "加薪", "有著數", "著數",
-    "好彩", "幸運", "中獎", "派息", "升值",
-    # Finance positive
-    "升市", "牛市", "回升", "反彈", "創新高", "跑贏", "跑嬴",
-    # Housing positive
-    "減價", "減租", "平盤", "筍盤",
-})
+_POSITIVE_TERMS: frozenset[str] = frozenset(
+    {
+        # Standard positive
+        "好",
+        "靚",
+        "正",
+        "勁",
+        "棒",
+        "讚",
+        "優秀",
+        "出色",
+        "卓越",
+        "滿意",
+        "開心",
+        "快樂",
+        "高興",
+        "喜悅",
+        "欣喜",
+        "愉快",
+        "幸福",
+        "美好",
+        "支持",
+        "認同",
+        "贊成",
+        "同意",
+        "推薦",
+        "鼓勵",
+        "感謝",
+        "多謝",
+        "進步",
+        "改善",
+        "提升",
+        "增長",
+        "發展",
+        "成功",
+        "勝利",
+        "達成",
+        # Cantonese slang / internet speak
+        "正㗎",
+        "好正",
+        "勁正",
+        "核突",
+        "型",
+        "巴閉",
+        "威",
+        "掂",
+        "叻",
+        "頂癮",
+        "好爽",
+        "爽歪歪",
+        "無得頂",
+        "一流",
+        "超正",
+        "係掂",
+        "贏",
+        "有hope",
+        "搏到",
+        "升",
+        "加薪",
+        "有著數",
+        "著數",
+        "好彩",
+        "幸運",
+        "中獎",
+        "派息",
+        "升值",
+        # Finance positive
+        "升市",
+        "牛市",
+        "回升",
+        "反彈",
+        "創新高",
+        "跑贏",
+        "跑嬴",
+        # Housing positive
+        "減價",
+        "減租",
+        "平盤",
+        "筍盤",
+    }
+)
 
 # Negative sentiment terms
-_NEGATIVE_TERMS: frozenset[str] = frozenset({
-    # Standard negative
-    "差", "衰", "爛", "廢", "劣", "壞", "失望", "難過", "傷心", "痛苦",
-    "憤怒", "憎恨", "討厭", "反感", "批評", "譴責", "抗議", "不滿",
-    "下跌", "衰退", "萎縮", "虧損", "失業", "裁員", "破產", "倒閉",
-    "通脹", "加息", "加租", "加價", "貴", "負擔", "困難", "艱難",
-    # Cantonese slang negative
-    "衰格", "廢柴", "蠢", "蠢豬", "撚樣", "仆街", "撚", "撚你", "X你",
-    "冇用", "冇料", "玩嘢", "串", "串到爆", "戇居", "戇鳩",
-    "GG", "涼了", "凉", "攬炒", "完蛋", "出事", "大鑊", "死梗",
-    "執笠", "炒魷", "炒", "炒散", "被炒", "被裁", "失業",
-    # Finance negative
-    "熊市", "跌市", "插水", "瀉", "急跌", "大跌", "崩盤", "爆煲",
-    "跌", "蝕", "蝕錢", "蝕本", "虧", "輸錢", "輸", "慘", "慘烈", "損失",
-    # Housing negative
-    "加租", "加價", "貴租", "樓價高", "供唔起", "負資產",
-    # Social/political negative
-    "移民", "走佬", "離港", "走", "逃", "潤", "run",
-    "打壓", "控制", "限制", "禁", "拘捕", "坐牢",
-})
+_NEGATIVE_TERMS: frozenset[str] = frozenset(
+    {
+        # Standard negative
+        "差",
+        "衰",
+        "爛",
+        "廢",
+        "劣",
+        "壞",
+        "失望",
+        "難過",
+        "傷心",
+        "痛苦",
+        "憤怒",
+        "憎恨",
+        "討厭",
+        "反感",
+        "批評",
+        "譴責",
+        "抗議",
+        "不滿",
+        "下跌",
+        "衰退",
+        "萎縮",
+        "虧損",
+        "失業",
+        "裁員",
+        "破產",
+        "倒閉",
+        "通脹",
+        "加息",
+        "加租",
+        "加價",
+        "貴",
+        "負擔",
+        "困難",
+        "艱難",
+        # Cantonese slang negative
+        "衰格",
+        "廢柴",
+        "蠢",
+        "蠢豬",
+        "撚樣",
+        "仆街",
+        "撚",
+        "撚你",
+        "X你",
+        "冇用",
+        "冇料",
+        "玩嘢",
+        "串",
+        "串到爆",
+        "戇居",
+        "戇鳩",
+        "GG",
+        "涼了",
+        "凉",
+        "攬炒",
+        "完蛋",
+        "出事",
+        "大鑊",
+        "死梗",
+        "執笠",
+        "炒魷",
+        "炒",
+        "炒散",
+        "被炒",
+        "被裁",
+        "失業",
+        # Finance negative
+        "熊市",
+        "跌市",
+        "插水",
+        "瀉",
+        "急跌",
+        "大跌",
+        "崩盤",
+        "爆煲",
+        "跌",
+        "蝕",
+        "蝕錢",
+        "蝕本",
+        "虧",
+        "輸錢",
+        "輸",
+        "慘",
+        "慘烈",
+        "損失",
+        # Housing negative
+        "加租",
+        "加價",
+        "貴租",
+        "樓價高",
+        "供唔起",
+        "負資產",
+        # Social/political negative
+        "移民",
+        "走佬",
+        "離港",
+        "走",
+        "逃",
+        "潤",
+        "run",
+        "打壓",
+        "控制",
+        "限制",
+        "禁",
+        "拘捕",
+        "坐牢",
+    }
+)
 
 # Intensifiers (amplify adjacent sentiment)
-_INTENSIFIERS: frozenset[str] = frozenset({
-    "非常", "極", "好", "超", "勁", "特別", "相當", "十分", "真係", "真的",
-    "完全", "絕對", "太", "咁", "咁樣", "好似", "最", "更", "更加",
-})
+_INTENSIFIERS: frozenset[str] = frozenset(
+    {
+        "非常",
+        "極",
+        "好",
+        "超",
+        "勁",
+        "特別",
+        "相當",
+        "十分",
+        "真係",
+        "真的",
+        "完全",
+        "絕對",
+        "太",
+        "咁",
+        "咁樣",
+        "好似",
+        "最",
+        "更",
+        "更加",
+    }
+)
 
 # Negation words
-_NEGATIONS: frozenset[str] = frozenset({
-    "唔", "不", "沒有", "冇", "無", "並非", "並不", "非", "否", "未",
-})
+_NEGATIONS: frozenset[str] = frozenset(
+    {
+        "唔",
+        "不",
+        "沒有",
+        "冇",
+        "無",
+        "並非",
+        "並不",
+        "非",
+        "否",
+        "未",
+    }
+)
 
 
 def score_sentiment(text: str) -> tuple[str, float]:
@@ -147,7 +333,7 @@ def score_sentiment(text: str) -> tuple[str, float]:
             continue
 
         # Check preceding window for negation or intensification
-        preceding = tokens[max(0, i - window): i]
+        preceding = tokens[max(0, i - window) : i]
         negated = any(neg in preceding for neg in _NEGATIONS)
         intensified = any(amp in preceding for amp in _INTENSIFIERS)
 
@@ -408,7 +594,9 @@ async def _download_category_historical(
             if resp.status_code in (403, 429, 503):
                 logger.warning(
                     "LIHKG blocked for cat %d page %d (HTTP %d) — stopping pagination",
-                    cat_id, page, resp.status_code,
+                    cat_id,
+                    page,
+                    resp.status_code,
                 )
                 break
 
@@ -440,7 +628,10 @@ async def _download_category_historical(
 
     logger.info(
         "LIHKG historical cat %d (%s): %d unique threads across %d pages",
-        cat_id, category_name, len(all_threads), pages,
+        cat_id,
+        category_name,
+        len(all_threads),
+        pages,
     )
     return DownloadResult(
         category=category_name,

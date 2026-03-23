@@ -3,6 +3,7 @@
 Enables paste-text-and-run: accepts seed text, infers domain,
 and returns a ready-to-run simulation configuration.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -18,32 +19,69 @@ logger = get_logger("zero_config")
 
 _STATIC_DOMAIN_KEYWORDS: dict[str, list[str]] = {
     "hk_city": [
-        "香港", "樓市", "property", "移民", "emigration", "生育", "fertility",
-        "hk", "hong kong",
+        "香港",
+        "樓市",
+        "property",
+        "移民",
+        "emigration",
+        "生育",
+        "fertility",
+        "hk",
+        "hong kong",
     ],
     "us_markets": [
-        "美股", "wall street", "nasdaq", "s&p", "fed", "inflation",
-        "dow jones", "treasury",
+        "美股",
+        "wall street",
+        "nasdaq",
+        "s&p",
+        "fed",
+        "inflation",
+        "dow jones",
+        "treasury",
     ],
     "global_macro": [
-        "global", "recession", "trade war", "油價", "commodity",
-        "world economy", "geopolitical",
+        "global",
+        "recession",
+        "trade war",
+        "油價",
+        "commodity",
+        "world economy",
+        "geopolitical",
     ],
     "public_narrative": [
-        "輿論", "narrative", "media", "民意", "protest",
-        "public opinion", "social media",
+        "輿論",
+        "narrative",
+        "media",
+        "民意",
+        "protest",
+        "public opinion",
+        "social media",
     ],
     "real_estate": [
-        "地產", "real estate", "mortgage", "樓價", "ccl",
-        "rent", "housing",
+        "地產",
+        "real estate",
+        "mortgage",
+        "樓價",
+        "ccl",
+        "rent",
+        "housing",
     ],
     "company_competitor": [
-        "公司", "company", "competitor", "market share", "營銷",
-        "enterprise", "corporate",
+        "公司",
+        "company",
+        "competitor",
+        "market share",
+        "營銷",
+        "enterprise",
+        "corporate",
     ],
     "community_movement": [
-        "社區", "community", "movement", "組織",
-        "grassroots", "activism",
+        "社區",
+        "community",
+        "movement",
+        "組織",
+        "grassroots",
+        "activism",
     ],
 }
 
@@ -77,23 +115,51 @@ _DOMAIN_KEYWORDS = _build_domain_keywords()
 # ---------------------------------------------------------------------------
 
 _HK_MODE_KEYWORDS: list[str] = [
-    "香港", "樓市", "移民", "生育", "hk", "hong kong",
-    "hkd", "legco", "mtv", "tuen mun", "yuen long",
-    "kowloon", "新界", "九龍", "港島", "ccl", "hsi",
+    "香港",
+    "樓市",
+    "移民",
+    "生育",
+    "hk",
+    "hong kong",
+    "hkd",
+    "legco",
+    "mtv",
+    "tuen mun",
+    "yuen long",
+    "kowloon",
+    "新界",
+    "九龍",
+    "港島",
+    "ccl",
+    "hsi",
 ]
 
 # Geopolitical / non-HK scenario keywords that indicate kg_driven mode
 _KG_DRIVEN_KEYWORDS: list[str] = [
-    "war", "military", "geopolitical", "sanctions", "nuclear",
-    "nato", "united nations", "un security council", "alliance",
-    "troops", "invasion", "conflict", "treaty", "tariff",
-    "trade war", "embargo", "coup",
+    "war",
+    "military",
+    "geopolitical",
+    "sanctions",
+    "nuclear",
+    "nato",
+    "united nations",
+    "un security council",
+    "alliance",
+    "troops",
+    "invasion",
+    "conflict",
+    "treaty",
+    "tariff",
+    "trade war",
+    "embargo",
+    "coup",
 ]
 
 
 # ---------------------------------------------------------------------------
 # Result dataclass
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class ZeroConfigResult:
@@ -112,6 +178,7 @@ class ZeroConfigResult:
 # ---------------------------------------------------------------------------
 # Service
 # ---------------------------------------------------------------------------
+
 
 class ZeroConfigService:
     """Infer domain and configuration from seed text alone."""
@@ -171,6 +238,7 @@ class ZeroConfigService:
     async def _llm_detect_mode(self, seed_text: str) -> str:
         """Single LLM call to classify seed text as hk_demographic or kg_driven."""
         from backend.app.utils.llm_client import get_default_client  # noqa: PLC0415
+
         llm = get_default_client()
         prompt = (
             "Classify the following scenario text into exactly one category:\n"
@@ -232,11 +300,7 @@ class ZeroConfigService:
 
             tp = TextProcessor()
             analysis = await tp.analyze_seed(seed_text)
-            entities = (
-                analysis.get("entities", [])
-                if isinstance(analysis, dict)
-                else []
-            )
+            entities = analysis.get("entities", []) if isinstance(analysis, dict) else []
         except Exception:
             logger.debug("TextProcessor unavailable — skipping entity extraction")
 
@@ -270,7 +334,7 @@ class ZeroConfigService:
         seed_text: str,
         round_count: int,
         llm: Any | None = None,
-    ) -> "TimeConfig":
+    ) -> TimeConfig:
         """LLM-infer scenario-appropriate time granularity.
 
         Falls back to 1 day per round on any error.
@@ -287,6 +351,7 @@ class ZeroConfigService:
         if llm is None:
             try:
                 from backend.app.utils.llm_client import get_default_client
+
                 llm = get_default_client()
             except Exception:
                 return _DEFAULT
@@ -309,7 +374,9 @@ class ZeroConfigService:
 
         try:
             import json
+
             from backend.app.utils.llm_client import get_agent_provider_model
+
             provider, model = get_agent_provider_model()
             resp = await llm.chat(
                 [{"role": "user", "content": prompt}],

@@ -14,7 +14,6 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 import httpx
 
@@ -26,9 +25,9 @@ _WB_BASE = "https://api.worldbank.org/v2/country/HKG/indicator"
 
 # World Bank population indicators
 _WB_POP_INDICATORS: dict[str, tuple[str, str]] = {
-    "total":    ("SP.POP.TOTL",        "population_total"),
-    "elderly":  ("SP.POP.65UP.TO.ZS",  "population_pct_65plus"),
-    "youth":    ("SP.POP.0014.TO.ZS",  "population_pct_0to14"),
+    "total": ("SP.POP.TOTL", "population_total"),
+    "elderly": ("SP.POP.65UP.TO.ZS", "population_pct_65plus"),
+    "youth": ("SP.POP.0014.TO.ZS", "population_pct_0to14"),
 }
 
 RAW_DIR = Path("data/raw/census")
@@ -46,8 +45,8 @@ class CensusRecord:
     value: float
     period: str
     source_url: str
-    source: str = "World Bank"      # normalizer requires this field
-    category: str = "population"    # normalizer requires non-empty category
+    source: str = "World Bank"  # normalizer requires this field
+    category: str = "population"  # normalizer requires non-empty category
 
 
 @dataclass(frozen=True)
@@ -75,7 +74,9 @@ async def _fetch_wb_population(
 
     try:
         resp = await client.get(
-            url, params={"format": "json", "per_page": 60, "mrv": 60}, timeout=30.0,
+            url,
+            params={"format": "json", "per_page": 60, "mrv": 60},
+            timeout=30.0,
         )
         resp.raise_for_status()
         data = resp.json()
@@ -101,16 +102,18 @@ async def _fetch_wb_population(
             val = round(float(raw_val), 4)
         except (TypeError, ValueError):
             continue
-        records.append(CensusRecord(
-            dataset_id=dataset_id,
-            metric=metric,
-            dimension_1="total",
-            dimension_2=None,
-            dimension_3=None,
-            value=val,
-            period=f"{year}-Q4",
-            source_url=url,
-        ))
+        records.append(
+            CensusRecord(
+                dataset_id=dataset_id,
+                metric=metric,
+                dimension_1="total",
+                dimension_2=None,
+                dimension_3=None,
+                value=val,
+                period=f"{year}-Q4",
+                source_url=url,
+            )
+        )
 
     logger.info("Census WB %s: %d records", indicator_key, len(records))
     return CensusResult(

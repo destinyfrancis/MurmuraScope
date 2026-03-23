@@ -5,6 +5,7 @@ sufficiently diverse, that the LLM driving agents is not systematically
 biased toward particular outcomes, and that observed emergent phenomena
 are genuine rather than artifacts.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -28,10 +29,11 @@ logger = get_logger("emergence_guards")
 _emergence_llm: LLMClient | None = None
 
 
-def _get_emergence_llm() -> "LLMClient":
+def _get_emergence_llm() -> LLMClient:
     global _emergence_llm
     if _emergence_llm is None:
         from backend.app.utils.llm_client import LLMClient  # noqa: PLC0415
+
         _emergence_llm = LLMClient()
     return _emergence_llm
 
@@ -134,7 +136,9 @@ def _is_liberal_scenario(scenario: str, all_scenarios: list[str]) -> bool:
 
 
 def _expected_stance(
-    political_stance: float, scenario: str, all_scenarios: list[str],
+    political_stance: float,
+    scenario: str,
+    all_scenarios: list[str],
 ) -> str | None:
     """Return expected stance given agent politics and scenario, or None if centrist."""
     if 0.4 <= political_stance <= 0.6:
@@ -156,9 +160,7 @@ def _shannon_entropy(counts: dict[str, int]) -> float:
     total = sum(counts.values())
     if total == 0:
         return 0.0
-    return -sum(
-        (c / total) * math.log2(c / total) for c in counts.values() if c > 0
-    )
+    return -sum((c / total) * math.log2(c / total) for c in counts.values() if c > 0)
 
 
 def _kurtosis_from_counts(counts: dict[str, int]) -> float:
@@ -181,7 +183,7 @@ def _kurtosis_from_counts(counts: dict[str, int]) -> float:
     m4 = sum((v - mean) ** 4 for v in values) / n
     if m2 < 1e-12:
         return 0.0
-    return (m4 / (m2 ** 2)) - 3.0
+    return (m4 / (m2**2)) - 3.0
 
 
 # ---------------------------------------------------------------------------
@@ -217,7 +219,8 @@ class BiasProbe:
             profiles = await self._load_profiles(session_id, sample_size)
         except Exception:
             logger.exception(
-                "Failed to load profiles for bias probe session=%s", session_id,
+                "Failed to load profiles for bias probe session=%s",
+                session_id,
             )
             return self._empty_result(session_id)
 
@@ -234,7 +237,9 @@ class BiasProbe:
         agreement_rate = max(stance_counts.values(), default=0) / total
         stance_kurtosis = _kurtosis_from_counts(stance_counts)
         persona_compliance = self._compute_persona_compliance(
-            profiles, stances, scenario,
+            profiles,
+            stances,
+            scenario,
         )
         diversity_index = _shannon_entropy(stance_counts)
         bias_detected = agreement_rate > 0.7 and persona_compliance < 0.5
@@ -265,7 +270,9 @@ class BiasProbe:
     # ------------------------------------------------------------------
 
     async def _load_profiles(
-        self, session_id: str, sample_size: int,
+        self,
+        session_id: str,
+        sample_size: int,
     ) -> list[dict]:
         async with get_db() as db:
             cursor = await db.execute(
@@ -291,7 +298,9 @@ class BiasProbe:
         ]
 
     async def _collect_stances(
-        self, profiles: list[dict], scenario: str,
+        self,
+        profiles: list[dict],
+        scenario: str,
     ) -> list[str]:
         """Call the LLM for each profile and return list of stances."""
         from backend.app.utils.llm_client import get_agent_provider_model  # noqa: PLC0415
@@ -300,21 +309,14 @@ class BiasProbe:
         sem = asyncio.Semaphore(self._SEMAPHORE_LIMIT)
 
         async def _query_one(profile: dict) -> str:
-            persona = (
-                f"一位{profile['age']}歲嘅"
-                f"{profile['occupation']}，"
-                f"住在{profile['district']}區"
-            )
+            persona = f"一位{profile['age']}歲嘅{profile['occupation']}，住在{profile['district']}區"
             async with sem:
                 try:
                     resp = await llm.chat_json(
                         messages=[
                             {
                                 "role": "system",
-                                "content": (
-                                    f"你是{persona}。"
-                                    "只用JSON回答。"
-                                ),
+                                "content": (f"你是{persona}。只用JSON回答。"),
                             },
                             {
                                 "role": "user",
@@ -322,7 +324,7 @@ class BiasProbe:
                                     "以下問題請給出"
                                     "你的立場和理由"
                                     f"：{scenario}\n"
-                                    '回答格式：'
+                                    "回答格式："
                                     '{"stance": "support/oppose/neutral", '
                                     '"reason": "..."}'
                                 ),
@@ -369,7 +371,10 @@ class BiasProbe:
         return compliant / len(stances)
 
     async def _persist(
-        self, session_id: str, scenario: str, result: BiasProbeResult,
+        self,
+        session_id: str,
+        scenario: str,
+        result: BiasProbeResult,
     ) -> None:
         try:
             async with get_db() as db:
@@ -408,7 +413,8 @@ class BiasProbe:
                 await db.commit()
         except Exception:
             logger.exception(
-                "Failed to persist bias probe result session=%s", session_id,
+                "Failed to persist bias probe result session=%s",
+                session_id,
             )
 
     @staticmethod
@@ -443,7 +449,9 @@ class PhaseTransitionDetector:
         self._history: dict[str, list[MetricSnapshot]] = {}
 
     def record(
-        self, session_id: str, snapshot: MetricSnapshot,
+        self,
+        session_id: str,
+        snapshot: MetricSnapshot,
     ) -> list[PhaseTransitionAlert]:
         """Record a metric snapshot and check for phase transitions.
 
@@ -517,7 +525,9 @@ class PhaseTransitionDetector:
         )
 
     async def persist_alerts(
-        self, session_id: str, alerts: list[PhaseTransitionAlert],
+        self,
+        session_id: str,
+        alerts: list[PhaseTransitionAlert],
     ) -> None:
         """Store alerts in emergence_alerts table."""
         if not alerts:
@@ -557,7 +567,8 @@ class PhaseTransitionDetector:
                 await db.commit()
         except Exception:
             logger.exception(
-                "Failed to persist emergence alerts session=%s", session_id,
+                "Failed to persist emergence alerts session=%s",
+                session_id,
             )
 
 
@@ -596,22 +607,32 @@ class EmergenceAttributor:
         """
         try:
             start_val, end_val = await self._load_metric_values(
-                session_id, metric_name, start_round, end_round,
+                session_id,
+                metric_name,
+                start_round,
+                end_round,
             )
         except Exception:
             logger.exception(
                 "Failed to load metric values: session=%s metric=%s",
-                session_id, metric_name,
+                session_id,
+                metric_name,
             )
             return self._zero_attribution(
-                session_id, metric_name, start_round, end_round,
+                session_id,
+                metric_name,
+                start_round,
+                end_round,
             )
 
         total_change = end_val - start_val
 
         try:
             shock_delta = await self._compute_shock_delta(
-                session_id, metric_name, start_round, end_round,
+                session_id,
+                metric_name,
+                start_round,
+                end_round,
             )
         except Exception:
             logger.debug("Could not compute shock delta, defaulting to 0")

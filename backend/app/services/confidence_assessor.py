@@ -63,8 +63,7 @@ class ConfidenceAssessor:
         async with get_db() as db:
             prov_rows = await (
                 await db.execute(
-                    "SELECT source_name, source_type, updated_at "
-                    "FROM data_provenance ORDER BY updated_at DESC"
+                    "SELECT source_name, source_type, updated_at FROM data_provenance ORDER BY updated_at DESC"
                 )
             ).fetchall()
 
@@ -106,14 +105,10 @@ class ConfidenceAssessor:
     async def _count_data_records(self) -> int:
         """Count total records in hk_data_snapshots."""
         async with get_db() as db:
-            count_row = await (
-                await db.execute("SELECT COUNT(*) as cnt FROM hk_data_snapshots")
-            ).fetchone()
+            count_row = await (await db.execute("SELECT COUNT(*) as cnt FROM hk_data_snapshots")).fetchone()
         return count_row["cnt"] if count_row else 0
 
-    async def _assess_agent_consensus(
-        self, session_id: str, data_coverage: float
-    ) -> list[MetricConfidence]:
+    async def _assess_agent_consensus(self, session_id: str, data_coverage: float) -> list[MetricConfidence]:
         """Compute per-decision-type consensus from agent decisions."""
         async with get_db() as db:
             decision_rows = await (

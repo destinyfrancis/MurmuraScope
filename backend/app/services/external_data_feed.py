@@ -15,6 +15,7 @@ Usage::
     data = await feed.fetch()
     # data = {"fed_rate": 0.045, "china_gdp_growth": 0.048, "taiwan_strait_risk": 0.30, ...}
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -32,8 +33,8 @@ logger = get_logger(__name__)
 _FRED_BASE = "https://api.stlouisfed.org/fred/series/observations"
 _FRED_SERIES: list[tuple[str, str, float]] = [
     # (series_id, macro_field, scale_factor)
-    ("FEDFUNDS", "fed_rate", 0.01),   # % → decimal
-    ("DEXHKUS",  "usd_hkd", 1.0),
+    ("FEDFUNDS", "fed_rate", 0.01),  # % → decimal
+    ("DEXHKUS", "usd_hkd", 1.0),
 ]
 
 # ---------------------------------------------------------------------------
@@ -42,9 +43,9 @@ _FRED_SERIES: list[tuple[str, str, float]] = [
 _WB_BASE = "https://api.worldbank.org/v2/country/{country}/indicator/{indicator}"
 _WB_SERIES: list[tuple[str, str, str, float]] = [
     # (country_code, indicator_id, macro_field, scale_factor)
-    ("HKG", "NY.GDP.MKTP.KD.ZG", "gdp_growth", 0.01),         # HK GDP growth %
-    ("CHN", "NY.GDP.MKTP.KD.ZG", "china_gdp_growth", 0.01),   # China GDP growth %
-    ("USA", "NY.GDP.MKTP.KD.ZG", "us_gdp_growth", 0.01),       # US GDP growth %
+    ("HKG", "NY.GDP.MKTP.KD.ZG", "gdp_growth", 0.01),  # HK GDP growth %
+    ("CHN", "NY.GDP.MKTP.KD.ZG", "china_gdp_growth", 0.01),  # China GDP growth %
+    ("USA", "NY.GDP.MKTP.KD.ZG", "us_gdp_growth", 0.01),  # US GDP growth %
 ]
 
 # Cache TTL: re-fetch at most once every 6 hours to avoid hammering APIs
@@ -139,7 +140,8 @@ class ExternalDataFeed:
 
         logger.info(
             "ExternalDataFeed: fetched %d live indicators: %s",
-            len(result), sorted(result.keys()),
+            len(result),
+            sorted(result.keys()),
         )
         return result
 
@@ -207,6 +209,7 @@ class ExternalDataFeed:
             return {}
 
         import httpx  # noqa: PLC0415
+
         result: dict[str, float] = {}
         async with httpx.AsyncClient(timeout=10.0) as client:
             for series_id, field, scale in _FRED_SERIES:
@@ -238,6 +241,7 @@ class ExternalDataFeed:
 
     async def _fetch_world_bank(self) -> dict[str, float]:
         import httpx  # noqa: PLC0415
+
         result: dict[str, float] = {}
         async with httpx.AsyncClient(timeout=15.0) as client:
             for country, indicator, field, scale in _WB_SERIES:

@@ -170,23 +170,17 @@ class ConsensusDebateEngine:
                     all_exchanges.append(exchange)
                     # Accumulate deltas
                     belief_deltas.setdefault(agent_a["id"], {})[topic] = (
-                        belief_deltas.get(agent_a["id"], {}).get(topic, 0.0)
-                        + exchange.agent_a_delta
+                        belief_deltas.get(agent_a["id"], {}).get(topic, 0.0) + exchange.agent_a_delta
                     )
                     belief_deltas.setdefault(agent_b["id"], {})[topic] = (
-                        belief_deltas.get(agent_b["id"], {}).get(topic, 0.0)
-                        + exchange.agent_b_delta
+                        belief_deltas.get(agent_b["id"], {}).get(topic, 0.0) + exchange.agent_b_delta
                     )
 
         # Step 4: Compute consensus scores
-        consensus_scores = self._compute_consensus(
-            agent_beliefs, stakeholder_agents, topics[:_MAX_TOPICS_PER_ROUND]
-        )
+        consensus_scores = self._compute_consensus(agent_beliefs, stakeholder_agents, topics[:_MAX_TOPICS_PER_ROUND])
 
         # Step 5: Persist to DB
-        await self._persist_debate_records(
-            session_id, round_num, all_exchanges, consensus_scores
-        )
+        await self._persist_debate_records(session_id, round_num, all_exchanges, consensus_scores)
 
         result = DebateRoundResult(
             round_number=round_num,
@@ -201,17 +195,11 @@ class ConsensusDebateEngine:
             round_num,
             result.topics_debated,
             result.pairs_debated,
-            (
-                statistics.mean(consensus_scores.values())
-                if consensus_scores
-                else 0.0
-            ),
+            (statistics.mean(consensus_scores.values()) if consensus_scores else 0.0),
         )
         return result
 
-    def get_belief_deltas(
-        self, result: DebateRoundResult
-    ) -> dict[str, dict[str, float]]:
+    def get_belief_deltas(self, result: DebateRoundResult) -> dict[str, dict[str, float]]:
         """Extract per-agent belief deltas from a debate result.
 
         Accumulates deltas across all exchanges, then clamps the total
@@ -234,10 +222,7 @@ class ConsensusDebateEngine:
         # Clamp accumulated totals
         cap = _MAX_TOTAL_DELTA_PER_TOPIC_PER_ROUND
         return {
-            agent_id: {
-                topic: max(-cap, min(cap, delta))
-                for topic, delta in topic_deltas.items()
-            }
+            agent_id: {topic: max(-cap, min(cap, delta)) for topic, delta in topic_deltas.items()}
             for agent_id, topic_deltas in deltas.items()
         }
 
@@ -337,10 +322,7 @@ class ConsensusDebateEngine:
                 agent_profile=a_profile,
                 opponent=agent_b,
                 opponent_stance=b_stance,
-                opponent_argument=(
-                    f"I believe the current trajectory on {topic} "
-                    f"warrants a stance of {b_stance:.2f}."
-                ),
+                opponent_argument=(f"I believe the current trajectory on {topic} warrants a stance of {b_stance:.2f}."),
                 topic=topic,
                 scenario_description=scenario_description,
             )
@@ -376,7 +358,9 @@ class ConsensusDebateEngine:
         except Exception:
             logger.exception(
                 "ConsensusDebate: pairwise debate failed for %s vs %s on %s",
-                a_id, b_id, topic,
+                a_id,
+                b_id,
+                topic,
             )
             return None
 

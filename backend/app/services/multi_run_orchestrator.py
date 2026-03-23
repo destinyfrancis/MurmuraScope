@@ -5,6 +5,7 @@ Runs N lightweight trials from Phase A canonical distributions using
 t-distribution sampling (heavier tails than Gaussian for tail-risk capture).
 No DB writes during trials; only final MultiRunResult is persisted.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -29,9 +30,11 @@ def _clamp_trial_count(n: int) -> int:
 # Data classes
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class CanonicalResult:
     """Phase A canonical simulation output consumed by MultiRunOrchestrator."""
+
     simulation_id: str
     scenario_metrics: tuple[str, ...]
     # agent_id → {metric_id: (mean, std_dev)} from Phase A
@@ -43,21 +46,19 @@ class CanonicalResult:
     # agent_id → tuple of neighbour agent_ids (from Phase A interaction_graph).
     # When present, each trial runs one round of DeGroot-style neighbour
     # averaging before outcome scoring, improving ensemble realism.
-    interaction_graph: dict[str, tuple[str, ...]] = dataclasses.field(
-        default_factory=dict
-    )
+    interaction_graph: dict[str, tuple[str, ...]] = dataclasses.field(default_factory=dict)
 
 
 @dataclass(frozen=True)
 class MultiRunResult:
     simulation_id: str
     trial_count: int
-    outcome_distribution: dict[str, float]             # outcome → probability (sums to 1)
-    most_common_path: list[str]                        # dominant event sequence
+    outcome_distribution: dict[str, float]  # outcome → probability (sums to 1)
+    most_common_path: list[str]  # dominant event sequence
     confidence_intervals: dict[str, tuple[float, float]]  # outcome → 95% CI
     avg_tipping_point_round: float
     faction_stability_score: float
-    importance_weights_used: bool = False              # True when rare_event_threshold set
+    importance_weights_used: bool = False  # True when rare_event_threshold set
 
 
 @dataclass(frozen=True)
@@ -68,17 +69,19 @@ class ReplicateResult:
     LLM seeds produce different canonical results, the spread in outcome
     probabilities quantifies how much the LLM non-determinism matters.
     """
+
     n_replicates: int
-    outcome_means: dict[str, float]       # per-outcome mean probability
-    outcome_variances: dict[str, float]   # per-outcome inter-run variance
-    outcome_std_devs: dict[str, float]    # per-outcome standard deviation
-    epistemic_uncertainty: float          # mean std_dev across outcomes (scalar)
+    outcome_means: dict[str, float]  # per-outcome mean probability
+    outcome_variances: dict[str, float]  # per-outcome inter-run variance
+    outcome_std_devs: dict[str, float]  # per-outcome standard deviation
+    epistemic_uncertainty: float  # mean std_dev across outcomes (scalar)
     summary: str
 
 
 # ---------------------------------------------------------------------------
 # Orchestrator
 # ---------------------------------------------------------------------------
+
 
 class MultiRunOrchestrator:
     """Run N in-memory stochastic trials from Phase A distributions.
@@ -116,13 +119,17 @@ class MultiRunOrchestrator:
         use_is = rare_event_threshold is not None
         logger.info(
             "MultiRunOrchestrator: starting %d trials (concurrency=%d, df=%d, IS=%s)",
-            n, concurrency, df, use_is,
+            n,
+            concurrency,
+            df,
+            use_is,
         )
 
         sem = asyncio.Semaphore(concurrency)
         ci: dict[str, tuple[float, float]]
 
         if use_is:
+
             async def run_trial_is(_: int) -> tuple[str, float]:
                 async with sem:
                     return _simulate_trial_is(
@@ -140,10 +147,7 @@ class MultiRunOrchestrator:
                 weighted_counts[outcome] = weighted_counts.get(outcome, 0.0) + w
             total_w = sum(weighted_counts.values()) or 1.0
             distribution = {o: c / total_w for o, c in weighted_counts.items()}
-            raw_counts_is = {
-                o: sum(1 for out, _ in results_is if out == o)
-                for o in canonical.scenario_outcomes
-            }
+            raw_counts_is = {o: sum(1 for out, _ in results_is if out == o) for o in canonical.scenario_outcomes}
             ci = _compute_confidence_intervals(raw_counts_is, n)
             most_common = max(distribution, key=distribution.get)
 
@@ -204,7 +208,9 @@ class MultiRunOrchestrator:
         if not canonical_list:
             return ReplicateResult(
                 n_replicates=0,
-                outcome_means={}, outcome_variances={}, outcome_std_devs={},
+                outcome_means={},
+                outcome_variances={},
+                outcome_std_devs={},
                 epistemic_uncertainty=0.0,
                 summary="No canonical results provided.",
             )
@@ -228,14 +234,12 @@ class MultiRunOrchestrator:
             n_reps = len(vals)
             mean = sum(vals) / n_reps
             variance = sum((v - mean) ** 2 for v in vals) / max(n_reps - 1, 1)
-            std = variance ** 0.5
+            std = variance**0.5
             means[outcome] = round(mean, 4)
             variances[outcome] = round(variance, 6)
             std_devs[outcome] = round(std, 4)
 
-        epistemic_uncertainty = round(
-            sum(std_devs.values()) / max(len(std_devs), 1), 4
-        )
+        epistemic_uncertainty = round(sum(std_devs.values()) / max(len(std_devs), 1), 4)
 
         top_uncertain = max(std_devs, key=std_devs.get) if std_devs else "none"
         summary = (
@@ -257,6 +261,7 @@ class MultiRunOrchestrator:
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
+
 
 def _sample_t(mean: float, std: float, df: int = 5) -> float:
     """Sample from t-distribution (heavier tails than Gaussian for tail risk)."""
@@ -295,10 +300,7 @@ def _simulate_trial(
     # Sample belief states with t-distribution variation
     sampled_beliefs: dict[str, dict[str, float]] = {}
     for agent_id, metric_dists in canonical.agent_belief_distributions.items():
-        sampled_beliefs[agent_id] = {
-            m: _sample_t(mean, std, df=df)
-            for m, (mean, std) in metric_dists.items()
-        }
+        sampled_beliefs[agent_id] = {m: _sample_t(mean, std, df=df) for m, (mean, std) in metric_dists.items()}
 
     # Optional: 1-hop DeGroot belief propagation
     if canonical.interaction_graph:
@@ -330,10 +332,7 @@ def _simulate_trial(
     n_outcomes = len(canonical.scenario_outcomes)
     for i, outcome in enumerate(canonical.scenario_outcomes):
         natural_level = (i + 1) / n_outcomes
-        score = sum(
-            1.0 - abs(v - natural_level)
-            for v in agg.values()
-        ) / max(len(agg), 1)
+        score = sum(1.0 - abs(v - natural_level) for v in agg.values()) / max(len(agg), 1)
         scores[outcome] = score + random.gauss(0, 0.1)  # add noise
 
     return max(scores, key=scores.get)
@@ -388,6 +387,7 @@ def _importance_sample_beliefs(
     sampling for estimating rare event probabilities in tail regions.
     """
     import math as _math
+
     sampled: dict[str, dict[str, float]] = {}
     for agent_id, metric_dists in canonical.agent_belief_distributions.items():
         agent_beliefs: dict[str, float] = {}
@@ -454,9 +454,7 @@ def _simulate_trial_is(
     n_outcomes = len(canonical.scenario_outcomes)
     for i, outcome in enumerate(canonical.scenario_outcomes):
         natural_level = (i + 1) / n_outcomes
-        score = sum(
-            1.0 - abs(v - natural_level) for v in agg.values()
-        ) / max(len(agg), 1)
+        score = sum(1.0 - abs(v - natural_level) for v in agg.values()) / max(len(agg), 1)
         scores[outcome] = score + random.gauss(0, 0.1)
 
     return max(scores, key=scores.get), importance_weight

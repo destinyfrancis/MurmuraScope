@@ -1,4 +1,5 @@
 """Tests for ExternalDataFeed health check, periodic refresh, and change detection."""
+
 from __future__ import annotations
 
 import pytest
@@ -8,10 +9,10 @@ from backend.app.services.external_data_feed import (
     detect_significant_changes,
 )
 
-
 # ---------------------------------------------------------------------------
 # detect_significant_changes
 # ---------------------------------------------------------------------------
+
 
 class TestDetectSignificantChanges:
     def test_above_threshold_detected(self):
@@ -67,6 +68,7 @@ class TestDetectSignificantChanges:
 # ExternalDataFeed.health_check
 # ---------------------------------------------------------------------------
 
+
 class TestHealthCheck:
     @pytest.mark.asyncio
     async def test_health_check_structure(self, monkeypatch):
@@ -74,6 +76,7 @@ class TestHealthCheck:
         monkeypatch.delenv("FRED_API_KEY", raising=False)
 
         feed = ExternalDataFeed()
+
         # Mock network calls to avoid real API hits
         async def _mock_fred():
             return {}
@@ -159,6 +162,7 @@ class TestHealthCheck:
 # ---------------------------------------------------------------------------
 # Force refresh / cache bypass
 # ---------------------------------------------------------------------------
+
 
 class TestForceRefresh:
     @pytest.mark.asyncio

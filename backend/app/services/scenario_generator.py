@@ -141,13 +141,9 @@ class ScenarioGenerator:
                 temperature=0.3,
             )
         except json.JSONDecodeError as exc:
-            raise RuntimeError(
-                f"ScenarioGenerator: LLM returned non-JSON response: {exc}"
-            ) from exc
+            raise RuntimeError(f"ScenarioGenerator: LLM returned non-JSON response: {exc}") from exc
         except Exception as exc:
-            raise RuntimeError(
-                f"ScenarioGenerator: LLM call failed: {exc}"
-            ) from exc
+            raise RuntimeError(f"ScenarioGenerator: LLM call failed: {exc}") from exc
 
         logger.info("ScenarioGenerator: LLM response received, parsing...")
         return raw
@@ -174,9 +170,7 @@ class ScenarioGenerator:
             shock_types = _parse_shock_types(raw.get("shock_types", []))
             impact_rules = _parse_impact_rules(raw.get("impact_rules", []))
             implied_actors = _parse_implied_actors(raw.get("implied_actors", []))
-            stakeholder_types = _parse_stakeholder_entity_types(
-                raw.get("stakeholder_entity_types", [])
-            )
+            stakeholder_types = _parse_stakeholder_entity_types(raw.get("stakeholder_entity_types", []))
 
             config = UniversalScenarioConfig(
                 scenario_id=str(uuid.uuid4()),
@@ -192,9 +186,7 @@ class ScenarioGenerator:
                 stakeholder_entity_types=tuple(stakeholder_types),
             )
         except (KeyError, TypeError, ValueError) as exc:
-            raise RuntimeError(
-                f"ScenarioGenerator: response validation failed: {exc}"
-            ) from exc
+            raise RuntimeError(f"ScenarioGenerator: response validation failed: {exc}") from exc
 
         logger.info(
             "ScenarioGenerator: config created (decisions=%d, metrics=%d, "
@@ -257,16 +249,12 @@ def _parse_decision_types(items: list[Any]) -> list[UniversalDecisionType]:
 
         raw_actions = item.get("possible_actions", [])
         if not isinstance(raw_actions, list) or not raw_actions:
-            raise ValueError(
-                f"decision_types[{i}] '{slug}' must have non-empty possible_actions"
-            )
+            raise ValueError(f"decision_types[{i}] '{slug}' must have non-empty possible_actions")
         actions = tuple(_sanitise_slug(str(a)) for a in raw_actions)
 
         raw_entity_types = item.get("applicable_entity_types", [])
         entity_types: tuple[str, ...] = (
-            tuple(str(e) for e in raw_entity_types)
-            if isinstance(raw_entity_types, list)
-            else ()
+            tuple(str(e) for e in raw_entity_types) if isinstance(raw_entity_types, list) else ()
         )
 
         result.append(
@@ -347,9 +335,7 @@ def _parse_shock_types(items: list[Any]) -> list[UniversalShockType]:
 
         raw_affected = item.get("affected_metrics", [])
         affected: tuple[str, ...] = (
-            tuple(_sanitise_slug(str(m)) for m in raw_affected)
-            if isinstance(raw_affected, list)
-            else ()
+            tuple(_sanitise_slug(str(m)) for m in raw_affected) if isinstance(raw_affected, list) else ()
         )
 
         raw_range = item.get("severity_range", [0.1, 1.0])
@@ -376,9 +362,7 @@ def _parse_shock_types(items: list[Any]) -> list[UniversalShockType]:
     return result
 
 
-def _parse_severity_range(
-    raw: Any, context: str
-) -> tuple[float, float]:
+def _parse_severity_range(raw: Any, context: str) -> tuple[float, float]:
     """Parse and clamp a severity_range value."""
     try:
         lo, hi = float(raw[0]), float(raw[1])
@@ -455,16 +439,16 @@ def _parse_implied_actors(raw_list: list[Any]) -> list[ImpliedActor]:
     result: list[ImpliedActor] = []
     for item in raw_list[:30]:  # cap at 30
         try:
-            actor_id = _validate_slug(
-                item.get("id", ""), f"implied_actor[{item.get('name', '?')}]"
+            actor_id = _validate_slug(item.get("id", ""), f"implied_actor[{item.get('name', '?')}]")
+            result.append(
+                ImpliedActor(
+                    id=actor_id,
+                    name=str(item.get("name", "")).strip(),
+                    entity_type=str(item.get("entity_type", "Organization")).strip(),
+                    role=str(item.get("role", "")).strip(),
+                    relevance_reason=str(item.get("relevance_reason", "")).strip(),
+                )
             )
-            result.append(ImpliedActor(
-                id=actor_id,
-                name=str(item.get("name", "")).strip(),
-                entity_type=str(item.get("entity_type", "Organization")).strip(),
-                role=str(item.get("role", "")).strip(),
-                relevance_reason=str(item.get("relevance_reason", "")).strip(),
-            ))
         except Exception as exc:
             logger.warning("ScenarioGenerator: skipping malformed implied_actor: %s", exc)
     return result

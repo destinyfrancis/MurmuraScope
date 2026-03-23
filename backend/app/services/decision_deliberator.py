@@ -16,14 +16,11 @@ back to stochastic conservative defaults.
 from __future__ import annotations
 
 import asyncio
-import json
 import random
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import Any
 
-import aiosqlite
-
-from backend.app.models.decision import AgentDecision, DecisionType, DECISION_ACTIONS
+from backend.app.models.decision import DECISION_ACTIONS, AgentDecision, DecisionType
 from backend.app.services.agent_factory import AgentProfile
 from backend.app.services.macro_state import MacroState
 from backend.app.utils.db import get_db
@@ -45,8 +42,12 @@ _BASE_BACKOFF_SEC: float = 2.0
 
 # Predicates in memory_triples that signal peer distress
 _DISTRESS_PREDICATES: tuple[str, ...] = (
-    "worries_about", "emigrated", "lost_job", "decreases",
-    "opposes", "causes",
+    "worries_about",
+    "emigrated",
+    "lost_job",
+    "decreases",
+    "opposes",
+    "causes",
 )
 
 # Decision actions that signal peer distress (for social contagion)
@@ -92,10 +93,7 @@ class SocialContagionContext:
             return ""
 
         lines = ["【社交傳染警報 SOCIAL CONTAGION】"]
-        lines.append(
-            f"你信任嘅朋友/同事中，{len(self.distress_signals)} 個人"
-            f"（{self.distress_ratio:.0%}）正經歷困擾："
-        )
+        lines.append(f"你信任嘅朋友/同事中，{len(self.distress_signals)} 個人（{self.distress_ratio:.0%}）正經歷困擾：")
         for sig in self.distress_signals[:5]:  # Max 5 signals in prompt
             lines.append(f"  - @{sig.peer_username} (信任度 {sig.trust_score:.2f}): {sig.detail}")
 
@@ -122,23 +120,38 @@ _DEFAULT_ACTION_FALLBACKS: dict[str, str] = {
 # instead of all defaulting to the same conservative action.
 _STOCHASTIC_FALLBACK_DIST: dict[str, tuple[tuple[str, float], ...]] = {
     DecisionType.BUY_PROPERTY: (
-        ("wait", 0.60), ("rent_more", 0.25), ("sell", 0.05), ("buy", 0.10),
+        ("wait", 0.60),
+        ("rent_more", 0.25),
+        ("sell", 0.05),
+        ("buy", 0.10),
     ),
     DecisionType.EMIGRATE: (
-        ("stay", 0.70), ("consider_later", 0.20), ("emigrate", 0.10),
+        ("stay", 0.70),
+        ("consider_later", 0.20),
+        ("emigrate", 0.10),
     ),
     DecisionType.CHANGE_JOB: (
-        ("stay", 0.65), ("upskill", 0.25), ("change_job", 0.08), ("retire_early", 0.02),
+        ("stay", 0.65),
+        ("upskill", 0.25),
+        ("change_job", 0.08),
+        ("retire_early", 0.02),
     ),
     DecisionType.INVEST: (
-        ("hold_cash", 0.50), ("diversify", 0.25), ("invest_stocks", 0.15),
-        ("invest_property", 0.05), ("invest_crypto", 0.05),
+        ("hold_cash", 0.50),
+        ("diversify", 0.25),
+        ("invest_stocks", 0.15),
+        ("invest_property", 0.05),
+        ("invest_crypto", 0.05),
     ),
     DecisionType.HAVE_CHILD: (
-        ("delay", 0.60), ("no_child", 0.30), ("have_child", 0.10),
+        ("delay", 0.60),
+        ("no_child", 0.30),
+        ("have_child", 0.10),
     ),
     DecisionType.ADJUST_SPENDING: (
-        ("maintain", 0.50), ("cut_spending", 0.30), ("increase_savings", 0.15),
+        ("maintain", 0.50),
+        ("cut_spending", 0.30),
+        ("increase_savings", 0.15),
         ("spend_more", 0.05),
     ),
 }
@@ -148,12 +161,11 @@ _STOCHASTIC_FALLBACK_DIST: dict[str, tuple[tuple[str, float], ...]] = {
 # Deliberator
 # ---------------------------------------------------------------------------
 
+
 class DecisionDeliberator:
     """Batch LLM deliberation for agent decisions with social contagion."""
 
-    def __init__(
-        self, llm_client: LLMClient | None = None, seed: int = 42
-    ) -> None:
+    def __init__(self, llm_client: LLMClient | None = None, seed: int = 42) -> None:
         self._client = llm_client or LLMClient()
         self._rng = random.Random(seed)
 
@@ -212,10 +224,7 @@ class DecisionDeliberator:
                     )
 
                 trusted_ids = [r[0] for r in trusted_peers]
-                peer_info = {
-                    r[0]: (float(r[1]), str(r[2]))
-                    for r in trusted_peers
-                }
+                peer_info = {r[0]: (float(r[1]), str(r[2])) for r in trusted_peers}
 
                 # 2. Query memory_triples for distress predicates from trusted peers
                 if trusted_ids:
@@ -239,13 +248,15 @@ class DecisionDeliberator:
                         predicate = row[1]
                         obj = row[2] or ""
                         trust, username = peer_info.get(peer_id, (0.0, f"agent_{peer_id}"))
-                        signals.append(PeerDistressSignal(
-                            peer_agent_id=peer_id,
-                            peer_username=username,
-                            signal_type="triple",
-                            detail=f"{predicate}: {obj}",
-                            trust_score=trust,
-                        ))
+                        signals.append(
+                            PeerDistressSignal(
+                                peer_agent_id=peer_id,
+                                peer_username=username,
+                                signal_type="triple",
+                                detail=f"{predicate}: {obj}",
+                                trust_score=trust,
+                            )
+                        )
 
                 # 3. Query agent_decisions for recent distress actions from trusted peers
                 distress_actions = _DISTRESS_ACTIONS.get(decision_type, ())
@@ -286,18 +297,18 @@ class DecisionDeliberator:
                         action = row[2]
                         reasoning = (row[3] or "")[:80]
                         trust, username = peer_info.get(peer_id, (0.0, f"agent_{peer_id}"))
-                        signals.append(PeerDistressSignal(
-                            peer_agent_id=peer_id,
-                            peer_username=username,
-                            signal_type="decision",
-                            detail=f"決定 {action} ({reasoning})",
-                            trust_score=trust,
-                        ))
+                        signals.append(
+                            PeerDistressSignal(
+                                peer_agent_id=peer_id,
+                                peer_username=username,
+                                signal_type="decision",
+                                detail=f"決定 {action} ({reasoning})",
+                                trust_score=trust,
+                            )
+                        )
 
         except Exception:
-            logger.exception(
-                "query_social_contagion failed session=%s agent=%d", session_id, agent_id
-            )
+            logger.exception("query_social_contagion failed session=%s agent=%d", session_id, agent_id)
             return SocialContagionContext(
                 agent_id=agent_id,
                 distress_signals=(),
@@ -312,14 +323,8 @@ class DecisionDeliberator:
             if existing is None or sig.trust_score > existing.trust_score:
                 best_by_peer[sig.peer_agent_id] = sig
 
-        unique_signals = tuple(
-            sorted(best_by_peer.values(), key=lambda s: s.trust_score, reverse=True)
-        )
-        distress_ratio = (
-            len(unique_signals) / len(trusted_ids)
-            if trusted_ids
-            else 0.0
-        )
+        unique_signals = tuple(sorted(best_by_peer.values(), key=lambda s: s.trust_score, reverse=True))
+        distress_ratio = len(unique_signals) / len(trusted_ids) if trusted_ids else 0.0
         contagion_active = len(unique_signals) >= 3
 
         return SocialContagionContext(
@@ -365,30 +370,32 @@ class DecisionDeliberator:
         # Query social contagion for each agent (batched DB queries)
         contagion_map: dict[int, SocialContagionContext] = {}
         for agent in eligible_agents:
-            ctx = await self.query_social_contagion(
-                session_id, agent.id, decision_type
-            )
+            ctx = await self.query_social_contagion(session_id, agent.id, decision_type)
             if ctx.contagion_active:
                 contagion_map[agent.id] = ctx
 
         if contagion_map:
             logger.info(
                 "Social contagion active for %d/%d agents, type=%s session=%s",
-                len(contagion_map), len(eligible_agents), decision_type, session_id,
+                len(contagion_map),
+                len(eligible_agents),
+                decision_type,
+                session_id,
             )
 
         all_decisions: list[AgentDecision] = []
         # Split into batches and run concurrently with limited parallelism
-        chunks = [
-            eligible_agents[start : start + batch_size]
-            for start in range(0, len(eligible_agents), batch_size)
-        ]
+        chunks = [eligible_agents[start : start + batch_size] for start in range(0, len(eligible_agents), batch_size)]
         sem = asyncio.Semaphore(3)
 
         async def _limited_batch(chunk: list[AgentProfile]) -> list[AgentDecision]:
             async with sem:
                 return await self._deliberate_one_batch(
-                    chunk, macro_state, decision_type, session_id, round_number,
+                    chunk,
+                    macro_state,
+                    decision_type,
+                    session_id,
+                    round_number,
                     contagion_map=contagion_map,
                     agent_enrichment=agent_enrichment,
                 )
@@ -401,7 +408,9 @@ class DecisionDeliberator:
             if isinstance(result, Exception):
                 logger.error(
                     "Batch deliberation failed for type=%s session=%s: %s",
-                    decision_type, session_id, result,
+                    decision_type,
+                    session_id,
+                    result,
                 )
             else:
                 all_decisions.extend(result)
@@ -445,12 +454,12 @@ class DecisionDeliberator:
                 if ctx is not None and ctx.contagion_active:
                     section = ctx.to_prompt_section()
                     if section:
-                        contagion_sections.append(
-                            f"--- agent_id={agent.id} 社交傳染 ---\n{section}"
-                        )
+                        contagion_sections.append(f"--- agent_id={agent.id} 社交傳染 ---\n{section}")
 
         messages = build_deliberation_prompt(
-            agents, macro_state, decision_type,
+            agents,
+            macro_state,
+            decision_type,
             contagion_context="\n\n".join(contagion_sections) if contagion_sections else None,
             agent_enrichment=agent_enrichment,
         )
@@ -471,10 +480,14 @@ class DecisionDeliberator:
             except Exception as exc:
                 last_exc = exc
                 if attempt < _MAX_RETRIES:
-                    backoff = _BASE_BACKOFF_SEC * (2 ** attempt)
+                    backoff = _BASE_BACKOFF_SEC * (2**attempt)
                     logger.warning(
                         "LLM attempt %d/%d failed for decision_type=%s session=%s — retrying in %.1fs",
-                        attempt + 1, _MAX_RETRIES + 1, decision_type, session_id, backoff,
+                        attempt + 1,
+                        _MAX_RETRIES + 1,
+                        decision_type,
+                        session_id,
+                        backoff,
                     )
                     await asyncio.sleep(backoff)
 
@@ -508,9 +521,7 @@ class DecisionDeliberator:
             if agent_id in seen_ids:
                 continue  # deduplicate
 
-            action = _validate_action(
-                str(item.get("action", "")), decision_type
-            )
+            action = _validate_action(str(item.get("action", "")), decision_type)
             reasoning = str(item.get("reasoning", ""))[:300]
             confidence = _clamp_float(item.get("confidence", _DEFAULT_CONFIDENCE))
 
@@ -530,9 +541,7 @@ class DecisionDeliberator:
         # Fill in any agents the LLM omitted
         for p in agents:
             if p.id not in seen_ids:
-                decisions.append(
-                    self._make_fallback(p, decision_type, session_id, round_number)
-                )
+                decisions.append(self._make_fallback(p, decision_type, session_id, round_number))
 
         return decisions
 
@@ -543,10 +552,7 @@ class DecisionDeliberator:
         session_id: str,
         round_number: int,
     ) -> list[AgentDecision]:
-        return [
-            self._make_fallback(p, decision_type, session_id, round_number)
-            for p in agents
-        ]
+        return [self._make_fallback(p, decision_type, session_id, round_number) for p in agents]
 
     def _stochastic_fallback(self, decision_type: str) -> dict[str, Any]:
         """Choose a conservative action from a weighted distribution.
@@ -600,6 +606,7 @@ class DecisionDeliberator:
 # ---------------------------------------------------------------------------
 # Helper functions
 # ---------------------------------------------------------------------------
+
 
 def _extract_list(raw: Any) -> list[dict[str, Any]] | None:
     """Extract a list of dicts from the LLM response.

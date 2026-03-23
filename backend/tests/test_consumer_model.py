@@ -2,21 +2,21 @@
 
 from __future__ import annotations
 
-import pytest
 from dataclasses import replace
 
+import pytest
+
 from backend.app.services.consumer_model import (
+    _PRICE_ELASTICITY,
     ConsumerModel,
     SpendingProfile,
-    _PRICE_ELASTICITY,
-    _clamp,
 )
 from backend.app.services.macro_state import MacroState
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture()
 def model() -> ConsumerModel:
@@ -86,8 +86,12 @@ class TestSpendingProfile:
     def test_validation_rejects_negative(self) -> None:
         with pytest.raises(ValueError):
             SpendingProfile(
-                food=-0.1, housing=0.3, transport=0.1,
-                entertainment=0.1, education=0.05, healthcare=0.05,
+                food=-0.1,
+                housing=0.3,
+                transport=0.1,
+                entertainment=0.1,
+                education=0.05,
+                healthcare=0.05,
                 savings_rate=0.5,
             )
 
@@ -109,26 +113,32 @@ class TestPriceElasticity:
         assert abs(_PRICE_ELASTICITY["entertainment"]) > abs(_PRICE_ELASTICITY["transport"])
 
     def test_high_inflation_reduces_entertainment_more_than_transport(
-        self, model: ConsumerModel, base_spending: SpendingProfile,
+        self,
+        model: ConsumerModel,
+        base_spending: SpendingProfile,
         high_inflation_macro: MacroState,
     ) -> None:
         adjusted = model.adjust_spending(
-            base_spending, high_inflation_macro, "neutral",
+            base_spending,
+            high_inflation_macro,
+            "neutral",
         )
         ent_cut = base_spending.entertainment - adjusted.entertainment
         trans_cut = base_spending.transport - adjusted.transport
         # Entertainment (elasticity -1.2) should be cut more than transport (-0.5)
-        assert ent_cut > trans_cut, (
-            f"Entertainment cut {ent_cut:.4f} should exceed transport cut {trans_cut:.4f}"
-        )
+        assert ent_cut > trans_cut, f"Entertainment cut {ent_cut:.4f} should exceed transport cut {trans_cut:.4f}"
 
     def test_low_inflation_no_elasticity_effect(
-        self, model: ConsumerModel, base_spending: SpendingProfile,
+        self,
+        model: ConsumerModel,
+        base_spending: SpendingProfile,
         base_macro: MacroState,
     ) -> None:
         """When CPI <= 3%, price elasticity should not kick in."""
         adjusted = model.adjust_spending(
-            base_spending, base_macro, "neutral",
+            base_spending,
+            base_macro,
+            "neutral",
         )
         # No inflation excess, so entertainment should not be cut by elasticity
         # (other adjustments like sentiment may still apply, but no elasticity)
@@ -136,11 +146,15 @@ class TestPriceElasticity:
         assert adjusted.entertainment >= base_spending.entertainment * 0.95
 
     def test_education_less_elastic_than_entertainment(
-        self, model: ConsumerModel, base_spending: SpendingProfile,
+        self,
+        model: ConsumerModel,
+        base_spending: SpendingProfile,
         high_inflation_macro: MacroState,
     ) -> None:
         adjusted = model.adjust_spending(
-            base_spending, high_inflation_macro, "neutral",
+            base_spending,
+            high_inflation_macro,
+            "neutral",
         )
         ent_pct_cut = (base_spending.entertainment - adjusted.entertainment) / base_spending.entertainment
         edu_pct_cut = (base_spending.education - adjusted.education) / base_spending.education

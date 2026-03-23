@@ -7,10 +7,8 @@ to generate alpha signals with strength and direction.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 from backend.app.services.consensus_estimator import ConsensusEstimate, ConsensusEstimator
-from backend.app.services.polymarket_client import PolymarketContract
 from backend.app.services.scenario_matcher import ContractMatch
 from backend.app.utils.db import get_db
 from backend.app.utils.logger import get_logger
@@ -28,18 +26,19 @@ _STRENGTH_MODERATE = 0.08
 @dataclass(frozen=True)
 class TradingSignal:
     """Immutable trading signal for a Polymarket contract."""
+
     contract_id: str
     contract_question: str
-    market_price: float         # current YES price on Polymarket
-    engine_probability: float   # our estimated P(YES)
-    alpha: float                # engine_prob - market_price
-    direction: str              # BUY_YES | BUY_NO | HOLD
-    strength: str               # strong | moderate | weak
-    strength_score: float       # [0, 1] numeric strength
-    confidence: float           # engine confidence [0, 1]
+    market_price: float  # current YES price on Polymarket
+    engine_probability: float  # our estimated P(YES)
+    alpha: float  # engine_prob - market_price
+    direction: str  # BUY_YES | BUY_NO | HOLD
+    strength: str  # strong | moderate | weak
+    strength_score: float  # [0, 1] numeric strength
+    confidence: float  # engine confidence [0, 1]
     supporting_agents: int
     opposing_agents: int
-    reasoning: str              # human-readable explanation
+    reasoning: str  # human-readable explanation
 
 
 class SignalGenerator:
@@ -72,9 +71,7 @@ class SignalGenerator:
                     session_id, contract.question, domain_pack_id=domain_pack_id
                 )
             except Exception:
-                logger.exception(
-                    "Consensus estimation failed for contract %s", contract.id
-                )
+                logger.exception("Consensus estimation failed for contract %s", contract.id)
                 continue
 
             # Market price = YES outcome price (first outcome)
@@ -102,9 +99,7 @@ class SignalGenerator:
             else:
                 strength = "weak"
 
-            reasoning = self._build_reasoning(
-                contract.question, market_price, estimate, alpha, direction
-            )
+            reasoning = self._build_reasoning(contract.question, market_price, estimate, alpha, direction)
 
             signal = TradingSignal(
                 contract_id=contract.id,
@@ -145,9 +140,7 @@ class SignalGenerator:
             logger.debug("Could not fetch domain_pack for session=%s", session_id)
             return None
 
-    async def _persist_signals(
-        self, session_id: str, signals: list[TradingSignal]
-    ) -> None:
+    async def _persist_signals(self, session_id: str, signals: list[TradingSignal]) -> None:
         """Save signals to prediction_signals table."""
         try:
             async with get_db() as db:
@@ -178,10 +171,18 @@ class SignalGenerator:
                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     [
                         (
-                            session_id, s.contract_id, s.contract_question,
-                            s.market_price, s.engine_probability, s.alpha,
-                            s.direction, s.strength, s.strength_score,
-                            s.confidence, s.supporting_agents, s.opposing_agents,
+                            session_id,
+                            s.contract_id,
+                            s.contract_question,
+                            s.market_price,
+                            s.engine_probability,
+                            s.alpha,
+                            s.direction,
+                            s.strength,
+                            s.strength_score,
+                            s.confidence,
+                            s.supporting_agents,
+                            s.opposing_agents,
                             s.reasoning,
                         )
                         for s in signals
@@ -205,9 +206,7 @@ class SignalGenerator:
         engine_pct = f"{estimate.probability:.0%}"
         alpha_pct = f"{alpha:+.1%}"
 
-        dir_zh = {"BUY_YES": "買入 YES", "BUY_NO": "買入 NO", "HOLD": "觀望"}.get(
-            direction, direction
-        )
+        dir_zh = {"BUY_YES": "買入 YES", "BUY_NO": "買入 NO", "HOLD": "觀望"}.get(direction, direction)
 
         return (
             f"市場定價 {market_pct}，引擎估算 {engine_pct}（alpha {alpha_pct}）。"

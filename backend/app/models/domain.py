@@ -1,4 +1,5 @@
 """Domain pack and data connector models."""
+
 from __future__ import annotations
 
 from typing import Literal

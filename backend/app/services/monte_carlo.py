@@ -23,9 +23,7 @@ from backend.app.services.calibrated_coefficients import CalibratedCoefficients
 from backend.app.utils.db import get_db
 from backend.app.utils.logger import get_logger
 
-_CALIBRATION_PATH = (
-    Path(__file__).resolve().parent.parent.parent.parent / "data" / "calibration_coefficients.json"
-)
+_CALIBRATION_PATH = Path(__file__).resolve().parent.parent.parent.parent / "data" / "calibration_coefficients.json"
 
 logger = get_logger("monte_carlo")
 
@@ -53,7 +51,7 @@ def _mc_trial_worker(
         cov_matrix_diag_sd,  # 1-D array of std-devs for the 4 correlated vars
         has_cov,
         ci_multiplier,
-        coefficients_dict,   # plain dict extracted from CalibratedCoefficients
+        coefficients_dict,  # plain dict extracted from CalibratedCoefficients
         pair_std_errs,
     ) = args
 
@@ -120,18 +118,21 @@ def _mc_trial_worker(
         return slope
 
     # -- Derive outcome metrics -----------------------------------------------
-    buy_property_rate = float(np.clip(
-        buy_conf * 0.6
-        - interest * _perturbed_coef("ccl_index", "negative_ratio", 3.0)
-        - geo_risk * 0.2,
-        0.0, 1.0,
-    ))
+    buy_property_rate = float(
+        np.clip(
+            buy_conf * 0.6 - interest * _perturbed_coef("ccl_index", "negative_ratio", 3.0) - geo_risk * 0.2,
+            0.0,
+            1.0,
+        )
+    )
 
-    emigrate_rate = float(np.clip(
-        emigrate_conf * 0.5
-        + geo_risk * 0.3,
-        0.0, 1.0,
-    ))
+    emigrate_rate = float(
+        np.clip(
+            emigrate_conf * 0.5 + geo_risk * 0.3,
+            0.0,
+            1.0,
+        )
+    )
 
     ccl_index_change = float(
         buy_property_rate * 5.0
@@ -160,9 +161,7 @@ def _mc_trial_worker(
     hsi_change = float(
         # GDP-to-stock-market elasticity: meta-analysis suggests r < 0.3; using 0.25
         # as empirical upper bound. Previous hand-tuned value of 0.6 implied ~2× over-sensitivity.
-        gdp_growth * 0.25 * hsi_base
-        + pos_ratio * hsi_pos_coef * hsi_base
-        - neg_ratio * hsi_neg_coef * hsi_base
+        gdp_growth * 0.25 * hsi_base + pos_ratio * hsi_pos_coef * hsi_base - neg_ratio * hsi_neg_coef * hsi_base
     )
 
     cc_neg = _perturbed_coef("consumer_confidence", "negative_ratio", -8.0)
@@ -171,10 +170,7 @@ def _mc_trial_worker(
         # CCI sensitivity: Conference Board analysis and HK Census & Statistics data suggest
         # GDP 1% ↑ → CCI +3-5 pts; unemployment 1pp ↑ → CCI -5-10 pts.
         # Previous hand-tuned values (40 / 20) were ~3× too high — scaling down accordingly.
-        gdp_growth * 15.0
-        - unemployment * 8.0
-        + pos_ratio * cc_pos
-        + neg_ratio * cc_neg
+        gdp_growth * 15.0 - unemployment * 8.0 + pos_ratio * cc_pos + neg_ratio * cc_neg
     )
 
     return {
@@ -186,6 +182,7 @@ def _mc_trial_worker(
         "hsi_change": hsi_change,
         "consumer_confidence_change": consumer_confidence_change,
     }
+
 
 # Correlated macro variables for Cholesky decomposition.
 # Order matters — must match row/column order in covariance matrix.
@@ -308,6 +305,7 @@ def _t_copula_sample(
         rng = np.random.default_rng()
     try:
         from scipy import stats  # noqa: PLC0415
+
         # 1. Chi-squared scaling factor
         chi2 = rng.chisquare(df, size=n_samples)
         # 2. Multivariate normal via Cholesky
@@ -382,6 +380,7 @@ class MonteCarloEngine:
         pack_correlated = _CORRELATED_VARS
         try:
             from backend.app.domain.base import DomainPackRegistry  # noqa: PLC0415
+
             pack = DomainPackRegistry.get(domain_pack_id)
             if pack.mc_default_metrics:
                 pack_metrics = list(pack.mc_default_metrics)
@@ -414,7 +413,10 @@ class MonteCarloEngine:
 
         logger.info(
             "MC run session=%s trials=%d metrics=%s data_integrity=%.2f",
-            session_id, n_trials, metrics, data_integrity,
+            session_id,
+            n_trials,
+            metrics,
+            data_integrity,
         )
 
         # Build per-pair OLS std_err lookup for calibration-driven perturbations
@@ -445,25 +447,19 @@ class MonteCarloEngine:
             np.fill_diagonal(corr_matrix, 1.0)
 
             copula_samples = self._apply_t_copula(
-                lhs_samples[:, :n_correlated], corr_matrix, df=5,
+                lhs_samples[:, :n_correlated],
+                corr_matrix,
+                df=5,
             )
             # Replace first n_correlated columns with copula-transformed samples
             lhs_samples = np.column_stack([copula_samples, lhs_samples[:, n_correlated:]])
 
         # Extract coefficients dict for pickling (avoids passing the full
         # CalibratedCoefficients object which contains a Path and lazy state).
-        coef_dict: dict[str, dict[str, float]] = (
-            calibrated_coefs.to_dict()
-            if calibrated_coefs is not None
-            else {}
-        )
+        coef_dict: dict[str, dict[str, float]] = calibrated_coefs.to_dict() if calibrated_coefs is not None else {}
 
         # Compute per-variable std-devs once; passed as a plain 1-D ndarray.
-        cov_diag_sd = (
-            np.sqrt(np.diag(cov_matrix)).tolist()
-            if cov_matrix is not None
-            else [0.0] * len(_CORRELATED_VARS)
-        )
+        cov_diag_sd = np.sqrt(np.diag(cov_matrix)).tolist() if cov_matrix is not None else [0.0] * len(_CORRELATED_VARS)
 
         # Build args list — every element must be picklable.
         args_list = [
@@ -505,14 +501,16 @@ class MonteCarloEngine:
             if len(values) == 0:
                 continue
             p10, p25, p50, p75, p90 = np.percentile(values, [10, 25, 50, 75, 90])
-            bands.append(DistributionBand(
-                metric_name=metric,
-                p10=float(p10),
-                p25=float(p25),
-                p50=float(p50),
-                p75=float(p75),
-                p90=float(p90),
-            ))
+            bands.append(
+                DistributionBand(
+                    metric_name=metric,
+                    p10=float(p10),
+                    p25=float(p25),
+                    p50=float(p50),
+                    p75=float(p75),
+                    p90=float(p90),
+                )
+            )
 
         # Persist to DB
         await self._persist_results(session_id, n_trials, bands)
@@ -602,20 +600,24 @@ class MonteCarloEngine:
             if len(values) == 0:
                 continue
             p10, p25, p50, p75, p90 = np.percentile(values, [10, 25, 50, 75, 90])
-            bands.append(DistributionBand(
-                metric_name=metric,
-                p10=float(p10),
-                p25=float(p25),
-                p50=float(p50),
-                p75=float(p75),
-                p90=float(p90),
-            ))
+            bands.append(
+                DistributionBand(
+                    metric_name=metric,
+                    p10=float(p10),
+                    p25=float(p25),
+                    p50=float(p50),
+                    p75=float(p75),
+                    p90=float(p90),
+                )
+            )
 
         await self._persist_results(session_id, n_trials, bands)
 
         logger.info(
             "Generic MC complete session=%s trials=%d metrics=%d",
-            session_id, n_trials, len(bands),
+            session_id,
+            n_trials,
+            len(bands),
         )
         return EnsembleResult(
             session_id=session_id,
@@ -657,9 +659,7 @@ class MonteCarloEngine:
                 if topic in baselines:
                     baselines[topic] = float(row["mean_stance"])
         except Exception:
-            logger.exception(
-                "_load_generic_base_values failed session=%s", session_id
-            )
+            logger.exception("_load_generic_base_values failed session=%s", session_id)
         return baselines
 
     async def get_cached_result(self, session_id: str) -> EnsembleResult | None:
@@ -778,13 +778,16 @@ class MonteCarloEngine:
                             break  # use first available
 
         # Assumed correlation matrix (economic theory priors)
-        corr = np.array([
-            # gdp    unemp   conf    hsi
-            [1.00,  -0.60,   0.50,   0.40],   # gdp_growth
-            [-0.60,  1.00,  -0.50,  -0.30],   # unemployment_rate
-            [0.50,  -0.50,   1.00,   0.60],   # consumer_confidence
-            [0.40,  -0.30,   0.60,   1.00],   # hsi_level
-        ], dtype=np.float64)
+        corr = np.array(
+            [
+                # gdp    unemp   conf    hsi
+                [1.00, -0.60, 0.50, 0.40],  # gdp_growth
+                [-0.60, 1.00, -0.50, -0.30],  # unemployment_rate
+                [0.50, -0.50, 1.00, 0.60],  # consumer_confidence
+                [0.40, -0.30, 0.60, 1.00],  # hsi_level
+            ],
+            dtype=np.float64,
+        )
 
         # Build covariance matrix: cov[i,j] = corr[i,j] * std[i] * std[j]
         sd = np.array([std_devs[v] for v in _CORRELATED_VARS], dtype=np.float64)
@@ -954,9 +957,14 @@ class MonteCarloEngine:
                     try:
                         macro = json.loads(row["macro_json"])
                         for key in (
-                            "gdp_growth", "unemployment_rate", "ccl_index",
-                            "hsi_level", "consumer_confidence", "net_migration",
-                            "interest_rate", "taiwan_strait_risk",
+                            "gdp_growth",
+                            "unemployment_rate",
+                            "ccl_index",
+                            "hsi_level",
+                            "consumer_confidence",
+                            "net_migration",
+                            "interest_rate",
+                            "taiwan_strait_risk",
                         ):
                             if key in macro and macro[key] is not None:
                                 base[key] = float(macro[key])
@@ -982,9 +990,7 @@ class MonteCarloEngine:
                         base["negative_ratio"] = float(sent_row[1])
 
         except Exception:
-            logger.warning(
-                "Could not load base data for session=%s, using defaults", session_id
-            )
+            logger.warning("Could not load base data for session=%s, using defaults", session_id)
 
         return base
 
@@ -1102,19 +1108,22 @@ class MonteCarloEngine:
 
         # -- Derive outcome metrics using calibrated coefficients ----------------
         # buy_property_rate: driven by confidence, penalised by interest + geo risk
-        buy_property_rate = float(np.clip(
-            buy_conf * 0.6
-            - interest * _perturbed_coef("ccl_index", "negative_ratio", 3.0)
-            - geo_risk * 0.2,
-            0.0, 1.0,
-        ))
+        buy_property_rate = float(
+            np.clip(
+                buy_conf * 0.6 - interest * _perturbed_coef("ccl_index", "negative_ratio", 3.0) - geo_risk * 0.2,
+                0.0,
+                1.0,
+            )
+        )
 
         # emigrate_rate: driven by emigrate confidence + geo risk
-        emigrate_rate = float(np.clip(
-            emigrate_conf * 0.5
-            + geo_risk * 0.3,
-            0.0, 1.0,
-        ))
+        emigrate_rate = float(
+            np.clip(
+                emigrate_conf * 0.5 + geo_risk * 0.3,
+                0.0,
+                1.0,
+            )
+        )
 
         # ccl_index_change: property demand - rate pressure - sentiment
         ccl_index_change = float(
@@ -1142,19 +1151,14 @@ class MonteCarloEngine:
         hsi_pos_coef = _perturbed_coef("hsi_level", "positive_ratio", 0.15)
         hsi_neg_coef = abs(_perturbed_coef("hsi_level", "stock_market_positive", 0.10))
         hsi_change = float(
-            gdp_growth * 0.6 * hsi_base
-            + pos_ratio * hsi_pos_coef * hsi_base
-            - neg_ratio * hsi_neg_coef * hsi_base
+            gdp_growth * 0.6 * hsi_base + pos_ratio * hsi_pos_coef * hsi_base - neg_ratio * hsi_neg_coef * hsi_base
         )
 
         # consumer_confidence_change: calibrated sentiment coefficients
         cc_neg = _perturbed_coef("consumer_confidence", "negative_ratio", -8.0)
         cc_pos = _perturbed_coef("consumer_confidence", "positive_ratio", 5.0)
         consumer_confidence_change = float(
-            gdp_growth * 40.0
-            - unemployment * 20.0
-            + pos_ratio * cc_pos
-            + neg_ratio * cc_neg
+            gdp_growth * 40.0 - unemployment * 20.0 + pos_ratio * cc_pos + neg_ratio * cc_neg
         )
 
         return {
@@ -1187,8 +1191,7 @@ class MonteCarloEngine:
                     (session_id,),
                 )
                 rows_to_insert = [
-                    (session_id, n_trials, b.metric_name, b.p10, b.p25, b.p50, b.p75, b.p90)
-                    for b in bands
+                    (session_id, n_trials, b.metric_name, b.p10, b.p25, b.p50, b.p75, b.p90) for b in bands
                 ]
                 await db.executemany(
                     """
@@ -1201,7 +1204,9 @@ class MonteCarloEngine:
                 await db.commit()
             logger.debug(
                 "Persisted %d distribution bands for session=%s n_trials=%d",
-                len(bands), session_id, n_trials,
+                len(bands),
+                session_id,
+                n_trials,
             )
         except Exception:
             logger.exception("_persist_results failed session=%s", session_id)
@@ -1236,7 +1241,8 @@ class MonteCarloEngine:
         if not result.is_fitted or result.train_accuracy < 0.4:
             logger.info(
                 "Surrogate not viable (fitted=%s acc=%.3f) — falling back to standard MC",
-                result.is_fitted, result.train_accuracy,
+                result.is_fitted,
+                result.train_accuracy,
             )
             ensemble = await self.run(session_id, n_trials=min(n_trials, 200), metrics=metrics)
             return {
@@ -1246,8 +1252,11 @@ class MonteCarloEngine:
                 "distributions": [
                     {
                         "metric": b.metric_name,
-                        "p10": b.p10, "p25": b.p25, "p50": b.p50,
-                        "p75": b.p75, "p90": b.p90,
+                        "p10": b.p10,
+                        "p25": b.p25,
+                        "p50": b.p50,
+                        "p75": b.p75,
+                        "p90": b.p90,
                     }
                     for b in ensemble.distributions
                 ],
@@ -1264,15 +1273,14 @@ class MonteCarloEngine:
 
         # Compute distribution over outcomes
         total = sum(predictions.values())
-        distribution = {
-            k: round(v / total, 4) for k, v in sorted(
-                predictions.items(), key=lambda x: -x[1]
-            )
-        }
+        distribution = {k: round(v / total, 4) for k, v in sorted(predictions.items(), key=lambda x: -x[1])}
 
         logger.info(
             "Surrogate MC completed session=%s trials=%d accuracy=%.3f classes=%d",
-            session_id, n_trials, result.train_accuracy, result.n_classes,
+            session_id,
+            n_trials,
+            result.train_accuracy,
+            result.n_classes,
         )
 
         return {

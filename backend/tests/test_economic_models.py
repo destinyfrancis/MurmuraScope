@@ -9,14 +9,15 @@ Covers:
 from __future__ import annotations
 
 import dataclasses
+
 import pytest
 
-from backend.app.services.macro_state import MacroState, BASELINE_AVG_SQFT_PRICE, BASELINE_STAMP_DUTY
-
+from backend.app.services.macro_state import BASELINE_AVG_SQFT_PRICE, BASELINE_STAMP_DUTY, MacroState
 
 # ---------------------------------------------------------------------------
 # Fixture: baseline MacroState
 # ---------------------------------------------------------------------------
+
 
 def _baseline_macro(**overrides) -> MacroState:
     """Create a baseline MacroState with optional overrides."""
@@ -51,34 +52,45 @@ class TestWealthEffectLifeCycle:
 
     def _make_profile(self):
         from backend.app.services.agent_factory import AgentProfile
+
         return AgentProfile(
-            id=1, agent_type="npc", age=40, sex="M",
-            district="中西區", occupation="金融業",
-            income_bracket="$40,000-$59,999", education_level="大學",
-            marital_status="已婚", housing_type="私人住宅",
-            openness=0.6, conscientiousness=0.5, extraversion=0.5,
-            agreeableness=0.5, neuroticism=0.3,
-            monthly_income=45000, savings=500000,
+            id=1,
+            agent_type="npc",
+            age=40,
+            sex="M",
+            district="中西區",
+            occupation="金融業",
+            income_bracket="$40,000-$59,999",
+            education_level="大學",
+            marital_status="已婚",
+            housing_type="私人住宅",
+            openness=0.6,
+            conscientiousness=0.5,
+            extraversion=0.5,
+            agreeableness=0.5,
+            neuroticism=0.3,
+            monthly_income=45000,
+            savings=500000,
         )
 
     def test_mpc_varies_by_age_band(self):
         """Different age bands produce different MPC values."""
         from backend.app.services.consumer_model import _LIFECYCLE_MPC
+
         assert _LIFECYCLE_MPC["young"] > _LIFECYCLE_MPC["middle"]
         assert _LIFECYCLE_MPC["middle"] > _LIFECYCLE_MPC["senior"]
 
     def test_wealth_elasticity_applies(self):
         """Positive wealth change increases entertainment spending."""
         from backend.app.services.consumer_model import ConsumerModel
+
         model = ConsumerModel()
         macro = _baseline_macro()
         profile = self._make_profile()
         base = model.generate_spending_profile(profile, macro)
 
         no_wealth = model.adjust_spending(base, macro, "neutral")
-        with_wealth = model.adjust_spending(
-            base, macro, "neutral", age_band="middle", wealth_change_pct=0.20
-        )
+        with_wealth = model.adjust_spending(base, macro, "neutral", age_band="middle", wealth_change_pct=0.20)
 
         # 20% wealth gain → entertainment should increase
         assert with_wealth.entertainment > no_wealth.entertainment
@@ -88,17 +100,14 @@ class TestWealthEffectLifeCycle:
         absolute adjustment, but they are *more* asset-dependent in reality.
         The MPC scaling ensures senior response is different from young."""
         from backend.app.services.consumer_model import ConsumerModel
+
         model = ConsumerModel()
         macro = _baseline_macro()
         profile = self._make_profile()
         base = model.generate_spending_profile(profile, macro)
 
-        young_adj = model.adjust_spending(
-            base, macro, "neutral", age_band="young", wealth_change_pct=0.10
-        )
-        senior_adj = model.adjust_spending(
-            base, macro, "neutral", age_band="senior", wealth_change_pct=0.10
-        )
+        young_adj = model.adjust_spending(base, macro, "neutral", age_band="young", wealth_change_pct=0.10)
+        senior_adj = model.adjust_spending(base, macro, "neutral", age_band="senior", wealth_change_pct=0.10)
         # Young MPC is higher → bigger entertainment change
         young_delta = young_adj.entertainment - base.entertainment
         senior_delta = senior_adj.entertainment - base.entertainment
@@ -111,14 +120,13 @@ class TestWealthEffectLifeCycle:
     def test_zero_wealth_change_no_adjustment(self):
         """Zero wealth change should not alter spending."""
         from backend.app.services.consumer_model import ConsumerModel
+
         model = ConsumerModel()
         macro = _baseline_macro()
         profile = self._make_profile()
         base = model.generate_spending_profile(profile, macro)
 
-        adjusted = model.adjust_spending(
-            base, macro, "neutral", age_band="middle", wealth_change_pct=0.0
-        )
+        adjusted = model.adjust_spending(base, macro, "neutral", age_band="middle", wealth_change_pct=0.0)
         baseline = model.adjust_spending(base, macro, "neutral")
 
         assert adjusted.entertainment == baseline.entertainment
@@ -127,6 +135,7 @@ class TestWealthEffectLifeCycle:
     def test_backward_compat_no_new_params(self):
         """Calling adjust_spending without new params works the same as before."""
         from backend.app.services.consumer_model import ConsumerModel
+
         model = ConsumerModel()
         macro = _baseline_macro()
         profile = self._make_profile()
@@ -148,6 +157,7 @@ class TestRegimeDetection:
     def test_crisis_detected_low_hsi(self):
         """HSI far below mean triggers crisis regime."""
         from backend.app.services.nonlinear_shocks import detect_regime
+
         macro = _baseline_macro(hsi_level=8000.0)  # z-score < -2
         regime = detect_regime(macro)
         assert regime.regime == "crisis"
@@ -156,6 +166,7 @@ class TestRegimeDetection:
     def test_boom_detected_low_unemployment(self):
         """Very low unemployment triggers boom regime."""
         from backend.app.services.nonlinear_shocks import detect_regime
+
         macro = _baseline_macro(unemployment_rate=0.025, hsi_level=22000.0)
         regime = detect_regime(macro)
         assert regime.regime == "boom"
@@ -163,6 +174,7 @@ class TestRegimeDetection:
     def test_normal_for_moderate_values(self):
         """Moderate indicators produce normal regime."""
         from backend.app.services.nonlinear_shocks import detect_regime
+
         macro = _baseline_macro(
             hsi_level=22000.0,
             unemployment_rate=0.04,
@@ -174,8 +186,8 @@ class TestRegimeDetection:
     def test_regime_state_is_frozen(self):
         """RegimeState should be immutable."""
         from backend.app.services.nonlinear_shocks import RegimeState
-        rs = RegimeState(regime="normal", hsi_zscore=0.0,
-                         unemployment_deviation=0.0, confidence_level=55.0)
+
+        rs = RegimeState(regime="normal", hsi_zscore=0.0, unemployment_deviation=0.0, confidence_level=55.0)
         with pytest.raises(dataclasses.FrozenInstanceError):
             rs.regime = "crisis"  # type: ignore[misc]
 
@@ -186,9 +198,8 @@ class TestInteractionTerms:
     def test_two_simultaneous_shocks_produce_extra(self):
         """interest_rate_hike + china_slowdown → extra HSI + confidence hit."""
         from backend.app.services.nonlinear_shocks import _compute_interaction_effects
-        extras = _compute_interaction_effects(
-            "interest_rate_hike", ("china_slowdown",)
-        )
+
+        extras = _compute_interaction_effects("interest_rate_hike", ("china_slowdown",))
         assert "hsi_level" in extras
         assert extras["hsi_level"] < 0  # negative extra
         assert "consumer_confidence" in extras
@@ -196,15 +207,15 @@ class TestInteractionTerms:
     def test_single_shock_no_interaction(self):
         """A single shock with no active companions produces no interaction."""
         from backend.app.services.nonlinear_shocks import _compute_interaction_effects
+
         extras = _compute_interaction_effects("interest_rate_hike", ())
         assert extras == {}
 
     def test_unknown_shock_pair_no_interaction(self):
         """Unknown shock pair produces no interaction terms."""
         from backend.app.services.nonlinear_shocks import _compute_interaction_effects
-        extras = _compute_interaction_effects(
-            "market_rally", ("rcep_benefit",)
-        )
+
+        extras = _compute_interaction_effects("market_rally", ("rcep_benefit",))
         assert extras == {}
 
 
@@ -219,6 +230,7 @@ class TestCreditCycle:
     def test_hibor_increase_tightens_credit(self):
         """Higher HIBOR → wider spread → lower credit growth."""
         from backend.app.services.bank_agent import BankAgent
+
         agent = BankAgent()
 
         macro_low = _baseline_macro(hibor_1m=0.01)
@@ -234,6 +246,7 @@ class TestCreditCycle:
     def test_property_crash_increases_npl(self):
         """CCL drop below baseline → NPL rises."""
         from backend.app.services.bank_agent import BankAgent
+
         agent = BankAgent()
 
         macro_normal = _baseline_macro(ccl_index=150.0)
@@ -248,6 +261,7 @@ class TestCreditCycle:
     def test_credit_impulse_positive_gdp_boost(self):
         """Positive credit impulse → positive GDP adjustment."""
         from backend.app.services.bank_agent import BankAgent, BankState
+
         agent = BankAgent()
 
         # Force a state with negative credit growth, then update to positive
@@ -281,6 +295,7 @@ class TestCreditCycle:
     def test_bank_state_is_frozen(self):
         """BankState should be immutable."""
         from backend.app.services.bank_agent import BankState
+
         bs = BankState()
         with pytest.raises(dataclasses.FrozenInstanceError):
             bs.npl_ratio = 0.5  # type: ignore[misc]
@@ -288,6 +303,7 @@ class TestCreditCycle:
     def test_ltv_capped_at_hkma_limit(self):
         """LTV should never exceed HKMA bounds regardless of conditions."""
         from backend.app.services.bank_agent import BankAgent
+
         agent = BankAgent()
 
         # Very benign conditions → LTV should relax but stay <= 0.70

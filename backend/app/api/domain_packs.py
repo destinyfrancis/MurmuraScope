@@ -3,22 +3,21 @@
 from __future__ import annotations
 
 import json
-import uuid
 import logging
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict
 
+import backend.app.domain.community_movement  # noqa: F401
+import backend.app.domain.company_competitor  # noqa: F401
+import backend.app.domain.global_macro  # noqa: F401
+
 # Import triggers pack registration
 import backend.app.domain.hk_city  # noqa: F401
-import backend.app.domain.us_markets  # noqa: F401
-import backend.app.domain.global_macro  # noqa: F401
 import backend.app.domain.public_narrative  # noqa: F401
 import backend.app.domain.real_estate  # noqa: F401
-import backend.app.domain.company_competitor  # noqa: F401
-import backend.app.domain.community_movement  # noqa: F401
-
+import backend.app.domain.us_markets  # noqa: F401
 from backend.app.domain.base import DomainPackRegistry
 from backend.app.models.domain import DraftDomainPack
 from backend.app.models.response import APIResponse
@@ -33,6 +32,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Request models
 # ---------------------------------------------------------------------------
+
 
 class GeneratePackRequest(BaseModel):
     """Request body for LLM-based domain pack generation."""
@@ -66,6 +66,7 @@ class SavePackRequest(BaseModel):
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _draft_pack_to_dict(pack: DraftDomainPack) -> dict[str, Any]:
     """Serialise a DraftDomainPack to a plain dict for JSON responses."""
     return {
@@ -88,6 +89,7 @@ def _draft_pack_to_dict(pack: DraftDomainPack) -> dict[str, Any]:
 # Builtin pack endpoints (existing)
 # ---------------------------------------------------------------------------
 
+
 @router.get("", response_model=APIResponse)
 async def list_domain_packs() -> APIResponse:
     """Return all registered domain packs (id + name).
@@ -98,15 +100,17 @@ async def list_domain_packs() -> APIResponse:
     packs = []
     for pack_id in DomainPackRegistry.list_packs():
         pack = DomainPackRegistry.get(pack_id)
-        packs.append({
-            "id": pack.id,
-            "name_zh": pack.name_zh,
-            "name_en": pack.name_en,
-            "locale": pack.locale,
-            "shock_count": len(pack.valid_shock_types),
-            "metric_count": len(pack.metrics),
-            "source": "builtin",
-        })
+        packs.append(
+            {
+                "id": pack.id,
+                "name_zh": pack.name_zh,
+                "name_en": pack.name_en,
+                "locale": pack.locale,
+                "shock_count": len(pack.valid_shock_types),
+                "metric_count": len(pack.metrics),
+                "source": "builtin",
+            }
+        )
 
     # Include custom packs from DB
     try:
@@ -117,15 +121,17 @@ async def list_domain_packs() -> APIResponse:
         for row in rows:
             shocks = json.loads(row[3]) if row[3] else []
             metrics = json.loads(row[4]) if row[4] else []
-            packs.append({
-                "id": row[0],
-                "name_zh": row[1],
-                "name_en": row[1],
-                "locale": row[2],
-                "shock_count": len(shocks),
-                "metric_count": len(metrics),
-                "source": "custom",
-            })
+            packs.append(
+                {
+                    "id": row[0],
+                    "name_zh": row[1],
+                    "name_en": row[1],
+                    "locale": row[2],
+                    "shock_count": len(shocks),
+                    "metric_count": len(metrics),
+                    "source": "custom",
+                }
+            )
     except Exception:
         # DB table may not exist yet on first boot; silently skip
         pass
@@ -158,33 +164,33 @@ async def get_domain_pack(pack_id: str) -> APIResponse:
                 "occupations": list(d.occupations.keys()),
             }
 
-        return APIResponse(success=True, data={
-            "id": pack.id,
-            "name_zh": pack.name_zh,
-            "name_en": pack.name_en,
-            "locale": pack.locale,
-            "shock_types": [
-                {"id": s.id, "label_zh": s.label_zh, "label_en": s.label_en}
-                for s in pack.shock_specs
-            ],
-            "metrics": [
-                {"name": m.name, "db_category": m.db_category, "seasonal_period": m.seasonal_period}
-                for m in pack.metrics
-            ],
-            "mc_default_metrics": list(pack.mc_default_metrics),
-            "correlated_vars": list(pack.correlated_vars),
-            "scenarios": list(pack.scenarios),
-            "demographics": demographics_summary,
-            "macro_fields": [
-                {
-                    "name": f.name,
-                    "label": f.label,
-                    "default_value": f.default_value,
-                    "unit": f.unit,
-                }
-                for f in pack.macro_fields
-            ],
-        })
+        return APIResponse(
+            success=True,
+            data={
+                "id": pack.id,
+                "name_zh": pack.name_zh,
+                "name_en": pack.name_en,
+                "locale": pack.locale,
+                "shock_types": [{"id": s.id, "label_zh": s.label_zh, "label_en": s.label_en} for s in pack.shock_specs],
+                "metrics": [
+                    {"name": m.name, "db_category": m.db_category, "seasonal_period": m.seasonal_period}
+                    for m in pack.metrics
+                ],
+                "mc_default_metrics": list(pack.mc_default_metrics),
+                "correlated_vars": list(pack.correlated_vars),
+                "scenarios": list(pack.scenarios),
+                "demographics": demographics_summary,
+                "macro_fields": [
+                    {
+                        "name": f.name,
+                        "label": f.label,
+                        "default_value": f.default_value,
+                        "unit": f.unit,
+                    }
+                    for f in pack.macro_fields
+                ],
+            },
+        )
 
     # Fall back to custom DB packs
     try:
@@ -202,25 +208,29 @@ async def get_domain_pack(pack_id: str) -> APIResponse:
         raise HTTPException(status_code=404, detail=f"Domain pack '{pack_id}' not found")
 
     r = row[0]
-    return APIResponse(success=True, data={
-        "id": r[0],
-        "name": r[1],
-        "description": r[2],
-        "regions": json.loads(r[3] or "[]"),
-        "occupations": json.loads(r[4] or "[]"),
-        "income_brackets": json.loads(r[5] or "[]"),
-        "shocks": json.loads(r[6] or "[]"),
-        "metrics": json.loads(r[7] or "[]"),
-        "persona_template": r[8] or "",
-        "sentiment_keywords": json.loads(r[9] or "[]"),
-        "locale": r[10] or "en-US",
-        "source": r[11] or "user_edited",
-    })
+    return APIResponse(
+        success=True,
+        data={
+            "id": r[0],
+            "name": r[1],
+            "description": r[2],
+            "regions": json.loads(r[3] or "[]"),
+            "occupations": json.loads(r[4] or "[]"),
+            "income_brackets": json.loads(r[5] or "[]"),
+            "shocks": json.loads(r[6] or "[]"),
+            "metrics": json.loads(r[7] or "[]"),
+            "persona_template": r[8] or "",
+            "sentiment_keywords": json.loads(r[9] or "[]"),
+            "locale": r[10] or "en-US",
+            "source": r[11] or "user_edited",
+        },
+    )
 
 
 # ---------------------------------------------------------------------------
 # Generation endpoint (Task 10)
 # ---------------------------------------------------------------------------
+
 
 @router.post("/generate", response_model=APIResponse)
 async def generate_domain_pack(req: GeneratePackRequest) -> APIResponse:
@@ -236,6 +246,7 @@ async def generate_domain_pack(req: GeneratePackRequest) -> APIResponse:
 
     try:
         llm = LLMClient()
+
         # Wrap to honour the provider preference from the request
         class _ProviderLLM:
             def __init__(self, client: LLMClient, provider: str) -> None:
@@ -259,6 +270,7 @@ async def generate_domain_pack(req: GeneratePackRequest) -> APIResponse:
 # ---------------------------------------------------------------------------
 # Save endpoint (Task 10)
 # ---------------------------------------------------------------------------
+
 
 @router.post("/save", response_model=APIResponse)
 async def save_custom_domain_pack(req: SavePackRequest) -> APIResponse:
@@ -332,16 +344,10 @@ async def save_custom_domain_pack(req: SavePackRequest) -> APIResponse:
 
     # Also register into in-memory registry so it's immediately usable
     try:
-        from backend.app.domain.base import DomainPackRegistry, DomainPack, ShockTypeSpec, MetricSpec  # noqa: PLC0415
+        from backend.app.domain.base import DomainPack, DomainPackRegistry, MetricSpec, ShockTypeSpec  # noqa: PLC0415
 
-        shock_specs = tuple(
-            ShockTypeSpec(id=s, label_zh=s, label_en=s)
-            for s in validated.shocks
-        )
-        metric_specs = tuple(
-            MetricSpec(name=m, label=m)
-            for m in validated.metrics
-        )
+        shock_specs = tuple(ShockTypeSpec(id=s, label_zh=s, label_en=s) for s in validated.shocks)
+        metric_specs = tuple(MetricSpec(name=m, label=m) for m in validated.metrics)
         pack = DomainPack(
             id=validated.id,
             name_zh=validated.name,

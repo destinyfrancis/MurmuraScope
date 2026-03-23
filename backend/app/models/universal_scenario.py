@@ -6,10 +6,10 @@ non-demographic simulation modes (kg_driven).
 All dataclasses are frozen to enforce immutability per project code style.
 Use dataclasses.replace() for any state transitions.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
-
 
 # ---------------------------------------------------------------------------
 # Decision space
@@ -39,9 +39,7 @@ class UniversalDecisionType:
         if not self.id:
             raise ValueError("UniversalDecisionType.id must not be empty")
         if not self.possible_actions:
-            raise ValueError(
-                f"UniversalDecisionType '{self.id}' must have at least one possible_action"
-            )
+            raise ValueError(f"UniversalDecisionType '{self.id}' must have at least one possible_action")
 
 
 # ---------------------------------------------------------------------------
@@ -101,8 +99,7 @@ class UniversalShockType:
         lo, hi = self.severity_range
         if lo < 0 or hi > 10 or lo > hi:
             raise ValueError(
-                f"UniversalShockType '{self.id}' severity_range must satisfy "
-                f"0 <= lo <= hi <= 10, got ({lo}, {hi})"
+                f"UniversalShockType '{self.id}' severity_range must satisfy 0 <= lo <= hi <= 10, got ({lo}, {hi})"
             )
 
 
@@ -218,25 +215,17 @@ class UniversalScenarioConfig:
         if not self.metrics:
             raise ValueError("UniversalScenarioConfig must have at least one metric")
 
-        decision_map: dict[str, frozenset[str]] = {
-            dt.id: frozenset(dt.possible_actions) for dt in self.decision_types
-        }
+        decision_map: dict[str, frozenset[str]] = {dt.id: frozenset(dt.possible_actions) for dt in self.decision_types}
         metric_ids: frozenset[str] = frozenset(m.id for m in self.metrics)
 
         for rule in self.impact_rules:
             if rule.decision_type_id not in decision_map:
-                raise ValueError(
-                    f"ImpactRule references unknown decision_type_id "
-                    f"'{rule.decision_type_id}'"
-                )
+                raise ValueError(f"ImpactRule references unknown decision_type_id '{rule.decision_type_id}'")
             if rule.metric_id not in metric_ids:
-                raise ValueError(
-                    f"ImpactRule references unknown metric_id '{rule.metric_id}'"
-                )
+                raise ValueError(f"ImpactRule references unknown metric_id '{rule.metric_id}'")
             if rule.action not in decision_map[rule.decision_type_id]:
                 raise ValueError(
-                    f"ImpactRule action '{rule.action}' not found in "
-                    f"decision_type '{rule.decision_type_id}'"
+                    f"ImpactRule action '{rule.action}' not found in decision_type '{rule.decision_type_id}'"
                 )
 
     # ------------------------------------------------------------------
@@ -257,12 +246,6 @@ class UniversalScenarioConfig:
                 return m
         return None
 
-    def rules_for_action(
-        self, decision_type_id: str, action: str
-    ) -> tuple[UniversalImpactRule, ...]:
+    def rules_for_action(self, decision_type_id: str, action: str) -> tuple[UniversalImpactRule, ...]:
         """Return all impact rules matching a specific decision type + action."""
-        return tuple(
-            r
-            for r in self.impact_rules
-            if r.decision_type_id == decision_type_id and r.action == action
-        )
+        return tuple(r for r in self.impact_rules if r.decision_type_id == decision_type_id and r.action == action)

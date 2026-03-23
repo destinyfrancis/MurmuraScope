@@ -4,19 +4,18 @@ from __future__ import annotations
 
 import pytest
 
+import backend.app.domain.global_macro  # noqa: F401
+
 # Ensure all packs are registered
 import backend.app.domain.hk_city  # noqa: F401
 import backend.app.domain.us_markets  # noqa: F401
-import backend.app.domain.global_macro  # noqa: F401
-
 from backend.app.domain.base import (
     DomainPackRegistry,
     PromptLocale,
     SentimentLexicon,
 )
-from backend.app.domain.locales.zh_hk import ZH_HK_LOCALE, ZH_HK_SENTIMENT
 from backend.app.domain.locales.en_us import EN_US_LOCALE, EN_US_SENTIMENT
-
+from backend.app.domain.locales.zh_hk import ZH_HK_LOCALE, ZH_HK_SENTIMENT
 
 # ---------------------------------------------------------------------------
 # PromptLocale dataclass
@@ -34,6 +33,7 @@ class TestPromptLocaleCreation:
 
     def test_prompt_locale_is_frozen(self) -> None:
         import dataclasses
+
         with pytest.raises((dataclasses.FrozenInstanceError, AttributeError, TypeError)):
             EN_US_LOCALE.language_code = "fr-FR"  # type: ignore[misc]
 
@@ -96,6 +96,7 @@ class TestSentimentLexicon:
     def test_sentiment_lexicon_is_frozen(self) -> None:
         # frozen dataclass — must not allow attribute mutation
         import dataclasses
+
         with pytest.raises((dataclasses.FrozenInstanceError, AttributeError, TypeError)):
             EN_US_SENTIMENT.positive_keywords = frozenset()  # type: ignore[misc]
 
@@ -177,7 +178,8 @@ class TestPackWithoutDemographics:
     def test_pack_missing_demographics_returns_none(self) -> None:
         """Packs that predate Phase 6 demographics field should have demographics=None."""
         # market_sector and other older packs may not have demographics
-        from backend.app.domain.base import DomainPack, DomainPackRegistry, ShockTypeSpec, MetricSpec
+        from backend.app.domain.base import DomainPack, MetricSpec, ShockTypeSpec
+
         minimal = DomainPack(
             id="_test_minimal",
             name_zh="測試",
@@ -210,36 +212,41 @@ class TestPackWithoutDemographics:
 
 class TestReportPromptLocaleSelectors:
     def test_get_react_system_prompt_zh(self) -> None:
-        from backend.prompts.report_prompts import get_react_system_prompt, REACT_SYSTEM_PROMPT
+        from backend.prompts.report_prompts import REACT_SYSTEM_PROMPT, get_react_system_prompt
+
         result = get_react_system_prompt("zh-HK")
         assert result == REACT_SYSTEM_PROMPT
 
     def test_get_react_system_prompt_en(self) -> None:
-        from backend.prompts.report_prompts import get_react_system_prompt, REACT_SYSTEM_PROMPT_EN
+        from backend.prompts.report_prompts import REACT_SYSTEM_PROMPT_EN, get_react_system_prompt
+
         result = get_react_system_prompt("en-US")
         assert result == REACT_SYSTEM_PROMPT_EN
 
     def test_get_react_system_prompt_default_is_zh(self) -> None:
-        from backend.prompts.report_prompts import get_react_system_prompt, REACT_SYSTEM_PROMPT
+        from backend.prompts.report_prompts import REACT_SYSTEM_PROMPT, get_react_system_prompt
+
         result = get_react_system_prompt()
         assert result == REACT_SYSTEM_PROMPT
 
     def test_get_report_generation_prompts_zh(self) -> None:
         from backend.prompts.report_prompts import (
-            get_report_generation_prompts,
             REPORT_GENERATION_SYSTEM,
             REPORT_GENERATION_USER,
+            get_report_generation_prompts,
         )
+
         system, user = get_report_generation_prompts("zh-HK")
         assert system == REPORT_GENERATION_SYSTEM
         assert user == REPORT_GENERATION_USER
 
     def test_get_report_generation_prompts_en(self) -> None:
         from backend.prompts.report_prompts import (
-            get_report_generation_prompts,
             REPORT_GENERATION_SYSTEM_EN,
             REPORT_GENERATION_USER_EN,
+            get_report_generation_prompts,
         )
+
         system, user = get_report_generation_prompts("en-US")
         assert system == REPORT_GENERATION_SYSTEM_EN
         assert user == REPORT_GENERATION_USER_EN
@@ -253,18 +260,22 @@ class TestReportPromptLocaleSelectors:
 class TestDecisionPromptLocaleSelectors:
     def test_get_deliberation_prompt_function_exists(self) -> None:
         from backend.prompts.decision_prompts import get_deliberation_prompt
+
         assert callable(get_deliberation_prompt)
 
     def test_build_deliberation_prompt_en_function_exists(self) -> None:
         from backend.prompts.decision_prompts import build_deliberation_prompt_en
+
         assert callable(build_deliberation_prompt_en)
 
     def test_system_prompt_en_exists(self) -> None:
         from backend.prompts.decision_prompts import SYSTEM_PROMPT_EN
+
         assert len(SYSTEM_PROMPT_EN) > 0
 
     def test_en_decision_instructions_all_types(self) -> None:
-        from backend.prompts.decision_prompts import _DECISION_INSTRUCTIONS_EN
         from backend.app.models.decision import DecisionType
+        from backend.prompts.decision_prompts import _DECISION_INSTRUCTIONS_EN
+
         for dt in DecisionType:
             assert dt in _DECISION_INSTRUCTIONS_EN, f"Missing EN instruction for {dt}"

@@ -31,9 +31,10 @@ from __future__ import annotations
 
 import re
 import threading
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 from backend.app.config import get_settings
 from backend.app.utils.logger import get_logger
@@ -44,18 +45,46 @@ logger = get_logger("duckdb_analytics")
 # Table name allowlist — prevents SQL injection via f-string interpolation
 # ---------------------------------------------------------------------------
 
-_VALID_TABLES: frozenset[str] = frozenset({
-    "agent_profiles", "belief_states", "simulation_actions", "simulation_sessions",
-    "emotional_states", "agent_memories", "kg_nodes", "kg_edges", "kg_communities",
-    "agent_relationships", "agent_decisions", "hk_data_snapshots", "market_data",
-    "macro_scenarios", "ensemble_results", "validation_runs", "social_sentiment",
-    "echo_chamber_snapshots", "news_headlines", "network_events", "agent_feeds",
-    "cognitive_dissonance", "polarization_snapshots", "emergence_metrics",
-    "cognitive_fingerprints", "world_events", "faction_snapshots_v2",
-    "tipping_points", "debate_rounds", "consensus_scores", "multi_run_results",
-    "seed_world_context", "seed_persona_templates", "memory_triples",
-    "reports", "scenario_branches",
-})
+_VALID_TABLES: frozenset[str] = frozenset(
+    {
+        "agent_profiles",
+        "belief_states",
+        "simulation_actions",
+        "simulation_sessions",
+        "emotional_states",
+        "agent_memories",
+        "kg_nodes",
+        "kg_edges",
+        "kg_communities",
+        "agent_relationships",
+        "agent_decisions",
+        "hk_data_snapshots",
+        "market_data",
+        "macro_scenarios",
+        "ensemble_results",
+        "validation_runs",
+        "social_sentiment",
+        "echo_chamber_snapshots",
+        "news_headlines",
+        "network_events",
+        "agent_feeds",
+        "cognitive_dissonance",
+        "polarization_snapshots",
+        "emergence_metrics",
+        "cognitive_fingerprints",
+        "world_events",
+        "faction_snapshots_v2",
+        "tipping_points",
+        "debate_rounds",
+        "consensus_scores",
+        "multi_run_results",
+        "seed_world_context",
+        "seed_persona_templates",
+        "memory_triples",
+        "reports",
+        "scenario_branches",
+    }
+)
 
 # ---------------------------------------------------------------------------
 # Optional dependency guard
@@ -124,7 +153,7 @@ class DuckDBAnalytics:
             raise ValueError(f"Invalid table name: {name!r}")
         return name
 
-    def _ensure_connection(self) -> "duckdb.DuckDBPyConnection":
+    def _ensure_connection(self) -> duckdb.DuckDBPyConnection:
         """Lazily create the DuckDB connection and attach SQLite.
 
         Acquires ``self._lock`` internally so the check-then-create sequence
@@ -143,16 +172,14 @@ class DuckDBAnalytics:
 
             # Validate path: only allow safe filesystem characters to prevent
             # SQL injection via the ATTACH statement.
-            if not re.match(r'^[\w./\-]+$', self._sqlite_path):
+            if not re.match(r"^[\w./\-]+$", self._sqlite_path):
                 raise ValueError(f"Invalid database path: {self._sqlite_path!r}")
 
             conn = duckdb.connect(":memory:")
             conn.execute("INSTALL sqlite; LOAD sqlite;")
             # Path is safe to interpolate: validated by regex above to contain
             # only word chars, dots, slashes, and hyphens — no SQL metacharacters.
-            conn.execute(
-                f"ATTACH '{self._sqlite_path}' AS sqlite_db (TYPE SQLITE, READ_ONLY)"
-            )
+            conn.execute(f"ATTACH '{self._sqlite_path}' AS sqlite_db (TYPE SQLITE, READ_ONLY)")
             # Set default schema so queries can reference tables directly
             conn.execute("USE sqlite_db")
             self._conn = conn

@@ -84,9 +84,7 @@ class EntityExtractor:
             nodes = _validate_nodes(raw_nodes, entity_types)
             edges = _validate_edges(raw_edges, nodes, relation_types)
 
-            logger.info(
-                "Extracted %d nodes and %d edges", len(nodes), len(edges)
-            )
+            logger.info("Extracted %d nodes and %d edges", len(nodes), len(edges))
             return nodes, edges
 
         except Exception:
@@ -110,8 +108,7 @@ class EntityExtractor:
             A tuple of (new_edges, updated_edges).
         """
         entities_summary = [
-            {"id": n["id"], "title": n["title"], "entity_type": n["entity_type"]}
-            for n in existing_nodes
+            {"id": n["id"], "title": n["title"], "entity_type": n["entity_type"]} for n in existing_nodes
         ]
 
         messages = [
@@ -119,9 +116,7 @@ class EntityExtractor:
             {
                 "role": "user",
                 "content": RELATIONSHIP_DETECTION_USER.format(
-                    entities_json=json.dumps(
-                        entities_summary, ensure_ascii=False, indent=2
-                    ),
+                    entities_json=json.dumps(entities_summary, ensure_ascii=False, indent=2),
                     relation_types=", ".join(relation_types),
                     round_context=round_context,
                 ),
@@ -139,10 +134,7 @@ class EntityExtractor:
             updated_edges = result.get("updated_edges", [])
 
             node_ids = {n["id"] for n in existing_nodes}
-            new_edges = [
-                e for e in new_edges
-                if e.get("source_id") in node_ids and e.get("target_id") in node_ids
-            ]
+            new_edges = [e for e in new_edges if e.get("source_id") in node_ids and e.get("target_id") in node_ids]
 
             logger.info(
                 "Round extraction: %d new edges, %d updated edges",
@@ -180,13 +172,15 @@ def _validate_nodes(
             node_id = f"{node_id}_{uuid.uuid4().hex[:6]}"
 
         seen_ids.add(node_id)
-        validated.append({
-            "id": node_id,
-            "entity_type": node["entity_type"],
-            "title": node["title"],
-            "description": node.get("description", ""),
-            "properties": node.get("properties", {}),
-        })
+        validated.append(
+            {
+                "id": node_id,
+                "entity_type": node["entity_type"],
+                "title": node["title"],
+                "description": node.get("description", ""),
+                "properties": node.get("properties", {}),
+            }
+        )
 
     return validated
 
@@ -216,12 +210,14 @@ def _validate_edges(
             weight = 1.0
         weight = max(0.1, min(1.0, float(weight)))
 
-        validated.append({
-            "source_id": src,
-            "target_id": tgt,
-            "relation_type": rel,
-            "description": edge.get("description", ""),
-            "weight": weight,
-        })
+        validated.append(
+            {
+                "source_id": src,
+                "target_id": tgt,
+                "relation_type": rel,
+                "description": edge.get("description", ""),
+                "weight": weight,
+            }
+        )
 
     return validated

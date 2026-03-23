@@ -1,8 +1,9 @@
 """Tests for AES-256 encryption utilities."""
+
 from __future__ import annotations
 
-import os
 import importlib
+import os
 
 import pytest
 
@@ -14,6 +15,7 @@ _TEST_KEY = "gkNGJWxQNDWqiEgajKGn1cDrE9B_xIlLyvD9d5KOOmU="
 def _reload_encryption():
     """Force a fresh import of encryption module to pick up env changes."""
     import backend.app.utils.encryption as enc_mod
+
     importlib.reload(enc_mod)
     return enc_mod
 
@@ -50,6 +52,7 @@ def test_missing_key_raises():
 def test_wrong_length_key_raises():
     # Only 16 bytes (128-bit), not 32
     import base64
+
     short_key = base64.urlsafe_b64encode(b"0123456789abcdef").decode()
     os.environ["DATA_ENCRYPTION_KEY"] = short_key
     enc = _reload_encryption()

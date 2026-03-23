@@ -40,9 +40,9 @@ HKMA_HIBOR_PARAMS: dict[str, str] = {"segment": "hibor.fixing"}
 
 # World Bank API replaces former data.gov.hk CKAN sources (CKAN is permanently 404)
 _WB_BASE = "https://api.worldbank.org/v2/country/HKG/indicator"
-_WB_CPI_INDICATOR = "FP.CPI.TOTL"           # CPI (2010 = 100)
-_WB_GDP_INDICATOR = "NY.GDP.MKTP.KD.ZG"     # GDP growth annual %
-_WB_LENDING_RATE = "FR.INR.LEND"            # Lending interest rate %
+_WB_CPI_INDICATOR = "FP.CPI.TOTL"  # CPI (2010 = 100)
+_WB_GDP_INDICATOR = "NY.GDP.MKTP.KD.ZG"  # GDP growth annual %
+_WB_LENDING_RATE = "FR.INR.LEND"  # Lending interest rate %
 
 
 # NOTE: All hardcoded fallback data has been removed.
@@ -112,7 +112,8 @@ async def _fetch_hkma_data(
     except httpx.HTTPStatusError as exc:
         logger.warning(
             "HKMA API returned HTTP %d for %s — endpoint may have changed",
-            exc.response.status_code, endpoint_url,
+            exc.response.status_code,
+            endpoint_url,
         )
         return []
     payload = resp.json()
@@ -145,7 +146,9 @@ async def download_hibor(client: httpx.AsyncClient | None = None) -> EconomyResu
 
     try:
         raw_records = await _fetch_hkma_data(
-            client, HKMA_ENDPOINTS["hibor"], params=HKMA_HIBOR_PARAMS,
+            client,
+            HKMA_ENDPOINTS["hibor"],
+            params=HKMA_HIBOR_PARAMS,
         )
 
         if not raw_records:
@@ -164,15 +167,17 @@ async def download_hibor(client: httpx.AsyncClient | None = None) -> EconomyResu
             for tenor_key in ("ir_overnight", "ir_1w", "ir_1m", "ir_2m", "ir_3m", "ir_6m", "ir_9m", "ir_12m"):
                 val = _try_parse_float(str(entry.get(tenor_key, "")))
                 if val is not None:
-                    records.append(EconomyRecord(
-                        category="interest_rate",
-                        metric=f"hibor_{tenor_key.replace('ir_', '')}",
-                        value=val,
-                        unit="percent",
-                        period=str(period),
-                        source="HKMA",
-                        source_url=HKMA_ENDPOINTS["hibor"],
-                    ))
+                    records.append(
+                        EconomyRecord(
+                            category="interest_rate",
+                            metric=f"hibor_{tenor_key.replace('ir_', '')}",
+                            value=val,
+                            unit="percent",
+                            period=str(period),
+                            source="HKMA",
+                            source_url=HKMA_ENDPOINTS["hibor"],
+                        )
+                    )
 
         if not records:
             return _empty_result("hkma_hibor", "HKMA HIBOR API returned no data")
@@ -223,15 +228,17 @@ async def download_prime_rate(client: httpx.AsyncClient | None = None) -> Econom
             if not year or val is None:
                 continue
             period = f"{year}-Q4"
-            records.append(EconomyRecord(
-                category="interest_rate",
-                metric="prime_rate",
-                value=val,
-                unit="percent",
-                period=period,
-                source="World Bank",
-                source_url=url,
-            ))
+            records.append(
+                EconomyRecord(
+                    category="interest_rate",
+                    metric="prime_rate",
+                    value=val,
+                    unit="percent",
+                    period=period,
+                    source="World Bank",
+                    source_url=url,
+                )
+            )
 
         if not records:
             return _empty_result("wb_lending_rate", "World Bank lending rate: no valid records")
@@ -249,8 +256,6 @@ async def download_prime_rate(client: httpx.AsyncClient | None = None) -> Econom
     finally:
         if own_client:
             await client.aclose()
-
-
 
 
 def _parse_csv_records(
@@ -292,15 +297,17 @@ def _parse_csv_records(
             numeric = _try_parse_float(val)
             if numeric is not None:
                 metric_name = f"{metric_prefix}_{key.lower().replace(' ', '_').replace('/', '_')}"
-                records.append(EconomyRecord(
-                    category=category,
-                    metric=metric_name,
-                    value=numeric,
-                    unit=unit,
-                    period=period,
-                    source="Census and Statistics Department",
-                    source_url=source_url,
-                ))
+                records.append(
+                    EconomyRecord(
+                        category=category,
+                        metric=metric_name,
+                        value=numeric,
+                        unit=unit,
+                        period=period,
+                        source="Census and Statistics Department",
+                        source_url=source_url,
+                    )
+                )
 
     return EconomyResult(
         source_name=metric_prefix,
@@ -395,15 +402,17 @@ async def _download_wb_economy(
         val = _try_parse_float(str(entry.get("value", "")))
         if not year or val is None:
             continue
-        records.append(EconomyRecord(
-            category=category,
-            metric=metric,
-            value=round(val, 4),
-            unit=unit,
-            period=f"{year}-Q4",
-            source="World Bank",
-            source_url=url,
-        ))
+        records.append(
+            EconomyRecord(
+                category=category,
+                metric=metric,
+                value=round(val, 4),
+                unit=unit,
+                period=f"{year}-Q4",
+                source="World Bank",
+                source_url=url,
+            )
+        )
 
     logger.info("World Bank %s: %d records", source_name, len(records))
     return EconomyResult(
@@ -421,7 +430,12 @@ async def download_cpi(client: httpx.AsyncClient | None = None) -> EconomyResult
         client = httpx.AsyncClient()
     try:
         return await _download_wb_economy(
-            client, _WB_CPI_INDICATOR, "price_index", "cpi_composite", "index", "cpi",
+            client,
+            _WB_CPI_INDICATOR,
+            "price_index",
+            "cpi_composite",
+            "index",
+            "cpi",
         )
     finally:
         if own_client:
@@ -435,7 +449,12 @@ async def download_gdp(client: httpx.AsyncClient | None = None) -> EconomyResult
         client = httpx.AsyncClient()
     try:
         return await _download_wb_economy(
-            client, _WB_GDP_INDICATOR, "gdp", "gdp_growth_rate", "percent", "gdp",
+            client,
+            _WB_GDP_INDICATOR,
+            "gdp",
+            "gdp_growth_rate",
+            "percent",
+            "gdp",
         )
     finally:
         if own_client:

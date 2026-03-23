@@ -173,8 +173,7 @@ Return ONLY valid JSON:
 # ---------------------------------------------------------------------------
 
 WHATIF_COMPARISON_SYSTEM = (
-    "You are a comparative policy analyst specialising in Hong Kong. "
-    "Compare outcomes of two simulation scenarios."
+    "You are a comparative policy analyst specialising in Hong Kong. Compare outcomes of two simulation scenarios."
 )
 
 WHATIF_COMPARISON_USER = """\
@@ -328,8 +327,7 @@ COMMUNITY_SUMMARY_USER = """\
 # ---------------------------------------------------------------------------
 
 SUBGRAPH_INSIGHT_SYSTEM = (
-    "你係一個香港社會網絡分析師。你要根據子圖結構同社群摘要，"
-    "產出一段 300 字以內嘅洞察報告。用繁體中文廣東話書寫。"
+    "你係一個香港社會網絡分析師。你要根據子圖結構同社群摘要，產出一段 300 字以內嘅洞察報告。用繁體中文廣東話書寫。"
 )
 
 SUBGRAPH_INSIGHT_USER = """\
@@ -498,6 +496,7 @@ Return the report in Markdown format in English.
 # Locale-aware prompt selectors
 # ---------------------------------------------------------------------------
 
+
 def get_react_system_prompt(locale: str = "zh-HK") -> str:
     """Return the ReACT system prompt for the given locale.
 
@@ -578,10 +577,7 @@ def build_planning_user_prompt(
     Returns:
         Formatted user prompt string.
     """
-    base = (
-        f"模擬問題：{scenario_question}\n\n"
-        f"模擬規模：{agent_count}個Agent，{round_count}輪互動，模式={sim_mode}\n\n"
-    )
+    base = f"模擬問題：{scenario_question}\n\n模擬規模：{agent_count}個Agent，{round_count}輪互動，模式={sim_mode}\n\n"
 
     time_section = ""
     if time_config:
@@ -594,10 +590,7 @@ def build_planning_user_prompt(
 
     seed_section = ""
     if seed_text:
-        seed_section = (
-            f"FACTUAL CONSTRAINTS FROM SEED TEXT (do NOT contradict these):\n"
-            f"{seed_text[:2000]}\n\n"
-        )
+        seed_section = f"FACTUAL CONSTRAINTS FROM SEED TEXT (do NOT contradict these):\n{seed_text[:2000]}\n\n"
 
     return base + time_section + seed_section + "請設計3-5章的報告結構，回答上述模擬問題。"
 

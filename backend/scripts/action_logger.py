@@ -16,8 +16,9 @@ from dataclasses import dataclass
 import aiosqlite
 
 from backend.app.utils.cantonese_lexicon import (
-    NEUTRAL_BOOSTERS as _NEUTRAL_BOOSTERS,
     detect_sentiment as _detect_sentiment,
+)
+from backend.app.utils.cantonese_lexicon import (
     extract_topics as _extract_topics,
 )
 from backend.app.utils.db import get_db
@@ -26,11 +27,6 @@ from backend.app.utils.logger import get_logger
 logger = get_logger("action_logger")
 
 # 保留向後相容的別名，供外部直接引用這些集合的程式碼使用
-from backend.app.utils.cantonese_lexicon import (
-    NEGATIVE_KEYWORDS as _NEGATIVE_KEYWORDS,
-    POSITIVE_KEYWORDS as _POSITIVE_KEYWORDS,
-    TOPIC_PATTERNS as _TOPIC_PATTERNS,
-)
 
 _HASHTAG_RE = re.compile(r"#(\w+)")
 
@@ -75,13 +71,9 @@ class ActionLogger:
                 cursor = await db.execute("PRAGMA table_info(simulation_actions)")
                 columns = {r[1] for r in await cursor.fetchall()}
                 if "parent_action_id" not in columns:
-                    await db.execute(
-                        "ALTER TABLE simulation_actions ADD COLUMN parent_action_id INTEGER"
-                    )
+                    await db.execute("ALTER TABLE simulation_actions ADD COLUMN parent_action_id INTEGER")
                 if "spread_depth" not in columns:
-                    await db.execute(
-                        "ALTER TABLE simulation_actions ADD COLUMN spread_depth INTEGER DEFAULT 0"
-                    )
+                    await db.execute("ALTER TABLE simulation_actions ADD COLUMN spread_depth INTEGER DEFAULT 0")
                 await db.commit()
             self._columns_ensured = True
         except Exception:
@@ -331,21 +323,23 @@ class ActionLogger:
             content = a.get("content", "")
             sentiment = a.get("sentiment") or _detect_sentiment(content)
             topics = a.get("topics") or _extract_topics(content)
-            rows.append((
-                a["session_id"],
-                a["round_number"],
-                a.get("agent_id"),
-                a["oasis_username"],
-                a.get("action_type", "post"),
-                a.get("platform", "twitter"),
-                content,
-                a.get("target_agent_username"),
-                sentiment,
-                json.dumps(topics if isinstance(topics, list) else [], ensure_ascii=False),
-                a.get("post_id"),
-                a.get("parent_action_id"),
-                a.get("spread_depth", 0),
-            ))
+            rows.append(
+                (
+                    a["session_id"],
+                    a["round_number"],
+                    a.get("agent_id"),
+                    a["oasis_username"],
+                    a.get("action_type", "post"),
+                    a.get("platform", "twitter"),
+                    content,
+                    a.get("target_agent_username"),
+                    sentiment,
+                    json.dumps(topics if isinstance(topics, list) else [], ensure_ascii=False),
+                    a.get("post_id"),
+                    a.get("parent_action_id"),
+                    a.get("spread_depth", 0),
+                )
+            )
 
         try:
             async with get_db() as db:
@@ -402,8 +396,7 @@ class ActionLogger:
             async with get_db() as db:
                 db.row_factory = aiosqlite.Row
                 cursor = await db.execute(
-                    f"SELECT * FROM simulation_actions WHERE {where}"
-                    f" ORDER BY round_number, id LIMIT ?",
+                    f"SELECT * FROM simulation_actions WHERE {where} ORDER BY round_number, id LIMIT ?",
                     params,
                 )
                 rows = await cursor.fetchall()
@@ -463,6 +456,7 @@ class ActionLogger:
         """
         try:
             from backend.app.services.sentiment_analyzer import SentimentAnalyzer
+
             analyzer = SentimentAnalyzer()
         except ImportError:
             logger.debug("SentimentAnalyzer not available — skipping batch rescore")
@@ -501,7 +495,9 @@ class ActionLogger:
 
             logger.info(
                 "Transformer rescore: session=%s round=%s updated=%d",
-                session_id, round_number, updated,
+                session_id,
+                round_number,
+                updated,
             )
             return updated
 

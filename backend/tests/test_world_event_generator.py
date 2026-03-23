@@ -1,11 +1,14 @@
 # backend/tests/test_world_event_generator.py
 """Tests for WorldEventGenerator service."""
+
 from __future__ import annotations
+
 from unittest.mock import AsyncMock, patch
+
 import pytest
+
 from backend.app.models.world_event import WorldEvent
 from backend.app.services.world_event_generator import WorldEventGenerator
-
 
 _MOCK_LLM_RESPONSE = {
     "events": [
@@ -49,12 +52,18 @@ async def test_generate_returns_world_events():
 @pytest.mark.asyncio
 async def test_generate_filters_unknown_metric_keys():
     """impact_vector keys not in active_metrics are silently dropped."""
-    response = {"events": [{
-        "event_id": "x", "content": "test", "event_type": "shock",
-        "reach": ["ALL"],
-        "impact_vector": {"known_metric": 0.1, "unknown_metric": 0.9},
-        "credibility": 0.8,
-    }]}
+    response = {
+        "events": [
+            {
+                "event_id": "x",
+                "content": "test",
+                "event_type": "shock",
+                "reach": ["ALL"],
+                "impact_vector": {"known_metric": 0.1, "unknown_metric": 0.9},
+                "credibility": 0.8,
+            }
+        ]
+    }
     gen = WorldEventGenerator()
     with patch.object(gen._llm, "chat_json", new_callable=AsyncMock) as m:
         m.return_value = response
@@ -74,7 +83,10 @@ async def test_generate_returns_empty_on_llm_failure():
     gen = WorldEventGenerator()
     with patch.object(gen._llm, "chat_json", side_effect=RuntimeError("LLM down")):
         events = await gen.generate(
-            scenario_description="test", round_number=1,
-            active_metrics=("m1",), prev_dominant_stance={}, event_history=[],
+            scenario_description="test",
+            round_number=1,
+            active_metrics=("m1",),
+            prev_dominant_stance={},
+            event_history=[],
         )
     assert events == []

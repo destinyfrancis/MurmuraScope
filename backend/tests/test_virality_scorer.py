@@ -3,15 +3,15 @@
 Covers ViralityScore model, cascade computation, virality index formula,
 and persistence with ON CONFLICT upsert.
 """
+
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from backend.app.models.recommendation import ViralityScore
 from backend.app.services.virality_scorer import ViralityScorer
-
 
 # ---------------------------------------------------------------------------
 # ViralityScore model tests
@@ -36,20 +36,28 @@ class TestViralityScoreModel:
 
     def test_frozen(self):
         vs = ViralityScore(
-            post_id="1", session_id="s",
-            cascade_depth=0, cascade_breadth=1,
-            velocity=0.0, reproduction_number=0.0,
-            cross_cluster_reach=0.0, virality_index=0.0,
+            post_id="1",
+            session_id="s",
+            cascade_depth=0,
+            cascade_breadth=1,
+            velocity=0.0,
+            reproduction_number=0.0,
+            cross_cluster_reach=0.0,
+            virality_index=0.0,
         )
         with pytest.raises(Exception):
             vs.virality_index = 1.0  # type: ignore[misc]
 
     def test_zero_defaults(self):
         vs = ViralityScore(
-            post_id="42", session_id="sess",
-            cascade_depth=0, cascade_breadth=0,
-            velocity=0.0, reproduction_number=0.0,
-            cross_cluster_reach=0.0, virality_index=0.0,
+            post_id="42",
+            session_id="sess",
+            cascade_depth=0,
+            cascade_breadth=0,
+            velocity=0.0,
+            reproduction_number=0.0,
+            cross_cluster_reach=0.0,
+            virality_index=0.0,
         )
         assert vs.cascade_depth == 0
         assert vs.virality_index == 0.0
@@ -79,14 +87,10 @@ def _make_db_with_rows(root_rows, all_rows, cluster_row=None, total_agents_row=N
             mock_cursor.fetchall = AsyncMock(return_value=all_rows)
         elif call_count == 3:
             # Third call: echo chamber cluster
-            mock_cursor.fetchone = AsyncMock(
-                return_value=cluster_row or (None,)
-            )
+            mock_cursor.fetchone = AsyncMock(return_value=cluster_row or (None,))
         elif call_count >= 4:
             # Remaining calls: total agent count per root post
-            mock_cursor.fetchone = AsyncMock(
-                return_value=total_agents_row or (100,)
-            )
+            mock_cursor.fetchone = AsyncMock(return_value=total_agents_row or (100,))
         return mock_cursor
 
     mock_db.execute = AsyncMock(side_effect=mock_execute)
@@ -150,9 +154,9 @@ class TestViralityScorerScorePosts:
 
         root_rows = [(1, 10, 1)]
         all_rows = [
-            (1, 10, 1, 0, 0),    # root
-            (2, 11, 2, 1, 1),    # depth 1
-            (3, 12, 3, 2, 2),    # depth 2
+            (1, 10, 1, 0, 0),  # root
+            (2, 11, 2, 1, 1),  # depth 1
+            (3, 12, 3, 2, 2),  # depth 2
         ]
 
         call_count = 0
@@ -288,9 +292,17 @@ class TestViralityScorerScorePosts:
         scorer = ViralityScorer()
 
         # Mock _load_clusters to return cluster mapping
-        with patch.object(scorer, "_load_clusters", new=AsyncMock(return_value={
-            "10": 0, "11": 1, "12": 2,
-        })):
+        with patch.object(
+            scorer,
+            "_load_clusters",
+            new=AsyncMock(
+                return_value={
+                    "10": 0,
+                    "11": 1,
+                    "12": 2,
+                }
+            ),
+        ):
             root_rows = [(1, 10, 1)]
             all_rows = [
                 (1, 10, 1, 0, 0),
@@ -339,10 +351,14 @@ class TestPersistScores:
         mock_db = AsyncMock()
         scores = [
             ViralityScore(
-                post_id="100", session_id="s",
-                cascade_depth=2, cascade_breadth=5,
-                velocity=1.0, reproduction_number=0.05,
-                cross_cluster_reach=0.5, virality_index=0.3,
+                post_id="100",
+                session_id="s",
+                cascade_depth=2,
+                cascade_breadth=5,
+                velocity=1.0,
+                reproduction_number=0.05,
+                cross_cluster_reach=0.5,
+                virality_index=0.3,
             ),
         ]
         await scorer.persist_scores("s", scores, mock_db)
@@ -358,10 +374,14 @@ class TestPersistScores:
         mock_db = AsyncMock()
         scores = [
             ViralityScore(
-                post_id=str(i), session_id="s",
-                cascade_depth=i, cascade_breadth=i * 2,
-                velocity=float(i), reproduction_number=0.1,
-                cross_cluster_reach=0.4, virality_index=0.3,
+                post_id=str(i),
+                session_id="s",
+                cascade_depth=i,
+                cascade_breadth=i * 2,
+                velocity=float(i),
+                reproduction_number=0.1,
+                cross_cluster_reach=0.4,
+                virality_index=0.3,
             )
             for i in range(1, 6)
         ]
@@ -393,9 +413,7 @@ class TestLoadClusters:
         scorer = ViralityScorer()
         mock_db = AsyncMock()
         mock_cursor = AsyncMock()
-        mock_cursor.fetchone = AsyncMock(
-            return_value=('{"10": 0, "11": 1, "12": 2}',)
-        )
+        mock_cursor.fetchone = AsyncMock(return_value=('{"10": 0, "11": 1, "12": 2}',))
         mock_db.execute = AsyncMock(return_value=mock_cursor)
 
         result = await scorer._load_clusters("s", mock_db)

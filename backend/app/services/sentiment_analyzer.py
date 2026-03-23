@@ -12,13 +12,14 @@ permanently operates in keyword-only mode.
 
 All public data structures are **frozen dataclasses** (immutable).
 """
+
 from __future__ import annotations
 
 import logging
 import re
 import threading
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 from backend.app.utils.cantonese_lexicon import (
     NEGATIVE_KEYWORDS,
@@ -29,6 +30,7 @@ from backend.app.utils.cantonese_lexicon import (
 
 try:
     from transformers import pipeline as hf_pipeline  # type: ignore[import-untyped]
+
     HAS_TRANSFORMERS = True
 except ImportError:
     HAS_TRANSFORMERS = False
@@ -43,19 +45,24 @@ _FALLBACK_MODEL_NAME = "bert-base-chinese"
 
 # ── Frozen dataclasses ─────────────────────────────────────────────────────
 
+
 @dataclass(frozen=True)
 class AspectSentiment:
     """Per-topic sentiment within a piece of text."""
+
     topic: str
-    label: str          # "positive" | "negative" | "neutral"
-    confidence: float   # 0.0 - 1.0
+    label: str  # "positive" | "negative" | "neutral"
+    confidence: float  # 0.0 - 1.0
+
 
 @dataclass(frozen=True)
 class SentimentResult:
     """Immutable sentiment analysis result."""
-    label: str                             # "positive" | "negative" | "neutral"
-    confidence: float                      # 0.0 - 1.0
+
+    label: str  # "positive" | "negative" | "neutral"
+    confidence: float  # 0.0 - 1.0
     aspects: dict[str, str] = field(default_factory=dict)  # topic -> label
+
 
 # ── Aspect extraction ──────────────────────────────────────────────────────
 
@@ -105,6 +112,7 @@ _ASPECT_KEYWORDS: dict[str, tuple[frozenset[str], frozenset[str]]] = {
     ),
 }
 
+
 def _extract_aspects(text: str) -> dict[str, str]:
     """Detect topics in *text* and assign per-topic sentiment."""
     if not text:
@@ -124,13 +132,15 @@ def _extract_aspects(text: str) -> dict[str, str]:
             aspects[topic] = "neutral"
     return aspects
 
+
 # ── Lazy Transformer model (thread-safe singleton) ─────────────────────────
 
 _model_lock = threading.Lock()
-_model_pipeline: Optional[Any] = None
+_model_pipeline: Any | None = None
 _model_load_failed = False
 
-def _lazy_load_model() -> Optional[Any]:
+
+def _lazy_load_model() -> Any | None:
     """Load HuggingFace sentiment pipeline on first call. Returns None on failure."""
     global _model_pipeline, _model_load_failed  # noqa: PLW0603
     if _model_pipeline is not None:
@@ -149,20 +159,25 @@ def _lazy_load_model() -> Optional[Any]:
         try:
             logger.info("Loading Transformer model: %s", _MODEL_NAME)
             _model_pipeline = hf_pipeline(
-                "sentiment-analysis", model=_MODEL_NAME,
-                truncation=True, max_length=512,
+                "sentiment-analysis",
+                model=_MODEL_NAME,
+                truncation=True,
+                max_length=512,
             )
             logger.info("Transformer sentiment model loaded: %s", _MODEL_NAME)
             return _model_pipeline
         except Exception:
             logger.warning(
                 "Primary model %s unavailable, trying fallback %s",
-                _MODEL_NAME, _FALLBACK_MODEL_NAME,
+                _MODEL_NAME,
+                _FALLBACK_MODEL_NAME,
             )
             try:
                 _model_pipeline = hf_pipeline(
-                    "sentiment-analysis", model=_FALLBACK_MODEL_NAME,
-                    truncation=True, max_length=512,
+                    "sentiment-analysis",
+                    model=_FALLBACK_MODEL_NAME,
+                    truncation=True,
+                    max_length=512,
                 )
                 logger.info("Fallback Transformer model loaded: %s", _FALLBACK_MODEL_NAME)
                 return _model_pipeline
@@ -171,7 +186,9 @@ def _lazy_load_model() -> Optional[Any]:
                 _model_load_failed = True
                 return None
 
+
 # ── Keyword scoring ────────────────────────────────────────────────────────
+
 
 def _keyword_scores(text: str) -> tuple[float, float, bool]:
     """Return (pos_score, neg_score, has_neutral_hedge) from keyword matching."""
@@ -219,6 +236,7 @@ def _keyword_scores(text: str) -> tuple[float, float, bool]:
     has_neutral = any(nb in text for nb in NEUTRAL_BOOSTERS)
     return pos_score, neg_score, has_neutral
 
+
 def _keyword_result(text: str) -> tuple[SentimentResult, float]:
     """Run keyword analysis. Returns (result, raw_confidence).
 
@@ -243,7 +261,9 @@ def _keyword_result(text: str) -> tuple[SentimentResult, float]:
     mixed = pos > 0 and neg > 0
     return SentimentResult(label=label, confidence=confidence, aspects=aspects), (0.0 if mixed else gap)
 
+
 # ── Transformer inference ──────────────────────────────────────────────────
+
 
 def _transformer_result(text: str, pipe: Any) -> SentimentResult:
     """Run Transformer pipeline on *text* and map 5-star to 3-class."""
@@ -253,7 +273,9 @@ def _transformer_result(text: str, pipe: Any) -> SentimentResult:
     confidence = round(float(raw["score"]), 4)
     return SentimentResult(label=label, confidence=confidence, aspects=_extract_aspects(text))
 
+
 # ── Public API ─────────────────────────────────────────────────────────────
+
 
 def analyze_text(text: str) -> SentimentResult:
     """Analyse *text*: keyword fast-path, Transformer fallback if uncertain.
@@ -277,12 +299,13 @@ def analyze_text(text: str) -> SentimentResult:
         logger.exception("Transformer inference failed; returning keyword result")
         return kw_result
 
+
 def analyze_batch(texts: list[str]) -> list[SentimentResult]:
     """Analyse a batch of texts. High-confidence items skip Transformer."""
     if not texts:
         return []
 
-    results: list[Optional[SentimentResult]] = [None] * len(texts)
+    results: list[SentimentResult | None] = [None] * len(texts)
     transformer_indices: list[int] = []
     transformer_texts: list[str] = []
 
@@ -308,13 +331,15 @@ def analyze_batch(texts: list[str]) -> list[SentimentResult]:
                     label = _STAR_TO_LABEL[stars]
                     confidence = round(float(raw["score"]), 4)
                     results[idx] = SentimentResult(
-                        label=label, confidence=confidence,
+                        label=label,
+                        confidence=confidence,
                         aspects=_extract_aspects(texts[idx]),
                     )
             except Exception:
                 logger.exception("Batch Transformer inference failed")
 
     return [r for r in results if r is not None]
+
 
 def analyze_news_headline(headline: str) -> SentimentResult:
     """Keyword-only headline analysis (no Transformer) for high throughput."""

@@ -16,7 +16,6 @@ from backend.app.services.monte_carlo import (
     _t_copula_sample,
 )
 
-
 # ---------------------------------------------------------------------------
 # _latin_hypercube_sample tests
 # ---------------------------------------------------------------------------
@@ -35,9 +34,7 @@ def test_lhs_generates_uniform_coverage():
         assert col.max() < 1.0
         # Each stratum [i/n, (i+1)/n) has exactly one point
         strata = (col * n).astype(int)
-        assert len(np.unique(strata)) == n, (
-            f"dim {dim}: expected {n} unique strata, got {len(np.unique(strata))}"
-        )
+        assert len(np.unique(strata)) == n, f"dim {dim}: expected {n} unique strata, got {len(np.unique(strata))}"
 
 
 def test_lhs_shape():

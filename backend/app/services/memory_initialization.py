@@ -14,18 +14,17 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from backend.app.utils.db import get_db
 from backend.app.utils.llm_client import LLMClient
 from backend.app.utils.logger import get_logger
 from backend.prompts.memory_init_prompts import (
-    WORLD_CONTEXT_SYSTEM,
-    WORLD_CONTEXT_USER,
     PERSONA_TEMPLATE_SYSTEM,
     PERSONA_TEMPLATE_USER,
+    WORLD_CONTEXT_SYSTEM,
+    WORLD_CONTEXT_USER,
 )
 
 if TYPE_CHECKING:
@@ -47,6 +46,7 @@ _MAX_WORLD_CONTEXT_ROWS: int = 8
 @dataclass(frozen=True)
 class SeedInitResult:
     """Result of build_from_graph()."""
+
     world_context_count: int
     persona_template_count: int
     enhanced_edge_count: int
@@ -55,6 +55,7 @@ class SeedInitResult:
 @dataclass(frozen=True)
 class HydrationResult:
     """Result of hydrate_session_bulk()."""
+
     total_injected: int
     agents_skipped: int
     templates_found: int
@@ -63,6 +64,7 @@ class HydrationResult:
 @dataclass(frozen=True)
 class WorldContextEntry:
     """Single world context item for prompt injection."""
+
     id: int
     graph_id: str
     context_type: str
@@ -102,6 +104,7 @@ def _agent_id_from_str(agent_str_id: str) -> int:
     deterministic positive int is safe.
     """
     import hashlib  # noqa: PLC0415
+
     return int(hashlib.md5(agent_str_id.encode()).hexdigest(), 16) % (2**31)
 
 
@@ -175,7 +178,10 @@ class MemoryInitializationService:
 
         logger.info(
             "build_from_graph %s: %d edges, %d world ctx, %d personas",
-            graph_id, edge_count, world_count, persona_count,
+            graph_id,
+            edge_count,
+            world_count,
+            persona_count,
         )
         return SeedInitResult(world_count, persona_count, edge_count)
 
@@ -203,7 +209,8 @@ class MemoryInitializationService:
         if not templates:
             logger.warning(
                 "hydrate_session_bulk: no persona templates for graph %s — skipping %d agents",
-                graph_id, len(agents),
+                graph_id,
+                len(agents),
             )
             return HydrationResult(total_injected=0, agents_skipped=len(agents), templates_found=0)
 
@@ -218,7 +225,9 @@ class MemoryInitializationService:
             if matched_key is None:
                 logger.warning(
                     "No template match for agent %s (type=%s) in graph %s",
-                    agent_str_id, agent_type, graph_id,
+                    agent_str_id,
+                    agent_type,
+                    graph_id,
                 )
                 agents_skipped += 1
                 continue
@@ -238,7 +247,9 @@ class MemoryInitializationService:
             except Exception:
                 logger.warning(
                     "Failed to inject memories for agent %s session %s",
-                    agent_str_id, session_id, exc_info=True,
+                    agent_str_id,
+                    session_id,
+                    exc_info=True,
                 )
                 agents_skipped += 1
 
@@ -309,9 +320,9 @@ class MemoryInitializationService:
 
         if not templates:
             logger.warning(
-                "Phase 3: no LLM persona templates parsed for graph %s "
-                "(%d upload templates already written)",
-                graph_id, upload_count,
+                "Phase 3: no LLM persona templates parsed for graph %s (%d upload templates already written)",
+                graph_id,
+                upload_count,
             )
             return upload_count
 
@@ -331,8 +342,7 @@ class MemoryInitializationService:
         async with get_db() as db:
             rows = await (
                 await db.execute(
-                    "SELECT title, entity_type, description, properties"
-                    " FROM kg_nodes WHERE session_id = ?",
+                    "SELECT title, entity_type, description, properties FROM kg_nodes WHERE session_id = ?",
                     (graph_id,),
                 )
             ).fetchall()
@@ -385,9 +395,9 @@ class MemoryInitializationService:
         count = await self._write_persona_templates(graph_id, templates)
         if count:
             logger.info(
-                "Phase 3 persona_upload: wrote %d templates from uploaded nodes "
-                "for graph %s",
-                count, graph_id,
+                "Phase 3 persona_upload: wrote %d templates from uploaded nodes for graph %s",
+                count,
+                graph_id,
             )
         return count
 
@@ -413,13 +423,15 @@ class MemoryInitializationService:
                 continue
             if not required.issubset(item.keys()):
                 continue
-            valid.append({
-                "context_type": str(item.get("context_type", "social_climate")),
-                "title": str(item["title"]),
-                "content": str(item["content"]),
-                "severity": float(item.get("severity", 0.7)),
-                "phase": str(item.get("phase", "crisis")),
-            })
+            valid.append(
+                {
+                    "context_type": str(item.get("context_type", "social_climate")),
+                    "title": str(item["title"]),
+                    "content": str(item["content"]),
+                    "severity": float(item.get("severity", 0.7)),
+                    "phase": str(item.get("phase", "crisis")),
+                }
+            )
         return valid
 
     def _parse_persona_response(self, raw: str) -> list[dict]:
@@ -439,16 +451,18 @@ class MemoryInitializationService:
                 continue
             if "agent_type_key" not in item:
                 continue
-            valid.append({
-                "agent_type_key":        str(item["agent_type_key"]),
-                "display_name":          str(item.get("display_name", item["agent_type_key"])),
-                "age_min":               item.get("age_min"),
-                "age_max":               item.get("age_max"),
-                "region_hint":           str(item.get("region_hint", "any")),
-                "population_ratio":      float(item.get("population_ratio", 0.25)),
-                "initial_memories":      list(item.get("initial_memories", [])),
-                "personality_hints":     dict(item.get("personality_hints", {})),
-            })
+            valid.append(
+                {
+                    "agent_type_key": str(item["agent_type_key"]),
+                    "display_name": str(item.get("display_name", item["agent_type_key"])),
+                    "age_min": item.get("age_min"),
+                    "age_max": item.get("age_max"),
+                    "region_hint": str(item.get("region_hint", "any")),
+                    "population_ratio": float(item.get("population_ratio", 0.25)),
+                    "initial_memories": list(item.get("initial_memories", [])),
+                    "personality_hints": dict(item.get("personality_hints", {})),
+                }
+            )
         return valid
 
     # ------------------------------------------------------------------
@@ -492,9 +506,7 @@ class MemoryInitializationService:
             """)
             await db.commit()
 
-    async def _write_world_context(
-        self, graph_id: str, entries: list[dict]
-    ) -> list[dict]:
+    async def _write_world_context(self, graph_id: str, entries: list[dict]) -> list[dict]:
         """Insert world context rows. Returns list of written entries with DB ids."""
         written = []
         async with get_db() as db:
@@ -503,17 +515,21 @@ class MemoryInitializationService:
                     """INSERT OR IGNORE INTO seed_world_context
                        (graph_id, context_type, title, content, severity, phase)
                        VALUES (?, ?, ?, ?, ?, ?)""",
-                    (graph_id, entry["context_type"], entry["title"],
-                     entry["content"], entry["severity"], entry["phase"]),
+                    (
+                        graph_id,
+                        entry["context_type"],
+                        entry["title"],
+                        entry["content"],
+                        entry["severity"],
+                        entry["phase"],
+                    ),
                 )
                 if cursor.lastrowid:
                     written.append({**entry, "db_id": cursor.lastrowid})
             await db.commit()
         return written
 
-    async def _write_persona_templates(
-        self, graph_id: str, templates: list[dict]
-    ) -> int:
+    async def _write_persona_templates(self, graph_id: str, templates: list[dict]) -> int:
         """Insert persona template rows. Returns count written."""
         count = 0
         async with get_db() as db:
@@ -551,11 +567,13 @@ class MemoryInitializationService:
         result = []
         for r in rows:
             try:
-                result.append({
-                    "agent_type_key": r["agent_type_key"],
-                    "initial_memories": json.loads(r["initial_memories_json"]),
-                    "personality_hints": json.loads(r["personality_hints_json"]),
-                })
+                result.append(
+                    {
+                        "agent_type_key": r["agent_type_key"],
+                        "initial_memories": json.loads(r["initial_memories_json"]),
+                        "personality_hints": json.loads(r["personality_hints_json"]),
+                    }
+                )
             except (json.JSONDecodeError, ValueError, KeyError):
                 logger.error(
                     "Corrupt persona template row for graph %s key %s — skipping",
@@ -604,14 +622,14 @@ class MemoryInitializationService:
             except Exception:
                 logger.warning(
                     "LanceDB dual-write failed for agent %d session %s",
-                    agent_id, session_id, exc_info=True,
+                    agent_id,
+                    session_id,
+                    exc_info=True,
                 )
 
         return len(valid_memories)
 
-    async def _sql_fetch_world_context(
-        self, graph_id: str, context_types: list[str] | None
-    ) -> list[WorldContextEntry]:
+    async def _sql_fetch_world_context(self, graph_id: str, context_types: list[str] | None) -> list[WorldContextEntry]:
         """SQL fetch world context, optionally filtered by context_type."""
         async with get_db() as db:
             if context_types:
@@ -632,8 +650,13 @@ class MemoryInitializationService:
                 )
         return [
             WorldContextEntry(
-                id=r["id"], graph_id=r["graph_id"], context_type=r["context_type"],
-                title=r["title"], content=r["content"], severity=r["severity"], phase=r["phase"],
+                id=r["id"],
+                graph_id=r["graph_id"],
+                context_type=r["context_type"],
+                title=r["title"],
+                content=r["content"],
+                severity=r["severity"],
+                phase=r["phase"],
             )
             for r in rows
         ]
@@ -644,6 +667,7 @@ class MemoryInitializationService:
         """Semantic search via raw LanceDB on swc_{graph_id[:12]} table."""
         try:
             import lancedb  # noqa: PLC0415
+
             from backend.app.services.vector_store import EmbeddingProvider  # noqa: PLC0415
 
             db = lancedb.connect(self._lancedb_path)
@@ -675,16 +699,19 @@ class MemoryInitializationService:
                 )
             return [
                 WorldContextEntry(
-                    id=r["id"], graph_id=r["graph_id"], context_type=r["context_type"],
-                    title=r["title"], content=r["content"], severity=r["severity"], phase=r["phase"],
+                    id=r["id"],
+                    graph_id=r["graph_id"],
+                    context_type=r["context_type"],
+                    title=r["title"],
+                    content=r["content"],
+                    severity=r["severity"],
+                    phase=r["phase"],
                 )
                 for r in rows
             ]
 
         except Exception:
-            logger.warning(
-                "Semantic search failed for graph %s, falling back to SQL", graph_id, exc_info=True
-            )
+            logger.warning("Semantic search failed for graph %s, falling back to SQL", graph_id, exc_info=True)
             return await self._sql_fetch_world_context(graph_id, context_types)
 
     async def _embed_world_context(self, graph_id: str, entries: list[dict]) -> None:
@@ -693,7 +720,7 @@ class MemoryInitializationService:
             return
         try:
             import lancedb  # noqa: PLC0415
-            import pyarrow as pa  # noqa: PLC0415
+
             from backend.app.services.vector_store import EmbeddingProvider  # noqa: PLC0415
 
             db = lancedb.connect(self._lancedb_path)
@@ -705,16 +732,18 @@ class MemoryInitializationService:
 
             rows = []
             for entry, vec in zip(entries, vectors):
-                rows.append({
-                    "id": f"swc_{graph_id[:8]}_{entry['db_id']}",
-                    "graph_id": graph_id,
-                    "context_type": entry["context_type"],
-                    "title": entry["title"],
-                    "content": entry["content"],
-                    "severity": entry["severity"],
-                    "phase": entry["phase"],
-                    "vector": vec,
-                })
+                rows.append(
+                    {
+                        "id": f"swc_{graph_id[:8]}_{entry['db_id']}",
+                        "graph_id": graph_id,
+                        "context_type": entry["context_type"],
+                        "title": entry["title"],
+                        "content": entry["content"],
+                        "severity": entry["severity"],
+                        "phase": entry["phase"],
+                        "vector": vec,
+                    }
+                )
 
             if table_name in db.table_names():
                 tbl = db.open_table(table_name)
@@ -726,8 +755,7 @@ class MemoryInitializationService:
             async with get_db() as sqldb:
                 for r in rows:
                     await sqldb.execute(
-                        "UPDATE seed_world_context SET lance_row_id = ? "
-                        "WHERE graph_id = ? AND title = ?",
+                        "UPDATE seed_world_context SET lance_row_id = ? WHERE graph_id = ? AND title = ?",
                         (r["id"], graph_id, r["title"]),
                     )
                 await sqldb.commit()
@@ -735,7 +763,8 @@ class MemoryInitializationService:
         except Exception:
             logger.warning(
                 "LanceDB embed failed for graph %s — world context stored in SQL only",
-                graph_id, exc_info=True,
+                graph_id,
+                exc_info=True,
             )
 
     # ------------------------------------------------------------------

@@ -3,6 +3,7 @@
 Covers: DiversityChecker, BiasProbeResult model, PhaseTransitionDetector,
 EmergenceAttribution, EmergenceScorecard, and MetricSnapshot.
 """
+
 from __future__ import annotations
 
 from dataclasses import FrozenInstanceError
@@ -18,18 +19,20 @@ from backend.app.models.emergence import (
 )
 from backend.app.services.emergence_guards import (
     DiversityChecker,
-    DiversityResult,
     PhaseTransitionDetector,
 )
 
 
-def _make_profile(openness: float, extraversion: float,
-                  political_stance: float, occupation: str, age: int) -> dict:
+def _make_profile(openness: float, extraversion: float, political_stance: float, occupation: str, age: int) -> dict:
     return {
-        "big5_openness": openness, "big5_conscientiousness": 0.5,
-        "big5_extraversion": extraversion, "big5_agreeableness": 0.5,
-        "big5_neuroticism": 0.5, "political_stance": political_stance,
-        "occupation": occupation, "age": age,
+        "big5_openness": openness,
+        "big5_conscientiousness": 0.5,
+        "big5_extraversion": extraversion,
+        "big5_agreeableness": 0.5,
+        "big5_neuroticism": 0.5,
+        "political_stance": political_stance,
+        "occupation": occupation,
+        "age": age,
     }
 
 
@@ -392,40 +395,53 @@ class TestEmergenceScorecard:
 # Grading rubric tests
 # ---------------------------------------------------------------------------
 
+
 class TestGradingRubric:
     """Tests for the _compute_grade function."""
 
     def test_grade_A(self) -> None:
         from backend.app.services.emergence_scorecard import _compute_grade
+
         # Phase 1C + Phase 3: Grade A now also requires network_volatility > 0.05
         # and belief_revision_rate > 0.05 (active network dynamics and belief updating)
-        assert _compute_grade(
-            emergence_ratio=0.8,
-            bias_contamination=0.2,
-            max_cascade_depth=5,
-            action_diversity=2.5,
-            network_volatility=0.1,
-            belief_revision_rate=0.1,
-        ) == "A"
+        assert (
+            _compute_grade(
+                emergence_ratio=0.8,
+                bias_contamination=0.2,
+                max_cascade_depth=5,
+                action_diversity=2.5,
+                network_volatility=0.1,
+                belief_revision_rate=0.1,
+            )
+            == "A"
+        )
 
     def test_grade_B(self) -> None:
         from backend.app.services.emergence_scorecard import _compute_grade
-        assert _compute_grade(emergence_ratio=0.6, bias_contamination=0.4, max_cascade_depth=2, action_diversity=1.8) == "B"
+
+        assert (
+            _compute_grade(emergence_ratio=0.6, bias_contamination=0.4, max_cascade_depth=2, action_diversity=1.8)
+            == "B"
+        )
 
     def test_grade_C(self) -> None:
         from backend.app.services.emergence_scorecard import _compute_grade
+
         assert _compute_grade(emergence_ratio=0.35, bias_contamination=0.6, max_cascade_depth=1) == "C"
 
     def test_grade_D(self) -> None:
         from backend.app.services.emergence_scorecard import _compute_grade
+
         assert _compute_grade(emergence_ratio=0.15, bias_contamination=0.3, max_cascade_depth=0) == "D"
 
     def test_grade_F_high_bias(self) -> None:
         from backend.app.services.emergence_scorecard import _compute_grade
+
         assert _compute_grade(emergence_ratio=0.9, bias_contamination=0.8, max_cascade_depth=10) == "F"
 
     def test_grade_F_low_emergence(self) -> None:
         from backend.app.services.emergence_scorecard import _compute_grade
+
         assert _compute_grade(emergence_ratio=0.05, bias_contamination=0.1, max_cascade_depth=0) == "F"
 
 
@@ -433,52 +449,62 @@ class TestGradingRubric:
 # Helper function tests
 # ---------------------------------------------------------------------------
 
+
 class TestHelperFunctions:
     """Tests for module-level helper functions in emergence_guards."""
 
     def test_shannon_entropy_uniform(self) -> None:
         from backend.app.services.emergence_guards import _shannon_entropy
+
         counts = {"support": 10, "oppose": 10, "neutral": 10}
         ent = _shannon_entropy(counts)
         assert ent > 1.5  # log2(3) ≈ 1.585
 
     def test_shannon_entropy_unanimous(self) -> None:
         from backend.app.services.emergence_guards import _shannon_entropy
+
         counts = {"support": 30}
         assert _shannon_entropy(counts) == 0.0
 
     def test_shannon_entropy_empty(self) -> None:
         from backend.app.services.emergence_guards import _shannon_entropy
+
         assert _shannon_entropy({}) == 0.0
 
     def test_kurtosis_uniform(self) -> None:
         from backend.app.services.emergence_guards import _kurtosis_from_counts
+
         counts = {"support": 10, "oppose": 10, "neutral": 10}
         k = _kurtosis_from_counts(counts)
         assert k < 0  # platykurtic (flat distribution)
 
     def test_kurtosis_peaked(self) -> None:
         from backend.app.services.emergence_guards import _kurtosis_from_counts
+
         counts = {"support": 28, "oppose": 1, "neutral": 1}
         k = _kurtosis_from_counts(counts)
         assert k > 0  # leptokurtic (peaked)
 
     def test_kurtosis_insufficient_data(self) -> None:
         from backend.app.services.emergence_guards import _kurtosis_from_counts
+
         counts = {"support": 2}
         assert _kurtosis_from_counts(counts) == 0.0
 
     def test_expected_stance_centrist(self) -> None:
         from backend.app.services.emergence_guards import _expected_stance
+
         scenarios = ["A", "B", "C"]
         assert _expected_stance(0.5, "A", scenarios) is None
 
     def test_expected_stance_liberal_pro_democracy(self) -> None:
-        from backend.app.services.emergence_guards import _expected_stance, BiasProbe
+        from backend.app.services.emergence_guards import BiasProbe, _expected_stance
+
         scenarios = BiasProbe.PROBE_SCENARIOS
         assert _expected_stance(0.8, scenarios[0], scenarios) == "support"
 
     def test_expected_stance_conservative_pro_establishment(self) -> None:
-        from backend.app.services.emergence_guards import _expected_stance, BiasProbe
+        from backend.app.services.emergence_guards import BiasProbe, _expected_stance
+
         scenarios = BiasProbe.PROBE_SCENARIOS
         assert _expected_stance(0.2, scenarios[0], scenarios) == "oppose"

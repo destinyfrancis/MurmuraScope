@@ -7,9 +7,8 @@ macro feedback).
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiosqlite
 import pytest
@@ -33,6 +32,7 @@ def _mock_llm():
     """Prevent any real LLM calls during E2E tests."""
     with _LLM_PATCH, _LLM_CHAT_PATCH:
         yield
+
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -87,10 +87,17 @@ async def seeded_session(dry_run_db):
                 status, oasis_db_path)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
-                session_id, "dry_run_test", "social_media",
-                "property", graph_id, 5, 3,
-                "openrouter", "deepseek/deepseek-v3.2",
-                "running", str(Path(db_path).parent / "oasis.db"),
+                session_id,
+                "dry_run_test",
+                "social_media",
+                "property",
+                graph_id,
+                5,
+                3,
+                "openrouter",
+                "deepseek/deepseek-v3.2",
+                "running",
+                str(Path(db_path).parent / "oasis.db"),
             ),
         )
 
@@ -107,12 +114,25 @@ async def seeded_session(dry_run_db):
                     oasis_username, oasis_persona)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
-                    session_id, "citizen", 25 + i * 5, "M" if i % 2 else "F",
-                    "沙田", "professional", "middle",
-                    "學位或以上", "single", "private",
-                    0.6, 0.5, 0.7, 0.5, 0.4,
-                    30000 + i * 5000, 100000 + i * 20000,
-                    f"dry_user_{i - 1}", f"Persona for agent {i}",
+                    session_id,
+                    "citizen",
+                    25 + i * 5,
+                    "M" if i % 2 else "F",
+                    "沙田",
+                    "professional",
+                    "middle",
+                    "學位或以上",
+                    "single",
+                    "private",
+                    0.6,
+                    0.5,
+                    0.7,
+                    0.5,
+                    0.4,
+                    30000 + i * 5000,
+                    100000 + i * 20000,
+                    f"dry_user_{i - 1}",
+                    f"Persona for agent {i}",
                 ),
             )
 

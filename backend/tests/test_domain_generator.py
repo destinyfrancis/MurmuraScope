@@ -1,12 +1,13 @@
 """Tests for DomainGenerator service (Task 9)."""
+
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from backend.app.services.domain_generator import DomainGenerator
-from backend.app.models.domain import DraftDomainPack
+import pytest
 
+from backend.app.models.domain import DraftDomainPack
+from backend.app.services.domain_generator import DomainGenerator
 
 # ---------------------------------------------------------------------------
 # Fixtures / shared constants
@@ -22,10 +23,26 @@ MOCK_LLM_RESPONSE = {
     "metrics": ["land_price_index", "vacancy_rate", "transaction_volume"],
     "persona_template": "You are a {occupation} living in {region}, Tokyo.",
     "sentiment_keywords": [
-        "good", "bad", "expensive", "cheap", "rising", "falling",
-        "bullish", "bearish", "stable", "volatile", "demand",
-        "supply", "mortgage", "rent", "buy", "sell", "invest",
-        "wait", "opportunity", "risk",
+        "good",
+        "bad",
+        "expensive",
+        "cheap",
+        "rising",
+        "falling",
+        "bullish",
+        "bearish",
+        "stable",
+        "volatile",
+        "demand",
+        "supply",
+        "mortgage",
+        "rent",
+        "buy",
+        "sell",
+        "invest",
+        "wait",
+        "opportunity",
+        "risk",
     ],
     "locale": "ja-JP",
 }
@@ -43,6 +60,7 @@ def _make_llm(responses: list[dict]) -> MagicMock:
 # ---------------------------------------------------------------------------
 # Happy path
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_generate_domain_pack_success():
@@ -105,6 +123,7 @@ async def test_generate_result_is_frozen():
 # ---------------------------------------------------------------------------
 # Retry logic
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_generate_retries_on_bad_json():
@@ -170,6 +189,7 @@ async def test_generate_retry_uses_different_prompt():
 # ---------------------------------------------------------------------------
 # _try_parse unit tests
 # ---------------------------------------------------------------------------
+
 
 def test_try_parse_valid():
     result = DomainGenerator._try_parse(MOCK_LLM_RESPONSE.copy())

@@ -10,7 +10,6 @@ VectorStore is available, falls back to the original SQL-only path.
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -54,9 +53,9 @@ _SUMMARIZE_MIN_MEMORIES: int = 5
 _SUMMARY_SALIENCE: float = 0.8
 
 # Memory compression constants (Phase 6 — ReMe-inspired lazy compression)
-_COMPRESSION_THRESHOLD: int = 200      # trigger when agent has >200 non-summary memories
-_COMPRESSION_BATCH_SIZE: int = 100     # compress oldest 100 memories per trigger
-_COMPRESSION_MIN_ROUND_AGE: int = 5    # only compress memories from ≥5 rounds ago
+_COMPRESSION_THRESHOLD: int = 200  # trigger when agent has >200 non-summary memories
+_COMPRESSION_BATCH_SIZE: int = 100  # compress oldest 100 memories per trigger
+_COMPRESSION_MIN_ROUND_AGE: int = 5  # only compress memories from ≥5 rounds ago
 
 
 @dataclass(frozen=True)
@@ -78,7 +77,7 @@ class AgentMemoryService:
     def __init__(
         self,
         llm_client: LLMClient | None = None,
-        vector_store: "VectorStore | None" = None,
+        vector_store: VectorStore | None = None,
         summarize_interval: int = 20,
         summarize_salience_threshold: float = 0.3,
     ) -> None:
@@ -124,15 +123,17 @@ class AgentMemoryService:
                         continue
                     importance_raw = float(m.get("importance_score", 5))
                     importance = max(0.0, min(1.0, importance_raw / 10.0))
-                    rows.append((
-                        session_id,
-                        agent_id,
-                        round_number,
-                        m.get("memory_text", ""),
-                        float(m.get("salience_score", 0.5)),
-                        m.get("memory_type", "observation"),
-                        importance,
-                    ))
+                    rows.append(
+                        (
+                            session_id,
+                            agent_id,
+                            round_number,
+                            m.get("memory_text", ""),
+                            float(m.get("salience_score", 0.5)),
+                            m.get("memory_type", "observation"),
+                            importance,
+                        )
+                    )
 
                 if rows:
                     try:
@@ -165,19 +166,23 @@ class AgentMemoryService:
                                 mem_text = row_data[3]
                                 mem_type = row_data[5]
                                 triples = self._triple_extractor.extract_triples(
-                                    mem_text, mem_type, username,
+                                    mem_text,
+                                    mem_type,
+                                    username,
                                 )
                                 for t in triples:
-                                    triple_rows.append((
-                                        mem_id,
-                                        session_id,
-                                        agent_id,
-                                        round_number,
-                                        t.subject,
-                                        t.predicate,
-                                        t.object,
-                                        t.confidence,
-                                    ))
+                                    triple_rows.append(
+                                        (
+                                            mem_id,
+                                            session_id,
+                                            agent_id,
+                                            round_number,
+                                            t.subject,
+                                            t.predicate,
+                                            t.object,
+                                            t.confidence,
+                                        )
+                                    )
                             if triple_rows:
                                 async with get_db() as db:
                                     await db.executemany(
@@ -193,36 +198,42 @@ class AgentMemoryService:
                         except Exception:
                             logger.exception(
                                 "triple extraction/insert failed session=%s round=%d",
-                                session_id, round_number,
+                                session_id,
+                                round_number,
                             )
 
                         # Dual-write to vector store
                         if self._vector_store is not None:
                             vec_records = []
                             for row_data, mem_id in zip(rows, inserted_ids):
-                                vec_records.append({
-                                    "memory_id": mem_id,
-                                    "agent_id": row_data[1],
-                                    "round_number": row_data[2],
-                                    "memory_text": row_data[3],
-                                    "salience_score": row_data[4],
-                                    "memory_type": row_data[5],
-                                    "importance_score": row_data[6],
-                                })
+                                vec_records.append(
+                                    {
+                                        "memory_id": mem_id,
+                                        "agent_id": row_data[1],
+                                        "round_number": row_data[2],
+                                        "memory_text": row_data[3],
+                                        "salience_score": row_data[4],
+                                        "memory_type": row_data[5],
+                                        "importance_score": row_data[6],
+                                    }
+                                )
                             try:
                                 await self._vector_store.add_memories(
-                                    session_id, vec_records,
+                                    session_id,
+                                    vec_records,
                                 )
                             except Exception:
                                 logger.exception(
                                     "vector_store.add_memories failed session=%s round=%d",
-                                    session_id, round_number,
+                                    session_id,
+                                    round_number,
                                 )
 
                     except Exception:
                         logger.exception(
                             "store_round_memories insert failed session=%s round=%d",
-                            session_id, round_number,
+                            session_id,
+                            round_number,
                         )
 
         return total
@@ -290,14 +301,13 @@ class AgentMemoryService:
             except Exception:
                 logger.exception(
                     "Semantic search failed, falling back to SQL session=%s agent=%d",
-                    session_id, agent_id,
+                    session_id,
+                    agent_id,
                 )
 
         # SQL fallback
         if not memory_context:
-            memory_context = await self._get_agent_context_sql(
-                session_id, agent_id, current_round
-            )
+            memory_context = await self._get_agent_context_sql(session_id, agent_id, current_round)
 
         # Append relational context (TKG triples) if memories exist
         parts = [memory_context] if memory_context else []
@@ -365,8 +375,13 @@ class AgentMemoryService:
                         LIMIT 20
                         """,
                         (
-                            session_id, agent_id, like_param, like_param,
-                            session_id, agent_id, max_hops,
+                            session_id,
+                            agent_id,
+                            like_param,
+                            like_param,
+                            session_id,
+                            agent_id,
+                            max_hops,
                         ),
                     )
                 else:
@@ -385,7 +400,8 @@ class AgentMemoryService:
         except Exception:
             logger.exception(
                 "get_relational_context failed session=%s agent=%d",
-                session_id, agent_id,
+                session_id,
+                agent_id,
             )
             return ""
 
@@ -432,22 +448,24 @@ class AgentMemoryService:
             if self._vector_store is not None:
                 try:
                     await self._vector_store.update_salience(
-                        session_id, decay_factor=_SALIENCE_DECAY,
+                        session_id,
+                        decay_factor=_SALIENCE_DECAY,
                     )
                 except Exception:
                     logger.exception(
-                        "vector_store.update_salience failed session=%s", session_id,
+                        "vector_store.update_salience failed session=%s",
+                        session_id,
                     )
 
             logger.debug(
                 "decay_memories round=%d pruned=%d session=%s",
-                round_number, pruned, session_id,
+                round_number,
+                pruned,
+                session_id,
             )
             return pruned
         except Exception:
-            logger.exception(
-                "decay_memories failed session=%s round=%d", session_id, round_number
-            )
+            logger.exception("decay_memories failed session=%s round=%d", session_id, round_number)
             return 0
 
     async def get_agent_memories(
@@ -478,9 +496,7 @@ class AgentMemoryService:
                 rows = await cursor.fetchall()
                 return [dict(r) for r in rows]
         except Exception:
-            logger.exception(
-                "get_agent_memories failed session=%s agent=%d", session_id, agent_id
-            )
+            logger.exception("get_agent_memories failed session=%s agent=%d", session_id, agent_id)
             return []
 
     async def get_agent_triples(
@@ -515,7 +531,8 @@ class AgentMemoryService:
         except Exception:
             logger.exception(
                 "get_agent_triples failed session=%s agent=%d",
-                session_id, agent_id,
+                session_id,
+                agent_id,
             )
             return []
 
@@ -608,9 +625,7 @@ class AgentMemoryService:
         budget = TokenBudget(total=max_tokens)
 
         # Priority 1: Recency (40% budget)
-        recent = await self._get_recent_memories(
-            session_id, agent_id, current_round, limit=5
-        )
+        recent = await self._get_recent_memories(session_id, agent_id, current_round, limit=5)
         recency_block = self._format_memories(recent, "短期記憶")
         recency_tokens = TokenCounter.count(recency_block)
 
@@ -626,9 +641,7 @@ class AgentMemoryService:
                 )
                 # Deduplicate against recency
                 recent_ids = {m["id"] for m in recent if m.get("id")}
-                unique_results = [
-                    r for r in results if r.memory_id not in recent_ids
-                ]
+                unique_results = [r for r in results if r.memory_id not in recent_ids]
                 if unique_results:
                     semantic_mems = [
                         {
@@ -641,9 +654,7 @@ class AgentMemoryService:
                     ]
                     semantic_block = self._format_memories(semantic_mems, "相關記憶")
             except Exception:
-                logger.exception(
-                    "Semantic tier failed session=%s agent=%d", session_id, agent_id
-                )
+                logger.exception("Semantic tier failed session=%s agent=%d", session_id, agent_id)
         semantic_tokens = TokenCounter.count(semantic_block)
 
         # Tier 3: Social influence (20% budget)
@@ -693,20 +704,20 @@ class AgentMemoryService:
                 return False
 
             # Build input for LLM summarization
-            memory_texts = [
-                f"[第{r[4]}輪, {r[2]}, 重要度{float(r[3]):.2f}] {r[1]}"
-                for r in old_memories
-            ]
+            memory_texts = [f"[第{r[4]}輪, {r[2]}, 重要度{float(r[3]):.2f}] {r[1]}" for r in old_memories]
             input_text = "\n".join(memory_texts)
 
             response = await self._llm.chat(
                 [
                     {"role": "system", "content": MEMORY_COMPRESSION_SYSTEM},
-                    {"role": "user", "content": MEMORY_COMPRESSION_USER.format(
-                        agent_id=agent_id,
-                        memory_count=len(old_memories),
-                        memories=input_text,
-                    )},
+                    {
+                        "role": "user",
+                        "content": MEMORY_COMPRESSION_USER.format(
+                            agent_id=agent_id,
+                            memory_count=len(old_memories),
+                            memories=input_text,
+                        ),
+                    },
                 ],
                 provider=get_agent_provider_model()[0],
                 model=get_agent_provider_model()[1],
@@ -751,14 +762,19 @@ class AgentMemoryService:
 
             logger.info(
                 "Summarized %d memories → 1 summary for agent=%d session=%s round=%d",
-                len(old_memories), agent_id, session_id, current_round,
+                len(old_memories),
+                agent_id,
+                session_id,
+                current_round,
             )
             return True
 
         except Exception:
             logger.exception(
                 "summarize_old_memories failed session=%s agent=%d round=%d",
-                session_id, agent_id, current_round,
+                session_id,
+                agent_id,
+                current_round,
             )
             return False
 
@@ -844,14 +860,18 @@ class AgentMemoryService:
 
             logger.debug(
                 "Compressed %d memories → 1 summary for agent=%d session=%s",
-                len(ids_to_delete), agent_id, session_id,
+                len(ids_to_delete),
+                agent_id,
+                session_id,
             )
             return True
 
         except Exception:
             logger.debug(
                 "Memory compression skipped for agent=%d session=%s",
-                agent_id, session_id, exc_info=True,
+                agent_id,
+                session_id,
+                exc_info=True,
             )
             return False
 
@@ -870,6 +890,7 @@ class AgentMemoryService:
             ``"edges"`` (list of edge row dicts for all direct connections).
         """
         from backend.app.utils.db import get_db  # noqa: PLC0415
+
         async with get_db() as db:
             db.row_factory = aiosqlite.Row
             placeholders = ",".join("?" * len(entity_ids))
@@ -879,8 +900,7 @@ class AgentMemoryService:
             )
             nodes = [dict(r) for r in await cursor.fetchall()]
             cursor = await db.execute(
-                f"SELECT * FROM kg_edges"
-                f" WHERE source_id IN ({placeholders}) OR target_id IN ({placeholders})",
+                f"SELECT * FROM kg_edges WHERE source_id IN ({placeholders}) OR target_id IN ({placeholders})",
                 entity_ids + entity_ids,
             )
             edges = [dict(r) for r in await cursor.fetchall()]
@@ -920,9 +940,7 @@ class AgentMemoryService:
                     for r in rows
                 ]
         except Exception:
-            logger.exception(
-                "_get_recent_memories failed session=%s agent=%d", session_id, agent_id
-            )
+            logger.exception("_get_recent_memories failed session=%s agent=%d", session_id, agent_id)
             return []
 
     def _format_memories(self, memories: list[dict], header: str) -> str:
@@ -971,14 +989,10 @@ class AgentMemoryService:
 
             lines = ["【信任來源動態】"]
             for r in rows:
-                lines.append(
-                    f"[KOL#{r[0]}, 信任度{float(r[1]):.2f}, 第{r[3]}輪] {r[2][:100]}"
-                )
+                lines.append(f"[KOL#{r[0]}, 信任度{float(r[1]):.2f}, 第{r[3]}輪] {r[2][:100]}")
             return "\n".join(lines)
         except Exception:
-            logger.exception(
-                "_get_kol_context failed session=%s agent=%d", session_id, agent_id
-            )
+            logger.exception("_get_kol_context failed session=%s agent=%d", session_id, agent_id)
             return ""
 
     async def _get_agent_context_sql(
@@ -1004,14 +1018,14 @@ class AgentMemoryService:
                     ORDER BY salience_score DESC, round_number DESC
                     LIMIT ?
                     """,
-                    (session_id, agent_id, min_round,
-                     _SALIENCE_PRUNE_THRESHOLD, _MAX_CONTEXT_MEMORIES),
+                    (session_id, agent_id, min_round, _SALIENCE_PRUNE_THRESHOLD, _MAX_CONTEXT_MEMORIES),
                 )
                 rows = await cursor.fetchall()
         except Exception:
             logger.exception(
                 "_get_agent_context_sql failed session=%s agent=%d",
-                session_id, agent_id,
+                session_id,
+                agent_id,
             )
             return ""
 
@@ -1037,9 +1051,7 @@ class AgentMemoryService:
         round_number: int,
     ) -> list[dict]:
         """Call LLM to summarize posts into memory records."""
-        posts_text = "\n".join(
-            f"[帖子 {i+1}] {p}" for i, p in enumerate(posts[:10])
-        )
+        posts_text = "\n".join(f"[帖子 {i + 1}] {p}" for i, p in enumerate(posts[:10]))
 
         messages = [
             {"role": "system", "content": MEMORY_SUMMARIZE_SYSTEM},
@@ -1062,9 +1074,7 @@ class AgentMemoryService:
             )
             return data.get("memories", [])
         except Exception:
-            logger.exception(
-                "_summarize_posts failed for user=%s round=%d", username, round_number
-            )
+            logger.exception("_summarize_posts failed for user=%s round=%d", username, round_number)
             return []
 
     # ------------------------------------------------------------------
@@ -1089,10 +1099,7 @@ class AgentMemoryService:
         all_scores: list[float] = []
         for i in range(0, len(agent_memories), batch_size):
             batch = agent_memories[i : i + batch_size]
-            prompt = "\n".join(
-                f"Agent {m['agent_id']}: {m['memory_text'][:200]}"
-                for m in batch
-            )
+            prompt = "\n".join(f"Agent {m['agent_id']}: {m['memory_text'][:200]}" for m in batch)
             try:
                 result = await self._llm.chat_json(
                     [
@@ -1114,9 +1121,7 @@ class AgentMemoryService:
                 if len(scores) < len(batch):
                     scores.extend([0.5] * (len(batch) - len(scores)))
             except Exception:
-                logger.exception(
-                    "batch_evaluate_salience LLM call failed for batch starting at %d", i
-                )
+                logger.exception("batch_evaluate_salience LLM call failed for batch starting at %d", i)
                 scores = [0.5] * len(batch)
             all_scores.extend(scores)
         return all_scores

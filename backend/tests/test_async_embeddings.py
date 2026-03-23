@@ -5,18 +5,19 @@ offloaded to a thread pool via asyncio.to_thread().
 These tests use unittest.mock to confirm asyncio.to_thread is invoked in the
 relevant async methods so the event loop is never blocked.
 """
+
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # MemoryInitializationService._semantic_search_world_context
 # ---------------------------------------------------------------------------
+
 
 class TestSemanticSearchWorldContextUsesThread:
     """_semantic_search_world_context must wrap embed_single in asyncio.to_thread."""
@@ -67,28 +68,25 @@ class TestSemanticSearchWorldContextUsesThread:
             # Also patch the lazy import inside the function
             import sys
             import types
+
             fake_vs_module = types.ModuleType("backend.app.services.vector_store")
             fake_vs_module.EmbeddingProvider = mock_provider_cls  # type: ignore[attr-defined]
             with patch.dict(sys.modules, {"backend.app.services.vector_store": fake_vs_module}):
-                result = await svc._semantic_search_world_context(
-                    _GRAPH_ID, "test query", None
-                )
+                result = await svc._semantic_search_world_context(_GRAPH_ID, "test query", None)
 
-        assert len(to_thread_calls) >= 1, (
-            "asyncio.to_thread must be called at least once for embedding"
-        )
+        assert len(to_thread_calls) >= 1, "asyncio.to_thread must be called at least once for embedding"
         # Verify the function passed to to_thread is embed_single.
         # When a MagicMock method is passed, its repr/name contains "embed_single".
         called_funcs = [call[0] for call in to_thread_calls]
-        assert any(
-            "embed_single" in (getattr(f, "__name__", "") or repr(f))
-            for f in called_funcs
-        ), f"embed_single not found among to_thread calls: {called_funcs}"
+        assert any("embed_single" in (getattr(f, "__name__", "") or repr(f)) for f in called_funcs), (
+            f"embed_single not found among to_thread calls: {called_funcs}"
+        )
 
 
 # ---------------------------------------------------------------------------
 # MemoryInitializationService._embed_world_context
 # ---------------------------------------------------------------------------
+
 
 class TestEmbedWorldContextUsesThread:
     """_embed_world_context must wrap embed (batch) in asyncio.to_thread."""
@@ -151,11 +149,14 @@ class TestEmbedWorldContextUsesThread:
             return func(*args, **kwargs)
 
         with (
-            patch.dict(sys.modules, {
-                "lancedb": fake_lancedb,
-                "pyarrow": fake_pa,
-                "backend.app.services.vector_store": fake_vs_module,
-            }),
+            patch.dict(
+                sys.modules,
+                {
+                    "lancedb": fake_lancedb,
+                    "pyarrow": fake_pa,
+                    "backend.app.services.vector_store": fake_vs_module,
+                },
+            ),
             patch(
                 "backend.app.services.memory_initialization.asyncio.to_thread",
                 side_effect=_capture_to_thread,
@@ -163,16 +164,13 @@ class TestEmbedWorldContextUsesThread:
         ):
             await svc._embed_world_context(_GRAPH_ID, entries)
 
-        assert len(to_thread_calls) >= 1, (
-            "asyncio.to_thread must be called at least once for batch embedding"
-        )
+        assert len(to_thread_calls) >= 1, "asyncio.to_thread must be called at least once for batch embedding"
         # Verify the function passed to to_thread is the batch embed method.
         # When a MagicMock method is passed, its repr contains "embed".
         called_funcs = [call[0] for call in to_thread_calls]
-        assert any(
-            "embed" in (getattr(f, "__name__", "") or repr(f))
-            for f in called_funcs
-        ), f"embed not found among to_thread calls: {called_funcs}"
+        assert any("embed" in (getattr(f, "__name__", "") or repr(f)) for f in called_funcs), (
+            f"embed not found among to_thread calls: {called_funcs}"
+        )
 
     @pytest.mark.asyncio
     async def test_empty_entries_skips_embedding(self):
@@ -194,14 +192,13 @@ class TestEmbedWorldContextUsesThread:
         ):
             await svc._embed_world_context("test_graph_id_0123456789ab", [])
 
-        assert len(to_thread_calls) == 0, (
-            "No embedding calls expected for empty entry list"
-        )
+        assert len(to_thread_calls) == 0, "No embedding calls expected for empty entry list"
 
 
 # ---------------------------------------------------------------------------
 # EmbeddingProvider.embed_single — unit-level sanity check
 # ---------------------------------------------------------------------------
+
 
 class TestEmbeddingProviderInterface:
     """EmbeddingProvider.embed_single must remain synchronous (called via to_thread)."""

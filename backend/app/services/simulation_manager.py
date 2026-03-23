@@ -45,7 +45,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
 # Module-level singleton — prevents duplicate SimulationRunner instances across
 # concurrent API requests.  Access via get_simulation_manager().
-_MANAGER_SINGLETON: "SimulationManager | None" = None
+_MANAGER_SINGLETON: SimulationManager | None = None
 
 # Module-level per-session start locks — shared across ALL SimulationManager
 # instances so concurrent POST /simulation/start requests for the same session
@@ -114,7 +114,9 @@ class SimulationManager:
             graph_id=graph_id,
             scenario_type=scenario_type,
             platforms=request.get("platforms", {"twitter": True, "reddit": True}),
-            llm_provider=request.get("llm_provider") or os.environ.get("AGENT_LLM_PROVIDER") or os.environ.get("LLM_PROVIDER", "openrouter"),
+            llm_provider=request.get("llm_provider")
+            or os.environ.get("AGENT_LLM_PROVIDER")
+            or os.environ.get("LLM_PROVIDER", "openrouter"),
         )
 
         # Derive stable paths for this session.
@@ -130,6 +132,7 @@ class SimulationManager:
         if user_api_key:
             try:
                 from backend.app.services.session_key_store import SessionKeyStore  # noqa: PLC0415
+
                 key_store = SessionKeyStore()
                 await key_store.store_key(
                     session_id=session.id,
@@ -140,7 +143,8 @@ class SimulationManager:
                 )
             except Exception:
                 logger.warning(
-                    "Failed to store BYOK key for session %s", session.id,
+                    "Failed to store BYOK key for session %s",
+                    session.id,
                     exc_info=True,
                 )
 
@@ -157,11 +161,7 @@ class SimulationManager:
             "agent_count": session.agent_count,
             "round_count": session.round_count,
             "status": session.status.value,
-            "estimated_cost_usd": (
-                session.cost_estimate.total_estimated_usd
-                if session.cost_estimate
-                else 0.0
-            ),
+            "estimated_cost_usd": (session.cost_estimate.total_estimated_usd if session.cost_estimate else 0.0),
             "csv_path": effective_csv_path,
         }
 
@@ -237,15 +237,14 @@ class SimulationManager:
                     )
                     logger.info("Session %s completed", session_id)
                 except Exception as exc:
-                    failed = updated.with_status(
-                        SessionStatus.FAILED, error_message=str(exc)
-                    )
+                    failed = updated.with_status(SessionStatus.FAILED, error_message=str(exc))
                     await _update_session_status(failed)
                     logger.error("Session %s failed: %s", session_id, exc)
 
                     # Push an error event so WebSocket clients know it failed.
                     try:
                         from backend.app.api.ws import push_progress  # noqa: PLC0415
+
                         await push_progress(
                             session_id,
                             {"type": "error", "data": {"message": str(exc)}},
@@ -260,6 +259,7 @@ class SimulationManager:
                     # Release buffered progress memory to prevent unbounded growth.
                     try:
                         from backend.app.api.ws import clear_progress  # noqa: PLC0415
+
                         clear_progress(session_id)
                     except Exception:
                         logger.warning(
@@ -285,9 +285,7 @@ class SimulationManager:
                 try:
                     await asyncio.wait_for(_run_and_finalize(), timeout=timeout_s)
                 except asyncio.TimeoutError:
-                    logger.critical(
-                        "Simulation %s timed out after %.0fs", session_id, timeout_s
-                    )
+                    logger.critical("Simulation %s timed out after %.0fs", session_id, timeout_s)
                     async with get_db() as db:
                         await db.execute(
                             "UPDATE simulation_sessions SET status='failed', "
@@ -311,15 +309,11 @@ class SimulationManager:
         """
         session = await _load_session(session_id)
         if session.status != SessionStatus.RUNNING:
-            raise ValueError(
-                f"Cannot stop session in '{session.status.value}' state"
-            )
+            raise ValueError(f"Cannot stop session in '{session.status.value}' state")
 
         await self._runner.stop(session_id)
 
-        stopped = session.with_status(
-            SessionStatus.FAILED, error_message="Stopped by user"
-        )
+        stopped = session.with_status(SessionStatus.FAILED, error_message="Stopped by user")
         await _update_session_status(stopped)
         logger.info("Session %s stopped by user", session_id)
 
@@ -358,7 +352,7 @@ class SimulationManager:
         return [dict(row) for row in rows]
 
 
-def get_simulation_manager() -> "SimulationManager":
+def get_simulation_manager() -> SimulationManager:
     """Return the process-wide SimulationManager singleton.
 
     Using a singleton ensures all API handlers share the same SimulationRunner,
@@ -417,9 +411,7 @@ async def generate_agents(
             from backend.app.services.kg_agent_factory import KGAgentFactory  # noqa: PLC0415
             from backend.app.utils.llm_client import LLMClient  # noqa: PLC0415
         except ImportError as exc:
-            raise RuntimeError(
-                "KGAgentFactory not available — ensure kg_agent_factory module exists"
-            ) from exc
+            raise RuntimeError("KGAgentFactory not available — ensure kg_agent_factory module exists") from exc
 
         llm = llm_client or LLMClient()
 
@@ -428,16 +420,17 @@ async def generate_agents(
         # which may differ from graph_id (format: graph_{session_id}_{hex}).
         # Extract the original session_id to query correctly.
         from backend.app.services.graph_builder import _session_id_from_graph_id  # noqa: PLC0415
+
         kg_session_id = _session_id_from_graph_id(graph_id)
 
         kg_nodes: list[dict[str, Any]] = []
         kg_edges: list[dict[str, Any]] = []
         try:
             from backend.app.utils.db import get_db  # noqa: PLC0415
+
             async with get_db() as db:
                 cursor = await db.execute(
-                    "SELECT id, entity_type, title, description, properties "
-                    "FROM kg_nodes WHERE session_id = ?",
+                    "SELECT id, entity_type, title, description, properties FROM kg_nodes WHERE session_id = ?",
                     (kg_session_id,),
                 )
                 kg_nodes = [dict(row) for row in await cursor.fetchall()]
@@ -467,6 +460,7 @@ async def generate_agents(
         # Hydrate seed memories (best-effort, never blocks simulation start)
         try:
             from backend.app.services.memory_initialization import MemoryInitializationService  # noqa: PLC0415
+
             mem_svc = MemoryInitializationService()
             agents = [(p.id, p.entity_type) for p in profiles]
             hydration = await mem_svc.hydrate_session_bulk(
@@ -499,6 +493,7 @@ async def generate_agents(
     domain_pack_id = request.get("domain_pack_id", "hk_city")
     try:
         from backend.app.domain.base import DomainPackRegistry  # noqa: PLC0415
+
         pack = DomainPackRegistry.get(domain_pack_id)
         demographics = pack.demographics
     except Exception:
@@ -510,16 +505,15 @@ async def generate_agents(
     factory = AgentFactory(demographics=demographics)
     profiles = factory.generate_population(agent_count, distribution or None)
 
-    from backend.app.services.profile_generator import ProfileGenerator  # noqa: PLC0415
-    from backend.app.services.macro_controller import MacroController  # noqa: PLC0415
     import asyncio as _asyncio  # noqa: PLC0415
     from pathlib import Path as _Path  # noqa: PLC0415
 
+    from backend.app.services.macro_controller import MacroController  # noqa: PLC0415
+    from backend.app.services.profile_generator import ProfileGenerator  # noqa: PLC0415
+
     profile_gen = ProfileGenerator(agent_factory=factory)
     macro = MacroController()
-    macro_state = await macro.get_baseline_for_scenario(
-        request.get("scenario_type", "property")
-    )
+    macro_state = await macro.get_baseline_for_scenario(request.get("scenario_type", "property"))
     csv_content = profile_gen.to_oasis_csv(profiles, macro_state)
     await _asyncio.to_thread(_Path(csv_path).write_text, csv_content, encoding="utf-8")
     logger.info(
@@ -563,31 +557,33 @@ async def store_agent_profiles(
         # Note: id is excluded — let SQLite AUTOINCREMENT assign a globally
         # unique id so that multiple sessions (each starting agent IDs at 1)
         # do not conflict on the PRIMARY KEY.
-        rows.append((
-            session_id,
-            profile.agent_type,
-            profile.age,
-            profile.sex,
-            profile.district,
-            profile.occupation,
-            profile.income_bracket,
-            profile.education_level,
-            profile.marital_status,
-            profile.housing_type,
-            profile.openness,
-            profile.conscientiousness,
-            profile.extraversion,
-            profile.agreeableness,
-            profile.neuroticism,
-            profile.monthly_income,
-            profile.savings,
-            persona,
-            username,
-            now,
-            bp["activity_level"],
-            bp["influence_weight"],
-            bp["is_stakeholder"],
-        ))
+        rows.append(
+            (
+                session_id,
+                profile.agent_type,
+                profile.age,
+                profile.sex,
+                profile.district,
+                profile.occupation,
+                profile.income_bracket,
+                profile.education_level,
+                profile.marital_status,
+                profile.housing_type,
+                profile.openness,
+                profile.conscientiousness,
+                profile.extraversion,
+                profile.agreeableness,
+                profile.neuroticism,
+                profile.monthly_income,
+                profile.savings,
+                persona,
+                username,
+                now,
+                bp["activity_level"],
+                bp["influence_weight"],
+                bp["is_stakeholder"],
+            )
+        )
 
     async with get_db() as db:
         await db.executemany(
@@ -605,9 +601,7 @@ async def store_agent_profiles(
         )
         await db.commit()
 
-    logger.info(
-        "Stored %d agent profiles for session %s", len(rows), session_id
-    )
+    logger.info("Stored %d agent profiles for session %s", len(rows), session_id)
 
 
 async def store_universal_agent_profiles(
@@ -626,31 +620,33 @@ async def store_universal_agent_profiles(
     rows = []
     for p in profiles:
         oasis_row = p.to_oasis_row()
-        rows.append((
-            session_id,
-            p.entity_type,          # agent_type
-            0,                      # age (N/A for universal)
-            "N/A",                  # sex
-            p.entity_type,          # district → entity_type
-            p.role,                 # occupation → role
-            "N/A",                  # income_bracket
-            "N/A",                  # education_level
-            "N/A",                  # marital_status
-            "N/A",                  # housing_type
-            p.openness,
-            p.conscientiousness,
-            p.extraversion,
-            p.agreeableness,
-            p.neuroticism,
-            0,                      # monthly_income
-            0,                      # savings
-            p.persona,              # oasis_persona
-            oasis_row["username"],  # oasis_username
-            now,
-            getattr(p, "activity_level", 0.5),
-            getattr(p, "influence_weight", 1.0),
-            int(getattr(p, "is_stakeholder", False)),
-        ))
+        rows.append(
+            (
+                session_id,
+                p.entity_type,  # agent_type
+                0,  # age (N/A for universal)
+                "N/A",  # sex
+                p.entity_type,  # district → entity_type
+                p.role,  # occupation → role
+                "N/A",  # income_bracket
+                "N/A",  # education_level
+                "N/A",  # marital_status
+                "N/A",  # housing_type
+                p.openness,
+                p.conscientiousness,
+                p.extraversion,
+                p.agreeableness,
+                p.neuroticism,
+                0,  # monthly_income
+                0,  # savings
+                p.persona,  # oasis_persona
+                oasis_row["username"],  # oasis_username
+                now,
+                getattr(p, "activity_level", 0.5),
+                getattr(p, "influence_weight", 1.0),
+                int(getattr(p, "is_stakeholder", False)),
+            )
+        )
 
     async with get_db() as db:
         await db.executemany(
@@ -668,15 +664,13 @@ async def store_universal_agent_profiles(
         )
         await db.commit()
 
-    logger.info(
-        "Stored %d universal agent profiles for session %s", len(rows), session_id
-    )
+    logger.info("Stored %d universal agent profiles for session %s", len(rows), session_id)
 
 
 async def store_activity_profiles(
     session_id: str,
     profiles: list[Any],
-    session_dir: "Path",
+    session_dir: Path,
     factory: Any,
 ) -> None:
     """Generate and persist 24-dim temporal activity profiles.
@@ -692,8 +686,8 @@ async def store_activity_profiles(
         session_dir: Path object pointing to ``data/sessions/{session_id}/``.
         factory:    AgentFactory instance (for ``generate_username``).
     """
-    from pathlib import Path  # noqa: PLC0415
     import random as _random  # noqa: PLC0415
+    from pathlib import Path  # noqa: PLC0415
 
     from backend.app.services.temporal_activation import TemporalActivationService  # noqa: PLC0415
 
@@ -723,9 +717,7 @@ async def store_activity_profiles(
         json.dumps(profile_map, ensure_ascii=False, indent=None),
         encoding="utf-8",
     )
-    logger.info(
-        "Wrote activity profiles for %d agents to %s", len(profile_map), json_path
-    )
+    logger.info("Wrote activity profiles for %d agents to %s", len(profile_map), json_path)
 
     # Persist chronotype + activity_vector columns into agent_profiles (runtime migration).
     try:
@@ -743,12 +735,14 @@ async def store_activity_profiles(
             # Update rows for this session using the username lookup.
             rows = []
             for username, ap in profile_map.items():
-                rows.append((
-                    ap["chronotype"],
-                    json.dumps(ap["activity_vector"]),
-                    session_id,
-                    username,
-                ))
+                rows.append(
+                    (
+                        ap["chronotype"],
+                        json.dumps(ap["activity_vector"]),
+                        session_id,
+                        username,
+                    )
+                )
             await db.executemany(
                 "UPDATE agent_profiles "
                 "SET chronotype = ?, activity_vector = ? "
@@ -792,10 +786,7 @@ def _validate_transition(current: SessionStatus, target: SessionStatus) -> None:
     """
     allowed = _VALID_TRANSITIONS.get(current, set())
     if target not in allowed:
-        raise ValueError(
-            f"Invalid transition: {current.value} → {target.value}. "
-            f"Allowed: {[s.value for s in allowed]}"
-        )
+        raise ValueError(f"Invalid transition: {current.value} → {target.value}. Allowed: {[s.value for s in allowed]}")
 
 
 async def _persist_session(
@@ -812,9 +803,7 @@ async def _persist_session(
       recover shocks, family_members, crm_data, and the CSV path.
     - estimated_cost_usd from the SessionState cost estimate.
     """
-    llm_model = request.get(
-        "llm_model", "deepseek/deepseek-v3.2"
-    )
+    llm_model = request.get("llm_model", "deepseek/deepseek-v3.2")
     seed_text = request.get("seed_text", session.scenario_type)
 
     # Embed csv_path in the request blob so _build_runner_config can read it.
@@ -846,11 +835,7 @@ async def _persist_session(
                 request.get("macro_scenario_id"),
                 oasis_db_path,
                 session.status.value,
-                (
-                    session.cost_estimate.total_estimated_usd
-                    if session.cost_estimate
-                    else 0.0
-                ),
+                (session.cost_estimate.total_estimated_usd if session.cost_estimate else 0.0),
                 json.dumps(enriched_request, ensure_ascii=False),
                 session.created_at,
                 domain_pack_id,
@@ -888,11 +873,7 @@ async def _load_session(session_id: str) -> SessionState:
         )
 
     platforms_raw = row["platforms"] if "platforms" in row_keys else None
-    platforms: dict[str, bool] = (
-        json.loads(platforms_raw)
-        if platforms_raw
-        else {"twitter": True, "reddit": False}
-    )
+    platforms: dict[str, bool] = json.loads(platforms_raw) if platforms_raw else {"twitter": True, "reddit": False}
 
     created_at = row["created_at"] if "created_at" in row_keys else datetime.utcnow().isoformat()
 
@@ -1011,6 +992,7 @@ async def _build_runner_config(session: SessionState) -> dict[str, Any]:
 
     try:
         from backend.app.services.session_key_store import SessionKeyStore  # noqa: PLC0415
+
         key_store = SessionKeyStore()
         key_info = await key_store.retrieve_key(session.id)
         if key_info is not None:
@@ -1033,6 +1015,7 @@ async def _build_runner_config(session: SessionState) -> dict[str, Any]:
             api_key = os.environ.get("FIREWORKS_API_KEY", "")
         else:
             from backend.app.utils.llm_client import _PROVIDERS  # noqa: PLC0415
+
             env_key = _PROVIDERS.get(provider, {}).get("env_key", "")
             api_key = os.environ.get(env_key, "") if env_key else ""
 
@@ -1043,6 +1026,7 @@ async def _build_runner_config(session: SessionState) -> dict[str, Any]:
             base_url = "https://api.fireworks.ai/inference/v1"
         else:
             from backend.app.utils.llm_client import _PROVIDERS  # noqa: PLC0415
+
             base_url = _PROVIDERS.get(provider, {}).get("base_url", "")
 
     if not llm_model or llm_model in ("accounts/fireworks/models/deepseek/deepseek-v3.2", "deepseek/deepseek-v3.2"):
@@ -1086,11 +1070,7 @@ def _session_to_dict(session: SessionState) -> dict[str, Any]:
         "scenario_type": session.scenario_type,
         "platforms": session.platforms,
         "llm_provider": session.llm_provider,
-        "estimated_cost_usd": (
-            session.cost_estimate.total_estimated_usd
-            if session.cost_estimate
-            else 0.0
-        ),
+        "estimated_cost_usd": (session.cost_estimate.total_estimated_usd if session.cost_estimate else 0.0),
         "error_message": session.error_message,
         "created_at": session.created_at,
         "updated_at": session.updated_at,

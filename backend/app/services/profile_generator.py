@@ -8,7 +8,7 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any
 
-from backend.app.services.agent_factory import AgentProfile, AgentFactory
+from backend.app.services.agent_factory import AgentFactory, AgentProfile
 from backend.app.services.macro_state import MacroState
 
 if TYPE_CHECKING:
@@ -83,18 +83,12 @@ _HOUSING_CONTEXT: dict[str, str] = {
         "依規定唔可以同時擁有私人物業。"
         "（呢位係已入住公屋住客，唔係喺輪候公屋嘅申請人。）"
     ),
-    "資助出售房屋": (
-        "住喺居屋或夾屋，享受政府資助置業計劃，正在供居屋按揭。"
-        "如欲出售，需先補地價。"
-    ),
+    "資助出售房屋": ("住喺居屋或夾屋，享受政府資助置業計劃，正在供居屋按揭。如欲出售，需先補地價。"),
     "私人住宅": (
         "住喺私人物業——可能係業主（正在供私樓按揭）或租客（交租金）。"
         "HIBOR 浮動直接影響業主月供；租客則面對市場租金壓力。"
     ),
-    "臨時／其他": (
-        "居住喺劏房、板間房或其他臨時住所，居住環境唔穩定。"
-        "上樓（申請公屋）係最迫切嘅需求。"
-    ),
+    "臨時／其他": ("居住喺劏房、板間房或其他臨時住所，居住環境唔穩定。上樓（申請公屋）係最迫切嘅需求。"),
 }
 
 
@@ -192,6 +186,7 @@ def _property_concern(profile: AgentProfile) -> str:
 # Personal concern segmentation — returns 2-3 concerns specific to EACH
 # agent so that different profile types write about different topics.
 # =========================================================================
+
 
 def _income_tier(profile: AgentProfile) -> str:
     """Classify income into low / mid / high tier."""
@@ -294,6 +289,7 @@ def _get_personal_concerns(profile: AgentProfile) -> str:
 # ProfileGenerator
 # =========================================================================
 
+
 class ProfileGenerator:
     """Convert AgentProfile entities to OASIS-compatible persona data."""
 
@@ -322,20 +318,14 @@ class ProfileGenerator:
         username = self._factory.generate_username(profile)
         personal_concerns = _get_personal_concerns(profile)
 
-        income_str = (
-            f"HK${profile.monthly_income:,}" if profile.monthly_income > 0
-            else "暫時無收入"
-        )
+        income_str = f"HK${profile.monthly_income:,}" if profile.monthly_income > 0 else "暫時無收入"
         savings_str = f"HK${profile.savings:,}"
 
         # Use brief macro context to avoid 100% Shenzhen/GBA mention rate
         if macro_state is not None:
             macro_brief = macro_state.to_brief_context()
         else:
-            macro_brief = (
-                "【香港當前經濟背景（一句話）】"
-                "HIBOR 4.20%、失業率 2.9%、CCL 152.3、GDP增長 3.2%、CPI 2.1%。"
-            )
+            macro_brief = "【香港當前經濟背景（一句話）】HIBOR 4.20%、失業率 2.9%、CCL 152.3、GDP增長 3.2%、CPI 2.1%。"
 
         persona = (
             f"你係一個住喺香港{profile.district}嘅{profile.age}歲"
@@ -459,11 +449,7 @@ class ProfileGenerator:
 
     def _build_description(self, profile: AgentProfile) -> str:
         """Build a concise 1-2 sentence bio for the CSV description column."""
-        income_str = (
-            f"HK${profile.monthly_income:,}/月"
-            if profile.monthly_income > 0
-            else "暫時無收入"
-        )
+        income_str = f"HK${profile.monthly_income:,}/月" if profile.monthly_income > 0 else "暫時無收入"
         return (
             f"{profile.age}歲{profile.district}居民，"
             f"從事{profile.occupation}，"
@@ -491,20 +477,14 @@ class ProfileGenerator:
         """
         username = self._factory.generate_username(profile)
 
-        income_str = (
-            f"HK${profile.monthly_income:,}" if profile.monthly_income > 0
-            else "暫時無收入"
-        )
+        income_str = f"HK${profile.monthly_income:,}" if profile.monthly_income > 0 else "暫時無收入"
         savings_str = f"HK${profile.savings:,}"
 
         # Brief macro background
         if macro_state is not None:
             macro_brief = macro_state.to_brief_context()
         else:
-            macro_brief = (
-                "【香港當前經濟背景（一句話）】"
-                "HIBOR 4.20%、失業率 2.9%、CCL 152.3、GDP增長 3.2%、CPI 2.1%。"
-            )
+            macro_brief = "【香港當前經濟背景（一句話）】HIBOR 4.20%、失業率 2.9%、CCL 152.3、GDP增長 3.2%、CPI 2.1%。"
 
         if self._locale:
             # Locale-aware code path: use locale personality descriptions,
@@ -536,15 +516,13 @@ class ProfileGenerator:
             ]
             personality_desc = "; ".join(p for p in personality_parts if p)
 
-            housing_desc = locale.housing_context.get(
-                profile.housing_type, profile.housing_type
-            )
+            housing_desc = locale.housing_context.get(profile.housing_type, profile.housing_type)
 
             user_char = (
                 f"{lang_rule}\n\n"
                 f"You are a resident of {profile.district}, aged {profile.age} "
                 f"({'male' if profile.sex == 'M' else 'female'}), "
-                f"username: \"{username}\".\n\n"
+                f'username: "{username}".\n\n'
                 f"[Background]\n"
                 f"- Age: {profile.age}\n"
                 f"- Occupation: {profile.occupation}\n"
@@ -609,8 +587,8 @@ class ProfileGenerator:
 
     async def build_persona_with_memory(
         self,
-        profile: "AgentProfile",
-        macro_state: "MacroState | None" = None,
+        profile: AgentProfile,
+        macro_state: MacroState | None = None,
         memory_context: str = "",
     ) -> str:
         """Build enriched persona string that includes agent memory context.

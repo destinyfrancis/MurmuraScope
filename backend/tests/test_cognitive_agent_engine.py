@@ -1,9 +1,12 @@
 # backend/tests/test_cognitive_agent_engine.py
 """Tests for CognitiveAgentEngine — full-LLM deliberation for stakeholder agents."""
+
 from __future__ import annotations
-import json
+
 from unittest.mock import AsyncMock, patch
+
 import pytest
+
 from backend.app.services.cognitive_agent_engine import CognitiveAgentEngine, DeliberationResult
 
 
@@ -78,6 +81,7 @@ async def test_deliberate_filters_unknown_metrics():
 # NEW FIELD TESTS for DeliberationResult (Task 2)
 # ---------------------------------------------------------------------------
 
+
 def test_deliberation_result_new_fields_have_defaults():
     """New fields topic_tags and emotional_reaction default to empty values."""
     r = DeliberationResult(
@@ -94,6 +98,7 @@ def test_deliberation_result_new_fields_have_defaults():
 def test_deliberation_result_is_frozen_with_new_fields():
     """New fields are frozen — mutations raise FrozenInstanceError."""
     import dataclasses
+
     r = DeliberationResult(
         agent_id="a1",
         decision="stay",
@@ -236,7 +241,9 @@ async def test_deliberate_topic_tags_capped_at_five():
 async def test_deliberate_emotional_reaction_truncated_at_50():
     """emotional_reaction is truncated to 50 characters."""
     engine = CognitiveAgentEngine()
-    long_reaction = "非常非常非常非常非常非常非常非常非常非常非常非常非常非常非常非常非常非常非常非常非常非常非常非常複雜的情緒反應"
+    long_reaction = (
+        "非常非常非常非常非常非常非常非常非常非常非常非常非常非常非常非常非常非常非常非常非常非常非常非常複雜的情緒反應"
+    )
     mock_response = {
         "decision": "stay",
         "reasoning": "complex",
@@ -258,5 +265,6 @@ async def test_deliberate_emotional_reaction_truncated_at_50():
 def test_deliberation_prompt_includes_topic_tags_instruction():
     """_DELIBERATION_USER prompt requests topic_tags and emotional_reaction fields."""
     from backend.app.services.cognitive_agent_engine import _DELIBERATION_USER
+
     assert "topic_tags" in _DELIBERATION_USER
     assert "emotional_reaction" in _DELIBERATION_USER

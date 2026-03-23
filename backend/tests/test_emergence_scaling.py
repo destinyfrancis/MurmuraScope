@@ -3,13 +3,16 @@
 These are unit tests (no real DB): they verify cache mechanics and contagion logic
 using in-memory data structures and mocks.
 """
-import pytest
+
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 def test_round_profiles_dict_initialised_empty():
     """SimulationRunner must have _round_profiles dict from __init__."""
     from backend.app.services.simulation_runner import SimulationRunner
+
     runner = SimulationRunner()
     assert hasattr(runner, "_round_profiles")
     assert isinstance(runner._round_profiles, dict)
@@ -55,6 +58,7 @@ def test_cache_pop_removes_session():
 async def test_process_round_decisions_no_db_call_when_cache_empty():
     """With empty cache, _process_round_decisions returns early without touching DB."""
     from backend.app.services.simulation_runner import SimulationRunner
+
     runner = SimulationRunner()
     runner._round_profiles["sess-1"] = []
 
@@ -68,6 +72,7 @@ async def test_process_round_decisions_no_db_call_when_cache_empty():
 async def test_process_belief_update_no_db_call_when_cache_empty():
     """With empty cache, _process_belief_update returns early without touching DB."""
     from backend.app.services.simulation_runner import SimulationRunner
+
     runner = SimulationRunner()
     runner._round_profiles["sess-3"] = []
 
@@ -82,6 +87,7 @@ async def test_process_belief_update_no_db_call_when_cache_empty():
 async def test_process_round_consumption_no_db_call_when_cache_empty():
     """With empty cache, _process_round_consumption returns early without touching DB."""
     from backend.app.services.simulation_runner import SimulationRunner
+
     runner = SimulationRunner()
     runner._round_profiles["sess-4"] = []
 
@@ -98,6 +104,7 @@ async def test_process_emotional_state_does_not_query_agent_profiles():
     use assert_not_called(). Instead, track executed SQL and verify none touch agent_profiles.
     """
     from backend.app.services.simulation_runner import SimulationRunner
+
     runner = SimulationRunner()
     runner._round_profiles["sess-2"] = []  # empty → early return after load_states
 
@@ -126,15 +133,14 @@ async def test_process_emotional_state_does_not_query_agent_profiles():
 
     # None of the SQL calls should touch agent_profiles
     for sql in executed_sqls:
-        assert "agent_profiles" not in sql.lower(), (
-            f"Unexpected agent_profiles query executed: {sql!r}"
-        )
+        assert "agent_profiles" not in sql.lower(), f"Unexpected agent_profiles query executed: {sql!r}"
 
 
 @pytest.mark.asyncio
 async def test_process_wealth_transfers_no_db_call_when_cache_empty():
     """With empty cache, _process_wealth_transfers returns early without touching DB."""
     from backend.app.services.simulation_runner import SimulationRunner
+
     runner = SimulationRunner()
     runner._round_profiles["sess-5"] = []
 

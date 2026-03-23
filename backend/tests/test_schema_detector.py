@@ -1,10 +1,11 @@
 """Tests for SchemaDetector."""
+
 from __future__ import annotations
 
 import pandas as pd
 import pytest
 
-from backend.app.services.schema_detector import SchemaDetector, DetectedField
+from backend.app.services.schema_detector import DetectedField, SchemaDetector
 
 
 def test_detect_numeric_columns():

@@ -87,9 +87,7 @@ class TrustDynamicsService:
             db: An open aiosqlite connection.
         """
         try:
-            await db.execute(
-                "ALTER TABLE agent_relationships ADD COLUMN trust_score REAL DEFAULT 0.0"
-            )
+            await db.execute("ALTER TABLE agent_relationships ADD COLUMN trust_score REAL DEFAULT 0.0")
             await db.commit()
             logger.info("Added trust_score column to agent_relationships")
         except Exception:
@@ -217,8 +215,7 @@ class TrustDynamicsService:
                     (session_id, *flat_ids),
                 )
                 trust_map: dict[tuple[int, int], float] = {
-                    (int(r[0]), int(r[1])): float(r[2])
-                    for r in await trust_cur.fetchall()
+                    (int(r[0]), int(r[1])): float(r[2]) for r in await trust_cur.fetchall()
                 }
 
                 # 5. Compute new scores in Python (zero DB round-trips)
@@ -233,26 +230,31 @@ class TrustDynamicsService:
                     stance_b = username_to_stance.get(uname_b, 0.5)
                     stance_bonus = 1.0 - abs(stance_a - stance_b)
 
-                    raw_delta = (
-                        alignment * _ALIGNMENT_WEIGHT
-                        + stance_bonus * _STANCE_WEIGHT
-                    ) * _STANCE_SCALE
+                    raw_delta = (alignment * _ALIGNMENT_WEIGHT + stance_bonus * _STANCE_WEIGHT) * _STANCE_SCALE
                     delta = max(_DELTA_MIN, min(_DELTA_MAX, raw_delta))
 
                     old_score = trust_map.get((aid, bid), 0.0)
                     new_score = max(_TRUST_MIN, min(_TRUST_MAX, old_score + delta))
 
-                    upsert_rows.append((
-                        session_id, aid, bid, "interaction", 0.5, new_score,
-                    ))
-                    updates.append(TrustUpdate(
-                        agent_a_id=aid,
-                        agent_b_id=bid,
-                        old_score=round(old_score, 4),
-                        new_score=round(new_score, 4),
-                        reason=f"sentiment={sentiment_a} alignment={alignment:.2f} "
-                               f"stance_bonus={stance_bonus:.2f}",
-                    ))
+                    upsert_rows.append(
+                        (
+                            session_id,
+                            aid,
+                            bid,
+                            "interaction",
+                            0.5,
+                            new_score,
+                        )
+                    )
+                    updates.append(
+                        TrustUpdate(
+                            agent_a_id=aid,
+                            agent_b_id=bid,
+                            old_score=round(old_score, 4),
+                            new_score=round(new_score, 4),
+                            reason=f"sentiment={sentiment_a} alignment={alignment:.2f} stance_bonus={stance_bonus:.2f}",
+                        )
+                    )
 
                 # 6. Batch UPSERT — single executemany replaces N×3 queries
                 await db.executemany(
@@ -271,7 +273,8 @@ class TrustDynamicsService:
         except Exception:
             logger.exception(
                 "update_trust_from_round failed session=%s round=%d",
-                session_id, round_number,
+                session_id,
+                round_number,
             )
 
         return tuple(updates)
@@ -349,18 +352,14 @@ class TrustDynamicsService:
                 )
                 rows = await cursor.fetchall()
         except Exception:
-            logger.exception(
-                "get_trust_context failed session=%s agent=%d", session_id, agent_id
-            )
+            logger.exception("get_trust_context failed session=%s agent=%d", session_id, agent_id)
             return ""
 
         if not rows:
             return ""
 
-        trusted = [(r[2] or f"agent_{r[0]}", round(float(r[1]), 2))
-                   for r in rows if r[1] > 0.1][:3]
-        distrusted = [(r[2] or f"agent_{r[0]}", round(float(r[1]), 2))
-                      for r in rows if r[1] < -0.1][-3:]
+        trusted = [(r[2] or f"agent_{r[0]}", round(float(r[1]), 2)) for r in rows if r[1] > 0.1][:3]
+        distrusted = [(r[2] or f"agent_{r[0]}", round(float(r[1]), 2)) for r in rows if r[1] < -0.1][-3:]
 
         if not trusted and not distrusted:
             return ""
@@ -410,8 +409,7 @@ class TrustDynamicsService:
                           AND agent_b_id = CAST(? AS TEXT)
                           AND round_number = ?
                         """,
-                        (upd.new_score, session_id,
-                         upd.agent_a_id, upd.agent_b_id, round_number),
+                        (upd.new_score, session_id, upd.agent_a_id, upd.agent_b_id, round_number),
                     )
                 await db.commit()
         except Exception:

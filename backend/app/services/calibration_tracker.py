@@ -9,6 +9,7 @@ Design:
   - All DB access via the project-standard ``get_db()`` context manager.
   - Table ``prediction_tracking`` is created lazily (no schema migration needed).
 """
+
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
@@ -38,9 +39,7 @@ class CalibrationTracker:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
-            await db.execute(
-                "CREATE INDEX IF NOT EXISTS idx_pt_pending ON prediction_tracking(hit)"
-            )
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_pt_pending ON prediction_tracking(hit)")
             await db.commit()
 
     async def record(

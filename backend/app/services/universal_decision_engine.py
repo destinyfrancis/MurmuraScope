@@ -35,6 +35,7 @@ try:
         UniversalImpactRule,
         UniversalScenarioConfig,
     )
+
     _SCENARIO_MODELS_AVAILABLE = True
 except ImportError:
     _SCENARIO_MODELS_AVAILABLE = False
@@ -47,8 +48,8 @@ except ImportError:
 # Cost-control sampling constants
 # ---------------------------------------------------------------------------
 
-_SAMPLE_RATE: float = 0.20   # 20 % of eligible agents per decision type
-_SAMPLE_CAP: int = 30        # hard cap per decision type
+_SAMPLE_RATE: float = 0.20  # 20 % of eligible agents per decision type
+_SAMPLE_CAP: int = 30  # hard cap per decision type
 
 # ---------------------------------------------------------------------------
 # Result dataclasses (frozen for immutability)
@@ -60,18 +61,16 @@ class UniversalAgentDecision:
     """One agent's decision in a universal simulation round."""
 
     session_id: str
-    agent_id: str           # UniversalAgentProfile.id (str, not int!)
+    agent_id: str  # UniversalAgentProfile.id (str, not int!)
     round_number: int
-    decision_type_id: str   # UniversalDecisionType.id
-    action: str             # one of UniversalDecisionType.possible_actions
+    decision_type_id: str  # UniversalDecisionType.id
+    action: str  # one of UniversalDecisionType.possible_actions
     reasoning: str
-    confidence: float       # 0.0–1.0
+    confidence: float  # 0.0–1.0
 
     def __post_init__(self) -> None:
         if not 0.0 <= self.confidence <= 1.0:
-            raise ValueError(
-                f"confidence must be in [0.0, 1.0], got {self.confidence!r}"
-            )
+            raise ValueError(f"confidence must be in [0.0, 1.0], got {self.confidence!r}")
 
 
 @dataclass(frozen=True)
@@ -81,7 +80,7 @@ class UniversalRoundResult:
     session_id: str
     round_number: int
     decisions: tuple[UniversalAgentDecision, ...]
-    metric_deltas: dict[str, float]       # metric_id → cumulative delta
+    metric_deltas: dict[str, float]  # metric_id → cumulative delta
     total_decisions: int
     counts_by_type: dict[str, dict[str, int]]  # {decision_type_id: {action: count}}
 
@@ -115,7 +114,7 @@ class UniversalDecisionEngine:
         session_id: str,
         round_number: int,
         agents: list[UniversalAgentProfile],
-        scenario_config: Any,           # UniversalScenarioConfig (duck-typed)
+        scenario_config: Any,  # UniversalScenarioConfig (duck-typed)
         current_metrics: dict[str, float],
         recent_events: str = "",
     ) -> UniversalRoundResult:
@@ -216,9 +215,7 @@ class UniversalDecisionEngine:
         if all_decisions:
             await self._store_decisions(all_decisions)
 
-        metric_deltas = _compute_metric_deltas(
-            all_decisions, list(scenario_config.impact_rules)
-        )
+        metric_deltas = _compute_metric_deltas(all_decisions, list(scenario_config.impact_rules))
         counts_by_type = _build_counts_by_type(all_decisions)
 
         logger.info(
@@ -245,7 +242,7 @@ class UniversalDecisionEngine:
     async def _deliberate_batch(
         self,
         agents: list[UniversalAgentProfile],
-        decision_type: Any,             # UniversalDecisionType (duck-typed)
+        decision_type: Any,  # UniversalDecisionType (duck-typed)
         current_metrics: dict[str, float],
         recent_events: str,
     ) -> list[UniversalAgentDecision]:
@@ -282,17 +279,13 @@ class UniversalDecisionEngine:
             "possible_actions": list(decision_type.possible_actions),
         }
         if decision_type.applicable_entity_types:
-            dt_payload["applicable_entity_types"] = list(
-                decision_type.applicable_entity_types
-            )
+            dt_payload["applicable_entity_types"] = list(decision_type.applicable_entity_types)
 
         agents_payload = [_agent_to_prompt_dict(a) for a in agents]
         metrics_payload = {k: round(v, 4) for k, v in current_metrics.items()}
 
         safe_recent_events = (
-            sanitize_scenario_description(recent_events)
-            if recent_events
-            else "No notable recent events."
+            sanitize_scenario_description(recent_events) if recent_events else "No notable recent events."
         )
         user_content = UNIVERSAL_DELIBERATION_USER.format(
             metrics_json=json.dumps(metrics_payload, ensure_ascii=False, indent=2),
@@ -345,9 +338,9 @@ class UniversalDecisionEngine:
 
             results.append(
                 UniversalAgentDecision(
-                    session_id="",       # caller will stamp
+                    session_id="",  # caller will stamp
                     agent_id=agent_id,
-                    round_number=0,      # caller will stamp
+                    round_number=0,  # caller will stamp
                     decision_type_id=decision_type.id,
                     action=action,
                     reasoning=reasoning,
@@ -512,7 +505,7 @@ def _agent_to_prompt_dict(agent: UniversalAgentProfile) -> dict[str, Any]:
 
 def _compute_metric_deltas(
     decisions: list[UniversalAgentDecision],
-    impact_rules: list[Any],     # list[UniversalImpactRule]
+    impact_rules: list[Any],  # list[UniversalImpactRule]
 ) -> dict[str, float]:
     """Aggregate metric deltas from decisions using impact rules.
 
@@ -541,9 +534,7 @@ def _compute_metric_deltas(
         if count == 0:
             continue
         delta = (count / 10.0) * rule.delta_per_10
-        metric_deltas[rule.metric_id] = (
-            metric_deltas.get(rule.metric_id, 0.0) + delta
-        )
+        metric_deltas[rule.metric_id] = metric_deltas.get(rule.metric_id, 0.0) + delta
 
     # Round to 4 dp for clean output
     return {k: round(v, 4) for k, v in metric_deltas.items()}
@@ -564,7 +555,5 @@ def _build_counts_by_type(
     for d in decisions:
         if d.decision_type_id not in counts:
             counts[d.decision_type_id] = {}
-        counts[d.decision_type_id][d.action] = (
-            counts[d.decision_type_id].get(d.action, 0) + 1
-        )
+        counts[d.decision_type_id][d.action] = counts[d.decision_type_id].get(d.action, 0) + 1
     return counts

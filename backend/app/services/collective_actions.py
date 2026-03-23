@@ -21,19 +21,19 @@ logger = get_logger("collective_actions")
 # Constants
 # ---------------------------------------------------------------------------
 
-_GROUP_MIN_MEMBERS: int = 5              # minimum agents to form a group
-_MUTUAL_TRUST_THRESHOLD: float = 0.4    # pairwise trust to be in same group
-_TOPIC_OVERLAP_THRESHOLD: float = 0.7   # fraction of topic overlap required
-_JOIN_TRUST_MIN: float = 0.3             # min trust to join an action
-_JOIN_STANCE_MIN: float = 0.6            # min political stance alignment
-_MOMENTUM_JOIN_DELTA: float = 0.05      # momentum gain per new participant batch
-_MOMENTUM_DECAY: float = 0.10           # natural momentum decay per round (10%)
-_SUCCESS_THRESHOLD: float = 0.15        # fraction of total agents for success
-_FAILURE_MOMENTUM_FLOOR: float = 0.1   # momentum below this triggers failure check
-_FAILURE_CONSECUTIVE_ROUNDS: int = 3    # rounds below floor before dissolution
-_CONTRIBUTION_RATE: float = 0.01        # 1% of savings contributed to group resources
-_MAX_CONTRIBUTION: int = 5_000          # HKD cap per member per formation
-_GROUP_DISSOLVE_MIN_MEMBERS: int = 3    # dissolve if membership falls below this
+_GROUP_MIN_MEMBERS: int = 5  # minimum agents to form a group
+_MUTUAL_TRUST_THRESHOLD: float = 0.4  # pairwise trust to be in same group
+_TOPIC_OVERLAP_THRESHOLD: float = 0.7  # fraction of topic overlap required
+_JOIN_TRUST_MIN: float = 0.3  # min trust to join an action
+_JOIN_STANCE_MIN: float = 0.6  # min political stance alignment
+_MOMENTUM_JOIN_DELTA: float = 0.05  # momentum gain per new participant batch
+_MOMENTUM_DECAY: float = 0.10  # natural momentum decay per round (10%)
+_SUCCESS_THRESHOLD: float = 0.15  # fraction of total agents for success
+_FAILURE_MOMENTUM_FLOOR: float = 0.1  # momentum below this triggers failure check
+_FAILURE_CONSECUTIVE_ROUNDS: int = 3  # rounds below floor before dissolution
+_CONTRIBUTION_RATE: float = 0.01  # 1% of savings contributed to group resources
+_MAX_CONTRIBUTION: int = 5_000  # HKD cap per member per formation
+_GROUP_DISSOLVE_MIN_MEMBERS: int = 3  # dissolve if membership falls below this
 
 # ---------------------------------------------------------------------------
 # Frozen dataclasses
@@ -44,31 +44,31 @@ _GROUP_DISSOLVE_MIN_MEMBERS: int = 3    # dissolve if membership falls below thi
 class AgentGroup:
     """Immutable snapshot of an agent group state."""
 
-    id: int | None                # None before DB persistence
+    id: int | None  # None before DB persistence
     session_id: str
     group_name: str
     agenda: str
     leader_agent_id: int
     member_count: int
-    shared_resources: int         # HKD pooled by members
+    shared_resources: int  # HKD pooled by members
     formed_round: int
-    status: str                   # "active" | "dissolved" | "succeeded"
+    status: str  # "active" | "dissolved" | "succeeded"
 
 
 @dataclass(frozen=True)
 class CollectiveAction:
     """Immutable snapshot of a collective action."""
 
-    id: int | None                # None before DB persistence
+    id: int | None  # None before DB persistence
     session_id: str
     group_id: int | None
     initiator_agent_id: int
-    action_type: str              # "protest" | "boycott" | "petition" | "crowdfund"
+    action_type: str  # "protest" | "boycott" | "petition" | "crowdfund"
     target: str
     participant_count: int
-    momentum: float               # 0.0–1.0
+    momentum: float  # 0.0–1.0
     round_initiated: int
-    status: str                   # "building" | "active" | "succeeded" | "failed"
+    status: str  # "building" | "active" | "succeeded" | "failed"
 
 
 # ---------------------------------------------------------------------------
@@ -143,6 +143,7 @@ async def _ensure_collective_tables(db: Any) -> None:
 # Group name generation (LLM)
 # ---------------------------------------------------------------------------
 
+
 async def _generate_group_name(
     agenda: str,
     llm_client: LLMClient | None,
@@ -173,6 +174,7 @@ async def _generate_group_name(
 # ---------------------------------------------------------------------------
 # Core functions
 # ---------------------------------------------------------------------------
+
 
 async def process_group_formation(
     session_id: str,
@@ -225,6 +227,7 @@ async def process_group_formation(
 
             # Parse cluster data
             import json as _json
+
             try:
                 cluster_data = _json.loads(snapshot_row[1]) if snapshot_row[1] else []
             except Exception:
@@ -322,8 +325,7 @@ async def process_group_formation(
             # Find cohesive sub-cluster with high mutual trust
             # Simple greedy: start from highest-trust agent
             trust_centrality: dict[int, int] = {
-                aid: len(trust_map.get(aid, set()) & set(cluster_agents))
-                for aid in cluster_agents
+                aid: len(trust_map.get(aid, set()) & set(cluster_agents)) for aid in cluster_agents
             }
             sorted_agents = sorted(
                 cluster_agents,
@@ -338,10 +340,7 @@ async def process_group_formation(
                     group_members.append(candidate)
                     continue
                 # Check mutual trust with existing members (majority rule)
-                trusted_by = sum(
-                    1 for m in group_members
-                    if candidate in trust_map.get(m, set())
-                )
+                trusted_by = sum(1 for m in group_members if candidate in trust_map.get(m, set()))
                 if len(group_members) > 0 and trusted_by / len(group_members) >= 0.5:
                     group_members.append(candidate)
                 if len(group_members) >= 20:  # cap group size
@@ -353,9 +352,7 @@ async def process_group_formation(
             # Elect leader: highest extraversion × trust centrality
             leader_id = max(
                 group_members,
-                key=lambda a: (
-                    profiles[a]["extraversion"] * (trust_centrality.get(a, 0) + 1)
-                ),
+                key=lambda a: profiles[a]["extraversion"] * (trust_centrality.get(a, 0) + 1),
             )
 
             # Compute shared resources
@@ -369,9 +366,7 @@ async def process_group_formation(
                 shared_resources += contribution
 
             # Determine agenda from dominant political stance
-            avg_stance = sum(
-                profiles[a]["political_stance"] for a in group_members
-            ) / len(group_members)
+            avg_stance = sum(profiles[a]["political_stance"] for a in group_members) / len(group_members)
             if avg_stance > 0.65:
                 agenda = "民主改革倡議"
             elif avg_stance < 0.35:
@@ -391,16 +386,12 @@ async def process_group_formation(
                              member_count, shared_resources, formed_round, status)
                         VALUES (?, ?, ?, ?, ?, ?, ?, 'active')
                         """,
-                        (session_id, group_name, agenda, leader_id,
-                         len(group_members), shared_resources, round_num),
+                        (session_id, group_name, agenda, leader_id, len(group_members), shared_resources, round_num),
                     )
                     group_id = cursor.lastrowid
 
                     # Insert member records
-                    member_rows = [
-                        (session_id, group_id, aid, round_num)
-                        for aid in group_members
-                    ]
+                    member_rows = [(session_id, group_id, aid, round_num) for aid in group_members]
                     await db.executemany(
                         """
                         INSERT OR IGNORE INTO agent_group_members
@@ -411,22 +402,28 @@ async def process_group_formation(
                     )
                     await db.commit()
 
-                new_groups.append(AgentGroup(
-                    id=group_id,
-                    session_id=session_id,
-                    group_name=group_name,
-                    agenda=agenda,
-                    leader_agent_id=leader_id,
-                    member_count=len(group_members),
-                    shared_resources=shared_resources,
-                    formed_round=round_num,
-                    status="active",
-                ))
+                new_groups.append(
+                    AgentGroup(
+                        id=group_id,
+                        session_id=session_id,
+                        group_name=group_name,
+                        agenda=agenda,
+                        leader_agent_id=leader_id,
+                        member_count=len(group_members),
+                        shared_resources=shared_resources,
+                        formed_round=round_num,
+                        status="active",
+                    )
+                )
 
                 logger.info(
                     "Group formed: '%s' leader=%d members=%d resources=%d session=%s round=%d",
-                    group_name, leader_id, len(group_members), shared_resources,
-                    session_id, round_num,
+                    group_name,
+                    leader_id,
+                    len(group_members),
+                    shared_resources,
+                    session_id,
+                    round_num,
                 )
 
                 # Limit to 3 new groups per round (avoid spamming)
@@ -503,9 +500,7 @@ async def initiate_collective_action(
         )
 
     except Exception:
-        logger.exception(
-            "initiate_collective_action failed session=%s round=%d", session_id, round_num
-        )
+        logger.exception("initiate_collective_action failed session=%s round=%d", session_id, round_num)
         return None
 
 
@@ -573,7 +568,9 @@ async def process_collective_action_momentum(
             trust_map.setdefault(tgt, []).append((src, trust, stance or 0.5))
 
         # Load existing participants per action
-        action_updates: list[tuple[int, float, str, int, int]] = []  # (participant_count, momentum, status, low_rounds, id)
+        action_updates: list[
+            tuple[int, float, str, int, int]
+        ] = []  # (participant_count, momentum, status, low_rounds, id)
         for action_row in active_actions:
             action_id = action_row[0]
             initiator_id = action_row[1]
@@ -640,11 +637,14 @@ async def process_collective_action_momentum(
 
         logger.debug(
             "collective_action_momentum session=%s round=%d actions=%d",
-            session_id, round_num, len(action_updates),
+            session_id,
+            round_num,
+            len(action_updates),
         )
 
     except Exception:
         logger.exception(
             "process_collective_action_momentum failed session=%s round=%d",
-            session_id, round_num,
+            session_id,
+            round_num,
         )

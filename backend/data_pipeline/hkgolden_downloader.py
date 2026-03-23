@@ -52,6 +52,7 @@ _USER_AGENTS: tuple[str, ...] = (
 # Data model
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class GoldenPost:
     """Immutable representation of a single HKGolden thread."""
@@ -68,6 +69,7 @@ class GoldenPost:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _random_ua() -> str:
     return random.choice(_USER_AGENTS)
@@ -95,6 +97,7 @@ def _parse_int(text: str | None) -> int:
 # ---------------------------------------------------------------------------
 # Downloader
 # ---------------------------------------------------------------------------
+
 
 class HKGoldenDownloader:
     """Async scraper for HKGolden forum."""
@@ -129,7 +132,8 @@ class HKGoldenDownloader:
                     logger.info("Scraped %d posts from HKGolden/%s", len(posts), channel["name"])
                 except Exception:
                     logger.warning(
-                        "Failed to scrape HKGolden/%s", channel["name"],
+                        "Failed to scrape HKGolden/%s",
+                        channel["name"],
                         exc_info=True,
                     )
 
@@ -158,18 +162,22 @@ class HKGoldenDownloader:
             try:
                 topic_metas = await self._parse_topic_list(client, channel_id, page)
                 for meta in topic_metas:
-                    posts.append(GoldenPost(
-                        title=meta["title"],
-                        content="",
-                        reply_count=meta.get("reply_count", 0),
-                        rating=meta.get("rating", 0),
-                        published=meta.get("published", ""),
-                        channel=channel_name,
-                        source_url=meta.get("url", ""),
-                    ))
+                    posts.append(
+                        GoldenPost(
+                            title=meta["title"],
+                            content="",
+                            reply_count=meta.get("reply_count", 0),
+                            rating=meta.get("rating", 0),
+                            published=meta.get("published", ""),
+                            channel=channel_name,
+                            source_url=meta.get("url", ""),
+                        )
+                    )
             except Exception:
                 logger.warning(
-                    "Failed to parse HKGolden/%s page %d", channel_name, page,
+                    "Failed to parse HKGolden/%s page %d",
+                    channel_name,
+                    page,
                     exc_info=True,
                 )
                 break
@@ -230,13 +238,15 @@ class HKGoldenDownloader:
                 if not title:
                     continue
 
-                topics.append({
-                    "title": title,
-                    "url": topic_url,
-                    "reply_count": reply_count,
-                    "rating": rating,
-                    "published": published,
-                })
+                topics.append(
+                    {
+                        "title": title,
+                        "url": topic_url,
+                        "reply_count": reply_count,
+                        "rating": rating,
+                        "published": published,
+                    }
+                )
             except Exception:
                 logger.debug("Failed to parse topic row in HKGolden/%s page %d", channel_id, page, exc_info=True)
                 continue
@@ -292,6 +302,7 @@ class HKGoldenDownloader:
 # ---------------------------------------------------------------------------
 # Pipeline entry point
 # ---------------------------------------------------------------------------
+
 
 async def download_all_hkgolden(client: httpx.AsyncClient | None = None) -> list:
     """Entry point for the download pipeline.

@@ -141,20 +141,20 @@ def _parse_workbook(
             for cell in row[1:]:
                 val = _try_float(cell)
                 if val is not None and val > 0:
-                    records.append(RVDRecord(
-                        category=category,
-                        metric=metric_name,
-                        value=round(val, 2),
-                        unit=unit,
-                        period=period,
-                        source="RVD",
-                        source_url=source_url,
-                    ))
+                    records.append(
+                        RVDRecord(
+                            category=category,
+                            metric=metric_name,
+                            value=round(val, 2),
+                            unit=unit,
+                            period=period,
+                            source="RVD",
+                            source_url=source_url,
+                        )
+                    )
                     break  # one record per row
 
     return records
-
-
 
 
 class RVDDownloader:
@@ -164,7 +164,7 @@ class RVDDownloader:
         self._client = client
         self._own_client = client is None
 
-    async def __aenter__(self) -> "RVDDownloader":
+    async def __aenter__(self) -> RVDDownloader:
         if self._own_client:
             self._client = httpx.AsyncClient(
                 timeout=httpx.Timeout(60.0, connect=15.0),

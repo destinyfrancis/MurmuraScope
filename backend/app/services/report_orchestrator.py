@@ -4,20 +4,21 @@ Phase 1: Generate outline (LLM → JSON chapters)
 Phase 2: Per-section ReACT (ReportSectionGenerator)
 Phase 3: Assembly + executive summary
 """
+
 from __future__ import annotations
 
 import json
-import re
-from typing import Any, Callable, Awaitable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from backend.app.services.report_section_generator import generate_section
 from backend.app.utils.db import get_db
 from backend.app.utils.llm_client import LLMClient, get_report_provider_model
 from backend.app.utils.logger import get_logger
 from backend.prompts.report_prompts import (
-    PLANNING_SYSTEM_PROMPT,
-    KG_DRIVEN_SECTION_SYSTEM_PROMPT,
     HK_DEMOGRAPHIC_SECTION_SYSTEM_PROMPT,
+    KG_DRIVEN_SECTION_SYSTEM_PROMPT,
+    PLANNING_SYSTEM_PROMPT,
     build_planning_user_prompt,
 )
 
@@ -37,6 +38,7 @@ def _make_llm_caller(llm: LLMClient) -> Callable[[list[dict]], Awaitable[str]]:
     async def _caller(msgs: list[dict]) -> str:
         resp = await llm.chat(msgs, provider=provider, model=model)
         return resp.content
+
     return _caller
 
 
@@ -69,7 +71,7 @@ class ReportOrchestrator:
                 depth -= 1
                 if depth == 0:
                     try:
-                        data = json.loads(raw[start:i + 1])
+                        data = json.loads(raw[start : i + 1])
                         return data.get("chapters", [])
                     except json.JSONDecodeError:
                         logger.warning("Failed to parse outline JSON: %.200s", raw)
@@ -87,18 +89,21 @@ class ReportOrchestrator:
         """
         try:
             async with get_db() as db:
-                session_row = await (await db.execute(
-                    "SELECT sim_mode, preset, seed_text, config_json FROM simulation_sessions WHERE id=?",
-                    (session_id,)
-                )).fetchone()
-                agent_count_row = await (await db.execute(
-                    "SELECT COUNT(*) as cnt FROM agent_profiles WHERE session_id=?",
-                    (session_id,)
-                )).fetchone()
-                round_count_row = await (await db.execute(
-                    "SELECT MAX(round_number) as max_round FROM simulation_actions WHERE session_id=?",
-                    (session_id,)
-                )).fetchone()
+                session_row = await (
+                    await db.execute(
+                        "SELECT sim_mode, preset, seed_text, config_json FROM simulation_sessions WHERE id=?",
+                        (session_id,),
+                    )
+                ).fetchone()
+                agent_count_row = await (
+                    await db.execute("SELECT COUNT(*) as cnt FROM agent_profiles WHERE session_id=?", (session_id,))
+                ).fetchone()
+                round_count_row = await (
+                    await db.execute(
+                        "SELECT MAX(round_number) as max_round FROM simulation_actions WHERE session_id=?",
+                        (session_id,),
+                    )
+                ).fetchone()
         except Exception:
             logger.warning("Failed to fetch session meta for %s", session_id)
             return {"sim_mode": "kg_driven", "agent_count": 0, "round_count": 0}
@@ -161,10 +166,14 @@ class ReportOrchestrator:
             seed_text=meta.get("seed_text", ""),
         )
         provider, model = get_report_provider_model()
-        _outline_resp = await self._llm.chat([
-            {"role": "system", "content": PLANNING_SYSTEM_PROMPT},
-            {"role": "user", "content": planning_prompt},
-        ], provider=provider, model=model)
+        _outline_resp = await self._llm.chat(
+            [
+                {"role": "system", "content": PLANNING_SYSTEM_PROMPT},
+                {"role": "user", "content": planning_prompt},
+            ],
+            provider=provider,
+            model=model,
+        )
         outline_response = _outline_resp.content
         chapters = self._parse_outline(outline_response)
         if not chapters:
@@ -179,8 +188,7 @@ class ReportOrchestrator:
             else "insight_forge, interview_agents, get_sentiment_timeline"
         )
         section_prompt = (
-            KG_DRIVEN_SECTION_SYSTEM_PROMPT if sim_mode == "kg_driven"
-            else HK_DEMOGRAPHIC_SECTION_SYSTEM_PROMPT
+            KG_DRIVEN_SECTION_SYSTEM_PROMPT if sim_mode == "kg_driven" else HK_DEMOGRAPHIC_SECTION_SYSTEM_PROMPT
         ).format(tool_descriptions=tool_desc_text)
 
         completed_sections: list[str] = []

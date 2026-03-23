@@ -4,17 +4,15 @@ Maintains 6 core belief topics for each agent. Updates apply confirmation bias
 modulated by the agent's openness trait (Big Five). Beliefs are persisted to
 the ``belief_states`` table.
 """
+
 from __future__ import annotations
 
 import math
-import re
 from dataclasses import replace
 from typing import Any
 
 from backend.app.models.emotional_state import (
-    CORE_BELIEF_TOPICS,
     Belief,
-    BeliefState,
 )
 from backend.app.utils.logger import get_logger
 
@@ -26,40 +24,133 @@ logger = get_logger("belief_system")
 
 _TOPIC_KEYWORDS: dict[str, dict[str, list[str]]] = {
     "property_outlook": {
-        "positive": ["樓市向好", "升市", "樓價上升", "買樓", "投資物業", "property rising",
-                     "house prices up", "real estate boom", "purchase property"],
-        "negative": ["樓市下跌", "跌市", "樓價下降", "賣樓", "負資產", "property crash",
-                     "house prices down", "real estate bust", "sell property"],
+        "positive": [
+            "樓市向好",
+            "升市",
+            "樓價上升",
+            "買樓",
+            "投資物業",
+            "property rising",
+            "house prices up",
+            "real estate boom",
+            "purchase property",
+        ],
+        "negative": [
+            "樓市下跌",
+            "跌市",
+            "樓價下降",
+            "賣樓",
+            "負資產",
+            "property crash",
+            "house prices down",
+            "real estate bust",
+            "sell property",
+        ],
     },
     "economy_outlook": {
-        "positive": ["經濟復甦", "增長", "繁榮", "就業增加", "GDP增長", "economic recovery",
-                     "growth", "boom", "jobs growth", "GDP growth"],
-        "negative": ["經濟衰退", "下跌", "失業", "蕭條", "裁員", "recession", "downturn",
-                     "unemployment", "depression", "layoffs"],
+        "positive": [
+            "經濟復甦",
+            "增長",
+            "繁榮",
+            "就業增加",
+            "GDP增長",
+            "economic recovery",
+            "growth",
+            "boom",
+            "jobs growth",
+            "GDP growth",
+        ],
+        "negative": [
+            "經濟衰退",
+            "下跌",
+            "失業",
+            "蕭條",
+            "裁員",
+            "recession",
+            "downturn",
+            "unemployment",
+            "depression",
+            "layoffs",
+        ],
     },
     "immigration_stance": {
-        "positive": ["移民好", "歡迎移民", "多元文化", "open immigration", "welcome immigrants",
-                     "multicultural", "diversity"],
-        "negative": ["反移民", "移民問題", "外來人口", "限制移民", "anti-immigration",
-                     "immigration problem", "restrict immigration", "limit migrants"],
+        "positive": [
+            "移民好",
+            "歡迎移民",
+            "多元文化",
+            "open immigration",
+            "welcome immigrants",
+            "multicultural",
+            "diversity",
+        ],
+        "negative": [
+            "反移民",
+            "移民問題",
+            "外來人口",
+            "限制移民",
+            "anti-immigration",
+            "immigration problem",
+            "restrict immigration",
+            "limit migrants",
+        ],
     },
     "government_trust": {
-        "positive": ["信任政府", "政府做得好", "支持政府", "有效施政", "trust government",
-                     "government doing well", "support government", "effective policy"],
-        "negative": ["不信任政府", "政府失職", "反對政府", "腐敗", "distrust government",
-                     "government failure", "oppose government", "corruption"],
+        "positive": [
+            "信任政府",
+            "政府做得好",
+            "支持政府",
+            "有效施政",
+            "trust government",
+            "government doing well",
+            "support government",
+            "effective policy",
+        ],
+        "negative": [
+            "不信任政府",
+            "政府失職",
+            "反對政府",
+            "腐敗",
+            "distrust government",
+            "government failure",
+            "oppose government",
+            "corruption",
+        ],
     },
     "social_stability": {
-        "positive": ["社會穩定", "和諧", "秩序", "安全", "social stability", "harmony",
-                     "order", "safety", "peaceful"],
-        "negative": ["社會動盪", "不安", "示威", "衝突", "social unrest", "instability",
-                     "protest", "conflict", "turmoil"],
+        "positive": ["社會穩定", "和諧", "秩序", "安全", "social stability", "harmony", "order", "safety", "peaceful"],
+        "negative": [
+            "社會動盪",
+            "不安",
+            "示威",
+            "衝突",
+            "social unrest",
+            "instability",
+            "protest",
+            "conflict",
+            "turmoil",
+        ],
     },
     "ai_impact": {
-        "positive": ["人工智能好", "AI機遇", "科技進步", "自動化好處", "AI benefits",
-                     "tech opportunity", "automation advantage", "AI positive"],
-        "negative": ["人工智能威脅", "AI搶工", "科技失業", "自動化壞處", "AI threat",
-                     "AI taking jobs", "tech unemployment", "automation risk"],
+        "positive": [
+            "人工智能好",
+            "AI機遇",
+            "科技進步",
+            "自動化好處",
+            "AI benefits",
+            "tech opportunity",
+            "automation advantage",
+            "AI positive",
+        ],
+        "negative": [
+            "人工智能威脅",
+            "AI搶工",
+            "科技失業",
+            "自動化壞處",
+            "AI threat",
+            "AI taking jobs",
+            "tech unemployment",
+            "automation risk",
+        ],
     },
 }
 
@@ -72,8 +163,8 @@ def _clamp(value: float, lo: float, hi: float) -> float:
 class BeliefSystem:
     """Manages agent belief updates using Bayesian inference with confirmation bias."""
 
-    CONFIRMATION_BIAS_BOOST: float = 1.3    # Weight multiplier when evidence matches prior
-    CONFIRMATION_BIAS_RESIST: float = 0.6   # Weight multiplier when evidence contradicts prior
+    CONFIRMATION_BIAS_BOOST: float = 1.3  # Weight multiplier when evidence matches prior
+    CONFIRMATION_BIAS_RESIST: float = 0.6  # Weight multiplier when evidence contradicts prior
     # Confidence gain per confirming evidence unit.
     # Calibrated to Anderson (1981) Information Integration Theory:
     # social media posts are weak-weight stimuli (~0.05–0.10 on a 0–1 scale).
@@ -82,7 +173,7 @@ class BeliefSystem:
     # consistent with Festinger (1957) attitude crystallisation timescales.
     CONFIDENCE_INCREMENT: float = 0.05
     CONFIDENCE_DECREMENT_FACTOR: float = 0.7  # Reduction multiplier when evidence contradicts prior
-    _CONFIDENCE_FLOOR: float = 0.1          # Minimum confidence (beliefs never vanish entirely)
+    _CONFIDENCE_FLOOR: float = 0.1  # Minimum confidence (beliefs never vanish entirely)
 
     def initialize_beliefs(
         self,
@@ -111,6 +202,7 @@ class BeliefSystem:
             List of 6 :class:`Belief` objects, one per core topic.
         """
         import random as _random  # noqa: PLC0415
+
         _rng = rng or _random
 
         political_stance = float(getattr(profile, "political_stance", 0.5))
@@ -123,15 +215,19 @@ class BeliefSystem:
         # --- property_outlook ---
         # Higher income → more bullish; lower income → more bearish
         income_scores = {
-            "低收入": -0.4, "中低收入": -0.1, "中收入": 0.1,
-            "中高收入": 0.3, "高收入": 0.5,
+            "低收入": -0.4,
+            "中低收入": -0.1,
+            "中收入": 0.1,
+            "中高收入": 0.3,
+            "高收入": 0.5,
         }
         prop_stance = income_scores.get(income_bracket, 0.0)
         # Adjust for district (e.g. expensive districts → residents may be more cynical)
         if district in ("中西區", "灣仔", "南區"):
             prop_stance -= 0.1  # expensive areas, feel the pinch more
-        beliefs = [Belief(topic="property_outlook", stance=_clamp(prop_stance, -1.0, 1.0),
-                          confidence=0.4 + 0.1 * openness)]
+        beliefs = [
+            Belief(topic="property_outlook", stance=_clamp(prop_stance, -1.0, 1.0), confidence=0.4 + 0.1 * openness)
+        ]
 
         # --- economy_outlook ---
         # Tech/finance workers → slightly more optimistic; manual workers → less
@@ -144,8 +240,7 @@ class BeliefSystem:
             econ_stance = -0.1
         # Higher income boosts optimism
         econ_stance += income_scores.get(income_bracket, 0.0) * 0.5
-        beliefs.append(Belief(topic="economy_outlook", stance=_clamp(econ_stance, -1.0, 1.0),
-                               confidence=0.45))
+        beliefs.append(Belief(topic="economy_outlook", stance=_clamp(econ_stance, -1.0, 1.0), confidence=0.45))
 
         # --- immigration_stance ---
         # Younger agents more open; older more cautious
@@ -153,15 +248,13 @@ class BeliefSystem:
         age_factor = -0.2 if age > 55 else (0.1 if age < 35 else 0.0)
         pol_factor = (political_stance - 0.5) * 0.4
         imm_stance = age_factor + pol_factor
-        beliefs.append(Belief(topic="immigration_stance", stance=_clamp(imm_stance, -1.0, 1.0),
-                               confidence=0.5))
+        beliefs.append(Belief(topic="immigration_stance", stance=_clamp(imm_stance, -1.0, 1.0), confidence=0.5))
 
         # --- government_trust ---
         # Directly derived from political stance: pro-establishment → trusts government
         # Political stance 0 (建制) → high trust; 1 (民主) → low trust
         gov_stance = 0.3 - 0.6 * political_stance
-        beliefs.append(Belief(topic="government_trust", stance=_clamp(gov_stance, -1.0, 1.0),
-                               confidence=0.5))
+        beliefs.append(Belief(topic="government_trust", stance=_clamp(gov_stance, -1.0, 1.0), confidence=0.5))
 
         # --- social_stability ---
         # New Territories districts tend to be slightly more conservative
@@ -169,16 +262,14 @@ class BeliefSystem:
         stability_bias = 0.1 if district in nt_districts else 0.0
         # More stable view with higher income
         stability_stance = stability_bias + income_scores.get(income_bracket, 0.0) * 0.3
-        beliefs.append(Belief(topic="social_stability", stance=_clamp(stability_stance, -1.0, 1.0),
-                               confidence=0.4))
+        beliefs.append(Belief(topic="social_stability", stance=_clamp(stability_stance, -1.0, 1.0), confidence=0.4))
 
         # --- ai_impact ---
         # Younger + tech workers → more positive on AI; older + manual → more concerned
         tech_ai_bonus = 0.2 if any(o in occupation for o in tech_occs) else 0.0
         age_ai = -0.15 if age > 55 else (0.15 if age < 30 else 0.0)
         ai_stance = tech_ai_bonus + age_ai
-        beliefs.append(Belief(topic="ai_impact", stance=_clamp(ai_stance, -1.0, 1.0),
-                               confidence=0.35))
+        beliefs.append(Belief(topic="ai_impact", stance=_clamp(ai_stance, -1.0, 1.0), confidence=0.35))
 
         return beliefs
 
@@ -273,7 +364,10 @@ class BeliefSystem:
 
         confirmation_bias = max(0.0, 1.0 - openness)
         lr = self.compute_likelihood_ratio(
-            evidence_stance, evidence_weight, belief.stance, confirmation_bias,
+            evidence_stance,
+            evidence_weight,
+            belief.stance,
+            confirmation_bias,
         )
 
         prob = self._stance_to_prob(belief.stance)
@@ -499,9 +593,7 @@ class BeliefSystem:
         if not beliefs:
             return
         rows = [
-            (session_id, agent_id, b.topic, b.stance, b.confidence,
-             b.evidence_count, round_number)
-            for b in beliefs
+            (session_id, agent_id, b.topic, b.stance, b.confidence, b.evidence_count, round_number) for b in beliefs
         ]
         await db.executemany(
             """INSERT OR REPLACE INTO belief_states

@@ -10,9 +10,9 @@ Implements:
 All state transitions use dataclasses.replace() — never mutate in-place.
 LLM cost: 0 (all rule-based).
 """
+
 from __future__ import annotations
 
-import math
 from dataclasses import replace
 from typing import Any
 
@@ -67,7 +67,8 @@ def _decay_rate(base_weekly: float, round_days: int) -> float:
         Decay multiplier appropriate for one round of ``round_days`` length.
     """
     weeks = round_days / 7.0
-    return base_weekly ** weeks
+    return base_weekly**weeks
+
 
 # Sensitivity coefficients for interaction updates
 _INTIMACY_SENSITIVITY = 0.04
@@ -94,22 +95,62 @@ _HORSEMAN_DEF_SCALE = 0.5
 _HORSEMAN_STONE_SCALE = 0.9
 
 # Edge description → relationship seed keywords
-_ROMANTIC_KEYWORDS = frozenset({
-    "romantic", "partner", "lover", "spouse", "husband", "wife",
-    "girlfriend", "boyfriend", "fiance", "married", "dating",
-    "戀人", "夫妻", "情侶", "配偶",
-})
-_FRIENDSHIP_KEYWORDS = frozenset({
-    "friend", "ally", "colleague", "associate", "朋友", "盟友",
-})
-_CONFLICT_KEYWORDS = frozenset({
-    "enemy", "rival", "opponent", "hostile", "antagonist",
-    "敵人", "對手", "衝突",
-})
-_FAMILY_KEYWORDS = frozenset({
-    "family", "sibling", "parent", "child", "brother", "sister",
-    "father", "mother", "家人", "兄弟", "姊妹",
-})
+_ROMANTIC_KEYWORDS = frozenset(
+    {
+        "romantic",
+        "partner",
+        "lover",
+        "spouse",
+        "husband",
+        "wife",
+        "girlfriend",
+        "boyfriend",
+        "fiance",
+        "married",
+        "dating",
+        "戀人",
+        "夫妻",
+        "情侶",
+        "配偶",
+    }
+)
+_FRIENDSHIP_KEYWORDS = frozenset(
+    {
+        "friend",
+        "ally",
+        "colleague",
+        "associate",
+        "朋友",
+        "盟友",
+    }
+)
+_CONFLICT_KEYWORDS = frozenset(
+    {
+        "enemy",
+        "rival",
+        "opponent",
+        "hostile",
+        "antagonist",
+        "敵人",
+        "對手",
+        "衝突",
+    }
+)
+_FAMILY_KEYWORDS = frozenset(
+    {
+        "family",
+        "sibling",
+        "parent",
+        "child",
+        "brother",
+        "sister",
+        "father",
+        "mother",
+        "家人",
+        "兄弟",
+        "姊妹",
+    }
+)
 
 
 def _clamp(value: float, lo: float = 0.0, hi: float = 1.0) -> float:
@@ -337,9 +378,7 @@ class RelationshipEngine:
         new_intimacy = _clamp(new_intimacy + _INTIMACY_SENSITIVITY * effective_valence)
         new_passion = _clamp(new_passion + _PASSION_SENSITIVITY * effective_valence)
         new_trust = _clamp(new_trust + _TRUST_SENSITIVITY * effective_valence, -1.0, 1.0)
-        new_satisfaction = _clamp(
-            state.satisfaction + _SATISFACTION_SENSITIVITY * effective_valence
-        )
+        new_satisfaction = _clamp(state.satisfaction + _SATISFACTION_SENSITIVITY * effective_valence)
 
         # 3. Investment accumulates slowly on positive interactions
         new_investment = state.investment
@@ -355,9 +394,7 @@ class RelationshipEngine:
 
         # 5. Stagnation detection
         total_change = abs(new_intimacy - state.intimacy) + abs(new_trust - state.trust)
-        new_rounds_since_change = (
-            0 if total_change > 0.01 else state.rounds_since_change + 1
-        )
+        new_rounds_since_change = 0 if total_change > 0.01 else state.rounds_since_change + 1
 
         has_interaction = abs(interaction_valence) > 0.05
         new_count = state.interaction_count + (1 if has_interaction else 0)
@@ -398,18 +435,10 @@ class RelationshipEngine:
             Each value is 0..1 (higher = more present).
         """
         # Criticism proxy: strong negative valence without contempt
-        criticism = _clamp(
-            _HORSEMAN_CRIT_SCALE * max(0.0, -interaction_valence)
-        )
-        contempt = _clamp(
-            _HORSEMAN_CONTEMPT_SCALE * contempt_signal
-        )
-        defensiveness = _clamp(
-            _HORSEMAN_DEF_SCALE * defensiveness_signal
-        )
-        stonewalling = _clamp(
-            _HORSEMAN_STONE_SCALE * stonewalling_signal
-        )
+        criticism = _clamp(_HORSEMAN_CRIT_SCALE * max(0.0, -interaction_valence))
+        contempt = _clamp(_HORSEMAN_CONTEMPT_SCALE * contempt_signal)
+        defensiveness = _clamp(_HORSEMAN_DEF_SCALE * defensiveness_signal)
+        stonewalling = _clamp(_HORSEMAN_STONE_SCALE * stonewalling_signal)
         return {
             "criticism": round(criticism, 4),
             "contempt": round(contempt, 4),

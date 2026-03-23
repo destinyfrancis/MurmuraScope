@@ -75,13 +75,15 @@ def _parse_transport_records(raw_rows: list[dict], metric_name: str, unit: str) 
             val = row.get(val_key)
             if val is not None:
                 try:
-                    records.append(TransportRecord(
-                        date=period,
-                        category="transport",
-                        metric=metric_name,
-                        value=round(float(val), 2),
-                        unit=unit,
-                    ))
+                    records.append(
+                        TransportRecord(
+                            date=period,
+                            category="transport",
+                            metric=metric_name,
+                            value=round(float(val), 2),
+                            unit=unit,
+                        )
+                    )
                 except (ValueError, TypeError):
                     pass
                 break
@@ -125,8 +127,10 @@ async def download_all_transport(
         return [TransportDownloadResult(records=(), row_count=0, error=error_msg)]
 
     logger.info("Transport data: %d total records", len(all_records))
-    return [TransportDownloadResult(
-        records=tuple(all_records),
-        row_count=len(all_records),
-        error=None,
-    )]
+    return [
+        TransportDownloadResult(
+            records=tuple(all_records),
+            row_count=len(all_records),
+            error=None,
+        )
+    ]

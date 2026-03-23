@@ -53,12 +53,15 @@ class AgentHooksMixin:
             budgets = await batch_allocate_attention(session_id, round_num, agent_ids, posts)
             logger.debug(
                 "_process_attention_allocation session=%s round=%d agents=%d",
-                session_id, round_num, len(budgets),
+                session_id,
+                round_num,
+                len(budgets),
             )
         except Exception:
             logger.exception(
                 "_process_attention_allocation failed session=%s round=%d",
-                session_id, round_num,
+                session_id,
+                round_num,
             )
 
     async def _apply_decision_side_effects(
@@ -132,13 +135,17 @@ class AgentHooksMixin:
 
             logger.debug(
                 "_apply_decision_side_effects session=%s round=%d quits=%d relocates=%d",
-                session_id, round_num, len(quit_updates), len(relocate_updates),
+                session_id,
+                round_num,
+                len(quit_updates),
+                len(relocate_updates),
             )
 
         except Exception:
             logger.exception(
                 "_apply_decision_side_effects failed session=%s round=%d",
-                session_id, round_num,
+                session_id,
+                round_num,
             )
 
     async def _process_round_memories(
@@ -155,7 +162,9 @@ class AgentHooksMixin:
         if username_to_agent_id is None:
             try:
                 import aiosqlite as _aiosqlite  # noqa: PLC0415
+
                 from backend.app.utils.db import get_db  # noqa: PLC0415
+
                 async with get_db() as db:
                     db.row_factory = _aiosqlite.Row
                     cursor = await db.execute(
@@ -163,19 +172,19 @@ class AgentHooksMixin:
                         (session_id,),
                     )
                     rows = await cursor.fetchall()
-                    username_to_agent_id = {
-                        r["oasis_username"]: r["id"] for r in rows if r["oasis_username"]
-                    }
+                    username_to_agent_id = {r["oasis_username"]: r["id"] for r in rows if r["oasis_username"]}
             except Exception:
                 logger.warning("Failed to build username mapping for session=%s", session_id)
                 username_to_agent_id = {}
 
         try:
             from backend.app.services.agent_memory import AgentMemoryService  # noqa: PLC0415
+
             if self._memory_service is None:
                 if self._vector_store is None:
                     try:
                         from backend.app.services.vector_store import VectorStore  # noqa: PLC0415
+
                         self._vector_store = VectorStore()
                     except Exception:
                         logger.warning("VectorStore init failed, using SQL-only memory")
@@ -189,14 +198,13 @@ class AgentHooksMixin:
                 username_to_agent_id=username_to_agent_id,
             )
             await self._memory_service.decay_memories(session_id, round_number)
-            logger.debug(
-                "round %d memories stored=%d session=%s", round_number, stored, session_id
-            )
+            logger.debug("round %d memories stored=%d session=%s", round_number, stored, session_id)
 
             # Memory summarization: every summarize_interval rounds (config-driven)
             if round_number > 0 and round_number % self._preset.hook_config.summarize_interval == 0:
                 try:
                     from backend.app.utils.db import get_db as _get_db  # noqa: PLC0415
+
                     async with _get_db() as _db:
                         cursor = await _db.execute(
                             "SELECT DISTINCT agent_id FROM agent_memories WHERE session_id = ?",
@@ -207,31 +215,31 @@ class AgentHooksMixin:
 
                     if agent_ids:
                         semaphore = asyncio.Semaphore(self._preset.hook_config.llm_concurrency)
+
                         async def _limited_summarize(aid: int) -> bool:
                             async with semaphore:
-                                return await self._memory_service.summarize_old_memories(
-                                    session_id, aid, round_number
-                                )
+                                return await self._memory_service.summarize_old_memories(session_id, aid, round_number)
+
                         summarize_results = await asyncio.gather(
                             *[_limited_summarize(aid) for aid in agent_ids],
                             return_exceptions=True,
                         )
-                        summarized_count = sum(
-                            1 for r in summarize_results if r is True
-                        )
+                        summarized_count = sum(1 for r in summarize_results if r is True)
                         logger.info(
                             "Memory summarization round=%d: %d/%d agents compressed session=%s",
-                            round_number, summarized_count, len(agent_ids), session_id,
+                            round_number,
+                            summarized_count,
+                            len(agent_ids),
+                            session_id,
                         )
                 except Exception:
                     logger.exception(
                         "Memory summarization failed session=%s round=%d",
-                        session_id, round_number,
+                        session_id,
+                        round_number,
                     )
         except Exception:
-            logger.exception(
-                "_process_round_memories failed session=%s round=%d", session_id, round_number
-            )
+            logger.exception("_process_round_memories failed session=%s round=%d", session_id, round_number)
 
     async def _process_round_trust(
         self,
@@ -271,7 +279,8 @@ class AgentHooksMixin:
                 logger.warning(
                     "_process_round_trust: could not load active agents "
                     "session=%s round=%d — falling back to full update",
-                    session_id, round_number,
+                    session_id,
+                    round_number,
                 )
 
             # Pass active_usernames hint to trust service (sparse update)
@@ -284,12 +293,13 @@ class AgentHooksMixin:
 
             logger.debug(
                 "_process_round_trust round=%d updates=%d active_agents=%d session=%s",
-                round_number, len(updates), len(active_usernames), session_id,
+                round_number,
+                len(updates),
+                len(active_usernames),
+                session_id,
             )
         except Exception:
-            logger.exception(
-                "_process_round_trust failed session=%s round=%d", session_id, round_number
-            )
+            logger.exception("_process_round_trust failed session=%s round=%d", session_id, round_number)
 
     async def _process_round_decisions(
         self,
@@ -301,6 +311,7 @@ class AgentHooksMixin:
             if self._kg_mode.get(session_id):
                 return  # kg_driven: uses UniversalDecisionEngine via stakeholder deliberation
             from backend.app.services.decision_engine import DecisionEngine  # noqa: PLC0415
+
             if self._decision_engine is None:
                 self._decision_engine = DecisionEngine()
 
@@ -309,7 +320,10 @@ class AgentHooksMixin:
             if not rows:
                 return
 
-            from backend.app.services.agent_factory import AgentProfile, _infer_fingerprint_from_demographics  # noqa: PLC0415
+            from backend.app.services.agent_factory import (  # noqa: PLC0415
+                AgentProfile,
+            )
+
             profiles_by_id: dict[int, AgentProfile] = {}
             for r in rows:
                 profiles_by_id[r["id"]] = AgentProfile(
@@ -335,12 +349,15 @@ class AgentHooksMixin:
             macro_state = self._macro_state.get(session_id)
             if macro_state is None:
                 from backend.app.services.macro_controller import MacroController  # noqa: PLC0415
+
                 mc = MacroController()
                 macro_state = await mc.get_baseline()
 
             # ── Gather enrichment context (Tasks 5, 6, 7, 10) ──
             agent_enrichment = await self._gather_hk_enrichment(
-                session_id, round_number, profiles_by_id,
+                session_id,
+                round_number,
+                profiles_by_id,
             )
 
             summary = await self._decision_engine.process_round_decisions(
@@ -355,6 +372,7 @@ class AgentHooksMixin:
             macro_adjustments = summary.get("macro_adjustments", {})
             if macro_adjustments and session_id in self._macro_state:
                 import dataclasses  # noqa: PLC0415
+
                 async with self._macro_locks[session_id]:
                     current = self._macro_state[session_id]
                     updates: dict[str, Any] = {}
@@ -387,7 +405,7 @@ class AgentHooksMixin:
         self,
         session_id: str,
         round_number: int,
-        profiles_by_id: "dict[int, Any]",
+        profiles_by_id: dict[int, Any],
     ) -> dict[int, dict[str, str]]:
         """Gather memory, fingerprint, feed, and trust context for HK agents.
 
@@ -437,6 +455,7 @@ class AgentHooksMixin:
         # ── Feed retrieval (Task 7) ───────────────────────────────────
         try:
             from backend.app.services.feed_ranker import FeedRankingEngine  # noqa: PLC0415
+
             feed_engine = FeedRankingEngine()
             prev_round = max(0, round_number - 1)
             async with get_db() as db:
@@ -444,12 +463,15 @@ class AgentHooksMixin:
                 for agent_id in sample_ids:
                     try:
                         feed_items = await feed_engine.get_agent_feed(
-                            session_id, agent_id, prev_round, limit=5, db=db,
+                            session_id,
+                            agent_id,
+                            prev_round,
+                            limit=5,
+                            db=db,
                         )
                         if feed_items:
                             feed_text = "; ".join(
-                                f"{item.get('oasis_username', '?')}: "
-                                f"{(item.get('content', '') or '')[:80]}"
+                                f"{item.get('oasis_username', '?')}: {(item.get('content', '') or '')[:80]}"
                                 for item in feed_items
                             )
                             enrichment.setdefault(agent_id, {})["feed"] = feed_text[:300]
@@ -483,18 +505,12 @@ class AgentHooksMixin:
                         if trusted or distrusted:
                             lines: list[str] = []
                             for r in trusted:
-                                lines.append(
-                                    f"信任Agent{r[0]}({r[1]:.2f})"
-                                )
+                                lines.append(f"信任Agent{r[0]}({r[1]:.2f})")
                             for r in distrusted:
                                 if float(r[1]) < 0:
-                                    lines.append(
-                                        f"唔信任Agent{r[0]}({r[1]:.2f})"
-                                    )
+                                    lines.append(f"唔信任Agent{r[0]}({r[1]:.2f})")
                             if lines:
-                                enrichment.setdefault(agent_id, {})["trust"] = (
-                                    ", ".join(lines)
-                                )
+                                enrichment.setdefault(agent_id, {})["trust"] = ", ".join(lines)
                     except Exception:
                         pass
         except Exception:
@@ -530,6 +546,7 @@ class AgentHooksMixin:
                 return
 
             from backend.app.services.agent_factory import AgentProfile  # noqa: PLC0415
+
             profiles: dict[int, AgentProfile] = {}
             for r in profile_rows:
                 try:
@@ -563,6 +580,7 @@ class AgentHooksMixin:
             # Compute feed sentiment per agent from this round's actions
             feed_data: dict[int, dict[str, float]] = {}
             from backend.app.utils.db import get_db as _get_db  # noqa: PLC0415
+
             async with _get_db() as db2:
                 cursor2 = await db2.execute(
                     """SELECT agent_id,
@@ -592,9 +610,7 @@ class AgentHooksMixin:
                 macro_valence = _clamp_float((gdp - 2.0) * 0.1 - (unemployment - 4.0) * 0.08)
 
             # Load pending arousal deltas from previous dissonance resolution
-            pending_deltas: dict[int, float] = getattr(self, "_pending_arousal_deltas", {}).get(
-                session_id, {}
-            )
+            pending_deltas: dict[int, float] = getattr(self, "_pending_arousal_deltas", {}).get(session_id, {})
 
             # Collect crisis agent IDs (set by _process_relationship_lifecycle)
             crisis_set: frozenset[int] = frozenset()
@@ -625,12 +641,15 @@ class AgentHooksMixin:
 
             logger.debug(
                 "_process_emotional_state session=%s round=%d agents=%d",
-                session_id, round_num, len(prev_states),
+                session_id,
+                round_num,
+                len(prev_states),
             )
         except Exception:
             logger.exception(
                 "_process_emotional_state failed session=%s round=%d",
-                session_id, round_num,
+                session_id,
+                round_num,
             )
 
     async def _process_belief_update(
@@ -642,7 +661,6 @@ class AgentHooksMixin:
         try:
             from backend.app.services.belief_system import BeliefSystem  # noqa: PLC0415
             from backend.app.services.cognitive_dissonance import DissonanceDetector  # noqa: PLC0415
-            import aiosqlite as _aiosqlite  # noqa: PLC0415
 
             belief_sys = BeliefSystem()
             dissonance_det = DissonanceDetector()
@@ -653,6 +671,7 @@ class AgentHooksMixin:
                 return
 
             from backend.app.services.agent_factory import AgentProfile  # noqa: PLC0415
+
             profiles: dict[int, AgentProfile] = {}
             for r in profile_rows:
                 try:
@@ -683,6 +702,7 @@ class AgentHooksMixin:
             agent_beliefs: dict[int, list] = {}
 
             from backend.app.utils.db import get_db as _get_db  # noqa: PLC0415
+
             async with _get_db() as db4:
                 for agent_id, profile in profiles.items():
                     beliefs = await belief_sys.load_beliefs(session_id, agent_id, prev_round, db4)
@@ -707,6 +727,7 @@ class AgentHooksMixin:
             # Load agent decisions for dissonance detection
             agent_actions: dict[int, list[str]] = {}
             from backend.app.utils.db import get_db as _get_db2  # noqa: PLC0415
+
             async with _get_db2() as db5:
                 cursor = await db5.execute(
                     """SELECT agent_id, action FROM agent_decisions
@@ -742,17 +763,22 @@ class AgentHooksMixin:
             # Store pending arousal deltas for next round's emotional state update
             if not hasattr(self, "_pending_arousal_deltas"):
                 from collections import defaultdict  # noqa: PLC0415
+
                 self._pending_arousal_deltas: dict[str, dict[int, float]] = defaultdict(dict)
             self._pending_arousal_deltas[session_id] = pending_deltas
 
             logger.debug(
                 "_process_belief_update session=%s round=%d agents=%d dissonances=%d",
-                session_id, round_num, len(updated_beliefs), len(_dissonance_results),
+                session_id,
+                round_num,
+                len(updated_beliefs),
+                len(_dissonance_results),
             )
         except Exception:
             logger.exception(
                 "_process_belief_update failed session=%s round=%d",
-                session_id, round_num,
+                session_id,
+                round_num,
             )
 
     async def _process_round_consumption(
@@ -765,6 +791,7 @@ class AgentHooksMixin:
             if self._kg_mode.get(session_id):
                 return  # kg_driven: HK consumption model not applicable
             from backend.app.services.consumption_model import ConsumptionTracker  # noqa: PLC0415
+
             if self._consumption_tracker is None:
                 self._consumption_tracker = ConsumptionTracker()
 
@@ -774,6 +801,7 @@ class AgentHooksMixin:
                 return
 
             from backend.app.services.agent_factory import AgentProfile  # noqa: PLC0415
+
             profiles = [
                 AgentProfile(
                     id=r["id"],
@@ -800,6 +828,7 @@ class AgentHooksMixin:
             macro_state = self._macro_state.get(session_id)
             if macro_state is None:
                 from backend.app.services.macro_controller import MacroController  # noqa: PLC0415
+
                 mc = MacroController()
                 macro_state = await mc.get_baseline()
 
@@ -811,10 +840,13 @@ class AgentHooksMixin:
             )
             logger.debug(
                 "_process_round_consumption: %d rows session=%s round=%d",
-                inserted, session_id, round_number,
+                inserted,
+                session_id,
+                round_number,
             )
         except Exception:
             logger.exception(
                 "_process_round_consumption failed session=%s round=%d",
-                session_id, round_number,
+                session_id,
+                round_number,
             )

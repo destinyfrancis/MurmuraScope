@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -14,9 +13,10 @@ from backend.data_pipeline.census_downloader import (
 from backend.data_pipeline.economy_downloader import (
     EconomyRecord,
     EconomyResult,
+)
+from backend.data_pipeline.economy_downloader import (
     _try_parse_float as econ_try_parse_float,
 )
-
 
 # ======================================================================
 # Census downloader — World Bank API (updated for 2026-03 rewrite)
@@ -175,9 +175,7 @@ class TestDataNormalizerInsertsSnapshots:
             )
         await test_db.commit()
 
-        cursor = await test_db.execute(
-            "SELECT COUNT(*) as cnt FROM population_distributions"
-        )
+        cursor = await test_db.execute("SELECT COUNT(*) as cnt FROM population_distributions")
         row = await cursor.fetchone()
         assert row["cnt"] == 2
 
@@ -212,9 +210,7 @@ class TestDataNormalizerInsertsSnapshots:
             )
         await test_db.commit()
 
-        cursor = await test_db.execute(
-            "SELECT * FROM hk_data_snapshots WHERE metric = 'hibor_3m'"
-        )
+        cursor = await test_db.execute("SELECT * FROM hk_data_snapshots WHERE metric = 'hibor_3m'")
         row = await cursor.fetchone()
         assert row is not None
         assert row["value"] == 4.70
@@ -250,8 +246,7 @@ class TestPopulationDistributionSumsToOne:
         await test_db.commit()
 
         cursor = await test_db.execute(
-            "SELECT SUM(probability) as total FROM population_distributions "
-            "WHERE category = 'age_distribution'"
+            "SELECT SUM(probability) as total FROM population_distributions WHERE category = 'age_distribution'"
         )
         row = await cursor.fetchone()
         assert abs(row["total"] - 1.0) < 1e-9

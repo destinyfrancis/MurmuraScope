@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import pytest
-import pytest_asyncio
-from unittest.mock import patch
 
 from backend.app.api.auth import (
     _create_access_token,
@@ -12,7 +10,6 @@ from backend.app.api.auth import (
     _hash_password,
     _verify_password,
 )
-
 
 # ---------------------------------------------------------------------------
 # Unit tests: password hashing
@@ -221,7 +218,9 @@ class TestAuthSecretKeyConfiguration:
         yield
         import importlib
         import os
+
         import backend.app.api.auth as auth_module
+
         original_secret = os.environ.get("AUTH_SECRET_KEY")
         original_debug = os.environ.get("DEBUG")
         try:
@@ -246,7 +245,9 @@ class TestAuthSecretKeyConfiguration:
 
         # Reload the auth module to pick up the new env var
         import importlib
+
         import backend.app.api.auth as auth_module
+
         importlib.reload(auth_module)
 
         assert auth_module.AUTH_SECRET_KEY == test_secret
@@ -259,14 +260,14 @@ class TestAuthSecretKeyConfiguration:
 
         import importlib
         import logging
+
         import backend.app.api.auth as auth_module
 
         with caplog.at_level(logging.WARNING, logger="api.auth"):
             importlib.reload(auth_module)
 
         assert any(
-            "AUTH_SECRET_KEY env var not set" in record.message
-            and "ephemeral secret" in record.message
+            "AUTH_SECRET_KEY env var not set" in record.message and "ephemeral secret" in record.message
             for record in caplog.records
         ), f"Expected warning not found in logs: {[r.message for r in caplog.records]}"
 
@@ -277,6 +278,7 @@ class TestAuthSecretKeyConfiguration:
         monkeypatch.setenv("DEBUG", "false")
 
         import importlib
+
         import backend.app.api.auth as auth_module
 
         with pytest.raises(SystemExit) as exc_info:

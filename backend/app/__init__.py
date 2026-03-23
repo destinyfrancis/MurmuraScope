@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import importlib
 import logging
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,7 +15,26 @@ from backend.app.utils.db import apply_migrations, init_db
 from backend.app.utils.logger import setup_logging
 
 # Router module names under backend.app.api
-_ROUTER_MODULES = ("auth", "graph", "simulation_macro", "simulation_branches", "simulation", "simulation_actions", "report", "data", "data_connector", "ws", "domain_packs", "workspace", "comments", "validation", "calibration", "emergence", "prediction_market", "stock_forecast")
+_ROUTER_MODULES = (
+    "auth",
+    "graph",
+    "simulation_macro",
+    "simulation_branches",
+    "simulation",
+    "simulation_actions",
+    "report",
+    "data",
+    "data_connector",
+    "ws",
+    "domain_packs",
+    "workspace",
+    "comments",
+    "validation",
+    "calibration",
+    "emergence",
+    "prediction_market",
+    "stock_forecast",
+)
 
 # Patterns that identify OASIS simulation subprocesses.
 _OASIS_SCRIPT_PATTERNS = (
@@ -43,10 +62,9 @@ async def _reap_orphaned_oasis_processes(logger: logging.Logger) -> None:
         import psutil
     except ImportError:
         # psutil not installed — fall back to the best-effort pkill approach.
-        logger.warning(
-            "psutil not installed — falling back to pkill for orphan reaping"
-        )
+        logger.warning("psutil not installed — falling back to pkill for orphan reaping")
         import subprocess as _sp
+
         _sp.run(
             ["pkill", "-f", "run_(twitter|parallel|facebook|instagram|reddit)_simulation.py"],
             capture_output=True,
@@ -73,6 +91,7 @@ async def _reap_orphaned_oasis_processes(logger: logging.Logger) -> None:
     if reaped:
         # Give processes a chance to exit gracefully before force-killing.
         import asyncio
+
         await asyncio.sleep(5.0)
         for pid in reaped:
             try:
@@ -95,6 +114,7 @@ async def _reap_orphaned_oasis_processes(logger: logging.Logger) -> None:
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Application lifespan: initialise DB and data scheduler on startup."""
     from backend.app.utils.telemetry import init_telemetry
+
     init_telemetry()
 
     logger = logging.getLogger("murmuroscope")
@@ -109,12 +129,14 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Start the serialised write queue — prevents "database is locked" errors
     # under concurrent load (3-5+ simultaneous users / active simulations).
     from backend.app.services.db_write_queue import get_write_queue
+
     await get_write_queue()
     logger.info("SQLite WriteQueue started")
 
     # Runtime migration: add share_token to reports table
     try:
         from backend.app.utils.db import get_db
+
         async with get_db() as db:
             await db.execute("ALTER TABLE reports ADD COLUMN share_token TEXT")
             await db.commit()
@@ -128,10 +150,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Runtime migration: add domain_pack_id to simulation_sessions table
     try:
         from backend.app.utils.db import get_db
+
         async with get_db() as db:
-            await db.execute(
-                "ALTER TABLE simulation_sessions ADD COLUMN domain_pack_id TEXT DEFAULT 'hk_city'"
-            )
+            await db.execute("ALTER TABLE simulation_sessions ADD COLUMN domain_pack_id TEXT DEFAULT 'hk_city'")
             await db.commit()
         logger.info("Added domain_pack_id column to simulation_sessions")
     except Exception as exc:
@@ -146,6 +167,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Runtime migration: create tables not yet in schema.sql
     try:
         from backend.app.utils.db import get_db
+
         async with get_db() as db:
             await db.execute(
                 "CREATE TABLE IF NOT EXISTS user_data_points ("
@@ -159,8 +181,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
                 ")"
             )
             await db.execute(
-                "CREATE INDEX IF NOT EXISTS idx_udp_session_metric "
-                "ON user_data_points(session_id, metric)"
+                "CREATE INDEX IF NOT EXISTS idx_udp_session_metric ON user_data_points(session_id, metric)"
             )
             await db.execute(
                 "CREATE TABLE IF NOT EXISTS api_data_sources ("
@@ -174,10 +195,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
                 "  created_at TEXT DEFAULT (datetime('now'))"
                 ")"
             )
-            await db.execute(
-                "CREATE INDEX IF NOT EXISTS idx_ads_session "
-                "ON api_data_sources(session_id)"
-            )
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_ads_session ON api_data_sources(session_id)")
             await db.commit()
         logger.info("Universal Prediction Engine tables ensured (user_data_points, api_data_sources)")
     except Exception:
@@ -186,6 +204,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Runtime migration: create session_api_keys table (BYOK)
     try:
         from backend.app.utils.db import get_db
+
         async with get_db() as db:
             await db.execute(
                 "CREATE TABLE IF NOT EXISTS session_api_keys ("
@@ -205,6 +224,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Runtime migration: add granularity column to market_data (Stock Forecast upgrade)
     try:
         from backend.app.utils.db import get_db
+
         async with get_db() as db:
             await db.execute("ALTER TABLE market_data ADD COLUMN granularity TEXT DEFAULT 'daily'")
             await db.commit()
@@ -218,6 +238,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Runtime migration: add valid_from / valid_until to kg_edges (Graphiti temporal pattern)
     try:
         from backend.app.utils.db import get_db
+
         async with get_db() as db:
             await db.execute("ALTER TABLE kg_edges ADD COLUMN valid_from INTEGER DEFAULT 0")
             await db.commit()
@@ -227,6 +248,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     try:
         from backend.app.utils.db import get_db
+
         async with get_db() as db:
             await db.execute("ALTER TABLE kg_edges ADD COLUMN valid_until INTEGER")
             await db.commit()
@@ -237,6 +259,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Backfill valid_from from existing round_number values
     try:
         from backend.app.utils.db import get_db
+
         async with get_db() as db:
             await db.execute(
                 "UPDATE kg_edges SET valid_from = round_number WHERE valid_from = 0 AND round_number IS NOT NULL"
@@ -248,10 +271,10 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Index for temporal queries
     try:
         from backend.app.utils.db import get_db
+
         async with get_db() as db:
             await db.execute(
-                "CREATE INDEX IF NOT EXISTS idx_kg_edge_temporal "
-                "ON kg_edges(session_id, valid_from, valid_until)"
+                "CREATE INDEX IF NOT EXISTS idx_kg_edge_temporal ON kg_edges(session_id, valid_from, valid_until)"
             )
             await db.commit()
     except Exception as exc:
@@ -259,18 +282,17 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Validate ExternalDataFeed configuration when enabled
     import os as _os
+
     if _os.environ.get("EXTERNAL_FEED_ENABLED", "false").lower() == "true":
         if not _os.environ.get("FRED_API_KEY", "").strip():
-            logger.warning(
-                "EXTERNAL_FEED_ENABLED=true but FRED_API_KEY not set — "
-                "FRED data source will be unavailable"
-            )
+            logger.warning("EXTERNAL_FEED_ENABLED=true but FRED_API_KEY not set — FRED data source will be unavailable")
         else:
             logger.info("ExternalDataFeed enabled with FRED + World Bank + Taiwan risk sources")
 
     # 1. Seed static population/census data (legitimate reference data)
     try:
         from backend.data_pipeline.hk_reference_data import seed_population_data
+
         await seed_population_data()
         logger.info("Population/census data seeded")
     except Exception:
@@ -280,6 +302,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     real_count = 0
     try:
         from backend.data_pipeline.download_all import run_pipeline
+
         summaries = await run_pipeline(normalize=True)
         real_count = sum(
             getattr(s, "total_records", getattr(s, "row_count", 0))
@@ -292,8 +315,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # 3. Log data gaps
     try:
-        from backend.data_pipeline.data_provenance import get_data_gaps, ensure_table
         from backend.app.utils.db import get_db
+        from backend.data_pipeline.data_provenance import ensure_table, get_data_gaps
+
         async with get_db() as db:
             await ensure_table(db)
             gaps = await get_data_gaps(db)
@@ -315,14 +339,15 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # 5. Calibration — only with sufficient real data
     try:
         from backend.data_pipeline.calibration import CalibrationPipeline
+
         if real_count >= 100:
             pipeline = CalibrationPipeline()
             await pipeline.run_calibration()
             logger.info("Calibration complete (based on %d real data points)", real_count)
         else:
             logger.warning(
-                "Real data insufficient (%d records) — calibration skipped, "
-                "using conservative default coefficients", real_count,
+                "Real data insufficient (%d records) — calibration skipped, using conservative default coefficients",
+                real_count,
             )
     except Exception:
         logger.warning("Calibration failed — using default coefficients")
@@ -331,6 +356,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     scheduler = None
     try:
         from backend.data_pipeline.scheduler import DataScheduler
+
         scheduler = DataScheduler()
         scheduler.start()
         logger.info("DataScheduler started")
@@ -340,6 +366,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Load custom domain packs from DB into in-memory registry
     try:
         from backend.app.domain.base import DomainPackRegistry
+
         loaded = await DomainPackRegistry.load_custom_from_db()
         if loaded:
             logger.info("Loaded %d custom domain pack(s) into registry", loaded)
@@ -353,6 +380,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Stop the serialised write queue and flush final metrics.
     from backend.app.services.db_write_queue import shutdown_write_queue
+
     await shutdown_write_queue()
     logger.info("SQLite WriteQueue stopped")
 
@@ -399,6 +427,7 @@ def create_app() -> FastAPI:
     from slowapi import _rate_limit_exceeded_handler
     from slowapi.errors import RateLimitExceeded
     from slowapi.middleware import SlowAPIMiddleware
+
     from backend.app.api.auth import _limiter
 
     # Apply default rate limit (120/minute per IP).

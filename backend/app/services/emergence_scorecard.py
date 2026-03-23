@@ -3,9 +3,9 @@
 Aggregates cascade, polarization, diversity, bias, and phase transition
 metrics into a single per-simulation summary with a letter grade (A-F).
 """
+
 from __future__ import annotations
 
-import json
 import math
 from typing import Any
 
@@ -135,8 +135,7 @@ class EmergenceScorecardGenerator:
         try:
             async with get_db() as db:
                 cursor = await db.execute(
-                    "SELECT political_stance FROM agent_profiles "
-                    "WHERE session_id = ? AND political_stance IS NOT NULL",
+                    "SELECT political_stance FROM agent_profiles WHERE session_id = ? AND political_stance IS NOT NULL",
                     (session_id,),
                 )
                 rows = await cursor.fetchall()
@@ -152,9 +151,7 @@ class EmergenceScorecardGenerator:
                         idx = min(4, int(v * 5))
                         bins[idx] += 1
                     n = len(values)
-                    return -sum(
-                        (c / n) * math.log2(c / n) for c in bins if c > 0
-                    )
+                    return -sum((c / n) * math.log2(c / n) for c in bins if c > 0)
 
                 # Compare early snapshot polarization vs late
                 cursor = await db.execute(
@@ -185,8 +182,7 @@ class EmergenceScorecardGenerator:
         try:
             async with get_db() as db:
                 cursor = await db.execute(
-                    "SELECT political_stance FROM agent_profiles "
-                    "WHERE session_id = ? AND political_stance IS NOT NULL",
+                    "SELECT political_stance FROM agent_profiles WHERE session_id = ? AND political_stance IS NOT NULL",
                     (session_id,),
                 )
                 rows = await cursor.fetchall()
@@ -198,8 +194,8 @@ class EmergenceScorecardGenerator:
 
             # Try scipy diptest
             try:
-                from scipy.stats import gaussian_kde  # noqa: PLC0415
                 import numpy as np  # noqa: PLC0415
+                from scipy.stats import gaussian_kde  # noqa: PLC0415
 
                 arr = np.array(values)
                 # Simple bimodality coefficient: (skewness^2 + 1) / kurtosis
@@ -208,10 +204,10 @@ class EmergenceScorecardGenerator:
                 std = arr.std()
                 if std < 1e-10:
                     return 1.0
-                skew = float(((arr - mean) ** 3).sum() / (n * std ** 3))
-                kurt = float(((arr - mean) ** 4).sum() / (n * std ** 4))
+                skew = float(((arr - mean) ** 3).sum() / (n * std**3))
+                kurt = float(((arr - mean) ** 4).sum() / (n * std**4))
                 # Bimodality coefficient (Pfister et al., 2013)
-                bc = (skew ** 2 + 1) / kurt
+                bc = (skew**2 + 1) / kurt
                 # BC > 0.555 suggests bimodality
                 return round(1.0 - bc, 4) if bc < 1.0 else 0.0
             except ImportError:
@@ -250,6 +246,7 @@ class EmergenceScorecardGenerator:
                 row = await cursor.fetchone()
                 if row:
                     from backend.app.models.emergence import BiasProbeResult  # noqa: PLC0415
+
                     bias_result = BiasProbeResult(
                         session_id=session_id,
                         scenario="",
@@ -263,8 +260,7 @@ class EmergenceScorecardGenerator:
 
                 # Get round range
                 cursor = await db.execute(
-                    "SELECT MIN(round_number), MAX(round_number) "
-                    "FROM polarization_snapshots WHERE session_id = ?",
+                    "SELECT MIN(round_number), MAX(round_number) FROM polarization_snapshots WHERE session_id = ?",
                     (session_id,),
                 )
                 rng = await cursor.fetchone()
@@ -276,7 +272,10 @@ class EmergenceScorecardGenerator:
             ratios: list[float] = []
             for metric in ("modularity", "opinion_variance"):
                 attr = await attributor.compute_attribution(
-                    session_id, metric, int(rng[0]), int(rng[1]),
+                    session_id,
+                    metric,
+                    int(rng[0]),
+                    int(rng[1]),
                     bias_probe_result=bias_result,
                 )
                 ratios.append(attr.emergence_ratio)
@@ -307,8 +306,7 @@ class EmergenceScorecardGenerator:
         try:
             async with get_db() as db:
                 cursor = await db.execute(
-                    "SELECT COUNT(*) FROM emergence_alerts "
-                    "WHERE session_id = ? AND severity = 'critical'",
+                    "SELECT COUNT(*) FROM emergence_alerts WHERE session_id = ? AND severity = 'critical'",
                     (session_id,),
                 )
                 row = await cursor.fetchone()
@@ -575,9 +573,7 @@ class EmergenceScorecardGenerator:
                     ("dissonance_prevalence", "REAL NOT NULL DEFAULT 0.0"),
                 ]:
                     try:
-                        await db.execute(
-                            f"ALTER TABLE emergence_scorecards ADD COLUMN {col_def[0]} {col_def[1]}"
-                        )
+                        await db.execute(f"ALTER TABLE emergence_scorecards ADD COLUMN {col_def[0]} {col_def[1]}")
                     except Exception:
                         pass  # Column already exists
                 await db.execute(
@@ -593,22 +589,30 @@ class EmergenceScorecardGenerator:
                     "dissonance_prevalence, grade) "
                     "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (
-                        session_id, sc.max_cascade_depth, sc.cascade_count,
-                        sc.avg_cascade_breadth, sc.polarization_delta,
-                        sc.echo_chamber_count_delta, sc.opinion_entropy_trend,
-                        sc.stance_bimodality_p, sc.emergence_ratio,
-                        sc.bias_contamination, sc.transition_count,
-                        sc.action_diversity_score, sc.network_volatility,
-                        sc.filter_bubble_delta, sc.information_flow_efficiency,
-                        sc.emotional_convergence, sc.belief_revision_rate,
-                        sc.dissonance_prevalence, sc.grade,
+                        session_id,
+                        sc.max_cascade_depth,
+                        sc.cascade_count,
+                        sc.avg_cascade_breadth,
+                        sc.polarization_delta,
+                        sc.echo_chamber_count_delta,
+                        sc.opinion_entropy_trend,
+                        sc.stance_bimodality_p,
+                        sc.emergence_ratio,
+                        sc.bias_contamination,
+                        sc.transition_count,
+                        sc.action_diversity_score,
+                        sc.network_volatility,
+                        sc.filter_bubble_delta,
+                        sc.information_flow_efficiency,
+                        sc.emotional_convergence,
+                        sc.belief_revision_rate,
+                        sc.dissonance_prevalence,
+                        sc.grade,
                     ),
                 )
                 await db.commit()
         except Exception:
-            logger.exception(
-                "EmergenceScorecardGenerator._persist failed session=%s", session_id
-            )
+            logger.exception("EmergenceScorecardGenerator._persist failed session=%s", session_id)
 
 
 # ---------------------------------------------------------------------------

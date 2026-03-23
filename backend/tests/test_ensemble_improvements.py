@@ -1,7 +1,8 @@
 """Unit tests for EnsembleRunner improvements: cap raise + dry_run."""
+
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -65,21 +66,24 @@ class TestEnsembleRunnerDryRun:
         mock_macro = MagicMock()
         mock_macro.__dict__ = {"hibor_1m": 0.05}
 
-        with patch.object(runner, "_load_parent_session", new_callable=AsyncMock) as mock_load, \
-             patch.object(runner, "_create_branch_session", new_callable=AsyncMock), \
-             patch.object(runner, "_execute_trial_simulation", new_callable=AsyncMock) as mock_exec, \
-             patch.object(runner, "_persist_trial_metadata", new_callable=AsyncMock), \
-             patch("backend.app.services.ensemble_runner._perturb_macro_fields") as mock_perturb:
-
+        with (
+            patch.object(runner, "_load_parent_session", new_callable=AsyncMock) as mock_load,
+            patch.object(runner, "_create_branch_session", new_callable=AsyncMock),
+            patch.object(runner, "_execute_trial_simulation", new_callable=AsyncMock) as mock_exec,
+            patch.object(runner, "_persist_trial_metadata", new_callable=AsyncMock),
+            patch("backend.app.services.ensemble_runner._perturb_macro_fields") as mock_perturb,
+        ):
             mock_load.return_value = ({"agent_count": 10, "round_count": 5}, mock_macro)
             mock_perturb.return_value = {"hibor_1m": 0.06}
 
             mock_analyzer = MagicMock()
-            mock_analyzer.compute_percentiles = AsyncMock(return_value=MagicMock(
-                to_dict=lambda: {},
-                n_trials=1,
-                distributions=[],
-            ))
+            mock_analyzer.compute_percentiles = AsyncMock(
+                return_value=MagicMock(
+                    to_dict=lambda: {},
+                    n_trials=1,
+                    distributions=[],
+                )
+            )
             runner._analyzer = mock_analyzer
 
             await runner.run_ensemble("sess1", n_trials=1, dry_run=True)

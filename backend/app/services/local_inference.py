@@ -11,10 +11,10 @@ Environment variables:
     OLLAMA_MODEL         Model name served by Ollama (default: deepseek-v2)
     OPENROUTER_API_KEY   Required when backend is "openrouter"
 """
+
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 from dataclasses import dataclass
 from typing import Any
@@ -140,10 +140,7 @@ class LocalInferenceAdapter:
         # Parallel single calls for ollama + openrouter (+ vLLM fallback)
         tasks = [self.chat(msgs, temperature=temperature, max_tokens=max_tokens) for msgs in batch]
         results = await asyncio.gather(*tasks, return_exceptions=True)
-        return [
-            r if isinstance(r, str) else f"[ERROR: {r}]"
-            for r in results
-        ]
+        return [r if isinstance(r, str) else f"[ERROR: {r}]" for r in results]
 
     @staticmethod
     def detect_backend() -> InferenceBackend:
@@ -158,7 +155,11 @@ class LocalInferenceAdapter:
 
         probes: list[tuple[str, str, str]] = [
             ("vllm", os.getenv("VLLM_BASE_URL", _DEFAULT_VLLM_URL), os.getenv("VLLM_MODEL", _DEFAULT_VLLM_MODEL)),
-            ("ollama", os.getenv("OLLAMA_BASE_URL", _DEFAULT_OLLAMA_URL), os.getenv("OLLAMA_MODEL", _DEFAULT_OLLAMA_MODEL)),
+            (
+                "ollama",
+                os.getenv("OLLAMA_BASE_URL", _DEFAULT_OLLAMA_URL),
+                os.getenv("OLLAMA_MODEL", _DEFAULT_OLLAMA_MODEL),
+            ),
         ]
 
         for name, base_url, model in probes:
@@ -218,15 +219,9 @@ class LocalInferenceAdapter:
         one call, so we use parallel asyncio tasks with the semaphore for
         concurrency control.
         """
-        tasks = [
-            self._openai_compat_single(msgs, temperature, max_tokens)
-            for msgs in batch
-        ]
+        tasks = [self._openai_compat_single(msgs, temperature, max_tokens) for msgs in batch]
         results = await asyncio.gather(*tasks, return_exceptions=True)
-        return [
-            r if isinstance(r, str) else f"[ERROR: {r}]"
-            for r in results
-        ]
+        return [r if isinstance(r, str) else f"[ERROR: {r}]" for r in results]
 
     async def _openai_compat_single(
         self,

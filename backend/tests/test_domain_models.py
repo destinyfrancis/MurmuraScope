@@ -1,4 +1,5 @@
 """Tests for domain pack models (Task 8)."""
+
 from __future__ import annotations
 
 import pytest
@@ -6,10 +7,10 @@ from pydantic import ValidationError
 
 from backend.app.models.domain import APISourceConfig, DraftDomainPack, FieldMapping
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _valid_pack(**overrides) -> DraftDomainPack:
     """Return a minimal valid DraftDomainPack, with optional field overrides."""
@@ -32,6 +33,7 @@ def _valid_pack(**overrides) -> DraftDomainPack:
 # ---------------------------------------------------------------------------
 # DraftDomainPack — happy path
 # ---------------------------------------------------------------------------
+
 
 def test_draft_domain_pack_valid():
     pack = _valid_pack()
@@ -93,6 +95,7 @@ def test_draft_domain_pack_more_keywords():
 # DraftDomainPack — frozen (immutability)
 # ---------------------------------------------------------------------------
 
+
 def test_draft_domain_pack_frozen():
     pack = _valid_pack()
     with pytest.raises(Exception):
@@ -108,6 +111,7 @@ def test_draft_domain_pack_frozen_list_field():
 # ---------------------------------------------------------------------------
 # DraftDomainPack — validation errors
 # ---------------------------------------------------------------------------
+
 
 def test_regions_too_few():
     with pytest.raises(ValidationError, match="regions must have at least 3"):
@@ -142,6 +146,7 @@ def test_invalid_source_literal():
 # ---------------------------------------------------------------------------
 # APISourceConfig
 # ---------------------------------------------------------------------------
+
 
 def test_api_source_config_defaults():
     cfg = APISourceConfig(url="https://api.example.com/data")
@@ -201,6 +206,7 @@ def test_api_source_config_invalid_auth_type():
 # ---------------------------------------------------------------------------
 # FieldMapping
 # ---------------------------------------------------------------------------
+
 
 def test_field_mapping_defaults():
     fm = FieldMapping(source_field="price", target_metric="index")

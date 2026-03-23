@@ -19,16 +19,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import numpy as np
 import pytest
 
-from backend.app.services.time_series_forecaster import (
-    TimeSeriesForecaster,
-    SUPPORTED_METRICS,
-    _quarter_label,
-    _annual_label,
-    _SEASONAL_METRICS,
-    _SEASONAL_ADJUSTMENTS,
-)
 from backend.app.models.forecast import ForecastPoint, ForecastResult
-
+from backend.app.services.time_series_forecaster import (
+    _SEASONAL_ADJUSTMENTS,
+    _SEASONAL_METRICS,
+    SUPPORTED_METRICS,
+    TimeSeriesForecaster,
+    _annual_label,
+    _quarter_label,
+)
 
 # ===========================================================================
 # Period label helpers
@@ -164,9 +163,12 @@ class TestForecastDataclasses:
 
     def test_forecast_result_to_dict(self):
         pt = ForecastPoint(
-            period="2025-Q1", value=150.0,
-            lower_80=145.0, upper_80=155.0,
-            lower_95=142.0, upper_95=158.0,
+            period="2025-Q1",
+            value=150.0,
+            lower_80=145.0,
+            upper_80=155.0,
+            lower_95=142.0,
+            upper_95=158.0,
         )
         result = ForecastResult(
             metric="ccl_index",
@@ -264,27 +266,41 @@ class TestGetForecastAdjustedBaseline:
     @pytest.mark.asyncio
     async def test_returns_dict_of_forecast_points(self):
         """get_forecast_adjusted_baseline should return a dict with ForecastPoints."""
+        import backend.app.services.time_series_forecaster as tsf_mod
         from backend.app.services.macro_controller import MacroController
         from backend.app.services.macro_state import MacroState
-        import backend.app.services.time_series_forecaster as tsf_mod
 
         state = MacroState(
-            hibor_1m=0.04, prime_rate=0.0575,
-            unemployment_rate=0.029, median_monthly_income=20_000,
-            ccl_index=152.3, avg_sqft_price={}, mortgage_cap=0.70,
-            stamp_duty_rates={}, gdp_growth=0.032, cpi_yoy=0.021,
-            hsi_level=16_800.0, consumer_confidence=88.5,
-            net_migration=-12_000, birth_rate=5.8, policy_flags={},
+            hibor_1m=0.04,
+            prime_rate=0.0575,
+            unemployment_rate=0.029,
+            median_monthly_income=20_000,
+            ccl_index=152.3,
+            avg_sqft_price={},
+            mortgage_cap=0.70,
+            stamp_duty_rates={},
+            gdp_growth=0.032,
+            cpi_yoy=0.021,
+            hsi_level=16_800.0,
+            consumer_confidence=88.5,
+            net_migration=-12_000,
+            birth_rate=5.8,
+            policy_flags={},
         )
 
         mock_result = ForecastResult(
             metric="gdp_growth",
             horizon=1,
-            points=[ForecastPoint(
-                period="2025-Q1", value=0.033,
-                lower_80=0.028, upper_80=0.038,
-                lower_95=0.025, upper_95=0.041,
-            )],
+            points=[
+                ForecastPoint(
+                    period="2025-Q1",
+                    value=0.033,
+                    lower_80=0.028,
+                    upper_80=0.038,
+                    lower_95=0.025,
+                    upper_95=0.041,
+                )
+            ],
             model_used="naive",
             fit_quality=0.0,
         )
@@ -295,6 +311,7 @@ class TestGetForecastAdjustedBaseline:
         class _MockForecaster:
             async def forecast(self, metric, horizon=1):
                 return mock_result
+
             async def list_supported_metrics(self):
                 return ["gdp_growth"]
 
@@ -310,17 +327,26 @@ class TestGetForecastAdjustedBaseline:
     @pytest.mark.asyncio
     async def test_returns_empty_dict_on_forecaster_failure(self):
         """If all forecasts fail, should return empty dict without raising."""
+        import backend.app.services.time_series_forecaster as tsf_mod
         from backend.app.services.macro_controller import MacroController
         from backend.app.services.macro_state import MacroState
-        import backend.app.services.time_series_forecaster as tsf_mod
 
         state = MacroState(
-            hibor_1m=0.04, prime_rate=0.0575,
-            unemployment_rate=0.029, median_monthly_income=20_000,
-            ccl_index=152.3, avg_sqft_price={}, mortgage_cap=0.70,
-            stamp_duty_rates={}, gdp_growth=0.032, cpi_yoy=0.021,
-            hsi_level=16_800.0, consumer_confidence=88.5,
-            net_migration=-12_000, birth_rate=5.8, policy_flags={},
+            hibor_1m=0.04,
+            prime_rate=0.0575,
+            unemployment_rate=0.029,
+            median_monthly_income=20_000,
+            ccl_index=152.3,
+            avg_sqft_price={},
+            mortgage_cap=0.70,
+            stamp_duty_rates={},
+            gdp_growth=0.032,
+            cpi_yoy=0.021,
+            hsi_level=16_800.0,
+            consumer_confidence=88.5,
+            net_migration=-12_000,
+            birth_rate=5.8,
+            policy_flags={},
         )
 
         mc = MacroController()
@@ -329,6 +355,7 @@ class TestGetForecastAdjustedBaseline:
         class _FailingForecaster:
             async def forecast(self, metric, horizon=1):
                 raise RuntimeError("DB down")
+
             async def list_supported_metrics(self):
                 return ["gdp_growth"]
 
@@ -351,12 +378,21 @@ class TestGetForecastAdjustedBaseline:
         forecast_gdp = 0.035  # forecaster projects higher growth
 
         state = MacroState(
-            hibor_1m=0.04, prime_rate=0.0575,
-            unemployment_rate=0.029, median_monthly_income=20_000,
-            ccl_index=152.3, avg_sqft_price={}, mortgage_cap=0.70,
-            stamp_duty_rates={}, gdp_growth=current_gdp, cpi_yoy=0.021,
-            hsi_level=16_800.0, consumer_confidence=88.5,
-            net_migration=-12_000, birth_rate=5.8, policy_flags={},
+            hibor_1m=0.04,
+            prime_rate=0.0575,
+            unemployment_rate=0.029,
+            median_monthly_income=20_000,
+            ccl_index=152.3,
+            avg_sqft_price={},
+            mortgage_cap=0.70,
+            stamp_duty_rates={},
+            gdp_growth=current_gdp,
+            cpi_yoy=0.021,
+            hsi_level=16_800.0,
+            consumer_confidence=88.5,
+            net_migration=-12_000,
+            birth_rate=5.8,
+            policy_flags={},
         )
 
         # Mock a ForecastPoint-like object for gdp_growth
@@ -377,9 +413,7 @@ class TestGetForecastAdjustedBaseline:
             mock_get_db.return_value.__aenter__ = AsyncMock(return_value=mock_db)
             mock_get_db.return_value.__aexit__ = AsyncMock(return_value=False)
 
-            updated = await mc.update_from_actions(
-                state, "sess1", 5, ets_forecast=ets_forecast
-            )
+            updated = await mc.update_from_actions(state, "sess1", 5, ets_forecast=ets_forecast)
 
         # GDP should start from forecast_gdp (0.035), not current_gdp (0.030)
         # No negative sentiment → no GDP reduction → updated.gdp_growth ≈ 0.035
@@ -449,9 +483,12 @@ class TestSeasonalityConfig:
         """Metrics without seasonal adjustments pass through unchanged."""
         forecaster = TimeSeriesForecaster()
         pt = ForecastPoint(
-            period="2024-Q2", value=100.0,
-            lower_80=95.0, upper_80=105.0,
-            lower_95=92.0, upper_95=108.0,
+            period="2024-Q2",
+            value=100.0,
+            lower_80=95.0,
+            upper_80=105.0,
+            lower_95=92.0,
+            upper_95=108.0,
         )
         result = forecaster._apply_seasonal_adjustment([pt], "hsi_level", "2024-Q1")
         assert len(result) == 1
@@ -461,9 +498,12 @@ class TestSeasonalityConfig:
         """ccl_index Q1 should have a slight negative adjustment."""
         forecaster = TimeSeriesForecaster()
         pt = ForecastPoint(
-            period="2025-Q1", value=160.0,
-            lower_80=155.0, upper_80=165.0,
-            lower_95=152.0, upper_95=168.0,
+            period="2025-Q1",
+            value=160.0,
+            lower_80=155.0,
+            upper_80=165.0,
+            lower_95=152.0,
+            upper_95=168.0,
         )
         result = forecaster._apply_seasonal_adjustment([pt], "ccl_index", "2024-Q4")
         assert len(result) == 1
@@ -474,9 +514,12 @@ class TestSeasonalityConfig:
         """ccl_index Q2 should be unchanged (no adjustment defined)."""
         forecaster = TimeSeriesForecaster()
         pt = ForecastPoint(
-            period="2025-Q2", value=160.0,
-            lower_80=155.0, upper_80=165.0,
-            lower_95=152.0, upper_95=168.0,
+            period="2025-Q2",
+            value=160.0,
+            lower_80=155.0,
+            upper_80=165.0,
+            lower_95=152.0,
+            upper_95=168.0,
         )
         result = forecaster._apply_seasonal_adjustment([pt], "ccl_index", "2025-Q1")
         assert result[0] is pt  # unchanged
@@ -486,9 +529,12 @@ class TestSeasonalityConfig:
         forecaster = TimeSeriesForecaster()
         original_value = 160.0
         pt = ForecastPoint(
-            period="2025-Q1", value=original_value,
-            lower_80=155.0, upper_80=165.0,
-            lower_95=152.0, upper_95=168.0,
+            period="2025-Q1",
+            value=original_value,
+            lower_80=155.0,
+            upper_80=165.0,
+            lower_95=152.0,
+            upper_95=168.0,
         )
         _ = forecaster._apply_seasonal_adjustment([pt], "ccl_index", "2024-Q4")
         assert pt.value == original_value  # original unchanged
@@ -541,9 +587,7 @@ class TestForecastRolling:
         # Patch DB to return 0 rows; hardcoded baseline has 8 points.
         # window_size=24 > 8+1 → empty
         with self._mock_db_context([]):
-            result = await forecaster.forecast_rolling(
-                "ccl_index", window_size=24, horizon=1
-            )
+            result = await forecaster.forecast_rolling("ccl_index", window_size=24, horizon=1)
         assert result == []
 
     @pytest.mark.asyncio
@@ -551,11 +595,9 @@ class TestForecastRolling:
         """With enough data, rolling should return ForecastPoint objects."""
         forecaster = TimeSeriesForecaster()
         # Build 30 synthetic rows (enough for window=20, horizon=1)
-        rows = [(f"202{i//4}-Q{(i%4)+1}", float(150 + i)) for i in range(30)]
+        rows = [(f"202{i // 4}-Q{(i % 4) + 1}", float(150 + i)) for i in range(30)]
         with self._mock_db_context(rows):
-            result = await forecaster.forecast_rolling(
-                "ccl_index", window_size=20, horizon=1
-            )
+            result = await forecaster.forecast_rolling("ccl_index", window_size=20, horizon=1)
         assert len(result) > 0
         for pt in result:
             assert isinstance(pt, ForecastPoint)
@@ -565,11 +607,9 @@ class TestForecastRolling:
     async def test_rolling_periods_are_labelled(self):
         """Each rolling ForecastPoint should have a non-empty period string."""
         forecaster = TimeSeriesForecaster()
-        rows = [(f"202{i//4}-Q{(i%4)+1}", float(150 + i)) for i in range(30)]
+        rows = [(f"202{i // 4}-Q{(i % 4) + 1}", float(150 + i)) for i in range(30)]
         with self._mock_db_context(rows):
-            result = await forecaster.forecast_rolling(
-                "ccl_index", window_size=20, horizon=1
-            )
+            result = await forecaster.forecast_rolling("ccl_index", window_size=20, horizon=1)
         for pt in result:
             assert pt.period != ""
 
@@ -577,11 +617,9 @@ class TestForecastRolling:
     async def test_rolling_ci_ordering(self):
         """lower_95 <= lower_80 <= value <= upper_80 <= upper_95 for all points."""
         forecaster = TimeSeriesForecaster()
-        rows = [(f"202{i//4}-Q{(i%4)+1}", float(0.028 + i * 0.001)) for i in range(30)]
+        rows = [(f"202{i // 4}-Q{(i % 4) + 1}", float(0.028 + i * 0.001)) for i in range(30)]
         with self._mock_db_context(rows):
-            result = await forecaster.forecast_rolling(
-                "gdp_growth", window_size=20, horizon=1
-            )
+            result = await forecaster.forecast_rolling("gdp_growth", window_size=20, horizon=1)
         for pt in result:
             assert pt.lower_95 <= pt.lower_80, f"CI ordering violated at {pt.period}"
             assert pt.upper_80 <= pt.upper_95, f"CI ordering violated at {pt.period}"
@@ -590,12 +628,10 @@ class TestForecastRolling:
     async def test_rolling_horizon_clamped_to_4(self):
         """horizon > 4 should be clamped to 4."""
         forecaster = TimeSeriesForecaster()
-        rows = [(f"202{i//4}-Q{(i%4)+1}", float(150 + i)) for i in range(40)]
+        rows = [(f"202{i // 4}-Q{(i % 4) + 1}", float(150 + i)) for i in range(40)]
         with self._mock_db_context(rows):
             # Should not raise; horizon clamped internally
-            result = await forecaster.forecast_rolling(
-                "ccl_index", window_size=20, horizon=99
-            )
+            result = await forecaster.forecast_rolling("ccl_index", window_size=20, horizon=99)
         # Result may be empty if window+horizon > n, but no crash
         assert isinstance(result, list)
 
@@ -638,8 +674,8 @@ class TestForecastMultivariate:
         forecaster = TimeSeriesForecaster()
 
         # Build 25 rows of synthetic data (enough for VAR)
-        rows_property = [(f"201{i//4}-Q{(i%4)+1}", float(150 + i)) for i in range(25)]
-        rows_gdp = [(f"201{i//4}-Q{(i%4)+1}", float(0.025 + i * 0.001)) for i in range(25)]
+        rows_property = [(f"201{i // 4}-Q{(i % 4) + 1}", float(150 + i)) for i in range(25)]
+        rows_gdp = [(f"201{i // 4}-Q{(i % 4) + 1}", float(0.025 + i * 0.001)) for i in range(25)]
 
         call_count = 0
 
@@ -659,6 +695,7 @@ class TestForecastMultivariate:
 
         # If statsmodels is available, result should be a dict; otherwise None
         import importlib
+
         var_mod = importlib.import_module("backend.app.services.var_forecaster")
         if var_mod.HAS_STATSMODELS:
             # May still be None if group metrics aren't all qualified; accept both
@@ -671,7 +708,7 @@ class TestForecastMultivariate:
         """If VARForecaster raises internally, forecast_multivariate returns None."""
         forecaster = TimeSeriesForecaster()
 
-        rows = [(f"201{i//4}-Q{(i%4)+1}", float(0.025 + i * 0.001)) for i in range(25)]
+        rows = [(f"201{i // 4}-Q{(i % 4) + 1}", float(0.025 + i * 0.001)) for i in range(25)]
 
         async def _mock_load(metric: str) -> list:
             return rows
@@ -703,18 +740,19 @@ class TestVARForecaster:
         if metrics is None:
             metrics = ["unemployment_rate", "consumer_confidence", "gdp_growth"]
         return {
-            m: [(f"201{i//4}-Q{(i%4)+1}", float(0.03 + i * 0.001 + j * 0.1))
-                for i in range(n)]
+            m: [(f"201{i // 4}-Q{(i % 4) + 1}", float(0.03 + i * 0.001 + j * 0.1)) for i in range(n)]
             for j, m in enumerate(metrics)
         }
 
     def test_align_series_empty_returns_none(self):
         from backend.app.services.var_forecaster import VARForecaster
+
         var = VARForecaster()
         assert var._align_series({}) is None
 
     def test_align_series_no_common_periods(self):
         from backend.app.services.var_forecaster import VARForecaster
+
         var = VARForecaster()
         series = {
             "a": [("2020-Q1", 1.0)],
@@ -724,6 +762,7 @@ class TestVARForecaster:
 
     def test_align_series_common_periods(self):
         from backend.app.services.var_forecaster import VARForecaster
+
         var = VARForecaster()
         series = {
             "a": [("2020-Q1", 1.0), ("2020-Q2", 2.0)],
@@ -737,6 +776,7 @@ class TestVARForecaster:
 
     def test_forecast_group_insufficient_data_returns_none(self):
         from backend.app.services.var_forecaster import VARForecaster
+
         var = VARForecaster()
         # Only 5 observations — well below _MIN_VAR_POINTS=20
         series = {
@@ -748,6 +788,7 @@ class TestVARForecaster:
 
     def test_forecast_group_no_common_periods_returns_none(self):
         from backend.app.services.var_forecaster import VARForecaster
+
         var = VARForecaster()
         series = {
             "a": [("2020-Q1", 1.0)],
@@ -758,21 +799,25 @@ class TestVARForecaster:
 
     def test_var_period_labels(self):
         from backend.app.services.var_forecaster import _next_period_labels
+
         labels = _next_period_labels("2024-Q3", 3)
         assert labels == ["2024-Q4", "2025-Q1", "2025-Q2"]
 
     def test_var_period_labels_annual(self):
         from backend.app.services.var_forecaster import _next_period_labels
+
         labels = _next_period_labels("2023", 3)
         assert labels == ["2024", "2025", "2026"]
 
     def test_var_period_labels_fallback(self):
         from backend.app.services.var_forecaster import _next_period_labels
+
         labels = _next_period_labels("unknown", 2)
         assert labels == ["t+1", "t+2"]
 
     def test_var_groups_defined(self):
         from backend.app.services.var_forecaster import VAR_GROUPS
+
         assert "property" in VAR_GROUPS
         assert "labour" in VAR_GROUPS
         assert "market" in VAR_GROUPS
@@ -803,11 +848,13 @@ class TestNewMetricsInSupportedSet:
 
     def test_new_metrics_in_metric_db_map(self):
         from backend.app.services.time_series_forecaster import METRIC_DB_MAP
+
         for m in _NEW_METRICS:
             assert m in METRIC_DB_MAP, f"{m} missing from METRIC_DB_MAP"
 
     def test_new_metrics_db_map_tuple_structure(self):
         from backend.app.services.time_series_forecaster import METRIC_DB_MAP
+
         for m in _NEW_METRICS:
             cat, key = METRIC_DB_MAP[m]
             assert isinstance(cat, str) and cat, f"{m}: category must be non-empty str"
@@ -827,8 +874,9 @@ class TestNewMetricsNoHardcodedBaseline:
     """Verify _hardcoded_baseline was removed — no synthetic baselines allowed."""
 
     def test_no_hardcoded_baseline_method(self):
-        assert not hasattr(TimeSeriesForecaster, "_hardcoded_baseline"), \
+        assert not hasattr(TimeSeriesForecaster, "_hardcoded_baseline"), (
             "_hardcoded_baseline should be removed — no synthetic data"
+        )
 
 
 class TestNewMetricsForecast:
@@ -909,8 +957,9 @@ class TestNewMetricsForecast:
 class TestBacktestResultCoverage80:
     """Tests for the coverage_80 field on BacktestResult."""
 
-    def _make_result(self, coverage_80: float = 0.75) -> "BacktestResult":
+    def _make_result(self, coverage_80: float = 0.75) -> BacktestResult:
         from backend.app.services.backtester import BacktestResult
+
         return BacktestResult(
             metric="gdp_growth",
             train_start="2015-Q1",
@@ -935,6 +984,7 @@ class TestBacktestResultCoverage80:
 
     def test_backtest_result_frozen_coverage_80(self):
         import dataclasses as dc
+
         result = self._make_result(0.80)
         with pytest.raises((dc.FrozenInstanceError, AttributeError)):
             result.coverage_80 = 0.5  # type: ignore[misc]
@@ -954,6 +1004,7 @@ class TestBacktestResultCoverage80:
     def test_compute_coverage_80_all_covered(self):
         """All actuals within CI → coverage = 1.0."""
         from backend.app.services.backtester import _compute_coverage_80
+
         actuals = np.array([1.0, 2.0, 3.0])
         lower = np.array([0.5, 1.5, 2.5])
         upper = np.array([1.5, 2.5, 3.5])
@@ -962,6 +1013,7 @@ class TestBacktestResultCoverage80:
     def test_compute_coverage_80_none_covered(self):
         """No actuals within CI → coverage = 0.0."""
         from backend.app.services.backtester import _compute_coverage_80
+
         actuals = np.array([10.0, 20.0, 30.0])
         lower = np.array([0.0, 0.0, 0.0])
         upper = np.array([1.0, 1.0, 1.0])
@@ -970,6 +1022,7 @@ class TestBacktestResultCoverage80:
     def test_compute_coverage_80_partial_coverage(self):
         """Half actuals within CI → coverage ≈ 0.5."""
         from backend.app.services.backtester import _compute_coverage_80
+
         actuals = np.array([1.0, 100.0])
         lower = np.array([0.5, 0.5])
         upper = np.array([1.5, 1.5])
@@ -977,6 +1030,7 @@ class TestBacktestResultCoverage80:
 
     def test_compute_coverage_80_empty_returns_zero(self):
         from backend.app.services.backtester import _compute_coverage_80
+
         result = _compute_coverage_80(
             np.array([], dtype=np.float64),
             np.array([], dtype=np.float64),
@@ -992,10 +1046,7 @@ class TestBacktestResultCoverage80:
         bt = Backtester()
 
         # Patch _load_history so it uses hardcoded 30-point data
-        history = [
-            (_quarter_label(2015, 1, i), 0.025 + i * 0.0005)
-            for i in range(32)
-        ]
+        history = [(_quarter_label(2015, 1, i), 0.025 + i * 0.0005) for i in range(32)]
 
         async def _mock_load(metric: str) -> list:
             return history

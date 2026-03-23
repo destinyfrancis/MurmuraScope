@@ -14,6 +14,7 @@ Completely gated: only active in kg_driven mode + emergence_enabled=True.
 hk_demographic mode is completely unaffected.
 LLM cost: 0.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -21,7 +22,6 @@ from typing import Any
 
 from backend.app.models.relationship_state import RelationshipState
 from backend.app.services.relationship_engine import RelationshipEngine
-from backend.app.utils.db import get_db
 from backend.app.utils.logger import get_logger
 
 logger = get_logger("relationship_lifecycle")
@@ -41,7 +41,7 @@ _CRISIS_NEGATIVITY_SIGNAL = -0.5  # valence below this → suspicious for horsem
 _DISSOLVED_COMMITMENT_MAX = 0.1
 _DISSOLVED_TRUST_MAX = -0.3
 
-_STAGNATED_ROUNDS = 5      # rounds_since_change >= this → stagnated
+_STAGNATED_ROUNDS = 5  # rounds_since_change >= this → stagnated
 
 # ---------------------------------------------------------------------------
 # Event record
@@ -105,37 +105,32 @@ class RelationshipLifecycleService:
             valence = valences.get(pair, 0.0)
 
             # FORMED
-            if (
-                pair not in formed
-                and state.trust >= _FORMED_TRUST_MIN
-                and state.intimacy >= _FORMED_INTIMACY_MIN
-            ):
+            if pair not in formed and state.trust >= _FORMED_TRUST_MIN and state.intimacy >= _FORMED_INTIMACY_MIN:
                 formed.add(pair)
-                events.append(RelationshipEvent(
-                    session_id=session_id,
-                    round_number=round_number,
-                    agent_a_id=aid,
-                    agent_b_id=bid,
-                    event_type="RELATIONSHIP_FORMED",
-                    payload=(
-                        f"trust={state.trust:.2f} intimacy={state.intimacy:.2f}"
-                    ),
-                ))
+                events.append(
+                    RelationshipEvent(
+                        session_id=session_id,
+                        round_number=round_number,
+                        agent_a_id=aid,
+                        agent_b_id=bid,
+                        event_type="RELATIONSHIP_FORMED",
+                        payload=(f"trust={state.trust:.2f} intimacy={state.intimacy:.2f}"),
+                    )
+                )
 
             # DEEPENED
-            if (
-                pair not in deepened
-                and state.commitment >= _DEEPENED_COMMITMENT_THRESHOLD
-            ):
+            if pair not in deepened and state.commitment >= _DEEPENED_COMMITMENT_THRESHOLD:
                 deepened.add(pair)
-                events.append(RelationshipEvent(
-                    session_id=session_id,
-                    round_number=round_number,
-                    agent_a_id=aid,
-                    agent_b_id=bid,
-                    event_type="RELATIONSHIP_DEEPENED",
-                    payload=f"commitment={state.commitment:.2f}",
-                ))
+                events.append(
+                    RelationshipEvent(
+                        session_id=session_id,
+                        round_number=round_number,
+                        agent_a_id=aid,
+                        agent_b_id=bid,
+                        event_type="RELATIONSHIP_DEEPENED",
+                        payload=f"commitment={state.commitment:.2f}",
+                    )
+                )
 
             # CRISIS / DISSOLVED — compute Gottman scores once for negative interactions
             gottman_avg = 0.0
@@ -144,57 +139,51 @@ class RelationshipLifecycleService:
                     interaction_valence=valence,
                     contempt_signal=max(0.0, -valence - 0.3),
                     defensiveness_signal=max(0.0, -valence - 0.2),
-                    stonewalling_signal=(
-                        0.5 if state.rounds_since_change > 2 else 0.0
-                    ),
+                    stonewalling_signal=(0.5 if state.rounds_since_change > 2 else 0.0),
                 )
                 gottman_avg = sum(gottman.values()) / max(len(gottman), 1)
                 if gottman_avg >= _CRISIS_GOTTMAN_THRESHOLD:
-                    events.append(RelationshipEvent(
+                    events.append(
+                        RelationshipEvent(
+                            session_id=session_id,
+                            round_number=round_number,
+                            agent_a_id=aid,
+                            agent_b_id=bid,
+                            event_type="RELATIONSHIP_CRISIS",
+                            payload=(f"gottman_avg={gottman_avg:.2f} contempt={gottman['contempt']:.2f}"),
+                        )
+                    )
+
+            # DISSOLVED — original condition OR Gottman horsemen overwhelm (>0.8)
+            if gottman_avg > 0.8 or (
+                state.commitment < _DISSOLVED_COMMITMENT_MAX and state.trust < _DISSOLVED_TRUST_MAX
+            ):
+                events.append(
+                    RelationshipEvent(
                         session_id=session_id,
                         round_number=round_number,
                         agent_a_id=aid,
                         agent_b_id=bid,
-                        event_type="RELATIONSHIP_CRISIS",
-                        payload=(
-                            f"gottman_avg={gottman_avg:.2f} "
-                            f"contempt={gottman['contempt']:.2f}"
-                        ),
-                    ))
-
-            # DISSOLVED — original condition OR Gottman horsemen overwhelm (>0.8)
-            if gottman_avg > 0.8 or (
-                state.commitment < _DISSOLVED_COMMITMENT_MAX
-                and state.trust < _DISSOLVED_TRUST_MAX
-            ):
-                events.append(RelationshipEvent(
-                    session_id=session_id,
-                    round_number=round_number,
-                    agent_a_id=aid,
-                    agent_b_id=bid,
-                    event_type="RELATIONSHIP_DISSOLVED",
-                    payload=(
-                        f"commitment={state.commitment:.2f} "
-                        f"trust={state.trust:.2f}"
-                    ),
-                ))
+                        event_type="RELATIONSHIP_DISSOLVED",
+                        payload=(f"commitment={state.commitment:.2f} trust={state.trust:.2f}"),
+                    )
+                )
                 # Reset formed/deepened so relationship can re-form
                 formed.discard(pair)
                 deepened.discard(pair)
 
             # STAGNATED — self-expansion theory: no growth → relationship drifts
             if state.rounds_since_change >= _STAGNATED_ROUNDS:
-                events.append(RelationshipEvent(
-                    session_id=session_id,
-                    round_number=round_number,
-                    agent_a_id=aid,
-                    agent_b_id=bid,
-                    event_type="RELATIONSHIP_STAGNATED",
-                    payload=(
-                        f"rounds_since_change={state.rounds_since_change} "
-                        f"intimacy={state.intimacy:.2f}"
-                    ),
-                ))
+                events.append(
+                    RelationshipEvent(
+                        session_id=session_id,
+                        round_number=round_number,
+                        agent_a_id=aid,
+                        agent_b_id=bid,
+                        event_type="RELATIONSHIP_STAGNATED",
+                        payload=(f"rounds_since_change={state.rounds_since_change} intimacy={state.intimacy:.2f}"),
+                    )
+                )
 
         return events
 
@@ -235,12 +224,12 @@ class RelationshipLifecycleService:
             await db.commit()
             logger.debug(
                 "Persisted %d relationship events session=%s round=%d",
-                len(events), events[0].session_id, events[0].round_number,
+                len(events),
+                events[0].session_id,
+                events[0].round_number,
             )
         except Exception:
-            logger.exception(
-                "persist_events failed for %d events", len(events)
-            )
+            logger.exception("persist_events failed for %d events", len(events))
 
     def cleanup_session(self, session_id: str) -> None:
         """Release per-session tracking state."""

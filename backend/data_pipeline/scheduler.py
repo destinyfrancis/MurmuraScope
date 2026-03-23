@@ -15,7 +15,6 @@ Usage (from backend startup):
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass
 from typing import Any
 
@@ -30,11 +29,11 @@ class ScheduledJob:
 
     name: str
     categories: tuple[str, ...]
-    trigger: str        # "cron" trigger type
+    trigger: str  # "cron" trigger type
     hour: int | str
     minute: int
     day_of_week: str | None  # None means every day
-    day: str | None          # "1" means first of month
+    day: str | None  # "1" means first of month
 
 
 class DataScheduler:
@@ -59,7 +58,7 @@ class DataScheduler:
             trigger="cron",
             hour=8,
             minute=0,
-            day_of_week=None,   # every day
+            day_of_week=None,  # every day
             day=None,
         ),
         ScheduledJob(
@@ -96,7 +95,7 @@ class DataScheduler:
             hour=2,
             minute=0,
             day_of_week=None,
-            day="1",            # 1st of each month
+            day="1",  # 1st of each month
         ),
         ScheduledJob(
             name="monthly_china_macro",
@@ -105,11 +104,11 @@ class DataScheduler:
             hour=3,
             minute=0,
             day_of_week=None,
-            day="2",            # 2nd of each month
+            day="2",  # 2nd of each month
         ),
         ScheduledJob(
             name="weekly_calibration",
-            categories=(),       # empty = calibration pipeline, not download
+            categories=(),  # empty = calibration pipeline, not download
             trigger="cron",
             hour=4,
             minute=0,
@@ -133,11 +132,11 @@ class DataScheduler:
         if self._scheduler is None:
             try:
                 from apscheduler.schedulers.asyncio import AsyncIOScheduler  # type: ignore[import]
+
                 self._scheduler = AsyncIOScheduler(timezone="Asia/Hong_Kong")
             except ImportError as exc:
                 raise RuntimeError(
-                    "APScheduler is required for the data scheduler. "
-                    "Install with: pip install 'apscheduler>=3.10'"
+                    "APScheduler is required for the data scheduler. Install with: pip install 'apscheduler>=3.10'"
                 ) from exc
         return self._scheduler
 
@@ -152,24 +151,29 @@ class DataScheduler:
             async def _calibration_job() -> None:
                 try:
                     from backend.data_pipeline.calibration import CalibrationPipeline
+
                     logger.info("Scheduler: starting calibration pipeline")
                     pipeline = CalibrationPipeline()
                     await pipeline.run_calibration()
                     logger.info("Scheduler: calibration complete")
                 except Exception:
                     logger.exception("Scheduler calibration job failed")
+
             return _calibration_job
 
         async def _job() -> None:
             try:
                 from backend.data_pipeline.download_all import run_pipeline  # avoid circular at module level
+
                 logger.info("Scheduler: starting download for %s", categories)
                 summaries = await run_pipeline(categories=categories, normalize=normalize)
                 total = sum(s.total_records for s in summaries)
                 errors = [s for s in summaries if s.error]
                 logger.info(
                     "Scheduler: completed %s — %d records, %d errors",
-                    categories, total, len(errors),
+                    categories,
+                    total,
+                    len(errors),
                 )
             except Exception:
                 logger.exception("Scheduler job failed for categories: %s", categories)
@@ -253,7 +257,6 @@ class DataScheduler:
 
 def _standalone_demo() -> None:
     """Run scheduler demo (does not download — just shows job registration)."""
-    import time
 
     scheduler = DataScheduler(normalize=False)
     logger.info("Registered jobs: %s", scheduler.job_names)

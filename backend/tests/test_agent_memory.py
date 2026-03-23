@@ -12,8 +12,7 @@ def test_salience_floor_constant_is_above_prune_threshold():
     )
 
     assert _SALIENCE_MIN_FLOOR > _SALIENCE_PRUNE_THRESHOLD, (
-        f"Floor ({_SALIENCE_MIN_FLOOR}) must exceed prune threshold "
-        f"({_SALIENCE_PRUNE_THRESHOLD})"
+        f"Floor ({_SALIENCE_MIN_FLOOR}) must exceed prune threshold ({_SALIENCE_PRUNE_THRESHOLD})"
     )
 
 
@@ -28,6 +27,4 @@ def test_salience_stabilizes_after_many_rounds():
     salience = 0.8
     for _ in range(100):
         salience = max(salience * _SALIENCE_DECAY, _SALIENCE_MIN_FLOOR)
-    assert salience >= _SALIENCE_MIN_FLOOR, (
-        f"Salience should stabilize at floor, got {salience}"
-    )
+    assert salience >= _SALIENCE_MIN_FLOOR, f"Salience should stabilize at floor, got {salience}"

@@ -1,4 +1,5 @@
 """Tests for EmotionalEngine and EmotionalState models (Phase 3)."""
+
 from __future__ import annotations
 
 import random
@@ -10,10 +11,10 @@ import pytest
 from backend.app.models.emotional_state import INCOME_QUARTILE, EmotionalState
 from backend.app.services.emotional_engine import EmotionalEngine
 
-
 # ---------------------------------------------------------------------------
 # Helper fixtures
 # ---------------------------------------------------------------------------
+
 
 def _make_profile(
     agent_id: int = 1,
@@ -54,6 +55,7 @@ def _state(
 # Model tests
 # ---------------------------------------------------------------------------
 
+
 def test_emotional_state_creation():
     """EmotionalState is a frozen dataclass with correct defaults."""
     es = EmotionalState(agent_id=1, session_id="s1", round_number=0)
@@ -90,6 +92,7 @@ def test_income_quartile_mapping():
 # ---------------------------------------------------------------------------
 # initialize_state tests
 # ---------------------------------------------------------------------------
+
 
 def test_initialize_state_returns_emotional_state():
     engine = EmotionalEngine()
@@ -165,6 +168,7 @@ def test_initialize_state_high_extraversion_high_arousal():
 # ---------------------------------------------------------------------------
 # update_state tests
 # ---------------------------------------------------------------------------
+
 
 def test_update_state_returns_new_state():
     """update_state returns a new EmotionalState object."""
@@ -299,6 +303,7 @@ def test_agreeable_boosts_social_influence():
 # Async persist/load tests (mock DB)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_persist_states():
     """persist_states should call executemany and commit."""
@@ -345,6 +350,7 @@ async def test_load_states():
 # TestNeuroticism — verifies neuroticism amplifies negative (not positive) shifts
 # ---------------------------------------------------------------------------
 
+
 class TestNeuroticism:
     """Neuroticism must amplify negative valence shifts and leave positive ones unchanged."""
 
@@ -366,14 +372,16 @@ class TestNeuroticism:
         engine = self._make_engine()
         start = self._start_state(valence=0.3)
         low_n = engine.update_state(
-            start, self._low_n_profile(),
+            start,
+            self._low_n_profile(),
             feed_sentiment_avg=-0.8,
             macro_shock_valence=0.0,
             personal_event_valence=0.0,
             controversy_exposure=0.0,
         )
         high_n = engine.update_state(
-            start, self._high_n_profile(),
+            start,
+            self._high_n_profile(),
             feed_sentiment_avg=-0.8,
             macro_shock_valence=0.0,
             personal_event_valence=0.0,
@@ -395,18 +403,23 @@ class TestNeuroticism:
 
         # With feed=+0.8 and macro=0, the delta IS positive, so the gate must not fire.
         low_n = engine.update_state(
-            start, self._low_n_profile(),
-            feed_sentiment_avg=0.8, macro_shock_valence=0.0,
-            personal_event_valence=0.0, controversy_exposure=0.0,
+            start,
+            self._low_n_profile(),
+            feed_sentiment_avg=0.8,
+            macro_shock_valence=0.0,
+            personal_event_valence=0.0,
+            controversy_exposure=0.0,
         )
         high_n = engine.update_state(
-            start, self._high_n_profile(),
-            feed_sentiment_avg=0.8, macro_shock_valence=0.0,
-            personal_event_valence=0.0, controversy_exposure=0.0,
+            start,
+            self._high_n_profile(),
+            feed_sentiment_avg=0.8,
+            macro_shock_valence=0.0,
+            personal_event_valence=0.0,
+            controversy_exposure=0.0,
         )
         # When gate doesn't fire, high-N should not land lower than low-N
         # (high-N may land SLIGHTLY higher due to macro_coef scaling, but not lower)
         assert high_n.valence >= low_n.valence - 1e-6, (
-            f"Neuroticism gate must not fire for positive delta: "
-            f"high_n={high_n.valence:.4f}, low_n={low_n.valence:.4f}"
+            f"Neuroticism gate must not fire for positive delta: high_n={high_n.valence:.4f}, low_n={low_n.valence:.4f}"
         )

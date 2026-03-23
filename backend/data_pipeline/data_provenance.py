@@ -121,10 +121,7 @@ async def record_fetch(
 ) -> None:
     """Insert one provenance row for a data fetch operation."""
     if source_type not in _VALID_SOURCE_TYPES:
-        raise ValueError(
-            f"Invalid source_type '{source_type}'; "
-            f"must be one of {sorted(_VALID_SOURCE_TYPES)}"
-        )
+        raise ValueError(f"Invalid source_type '{source_type}'; must be one of {sorted(_VALID_SOURCE_TYPES)}")
     if record_count < 0:
         raise ValueError(f"record_count must be >= 0, got {record_count}")
 

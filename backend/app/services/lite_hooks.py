@@ -11,6 +11,7 @@ from uniform random.  This means different agents react differently to the
 same event, and different random seeds produce meaningfully different
 collective trajectories.
 """
+
 from __future__ import annotations
 
 import math
@@ -20,7 +21,6 @@ from typing import Any
 
 from backend.app.models.world_event import WorldEvent
 from backend.app.services.cognitive_agent_engine import DeliberationResult
-from backend.app.services.constants import HC_EPSILON
 from backend.app.utils.logger import get_logger
 
 logger = get_logger("lite_hooks")
@@ -109,15 +109,17 @@ def generate_lite_events(
             f"(impact: {', '.join(f'{k}:{v:+.2f}' for k, v in impact.items())})"
         )
 
-        events.append(WorldEvent(
-            event_id=f"lite_{round_number}_{i}_{uuid.uuid4().hex[:6]}",
-            round_number=round_number,
-            content=content,
-            event_type=etype,
-            reach=("ALL",),
-            impact_vector=impact,
-            credibility=round(credibility, 3),
-        ))
+        events.append(
+            WorldEvent(
+                event_id=f"lite_{round_number}_{i}_{uuid.uuid4().hex[:6]}",
+                round_number=round_number,
+                content=content,
+                event_type=etype,
+                reach=("ALL",),
+                impact_vector=impact,
+                credibility=round(credibility, 3),
+            )
+        )
 
     return events
 
@@ -186,9 +188,9 @@ def deliberate_lite(
             belief_direction = 1.0 if current > 0.5 else -1.0
             dogmatism = 1.0 - agent.get("openness", 0.5)
             if event_direction == belief_direction:
-                confirmation = 1.0 + 0.4 * dogmatism      # [1.0, 1.4]
+                confirmation = 1.0 + 0.4 * dogmatism  # [1.0, 1.4]
             else:
-                confirmation = 1.0 - 0.5 * dogmatism       # [0.5, 1.0]
+                confirmation = 1.0 - 0.5 * dogmatism  # [0.5, 1.0]
 
             # Cognitive fingerprint modulation
             susceptibility = cf.get("susceptibility", 0.5)
@@ -198,10 +200,7 @@ def deliberate_lite(
             belief_updates[metric] = belief_updates.get(metric, 0.0) + adjusted_delta
 
     # Round and cap updates
-    belief_updates = {
-        k: round(max(-0.25, min(0.25, v)), 4)
-        for k, v in belief_updates.items()
-    }
+    belief_updates = {k: round(max(-0.25, min(0.25, v)), 4) for k, v in belief_updates.items()}
 
     # Strategic momentum: bias toward consistency with previous decision.
     # Conscientiousness modulates persistence (high = more sticky).
@@ -210,7 +209,8 @@ def deliberate_lite(
         sign = 1.0 if prev_decision == "escalate" else -1.0
         nudge = sign * 0.03 * (0.5 + agent.get("conscientiousness", 0.5))
         belief_updates[momentum_metric] = round(
-            max(-0.25, min(0.25, belief_updates[momentum_metric] + nudge)), 4,
+            max(-0.25, min(0.25, belief_updates[momentum_metric] + nudge)),
+            4,
         )
 
     # Decision: pick action based on strongest belief shift
@@ -245,10 +245,14 @@ def deliberate_lite(
 
     # Reasoning: template based on decision
     reasoning = (
-        f"基於 {len(events)} 個事件分析，{strongest_metric if belief_updates else '局勢'}"
-        f"趨勢{'上升' if belief_updates.get(strongest_metric if belief_updates else '', 0) > 0 else '下降'}，"
-        f"選擇 {decision}。"
-    ) if belief_updates else "當前局勢穩定，繼續觀察。"
+        (
+            f"基於 {len(events)} 個事件分析，{strongest_metric if belief_updates else '局勢'}"
+            f"趨勢{'上升' if belief_updates.get(strongest_metric if belief_updates else '', 0) > 0 else '下降'}，"
+            f"選擇 {decision}。"
+        )
+        if belief_updates
+        else "當前局勢穩定，繼續觀察。"
+    )
 
     return DeliberationResult(
         agent_id=agent_id,
@@ -264,6 +268,7 @@ def deliberate_lite(
 # ---------------------------------------------------------------------------
 # 3. Rule-based consensus debate
 # ---------------------------------------------------------------------------
+
 
 def debate_lite(
     agent_a: dict[str, Any],
@@ -345,10 +350,7 @@ def run_debate_round_lite(
 
     divergent_topics: list[tuple[str, float]] = []
     for metric in all_metrics:
-        vals = [
-            agent_beliefs.get(a.get("id", ""), {}).get(metric, 0.5)
-            for a in stakeholder_agents
-        ]
+        vals = [agent_beliefs.get(a.get("id", ""), {}).get(metric, 0.5) for a in stakeholder_agents]
         if len(vals) < 2:
             continue
         mean = sum(vals) / len(vals)

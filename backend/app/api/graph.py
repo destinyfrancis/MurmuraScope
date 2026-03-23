@@ -11,8 +11,8 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
-from backend.app.api.auth import _limiter
 
+from backend.app.api.auth import _limiter
 from backend.app.models.request import GraphBuildRequest
 from backend.app.models.response import APIResponse, GraphBuildResponse
 from backend.app.services.implicit_stakeholder_service import ImplicitStakeholderService
@@ -32,57 +32,255 @@ _HK_PROPERTY_NODES: list[dict[str, Any]] = [
     {"id": "district_cwb", "type": "location", "label": "中西區", "description": "香港島核心商業及住宅區", "size": 14},
     {"id": "district_kc", "type": "location", "label": "九龍城", "description": "九龍半島傳統住宅區", "size": 12},
     {"id": "district_st", "type": "location", "label": "沙田", "description": "新界東新市鎮，發展成熟", "size": 13},
-    {"id": "district_yl", "type": "location", "label": "元朗", "description": "新界西北，北部都會區發展重點", "size": 12},
-    {"id": "district_lantau", "type": "location", "label": "大嶼山", "description": "機場島，北大嶼山新發展區", "size": 11},
+    {
+        "id": "district_yl",
+        "type": "location",
+        "label": "元朗",
+        "description": "新界西北，北部都會區發展重點",
+        "size": 12,
+    },
+    {
+        "id": "district_lantau",
+        "type": "location",
+        "label": "大嶼山",
+        "description": "機場島，北大嶼山新發展區",
+        "size": 11,
+    },
     # Banks (organization)
     {"id": "bank_hsbc", "type": "organization", "label": "滙豐銀行", "description": "香港最大按揭銀行之一", "size": 13},
     {"id": "bank_hase", "type": "organization", "label": "恒生銀行", "description": "本地最大零售銀行之一", "size": 12},
-    {"id": "bank_bochk", "type": "organization", "label": "中銀香港", "description": "主要發鈔銀行，按揭市場份額大", "size": 12},
-    {"id": "bank_sc", "type": "organization", "label": "渣打銀行", "description": "國際銀行，提供多元按揭產品", "size": 11},
+    {
+        "id": "bank_bochk",
+        "type": "organization",
+        "label": "中銀香港",
+        "description": "主要發鈔銀行，按揭市場份額大",
+        "size": 12,
+    },
+    {
+        "id": "bank_sc",
+        "type": "organization",
+        "label": "渣打銀行",
+        "description": "國際銀行，提供多元按揭產品",
+        "size": 11,
+    },
     # Developers (organization)
     {"id": "dev_shk", "type": "organization", "label": "新鴻基地產", "description": "香港最大地產商之一", "size": 14},
     {"id": "dev_ck", "type": "organization", "label": "長江實業", "description": "李嘉誠家族旗下地產商", "size": 13},
-    {"id": "dev_henderson", "type": "organization", "label": "恒基地產", "description": "李兆基家族旗下地產商", "size": 12},
+    {
+        "id": "dev_henderson",
+        "type": "organization",
+        "label": "恒基地產",
+        "description": "李兆基家族旗下地產商",
+        "size": 12,
+    },
     # Policies (policy)
     {"id": "policy_bsd", "type": "policy", "label": "印花稅措施", "description": "BSD/SSD，2024年全面撤辣", "size": 13},
-    {"id": "policy_mip", "type": "policy", "label": "按揭保險計劃", "description": "HKMC按揭保險，提高上車成數", "size": 12},
-    {"id": "policy_stress", "type": "policy", "label": "壓力測試", "description": "HKMA按揭壓力測試（+2%利率）", "size": 12},
+    {
+        "id": "policy_mip",
+        "type": "policy",
+        "label": "按揭保險計劃",
+        "description": "HKMC按揭保險，提高上車成數",
+        "size": 12,
+    },
+    {
+        "id": "policy_stress",
+        "type": "policy",
+        "label": "壓力測試",
+        "description": "HKMA按揭壓力測試（+2%利率）",
+        "size": 12,
+    },
     {"id": "policy_vacancy", "type": "policy", "label": "空置稅", "description": "針對一手空置單位嘅稅項", "size": 10},
-    {"id": "policy_ndd", "type": "policy", "label": "北部都會區", "description": "新界北部發展計劃，30萬新住宅單位", "size": 13},
+    {
+        "id": "policy_ndd",
+        "type": "policy",
+        "label": "北部都會區",
+        "description": "新界北部發展計劃，30萬新住宅單位",
+        "size": 13,
+    },
     # Economic Indicators (economic)
-    {"id": "econ_hibor", "type": "economic", "label": "HIBOR利率", "description": "銀行同業拆息，影響按揭利率", "size": 14},
-    {"id": "econ_prime", "type": "economic", "label": "最優惠利率", "description": "Prime Rate，按揭定價基準", "size": 13},
-    {"id": "econ_ccl", "type": "economic", "label": "中原城市領先指數", "description": "CCL樓價指數，追蹤二手住宅價格", "size": 14},
-    {"id": "econ_unemp", "type": "economic", "label": "失業率", "description": "香港整體失業率，影響置業信心", "size": 12},
-    {"id": "econ_cpi", "type": "economic", "label": "通脹率", "description": "消費物價指數，影響實際購買力", "size": 11},
+    {
+        "id": "econ_hibor",
+        "type": "economic",
+        "label": "HIBOR利率",
+        "description": "銀行同業拆息，影響按揭利率",
+        "size": 14,
+    },
+    {
+        "id": "econ_prime",
+        "type": "economic",
+        "label": "最優惠利率",
+        "description": "Prime Rate，按揭定價基準",
+        "size": 13,
+    },
+    {
+        "id": "econ_ccl",
+        "type": "economic",
+        "label": "中原城市領先指數",
+        "description": "CCL樓價指數，追蹤二手住宅價格",
+        "size": 14,
+    },
+    {
+        "id": "econ_unemp",
+        "type": "economic",
+        "label": "失業率",
+        "description": "香港整體失業率，影響置業信心",
+        "size": 12,
+    },
+    {
+        "id": "econ_cpi",
+        "type": "economic",
+        "label": "通脹率",
+        "description": "消費物價指數，影響實際購買力",
+        "size": 11,
+    },
     {"id": "econ_gdp", "type": "economic", "label": "GDP增長", "description": "香港本地生產總值增長率", "size": 12},
     # Person types (person)
-    {"id": "person_ftb", "type": "person", "label": "首置買家", "description": "首次置業人士，主要受按揭保險及印花稅影響", "size": 14},
-    {"id": "person_upgrader", "type": "person", "label": "換樓客", "description": "現有業主換樓，受SSD及印花稅影響", "size": 13},
-    {"id": "person_investor", "type": "person", "label": "投資者", "description": "物業投資者，受BSD及租金回報影響", "size": 12},
-    {"id": "person_renter", "type": "person", "label": "租客", "description": "無力置業人士，主要關注租金走勢", "size": 12},
+    {
+        "id": "person_ftb",
+        "type": "person",
+        "label": "首置買家",
+        "description": "首次置業人士，主要受按揭保險及印花稅影響",
+        "size": 14,
+    },
+    {
+        "id": "person_upgrader",
+        "type": "person",
+        "label": "換樓客",
+        "description": "現有業主換樓，受SSD及印花稅影響",
+        "size": 13,
+    },
+    {
+        "id": "person_investor",
+        "type": "person",
+        "label": "投資者",
+        "description": "物業投資者，受BSD及租金回報影響",
+        "size": 12,
+    },
+    {
+        "id": "person_renter",
+        "type": "person",
+        "label": "租客",
+        "description": "無力置業人士，主要關注租金走勢",
+        "size": 12,
+    },
     # Social phenomena (social)
-    {"id": "social_afford", "type": "social", "label": "上車難問題", "description": "年輕人置業困難，樓價收入比全球最高", "size": 14},
-    {"id": "social_emigrate", "type": "social", "label": "移民潮", "description": "香港居民淨移出，影響樓市需求", "size": 13},
-    {"id": "social_confidence", "type": "social", "label": "置業信心", "description": "市場對樓市走勢嘅整體信心指標", "size": 13},
+    {
+        "id": "social_afford",
+        "type": "social",
+        "label": "上車難問題",
+        "description": "年輕人置業困難，樓價收入比全球最高",
+        "size": 14,
+    },
+    {
+        "id": "social_emigrate",
+        "type": "social",
+        "label": "移民潮",
+        "description": "香港居民淨移出，影響樓市需求",
+        "size": 13,
+    },
+    {
+        "id": "social_confidence",
+        "type": "social",
+        "label": "置業信心",
+        "description": "市場對樓市走勢嘅整體信心指標",
+        "size": 13,
+    },
     # External — US / Global (economic)
-    {"id": "ext_fed", "type": "economic", "label": "美聯儲利率", "description": "聯邦基金利率，透過聯繫匯率直接影響HIBOR及按揭利率", "size": 15},
-    {"id": "ext_usd_hkd", "type": "economic", "label": "聯繫匯率", "description": "美元/港元7.75-7.85聯繫匯率制度，港元利率跟隨美元", "size": 13},
-    {"id": "ext_us_recession", "type": "economic", "label": "美國衰退風險", "description": "美國經濟衰退機率，影響全球資金風險偏好", "size": 11},
+    {
+        "id": "ext_fed",
+        "type": "economic",
+        "label": "美聯儲利率",
+        "description": "聯邦基金利率，透過聯繫匯率直接影響HIBOR及按揭利率",
+        "size": 15,
+    },
+    {
+        "id": "ext_usd_hkd",
+        "type": "economic",
+        "label": "聯繫匯率",
+        "description": "美元/港元7.75-7.85聯繫匯率制度，港元利率跟隨美元",
+        "size": 13,
+    },
+    {
+        "id": "ext_us_recession",
+        "type": "economic",
+        "label": "美國衰退風險",
+        "description": "美國經濟衰退機率，影響全球資金風險偏好",
+        "size": 11,
+    },
     # External — China economy (economic)
-    {"id": "ext_china_gdp", "type": "economic", "label": "中國GDP增長", "description": "中國實際GDP增長率，影響北水流入及內地買家能力", "size": 14},
-    {"id": "ext_china_property", "type": "economic", "label": "內房危機", "description": "恒大/碧桂園等內房危機，衝擊內地買家信心及資金", "size": 13},
-    {"id": "ext_rmb", "type": "economic", "label": "人民幣匯率", "description": "RMB/HKD匯率，影響內地資金購買香港資產嘅成本", "size": 12},
-    {"id": "ext_northbound", "type": "economic", "label": "北水流入", "description": "滬深港通北向資金流入，反映內地資金對港股偏好", "size": 13},
+    {
+        "id": "ext_china_gdp",
+        "type": "economic",
+        "label": "中國GDP增長",
+        "description": "中國實際GDP增長率，影響北水流入及內地買家能力",
+        "size": 14,
+    },
+    {
+        "id": "ext_china_property",
+        "type": "economic",
+        "label": "內房危機",
+        "description": "恒大/碧桂園等內房危機，衝擊內地買家信心及資金",
+        "size": 13,
+    },
+    {
+        "id": "ext_rmb",
+        "type": "economic",
+        "label": "人民幣匯率",
+        "description": "RMB/HKD匯率，影響內地資金購買香港資產嘅成本",
+        "size": 12,
+    },
+    {
+        "id": "ext_northbound",
+        "type": "economic",
+        "label": "北水流入",
+        "description": "滬深港通北向資金流入，反映內地資金對港股偏好",
+        "size": 13,
+    },
     # External — China politics (policy)
-    {"id": "ext_china_policy", "type": "policy", "label": "中國內地政策", "description": "內地政治方向、監管政策、對港政策等", "size": 13},
-    {"id": "ext_us_china_trade", "type": "policy", "label": "中美貿易關係", "description": "中美貿易戰/科技戰，影響香港作為國際金融中心地位", "size": 13},
+    {
+        "id": "ext_china_policy",
+        "type": "policy",
+        "label": "中國內地政策",
+        "description": "內地政治方向、監管政策、對港政策等",
+        "size": 13,
+    },
+    {
+        "id": "ext_us_china_trade",
+        "type": "policy",
+        "label": "中美貿易關係",
+        "description": "中美貿易戰/科技戰，影響香港作為國際金融中心地位",
+        "size": 13,
+    },
     # External — Geopolitical (social)
-    {"id": "ext_taiwan_strait", "type": "social", "label": "台海局勢", "description": "台海緊張程度，地緣政治風險影響國際資金去向及移民潮", "size": 14},
+    {
+        "id": "ext_taiwan_strait",
+        "type": "social",
+        "label": "台海局勢",
+        "description": "台海緊張程度，地緣政治風險影響國際資金去向及移民潮",
+        "size": 14,
+    },
     # External — Shenzhen / GBA (location)
-    {"id": "ext_shenzhen", "type": "location", "label": "深圳低成本生活", "description": "深圳生活成本僅香港38%，吸引港人跨境居住返港上班", "size": 14},
-    {"id": "ext_gba", "type": "location", "label": "大灣區發展", "description": "粵港澳大灣區整合，30分鐘生活圈，推動北部都會區價值", "size": 13},
-    {"id": "ext_crossborder", "type": "social", "label": "跨境生活模式", "description": "港人北上居住、深圳工作，影響香港租務及置業需求", "size": 12},
+    {
+        "id": "ext_shenzhen",
+        "type": "location",
+        "label": "深圳低成本生活",
+        "description": "深圳生活成本僅香港38%，吸引港人跨境居住返港上班",
+        "size": 14,
+    },
+    {
+        "id": "ext_gba",
+        "type": "location",
+        "label": "大灣區發展",
+        "description": "粵港澳大灣區整合，30分鐘生活圈，推動北部都會區價值",
+        "size": 13,
+    },
+    {
+        "id": "ext_crossborder",
+        "type": "social",
+        "label": "跨境生活模式",
+        "description": "港人北上居住、深圳工作，影響香港租務及置業需求",
+        "size": 12,
+    },
 ]
 
 _HK_PROPERTY_EDGES: list[dict[str, Any]] = [
@@ -234,8 +432,7 @@ async def _persist_graph(graph_id: str, nodes: list[dict], edges: list[dict]) ->
             node_rows,
         )
         await db.executemany(
-            "INSERT INTO kg_edges (session_id, source_id, target_id, relation_type, weight)"
-            " VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO kg_edges (session_id, source_id, target_id, relation_type, weight) VALUES (?, ?, ?, ?, ?)",
             edge_rows,
         )
         await db.commit()
@@ -284,6 +481,7 @@ async def build_graph(request: Request, req: GraphBuildRequest) -> APIResponse:
     safe_seed_for_detect = sanitize_seed_text(req.seed_text) if req.seed_text else ""
     if safe_seed_for_detect.strip():
         from backend.app.services.zero_config import ZeroConfigService  # noqa: PLC0415
+
         _detected_mode = await ZeroConfigService().detect_mode_async(safe_seed_for_detect)
         _is_hk = _detected_mode == "hk_demographic"
     else:
@@ -311,8 +509,8 @@ async def build_graph(request: Request, req: GraphBuildRequest) -> APIResponse:
     safe_seed = safe_seed_for_detect  # already sanitized above
     if safe_seed and safe_seed.strip():
         try:
-            from backend.app.services.text_processor import TextProcessor  # noqa: PLC0415
             from backend.app.services.seed_graph_injector import SeedGraphInjector  # noqa: PLC0415
+            from backend.app.services.text_processor import TextProcessor  # noqa: PLC0415
 
             processor = TextProcessor()
             processed = await processor.process(safe_seed)
@@ -323,7 +521,9 @@ async def build_graph(request: Request, req: GraphBuildRequest) -> APIResponse:
             seed_edges = inject_result.get("seed_edges", 0)
             logger.info(
                 "Seed injection for graph %s: +%d nodes, +%d edges",
-                graph_id, seed_nodes, seed_edges,
+                graph_id,
+                seed_nodes,
+                seed_edges,
             )
         except Exception:
             logger.exception(
@@ -337,7 +537,11 @@ async def build_graph(request: Request, req: GraphBuildRequest) -> APIResponse:
             existing_for_dedup: list[dict[str, str]] = []
             if _is_hk:
                 existing_for_dedup = [
-                    {"id": str(n.get("id", "")), "label": str(n.get("label") or n.get("title") or ""), "entity_type": str(n.get("type") or n.get("entity_type") or "")}
+                    {
+                        "id": str(n.get("id", "")),
+                        "label": str(n.get("label") or n.get("title") or ""),
+                        "entity_type": str(n.get("type") or n.get("entity_type") or ""),
+                    }
                     for n in _HK_PROPERTY_NODES
                 ]
             else:
@@ -358,7 +562,8 @@ async def build_graph(request: Request, req: GraphBuildRequest) -> APIResponse:
             implicit_nodes = discovery.nodes_added
             logger.info(
                 "Implicit stakeholder discovery for graph %s: +%d nodes",
-                graph_id, implicit_nodes,
+                graph_id,
+                implicit_nodes,
             )
         except Exception:
             logger.exception(
@@ -370,6 +575,7 @@ async def build_graph(request: Request, req: GraphBuildRequest) -> APIResponse:
         mem_result = None
         try:
             from backend.app.services.memory_initialization import MemoryInitializationService  # noqa: PLC0415
+
             mem_svc = MemoryInitializationService()
             mem_result = await mem_svc.build_from_graph(graph_id, safe_seed)
             logger.info(
@@ -440,15 +646,13 @@ async def get_graph(graph_id: str) -> APIResponse:
         async with get_db() as db:
             node_rows = await (
                 await db.execute(
-                    "SELECT id, entity_type, title, description, properties"
-                    " FROM kg_nodes WHERE session_id = ?",
+                    "SELECT id, entity_type, title, description, properties FROM kg_nodes WHERE session_id = ?",
                     (graph_id,),
                 )
             ).fetchall()
             edge_rows = await (
                 await db.execute(
-                    "SELECT source_id, target_id, relation_type, weight"
-                    " FROM kg_edges WHERE session_id = ?",
+                    "SELECT source_id, target_id, relation_type, weight FROM kg_edges WHERE session_id = ?",
                     (graph_id,),
                 )
             ).fetchall()
@@ -475,8 +679,7 @@ async def list_nodes(graph_id: str) -> APIResponse:
     async with get_db() as db:
         rows = await (
             await db.execute(
-                "SELECT id, entity_type, title, description, properties"
-                " FROM kg_nodes WHERE session_id = ?",
+                "SELECT id, entity_type, title, description, properties FROM kg_nodes WHERE session_id = ?",
                 (graph_id,),
             )
         ).fetchall()
@@ -491,8 +694,7 @@ async def list_edges(graph_id: str) -> APIResponse:
     async with get_db() as db:
         rows = await (
             await db.execute(
-                "SELECT source_id, target_id, relation_type, weight"
-                " FROM kg_edges WHERE session_id = ?",
+                "SELECT source_id, target_id, relation_type, weight FROM kg_edges WHERE session_id = ?",
                 (graph_id,),
             )
         ).fetchall()
@@ -502,12 +704,14 @@ async def list_edges(graph_id: str) -> APIResponse:
 
 
 _MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
-_ALLOWED_CONTENT_TYPES = frozenset({
-    "application/pdf",
-    "text/plain",
-    "text/markdown",
-    "application/octet-stream",  # some browsers send this for .md
-})
+_ALLOWED_CONTENT_TYPES = frozenset(
+    {
+        "application/pdf",
+        "text/plain",
+        "text/markdown",
+        "application/octet-stream",  # some browsers send this for .md
+    }
+)
 _ALLOWED_EXTENSIONS = frozenset({".pdf", ".txt", ".md", ".markdown"})
 
 
@@ -519,7 +723,6 @@ async def upload_seed_file(file: UploadFile = File(...)) -> APIResponse:
     - Max size: 10 MB
     - Accepted types: PDF, Markdown (.md), plain text (.txt)
     """
-    import io  # noqa: PLC0415
 
     # Validate extension
     filename = file.filename or ""
@@ -615,17 +818,10 @@ async def analyze_seed(request: Request, req: GraphBuildRequest) -> APIResponse:
             success=True,
             data={
                 "language": result.language,
-                "entities": [
-                    {"name": e.name, "type": e.type, "relevance": e.relevance}
-                    for e in result.entities
-                ],
-                "timeline": [
-                    {"date_hint": t.date_hint, "event": t.event}
-                    for t in result.timeline
-                ],
+                "entities": [{"name": e.name, "type": e.type, "relevance": e.relevance} for e in result.entities],
+                "timeline": [{"date_hint": t.date_hint, "event": t.event} for t in result.timeline],
                 "stakeholders": [
-                    {"group": s.group, "impact": s.impact, "description": s.description}
-                    for s in result.stakeholders
+                    {"group": s.group, "impact": s.impact, "description": s.description} for s in result.stakeholders
                 ],
                 "sentiment": result.sentiment,
                 "key_claims": list(result.key_claims),
@@ -756,6 +952,7 @@ async def get_graph_snapshot(graph_id: str, round_number: int) -> APIResponse:
         )
 
     import json as _json  # noqa: PLC0415
+
     snapshot_data = _json.loads(row[0] or "{}")
     return APIResponse(
         success=True,
@@ -776,9 +973,7 @@ async def get_graph_snapshot(graph_id: str, round_number: int) -> APIResponse:
 
 
 @router.get("/{graph_id}/node/{node_id}/neighborhood")
-async def get_node_neighborhood(
-    graph_id: str, node_id: str, hops: int = 2
-) -> APIResponse:
+async def get_node_neighborhood(graph_id: str, node_id: str, hops: int = 2) -> APIResponse:
     """Return N-hop subgraph centered on a node."""
     if hops < 1 or hops > 5:
         raise HTTPException(status_code=400, detail="hops must be between 1 and 5")
@@ -803,7 +998,7 @@ async def get_node_neighborhood(
             ).fetchall()
 
             next_frontier: set[str] = set()
-            for row in (rows or []):
+            for row in rows or []:
                 result_edges.append(dict(row))
                 for nid in (row["source_id"], row["target_id"]):
                     if nid not in visited:
@@ -837,9 +1032,7 @@ async def get_node_neighborhood(
 
 
 @router.get("/{graph_id}/diff")
-async def get_graph_diff(
-    graph_id: str, from_round: int, to_round: int
-) -> APIResponse:
+async def get_graph_diff(graph_id: str, from_round: int, to_round: int) -> APIResponse:
     """Return added/removed/changed nodes and edges between two KG snapshots."""
     if from_round >= to_round:
         raise HTTPException(status_code=400, detail="from_round must be less than to_round")
@@ -885,11 +1078,13 @@ async def get_graph_diff(
         if k in edges_from:
             e_from = edges_from[k]
             if e_from.get("weight") != e_to.get("weight"):
-                changed_edges.append({
-                    "edge": e_to,
-                    "weight_before": e_from.get("weight"),
-                    "weight_after": e_to.get("weight"),
-                })
+                changed_edges.append(
+                    {
+                        "edge": e_to,
+                        "weight_before": e_from.get("weight"),
+                        "weight_after": e_to.get("weight"),
+                    }
+                )
 
     return APIResponse(
         success=True,
@@ -972,28 +1167,34 @@ async def get_node_evidence(graph_id: str, node_id: str) -> APIResponse:
     try:
         async with get_db() as db:
             # Get node details
-            node_row = await (await db.execute(
-                "SELECT id, entity_type, title, description FROM kg_nodes WHERE session_id = ? AND id = ?",
-                (graph_id, node_id),
-            )).fetchone()
+            node_row = await (
+                await db.execute(
+                    "SELECT id, entity_type, title, description FROM kg_nodes WHERE session_id = ? AND id = ?",
+                    (graph_id, node_id),
+                )
+            ).fetchone()
             if not node_row:
                 raise HTTPException(status_code=404, detail=f"Node {node_id} not found in graph {graph_id}")
 
             node_label = node_row["title"]
 
             # Find agent memories mentioning this node's label
-            memory_rows = await (await db.execute(
-                "SELECT agent_id, memory_text, memory_type, salience_score, round_number, created_at FROM agent_memories WHERE session_id = ? AND memory_text LIKE ? ORDER BY salience_score DESC LIMIT 20",
-                (graph_id, f"%{node_label}%"),
-            )).fetchall()
+            memory_rows = await (
+                await db.execute(
+                    "SELECT agent_id, memory_text, memory_type, salience_score, round_number, created_at FROM agent_memories WHERE session_id = ? AND memory_text LIKE ? ORDER BY salience_score DESC LIMIT 20",
+                    (graph_id, f"%{node_label}%"),
+                )
+            ).fetchall()
 
             # Find data provenance records
             provenance_rows = []
             try:
-                provenance_rows = await (await db.execute(
-                    "SELECT category, metric, source_type, source_url, last_updated FROM data_provenance WHERE metric LIKE ? OR category LIKE ? LIMIT 10",
-                    (f"%{node_label}%", f"%{node_label}%"),
-                )).fetchall()
+                provenance_rows = await (
+                    await db.execute(
+                        "SELECT category, metric, source_type, source_url, last_updated FROM data_provenance WHERE metric LIKE ? OR category LIKE ? LIMIT 10",
+                        (f"%{node_label}%", f"%{node_label}%"),
+                    )
+                ).fetchall()
             except Exception:
                 logger.debug("data_provenance query failed (table may not exist)")
 
@@ -1006,7 +1207,11 @@ async def get_node_evidence(graph_id: str, node_id: str) -> APIResponse:
                 "memories": [dict(r) for r in (memory_rows or [])],
                 "provenance": [dict(r) for r in (provenance_rows or [])],
             },
-            meta={"graph_id": graph_id, "memory_count": len(memory_rows or []), "provenance_count": len(provenance_rows or [])},
+            meta={
+                "graph_id": graph_id,
+                "memory_count": len(memory_rows or []),
+                "provenance_count": len(provenance_rows or []),
+            },
         )
     except HTTPException:
         raise
@@ -1022,6 +1227,7 @@ async def get_graph_at_round(graph_id: str, round: int = 0) -> dict:
     Uses valid_from / valid_until columns — no snapshot table required.
     """
     from backend.app.services.kg_temporal_queries import get_kg_edges_at_round
+
     # Need session_id: look up most recent session for this graph_id
     async with get_db() as db:
         cursor = await db.execute(

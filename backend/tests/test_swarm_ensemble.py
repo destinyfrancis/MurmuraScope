@@ -1,22 +1,24 @@
 """Unit tests for SwarmEnsemble probability cloud pipeline."""
+
 from __future__ import annotations
 
 import statistics as _statistics
+
 import pytest
 
 from backend.app.services.swarm_ensemble import (
+    _DEFAULT_REPLICAS,
+    _MAX_REPLICAS,
     ProbabilityCloud,
     SwarmEnsemble,
     TrajectoryOutcome,
     _wilson_ci,
-    _DEFAULT_REPLICAS,
-    _MAX_REPLICAS,
 )
-
 
 # ---------------------------------------------------------------------------
 # TrajectoryOutcome classification
 # ---------------------------------------------------------------------------
+
 
 class TestTrajectoryClassification:
     """Verify outcome classification from emergence patterns."""
@@ -67,6 +69,7 @@ class TestTrajectoryClassification:
 # ---------------------------------------------------------------------------
 # Aggregation
 # ---------------------------------------------------------------------------
+
 
 class TestAggregation:
     """Verify probability cloud aggregation from multiple trajectories."""
@@ -121,6 +124,7 @@ class TestAggregation:
 # Wilson CI
 # ---------------------------------------------------------------------------
 
+
 class TestWilsonCI:
     def test_basic_ci(self):
         lo, hi = _wilson_ci(50, 100)
@@ -145,6 +149,7 @@ class TestWilsonCI:
 # Constants
 # ---------------------------------------------------------------------------
 
+
 class TestConstants:
     def test_default_replicas(self):
         assert _DEFAULT_REPLICAS == 50
@@ -157,26 +162,38 @@ class TestConstants:
 # Frozen dataclasses
 # ---------------------------------------------------------------------------
 
+
 class TestFrozenDataclasses:
     def test_trajectory_outcome_frozen(self):
         o = TrajectoryOutcome(
-            replica_index=0, branch_session_id="x", faction_count=2,
-            tipping_point_rounds=(), dominant_faction_size_ratio=0.5,
-            final_belief_centroid={}, polarization_score=0.1,
+            replica_index=0,
+            branch_session_id="x",
+            faction_count=2,
+            tipping_point_rounds=(),
+            dominant_faction_size_ratio=0.5,
+            final_belief_centroid={},
+            polarization_score=0.1,
         )
         import dataclasses
+
         with pytest.raises(dataclasses.FrozenInstanceError):
             o.faction_count = 5  # type: ignore[misc]
 
     def test_probability_cloud_frozen(self):
         cloud = ProbabilityCloud(
-            parent_session_id="x", n_replicas=10, n_completed=10,
-            trajectories=(), avg_faction_count=2.0,
-            tipping_probability=0.5, avg_polarization=0.2,
-            belief_cloud={}, outcome_distribution={},
+            parent_session_id="x",
+            n_replicas=10,
+            n_completed=10,
+            trajectories=(),
+            avg_faction_count=2.0,
+            tipping_probability=0.5,
+            avg_polarization=0.2,
+            belief_cloud={},
+            outcome_distribution={},
             confidence_intervals={},
         )
         import dataclasses
+
         with pytest.raises(dataclasses.FrozenInstanceError):
             cloud.n_replicas = 20  # type: ignore[misc]
 
@@ -216,9 +233,5 @@ def test_belief_cloud_percentiles_use_interpolation():
 
     p25_actual, _, p75_actual = cloud.belief_cloud["metric_a"]
 
-    assert p25_actual == p25_expected, (
-        f"p25 must be interpolated ({p25_expected}), got {p25_actual}"
-    )
-    assert p75_actual == p75_expected, (
-        f"p75 must be interpolated ({p75_expected}), got {p75_actual}"
-    )
+    assert p25_actual == p25_expected, f"p25 must be interpolated ({p25_expected}), got {p25_actual}"
+    assert p75_actual == p75_expected, f"p75 must be interpolated ({p75_expected}), got {p75_actual}"

@@ -1,15 +1,14 @@
 """Tests for DataConnector and its file-ingestion pipeline."""
+
 from __future__ import annotations
 
 import json
-import os
 from unittest.mock import patch
 
 import aiosqlite
 import pytest
 
 from backend.app.services.data_connector import DataConnector, IngestResult
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -124,6 +123,7 @@ async def _make_test_db(tmp_path) -> str:
 def _patched_settings(db_path: str):
     """Return a fresh Settings instance pointing at *db_path*."""
     import backend.app.config as config_mod
+
     return patch.object(
         config_mod,
         "_settings",
@@ -146,9 +146,7 @@ async def test_ingest_with_mappings_stores_rows(tmp_path):
     assert result.mapped_count == 3
 
     async with aiosqlite.connect(db_path) as db:
-        async with db.execute(
-            "SELECT COUNT(*) FROM user_data_points WHERE session_id='sess_map_01'"
-        ) as cur:
+        async with db.execute("SELECT COUNT(*) FROM user_data_points WHERE session_id='sess_map_01'") as cur:
             row = await cur.fetchone()
     assert row[0] == 3
 
@@ -187,8 +185,6 @@ async def test_ingest_multiple_mappings(tmp_path):
     assert result.mapped_count == 6
 
     async with aiosqlite.connect(db_path) as db:
-        async with db.execute(
-            "SELECT COUNT(*) FROM user_data_points WHERE session_id='sess_multi_01'"
-        ) as cur:
+        async with db.execute("SELECT COUNT(*) FROM user_data_points WHERE session_id='sess_multi_01'") as cur:
             row = await cur.fetchone()
     assert row[0] == 6

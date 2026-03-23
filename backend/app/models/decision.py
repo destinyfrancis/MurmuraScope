@@ -16,7 +16,7 @@ class DecisionType(str, Enum):
     HAVE_CHILD = "have_child"
     ADJUST_SPENDING = "adjust_spending"  # Phase 4
     EMPLOYMENT_CHANGE = "employment_change"  # Phase 18: O2O Layer 3
-    RELOCATE = "relocate"                    # Phase 18: O2O Layer 3
+    RELOCATE = "relocate"  # Phase 18: O2O Layer 3
 
 
 # Valid action strings per decision type (for validation)
@@ -39,10 +39,10 @@ class AgentDecision:
     session_id: str
     agent_id: int
     round_number: int
-    decision_type: str   # DecisionType value
-    action: str          # e.g. buy / emigrate / stay / invest_stocks
+    decision_type: str  # DecisionType value
+    action: str  # e.g. buy / emigrate / stay / invest_stocks
     reasoning: str
-    confidence: float    # 0.0–1.0
+    confidence: float  # 0.0–1.0
     topic_tags: tuple[str, ...] = ()
     """Topics this decision touches — persisted as JSON array in DB."""
     emotional_reaction: str = ""
@@ -50,9 +50,7 @@ class AgentDecision:
 
     def __post_init__(self) -> None:
         if not (0.0 <= self.confidence <= 1.0):
-            raise ValueError(
-                f"confidence must be between 0 and 1, got {self.confidence}"
-            )
+            raise ValueError(f"confidence must be between 0 and 1, got {self.confidence}")
 
 
 @dataclass(frozen=True)
@@ -60,6 +58,6 @@ class DecisionSummary:
     """Aggregated decision counts for a session/round."""
 
     session_id: str
-    round_number: int | None          # None = across all rounds
+    round_number: int | None  # None = across all rounds
     counts_by_type: dict[str, dict[str, int]]  # {decision_type: {action: count}}
     total_decisions: int

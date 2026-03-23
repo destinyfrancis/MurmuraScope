@@ -25,6 +25,7 @@ from backend.app.utils.logger import get_logger
 # Load .env from project root (no-op if dotenv not available or file missing)
 try:
     from dotenv import load_dotenv as _load_dotenv
+
     _load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env", override=False)
 except ImportError:
     pass
@@ -76,12 +77,14 @@ def _parse_observations(series_id: str, data: dict) -> list[FredRecord]:
         if raw_value == ".":
             continue
         try:
-            records.append(FredRecord(
-                series_id=series_id,
-                value=round(float(raw_value), 6),
-                date=str(obs.get("date", "")),
-                source="fred",
-            ))
+            records.append(
+                FredRecord(
+                    series_id=series_id,
+                    value=round(float(raw_value), 6),
+                    date=str(obs.get("date", "")),
+                    source="fred",
+                )
+            )
         except (ValueError, TypeError):
             continue
     return records
@@ -116,8 +119,6 @@ async def _fetch_series(
     except (httpx.RequestError, httpx.TimeoutException, json.JSONDecodeError, ValueError) as exc:
         logger.debug("FRED fetch failed for %s: %s", series_id, exc)
         return []
-
-
 
 
 async def download_series(
@@ -160,7 +161,8 @@ async def download_series(
                 if resp.status_code != 200:
                     logger.warning(
                         "download_series: FRED HTTP %d for %s",
-                        resp.status_code, series_id,
+                        resp.status_code,
+                        series_id,
                     )
                     continue
                 records = _parse_observations(series_id, resp.json())
@@ -204,20 +206,24 @@ async def download_all_fred(
         live_records = await _fetch_series(client, series_id, api_key)
 
         if live_records:
-            results.append(DownloadResult(
-                category="fred",
-                row_count=len(live_records),
-                records=tuple(live_records),
-                error=None,
-            ))
+            results.append(
+                DownloadResult(
+                    category="fred",
+                    row_count=len(live_records),
+                    records=tuple(live_records),
+                    error=None,
+                )
+            )
             logger.info("FRED %s: %d records fetched", series_id, len(live_records))
         else:
-            results.append(DownloadResult(
-                category="fred",
-                row_count=0,
-                records=(),
-                error=f"FRED API returned no data for {series_id}",
-            ))
+            results.append(
+                DownloadResult(
+                    category="fred",
+                    row_count=0,
+                    records=(),
+                    error=f"FRED API returned no data for {series_id}",
+                )
+            )
             logger.warning("FRED %s: no data returned — no fallback", series_id)
 
     return results

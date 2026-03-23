@@ -23,13 +23,14 @@ Usage::
     cloud = await SwarmEnsemble().run(session_id, n_replicas=50)
     # cloud.outcome_distribution = {"escalation": 0.42, "stalemate": 0.31, ...}
 """
+
 from __future__ import annotations
 
 import asyncio
 import json
 import statistics
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from backend.app.utils.db import get_db
@@ -47,6 +48,7 @@ _MAX_CONCURRENT: int = 3
 @dataclass(frozen=True)
 class TrajectoryOutcome:
     """Immutable summary of one simulation trajectory."""
+
     replica_index: int
     branch_session_id: str
     faction_count: int
@@ -59,6 +61,7 @@ class TrajectoryOutcome:
 @dataclass(frozen=True)
 class ProbabilityCloud:
     """Aggregate result from N genuine simulation trajectories."""
+
     parent_session_id: str
     n_replicas: int
     n_completed: int
@@ -106,7 +109,8 @@ class SwarmEnsemble:
         n_replicas = max(1, min(n_replicas, _MAX_REPLICAS))
         logger.info(
             "SwarmEnsemble: starting %d replicas for session=%s",
-            n_replicas, session_id,
+            n_replicas,
+            session_id,
         )
 
         # Load parent session
@@ -122,7 +126,9 @@ class SwarmEnsemble:
 
         logger.info(
             "SwarmEnsemble: fork_round=%d (of %d total) session=%s",
-            fork_round, total_rounds, session_id,
+            fork_round,
+            total_rounds,
+            session_id,
         )
 
         # Create and run replicas in batches
@@ -147,7 +153,9 @@ class SwarmEnsemble:
 
         logger.info(
             "SwarmEnsemble: %d/%d replicas completed session=%s",
-            len(outcomes), n_replicas, session_id,
+            len(outcomes),
+            n_replicas,
+            session_id,
         )
 
         return self._aggregate(session_id, n_replicas, outcomes)
@@ -200,7 +208,10 @@ class SwarmEnsemble:
         try:
             # Create branch session + copy full state up to fork_round
             await self._create_branch(
-                branch_id, parent_session_id, label, branch_config,
+                branch_id,
+                parent_session_id,
+                label,
+                branch_config,
                 fork_round=fork_round,
             )
 
@@ -223,7 +234,10 @@ class SwarmEnsemble:
 
         except Exception as exc:
             logger.warning(
-                "Replica %d failed branch=%s: %s", replica_index, branch_id, exc,
+                "Replica %d failed branch=%s: %s",
+                replica_index,
+                branch_id,
+                exc,
             )
             # Mark failed
             try:
@@ -260,7 +274,8 @@ class SwarmEnsemble:
                    VALUES (?, ?, ?, ?, 'running', ?,
                            ?, ?, ?, ?, '', datetime('now'))""",
                 (
-                    branch_id, label,
+                    branch_id,
+                    label,
                     config.get("sim_mode", "kg_driven"),
                     config.get("scenario_type", "kg_driven"),
                     json.dumps(config, ensure_ascii=False),
@@ -407,7 +422,9 @@ class SwarmEnsemble:
             await db.commit()
 
     async def _extract_outcome(
-        self, branch_id: str, replica_index: int,
+        self,
+        branch_id: str,
+        replica_index: int,
     ) -> TrajectoryOutcome:
         """Extract outcome summary from a completed replica."""
         async with get_db() as db:
@@ -425,15 +442,9 @@ class SwarmEnsemble:
             if faction_row and faction_row["factions_json"]:
                 factions = json.loads(faction_row["factions_json"])
                 faction_count = len(factions)
-                total_members = sum(
-                    len(f.get("member_agent_ids", []))
-                    for f in factions
-                )
+                total_members = sum(len(f.get("member_agent_ids", [])) for f in factions)
                 if total_members > 0 and factions:
-                    largest = max(
-                        len(f.get("member_agent_ids", []))
-                        for f in factions
-                    )
+                    largest = max(len(f.get("member_agent_ids", [])) for f in factions)
                     dominant_ratio = largest / total_members
 
             # Tipping points
@@ -473,6 +484,7 @@ class SwarmEnsemble:
                 if by_topic:
                     # Polarization = average std deviation across topics
                     import math
+
                     stds = []
                     for stances in by_topic.values():
                         n = len(stances)
@@ -501,10 +513,14 @@ class SwarmEnsemble:
         if not outcomes:
             return ProbabilityCloud(
                 parent_session_id=session_id,
-                n_replicas=n_replicas, n_completed=0,
-                trajectories=(), avg_faction_count=0,
-                tipping_probability=0, avg_polarization=0,
-                belief_cloud={}, outcome_distribution={},
+                n_replicas=n_replicas,
+                n_completed=0,
+                trajectories=(),
+                avg_faction_count=0,
+                tipping_probability=0,
+                avg_polarization=0,
+                belief_cloud={},
+                outcome_distribution={},
                 confidence_intervals={},
             )
 
@@ -523,10 +539,7 @@ class SwarmEnsemble:
 
         belief_cloud: dict[str, tuple[float, float, float]] = {}
         for topic in sorted(all_topics):
-            vals = sorted(
-                o.final_belief_centroid.get(topic, 0.5)
-                for o in outcomes
-            )
+            vals = sorted(o.final_belief_centroid.get(topic, 0.5) for o in outcomes)
             if len(vals) < 2:
                 p25 = median = p75 = vals[0] if vals else 0.5
             else:
@@ -535,7 +548,9 @@ class SwarmEnsemble:
                 quarts = statistics.quantiles(vals, n=4)
                 p25, median, p75 = quarts[0], quarts[1], quarts[2]
             belief_cloud[topic] = (
-                round(p25, 4), round(median, 4), round(p75, 4),
+                round(p25, 4),
+                round(median, 4),
+                round(p75, 4),
             )
 
         # Outcome clustering: classify each run by dominant pattern
@@ -593,7 +608,9 @@ class SwarmEnsemble:
 
 
 def _wilson_ci(
-    count: int, total: int, z: float = 1.96,
+    count: int,
+    total: int,
+    z: float = 1.96,
 ) -> tuple[float, float]:
     """Wilson score 95% confidence interval for a proportion."""
     if total == 0:
@@ -602,6 +619,7 @@ def _wilson_ci(
     denom = 1 + z * z / total
     centre = p + z * z / (2 * total)
     import math
+
     spread = z * math.sqrt((p * (1 - p) + z * z / (4 * total)) / total)
     lo = max(0.0, round((centre - spread) / denom, 4))
     hi = min(1.0, round((centre + spread) / denom, 4))

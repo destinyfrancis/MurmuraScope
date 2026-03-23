@@ -1,11 +1,11 @@
 # backend/app/models/world_event.py
 """WorldEvent model for per-round scenario event generation."""
+
 from __future__ import annotations
+
 from dataclasses import dataclass
 
-_VALID_EVENT_TYPES: frozenset[str] = frozenset(
-    {"shock", "rumor", "official", "grassroots"}
-)
+_VALID_EVENT_TYPES: frozenset[str] = frozenset({"shock", "rumor", "official", "grassroots"})
 
 
 @dataclass(frozen=True)
@@ -19,7 +19,7 @@ class WorldEvent:
     event_id: str
     round_number: int
     content: str
-    event_type: str   # shock | rumor | official | grassroots
+    event_type: str  # shock | rumor | official | grassroots
     # Info diet tags that receive this event. ("ALL",) = broadcast to all.
     reach: tuple[str, ...]
     # Metric ID → delta mapping. Keys validated against active scenario metrics.
@@ -29,16 +29,11 @@ class WorldEvent:
 
     def __post_init__(self) -> None:
         if self.event_type not in _VALID_EVENT_TYPES:
-            raise ValueError(
-                f"event_type must be one of {sorted(_VALID_EVENT_TYPES)}, "
-                f"got '{self.event_type}'"
-            )
+            raise ValueError(f"event_type must be one of {sorted(_VALID_EVENT_TYPES)}, got '{self.event_type}'")
         if not self.reach:
             raise ValueError("reach must not be empty")
         if not (0.0 <= self.credibility <= 1.0):
-            raise ValueError(
-                f"credibility must be in [0, 1], got {self.credibility}"
-            )
+            raise ValueError(f"credibility must be in [0, 1], got {self.credibility}")
 
     def reaches_agent(self, info_diet: tuple[str, ...] | list[str]) -> bool:
         """Return True if this event is visible to an agent with the given info_diet."""

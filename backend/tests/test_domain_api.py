@@ -6,12 +6,12 @@ Covers:
 - POST /api/domain-packs/generate -- LLM-based generation (mocked)
 - POST /api/domain-packs/save     -- persist custom pack to DB
 """
+
 from __future__ import annotations
 
-import json
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 
 # ---------------------------------------------------------------------------
 # Shared fixtures / helpers
@@ -42,10 +42,26 @@ MOCK_LLM_PACK = {
     "metrics": ["land_price_index", "vacancy_rate", "transaction_volume"],
     "persona_template": "You are a {occupation} living in {region}, Tokyo.",
     "sentiment_keywords": [
-        "good", "bad", "expensive", "cheap", "rising", "falling",
-        "bullish", "bearish", "stable", "volatile", "demand",
-        "supply", "mortgage", "rent", "buy", "sell", "invest",
-        "wait", "opportunity", "risk",
+        "good",
+        "bad",
+        "expensive",
+        "cheap",
+        "rising",
+        "falling",
+        "bullish",
+        "bearish",
+        "stable",
+        "volatile",
+        "demand",
+        "supply",
+        "mortgage",
+        "rent",
+        "buy",
+        "sell",
+        "invest",
+        "wait",
+        "opportunity",
+        "risk",
     ],
     "locale": "ja-JP",
 }
@@ -66,6 +82,7 @@ def _unwrap(resp_json: dict) -> dict | list:
 # ---------------------------------------------------------------------------
 # GET /api/domain-packs -- list packs
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_list_domain_packs_returns_builtin(test_client):
@@ -108,6 +125,7 @@ async def test_list_domain_packs_includes_us_markets(test_client):
 # GET /api/domain-packs/{pack_id} -- get specific builtin pack
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_get_hk_city_pack(test_client):
     resp = await test_client.get("/api/domain-packs/hk_city")
@@ -142,6 +160,7 @@ async def test_get_us_markets_pack(test_client):
 # ---------------------------------------------------------------------------
 # POST /api/domain-packs/generate -- LLM generation
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_generate_domain_pack_success(test_client):
@@ -178,8 +197,18 @@ async def test_generate_returns_pack_fields(test_client):
         )
 
     pack = _unwrap(resp.json())["pack"]
-    for field in ("id", "name", "regions", "occupations", "shocks", "metrics",
-                  "persona_template", "sentiment_keywords", "locale", "source"):
+    for field in (
+        "id",
+        "name",
+        "regions",
+        "occupations",
+        "shocks",
+        "metrics",
+        "persona_template",
+        "sentiment_keywords",
+        "locale",
+        "source",
+    ):
         assert field in pack, f"Missing field: {field}"
 
 
@@ -211,6 +240,7 @@ async def test_generate_llm_failure_returns_422(test_client):
 # ---------------------------------------------------------------------------
 # POST /api/domain-packs/save -- persist custom pack
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_save_custom_pack_success(test_client):
@@ -307,6 +337,7 @@ async def test_save_pack_preserves_metrics(test_client):
 # ---------------------------------------------------------------------------
 # Integration: generate -> save -> list workflow
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_generate_save_list_workflow(test_client):

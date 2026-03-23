@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -15,7 +14,6 @@ from backend.app.models.project import (
     SessionStatus,
     SimMode,
 )
-
 
 # ======================================================================
 # Session creation
@@ -56,13 +54,15 @@ class TestCreateSessionStoresInDB:
             scenario_type=sample_session_request["scenario_type"],
         )
 
-        cost_json = json.dumps({
-            "agent_count": session.cost_estimate.agent_count,
-            "round_count": session.cost_estimate.round_count,
-            "cost_per_call_usd": session.cost_estimate.cost_per_call_usd,
-            "total_estimated_usd": session.cost_estimate.total_estimated_usd,
-            "token_estimate": session.cost_estimate.token_estimate,
-        })
+        cost_json = json.dumps(
+            {
+                "agent_count": session.cost_estimate.agent_count,
+                "round_count": session.cost_estimate.round_count,
+                "cost_per_call_usd": session.cost_estimate.cost_per_call_usd,
+                "total_estimated_usd": session.cost_estimate.total_estimated_usd,
+                "token_estimate": session.cost_estimate.token_estimate,
+            }
+        )
 
         # Note: The schema has different columns from _persist_session,
         # so we insert using the schema's actual columns.
@@ -89,9 +89,7 @@ class TestCreateSessionStoresInDB:
         )
         await test_db.commit()
 
-        cursor = await test_db.execute(
-            "SELECT * FROM simulation_sessions WHERE id = ?", (session.id,)
-        )
+        cursor = await test_db.execute("SELECT * FROM simulation_sessions WHERE id = ?", (session.id,))
         row = await cursor.fetchone()
         assert row is not None
         assert row["status"] == "created"
@@ -121,9 +119,12 @@ class TestSessionStatusTransitions:
 
     def test_created_to_running(self):
         session = SessionState.create(
-            name="test", sim_mode=SimMode.LIFE_DECISION,
-            agent_count=5, round_count=3,
-            graph_id="g-1", scenario_type="property",
+            name="test",
+            sim_mode=SimMode.LIFE_DECISION,
+            agent_count=5,
+            round_count=3,
+            graph_id="g-1",
+            scenario_type="property",
         )
         updated = session.with_status(SessionStatus.RUNNING)
         assert updated.status == SessionStatus.RUNNING
@@ -131,9 +132,12 @@ class TestSessionStatusTransitions:
 
     def test_running_to_completed(self):
         session = SessionState.create(
-            name="test", sim_mode=SimMode.LIFE_DECISION,
-            agent_count=5, round_count=3,
-            graph_id="g-1", scenario_type="property",
+            name="test",
+            sim_mode=SimMode.LIFE_DECISION,
+            agent_count=5,
+            round_count=3,
+            graph_id="g-1",
+            scenario_type="property",
         )
         running = session.with_status(SessionStatus.RUNNING)
         completed = running.with_status(SessionStatus.COMPLETED)
@@ -141,22 +145,26 @@ class TestSessionStatusTransitions:
 
     def test_running_to_failed(self):
         session = SessionState.create(
-            name="test", sim_mode=SimMode.LIFE_DECISION,
-            agent_count=5, round_count=3,
-            graph_id="g-1", scenario_type="property",
+            name="test",
+            sim_mode=SimMode.LIFE_DECISION,
+            agent_count=5,
+            round_count=3,
+            graph_id="g-1",
+            scenario_type="property",
         )
         running = session.with_status(SessionStatus.RUNNING)
-        failed = running.with_status(
-            SessionStatus.FAILED, error_message="Test error"
-        )
+        failed = running.with_status(SessionStatus.FAILED, error_message="Test error")
         assert failed.status == SessionStatus.FAILED
         assert failed.error_message == "Test error"
 
     def test_with_status_creates_new_instance(self):
         session = SessionState.create(
-            name="test", sim_mode=SimMode.LIFE_DECISION,
-            agent_count=5, round_count=3,
-            graph_id="g-1", scenario_type="property",
+            name="test",
+            sim_mode=SimMode.LIFE_DECISION,
+            agent_count=5,
+            round_count=3,
+            graph_id="g-1",
+            scenario_type="property",
         )
         updated = session.with_status(SessionStatus.RUNNING)
         # Original is unchanged (immutability)
@@ -166,9 +174,12 @@ class TestSessionStatusTransitions:
 
     def test_with_round_updates_round(self):
         session = SessionState.create(
-            name="test", sim_mode=SimMode.LIFE_DECISION,
-            agent_count=5, round_count=10,
-            graph_id="g-1", scenario_type="property",
+            name="test",
+            sim_mode=SimMode.LIFE_DECISION,
+            agent_count=5,
+            round_count=10,
+            graph_id="g-1",
+            scenario_type="property",
         )
         updated = session.with_round(7)
         assert updated.current_round == 7
@@ -207,18 +218,33 @@ class TestAgentProfilesMatchCensusDistribution:
                (id, name, sim_mode, seed_text, agent_count, round_count,
                 llm_provider, llm_model, oasis_db_path, status)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (session_id, "test", "life_decision", "seed", 5, 3,
-             "deepseek", "deepseek-chat", "/tmp/test.db", "created"),
+            (session_id, "test", "life_decision", "seed", 5, 3, "deepseek", "deepseek-chat", "/tmp/test.db", "created"),
         )
 
         # Insert agent profiles
         agents = [
-            (session_id, i, "resident", 25 + i * 5, "M" if i % 2 == 0 else "F",
-             "Central", "professional", "high",
-             "university", "single", "private",
-             0.7, 0.6, 0.5, 0.8, 0.3,
-             30000 + i * 5000, 100000,
-             f"persona_{i}", f"user_{i}")
+            (
+                session_id,
+                i,
+                "resident",
+                25 + i * 5,
+                "M" if i % 2 == 0 else "F",
+                "Central",
+                "professional",
+                "high",
+                "university",
+                "single",
+                "private",
+                0.7,
+                0.6,
+                0.5,
+                0.8,
+                0.3,
+                30000 + i * 5000,
+                100000,
+                f"persona_{i}",
+                f"user_{i}",
+            )
             for i in range(5)
         ]
 
@@ -250,8 +276,18 @@ class TestAgentProfilesMatchCensusDistribution:
                (id, name, sim_mode, seed_text, agent_count, round_count,
                 llm_provider, llm_model, oasis_db_path, status)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (session_id, "test", "life_decision", "seed", 100, 3,
-             "deepseek", "deepseek-chat", "/tmp/test.db", "created"),
+            (
+                session_id,
+                "test",
+                "life_decision",
+                "seed",
+                100,
+                3,
+                "deepseek",
+                "deepseek-chat",
+                "/tmp/test.db",
+                "created",
+            ),
         )
 
         # Insert 100 agents with roughly equal sex distribution
@@ -264,10 +300,28 @@ class TestAgentProfilesMatchCensusDistribution:
                     openness, conscientiousness, extraversion, agreeableness, neuroticism,
                     monthly_income, savings, oasis_persona, oasis_username)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (session_id, i, "resident", 30, sex, "Central", "worker",
-                 "medium", "secondary", "single", "public",
-                 0.5, 0.5, 0.5, 0.5, 0.5, 20000, 50000,
-                 f"persona_{i}", f"user_{i}"),
+                (
+                    session_id,
+                    i,
+                    "resident",
+                    30,
+                    sex,
+                    "Central",
+                    "worker",
+                    "medium",
+                    "secondary",
+                    "single",
+                    "public",
+                    0.5,
+                    0.5,
+                    0.5,
+                    0.5,
+                    0.5,
+                    20000,
+                    50000,
+                    f"persona_{i}",
+                    f"user_{i}",
+                ),
             )
         await test_db.commit()
 
@@ -363,8 +417,7 @@ class TestShockInjectionAtCorrectRound:
 
         for shock in shocks:
             assert 1 <= shock["round_number"] <= round_count, (
-                f"Shock at round {shock['round_number']} exceeds "
-                f"session round_count {round_count}"
+                f"Shock at round {shock['round_number']} exceeds session round_count {round_count}"
             )
 
 

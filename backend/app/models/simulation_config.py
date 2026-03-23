@@ -1,8 +1,9 @@
 """Simulation configuration: hook intervals and presets."""
+
 from __future__ import annotations
 
 import os as _os
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
@@ -29,13 +30,13 @@ class HookConfig:
     feed_algorithm: str = "engagement_first"
     virality_interval: int = 3
     # Phase 3: emotional state
-    emotional_contagion_interval: int = 3   # emotional spread every N rounds
+    emotional_contagion_interval: int = 3  # emotional spread every N rounds
     # Phase 1A/1B: OASIS fork integration
-    attention_economy_interval: int = 1     # attention allocation every N rounds (1 = every round)
-    temporal_activation_enabled: bool = True # enable time-of-day gating
-    collective_action_interval: int = 5     # group formation every N rounds
+    attention_economy_interval: int = 1  # attention allocation every N rounds (1 = every round)
+    temporal_activation_enabled: bool = True  # enable time-of-day gating
+    collective_action_interval: int = 5  # group formation every N rounds
     # Phase C: emergence toggle
-    emergence_enabled: bool = True          # enable emergence hooks (emotional, belief, contagion, etc.)
+    emergence_enabled: bool = True  # enable emergence hooks (emotional, belief, contagion, etc.)
     # Reflection loop: synthesise 'thought' memories for stakeholder agents every N rounds
     reflection_interval: int = 7
     activation_seed: int | None = None
@@ -104,27 +105,42 @@ class SimPreset:
 
 
 PRESET_FAST = SimPreset(
-    name="fast", agents=100, rounds=15, mc_trials=30,
+    name="fast",
+    agents=100,
+    rounds=15,
+    mc_trials=30,
     hook_config=HookConfig(emergence_enabled=False),
     estimated_cost_usd=0.15,
 )
 PRESET_STANDARD = SimPreset(
-    name="standard", agents=300, rounds=20, mc_trials=50,
+    name="standard",
+    agents=300,
+    rounds=20,
+    mc_trials=50,
     hook_config=HookConfig(emergence_enabled=True),
     estimated_cost_usd=0.60,
 )
 PRESET_DEEP = SimPreset(
-    name="deep", agents=500, rounds=30, mc_trials=100,
+    name="deep",
+    agents=500,
+    rounds=30,
+    mc_trials=100,
     hook_config=HookConfig(emergence_enabled=True),
     estimated_cost_usd=1.89,
 )
 PRESET_LARGE = SimPreset(
-    name="large", agents=1000, rounds=25, mc_trials=200,
+    name="large",
+    agents=1000,
+    rounds=25,
+    mc_trials=200,
     hook_config=HookConfig.scaled(1000),
     estimated_cost_usd=3.50,
 )
 PRESET_MASSIVE = SimPreset(
-    name="massive", agents=3000, rounds=20, mc_trials=300,
+    name="massive",
+    agents=3000,
+    rounds=20,
+    mc_trials=300,
     hook_config=HookConfig.scaled(3000),
     estimated_cost_usd=8.00,
 )
@@ -177,8 +193,5 @@ def resolve_preset(
 
     preset = PRESETS.get(preset_name)
     if preset is None:
-        raise ValueError(
-            f"Unknown preset '{preset_name}'. "
-            f"Available: {sorted(PRESETS)}, 'custom'"
-        )
+        raise ValueError(f"Unknown preset '{preset_name}'. Available: {sorted(PRESETS)}, 'custom'")
     return preset

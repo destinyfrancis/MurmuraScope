@@ -118,6 +118,7 @@ class CalibrationParams:
     def to_dict(self) -> dict[str, float | int]:
         """Return all parameters as a plain dict for serialisation."""
         import dataclasses  # noqa: PLC0415
+
         return {f.name: getattr(self, f.name) for f in dataclasses.fields(self)}
 
 

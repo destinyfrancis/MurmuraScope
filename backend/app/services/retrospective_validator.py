@@ -40,18 +40,20 @@ logger = get_logger("retrospective_validator")
 # Constants
 # ---------------------------------------------------------------------------
 
-VALIDATABLE_METRICS: frozenset[str] = frozenset({
-    "ccl_index",
-    "unemployment_rate",
-    "hsi_level",
-    "cpi_yoy",
-    "gdp_growth",
-    "consumer_confidence",
-    "net_migration",
-    "hibor_1m",
-    "retail_sales_index",
-    "tourist_arrivals",
-})
+VALIDATABLE_METRICS: frozenset[str] = frozenset(
+    {
+        "ccl_index",
+        "unemployment_rate",
+        "hsi_level",
+        "cpi_yoy",
+        "gdp_growth",
+        "consumer_confidence",
+        "net_migration",
+        "hibor_1m",
+        "retail_sales_index",
+        "tourist_arrivals",
+    }
+)
 
 # Maps metric names to (category, db_metric) pairs in hk_data_snapshots.
 _METRIC_DB_MAP: dict[str, tuple[str, str]] = {
@@ -105,9 +107,7 @@ class _FoldScopedCoefficients:
     so it can be injected into ``_generate_trajectory()`` transparently.
     """
 
-    def __init__(
-        self, training_series: dict[str, list[tuple[str, float]]]
-    ) -> None:
+    def __init__(self, training_series: dict[str, list[tuple[str, float]]]) -> None:
         self._drifts: dict[str, dict[str, float]] = {}
         for metric, series in training_series.items():
             if len(series) < 2:
@@ -145,8 +145,8 @@ class ValidationResult:
     n_observations: int
     period_start: str
     period_end: str
-    brier_score: float = 0.25   # probabilistic calibration: 0 = perfect, 0.25 = random
-    base_rate: float = 0.5      # prevalence of "up" movements in actual data
+    brier_score: float = 0.25  # probabilistic calibration: 0 = perfect, 0.25 = random
+    base_rate: float = 0.5  # prevalence of "up" movements in actual data
 
 
 # ---------------------------------------------------------------------------
@@ -157,9 +157,7 @@ class ValidationResult:
 def _parse_period(period: str) -> tuple[int, int]:
     """Parse '2020-Q1' into (2020, 1). Raises ValueError on bad format."""
     if not _PERIOD_PATTERN.match(period):
-        raise ValueError(
-            f"Invalid period format '{period}'. Expected YYYY-QN (e.g. 2020-Q1)."
-        )
+        raise ValueError(f"Invalid period format '{period}'. Expected YYYY-QN (e.g. 2020-Q1).")
     year_str, q_str = period.split("-Q")
     return int(year_str), int(q_str)
 
@@ -204,12 +202,12 @@ def _find_best_timing_offset(
 
     for offset in range(-max_offset, max_offset + 1):
         if offset >= 0:
-            p_slice = predicted[:n - offset] if offset > 0 else predicted
+            p_slice = predicted[: n - offset] if offset > 0 else predicted
             a_slice = actual[offset:] if offset > 0 else actual
         else:
             abs_off = abs(offset)
             p_slice = predicted[abs_off:]
-            a_slice = actual[:n - abs_off]
+            a_slice = actual[: n - abs_off]
 
         if len(p_slice) < 2 or len(a_slice) < 2:
             continue
@@ -267,29 +265,21 @@ class RetrospectiveValidator:
         _parse_period(period_end)
 
         if _period_to_sortable(period_start) >= _period_to_sortable(period_end):
-            raise ValueError(
-                f"period_start ({period_start}) must be before period_end ({period_end})."
-            )
+            raise ValueError(f"period_start ({period_start}) must be before period_end ({period_end}).")
 
         # Filter to requested metrics
         target_metrics = (
-            [m for m in metrics if m in VALIDATABLE_METRICS]
-            if metrics is not None
-            else sorted(VALIDATABLE_METRICS)
+            [m for m in metrics if m in VALIDATABLE_METRICS] if metrics is not None else sorted(VALIDATABLE_METRICS)
         )
 
         if not target_metrics:
-            raise ValueError(
-                f"No valid metrics requested. Available: {sorted(VALIDATABLE_METRICS)}"
-            )
+            raise ValueError(f"No valid metrics requested. Available: {sorted(VALIDATABLE_METRICS)}")
 
         # Load historical data
         historical = await self._load_historical_series(period_start, period_end)
 
         # Check minimum data threshold
-        loadable_count = sum(
-            1 for m in target_metrics if m in historical and len(historical[m]) >= 2
-        )
+        loadable_count = sum(1 for m in target_metrics if m in historical and len(historical[m]) >= 2)
         if loadable_count < MIN_METRICS_REQUIRED:
             logger.warning(
                 "Insufficient historical data: %d metrics loadable (need %d)",
@@ -321,13 +311,9 @@ class RetrospectiveValidator:
                 continue
 
             actual_values = [v for _, v in series]
-            predicted_values = self._generate_trajectory(
-                metric, actual_values[0], len(actual_values), coefficients
-            )
+            predicted_values = self._generate_trajectory(metric, actual_values[0], len(actual_values), coefficients)
 
-            accuracy_metrics = await self._compute_metrics(
-                predicted_values, actual_values
-            )
+            accuracy_metrics = await self._compute_metrics(predicted_values, actual_values)
 
             timing_offset = _find_best_timing_offset(predicted_values, actual_values)
 
@@ -434,9 +420,7 @@ class RetrospectiveValidator:
         all_periods = _enumerate_periods(period_start, period_end)
         n = len(all_periods)
         if n < k * 2:
-            logger.warning(
-                "kfold_validate: not enough periods (%d) for k=%d — reducing k", n, k
-            )
+            logger.warning("kfold_validate: not enough periods (%d) for k=%d — reducing k", n, k)
             k = max(2, n // 2)
 
         # Build fold boundaries (walk-forward: train on [0, fold_start), test on fold)
@@ -464,7 +448,8 @@ class RetrospectiveValidator:
             # (all periods BEFORE the validation fold) to prevent look-ahead.
             train_end = all_periods[fold_start - 1]
             training_series = await self._load_historical_series(
-                all_periods[0], train_end,
+                all_periods[0],
+                train_end,
             )
             fold_coefficients = _FoldScopedCoefficients(training_series)
 
@@ -491,9 +476,7 @@ class RetrospectiveValidator:
                     "pearson_r": r.pearson_r,
                     "mape": r.mape,
                 }
-                per_metric_accuracies.setdefault(r.metric, []).append(
-                    r.directional_accuracy
-                )
+                per_metric_accuracies.setdefault(r.metric, []).append(r.directional_accuracy)
 
             fold_results.append(fold_dict)
 
@@ -554,12 +537,8 @@ class RetrospectiveValidator:
                     if rows:
                         series: list[tuple[str, float]] = []
                         for row in rows:
-                            period_val = (
-                                row[0] if isinstance(row, (list, tuple)) else row["period"]
-                            )
-                            value = (
-                                row[1] if isinstance(row, (list, tuple)) else row["value"]
-                            )
+                            period_val = row[0] if isinstance(row, (list, tuple)) else row["period"]
+                            value = row[1] if isinstance(row, (list, tuple)) else row["value"]
                             series.append((str(period_val), float(value)))
 
                         # Sort by period
@@ -618,9 +597,7 @@ class RetrospectiveValidator:
         # Avoid division by zero: skip actuals that are zero
         nonzero_mask = np.abs(a_arr) > 1e-12
         if np.any(nonzero_mask):
-            abs_pct_errors = np.abs(
-                (a_arr[nonzero_mask] - p_arr[nonzero_mask]) / a_arr[nonzero_mask]
-            )
+            abs_pct_errors = np.abs((a_arr[nonzero_mask] - p_arr[nonzero_mask]) / a_arr[nonzero_mask])
             mape = float(np.mean(abs_pct_errors))
         else:
             mape = 0.0

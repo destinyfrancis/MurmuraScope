@@ -80,7 +80,7 @@ class SeedGraphInjector:
     async def inject(
         self,
         graph_id: str,
-        processed_seed: "ProcessedSeed",
+        processed_seed: ProcessedSeed,
     ) -> dict[str, Any]:
         """Convert ProcessedSeed into KG nodes/edges and store via aiosqlite.
 
@@ -145,26 +145,30 @@ class SeedGraphInjector:
             else:
                 stk_id = f"{prefix}_stk_{_slug(stk.group)}"
                 if stk_id not in {n.id for n in stakeholder_nodes}:
-                    stakeholder_nodes.append(SeedGraphNode(
-                        id=stk_id,
-                        entity_type="StakeholderGroup",
-                        title=stk.group,
-                        description=stk.description or f"影響群體：{stk.group}",
-                        properties={"impact": stk.impact, "source": "seed"},
-                    ))
+                    stakeholder_nodes.append(
+                        SeedGraphNode(
+                            id=stk_id,
+                            entity_type="StakeholderGroup",
+                            title=stk.group,
+                            description=stk.description or f"影響群體：{stk.group}",
+                            properties={"impact": stk.impact, "source": "seed"},
+                        )
+                    )
 
             # Connect stakeholder to related entities
             for entity in processed_seed.entities:
                 e_norm = _normalize_name(entity.name)
                 e_id = entity_id_map.get(e_norm)
                 if e_id:
-                    stakeholder_edges.append(SeedGraphEdge(
-                        source_id=stk_id,
-                        target_id=e_id,
-                        relation_type="AFFECTED_BY",
-                        description=f"{stk.group}受{entity.name}影響",
-                        weight=entity.relevance,
-                    ))
+                    stakeholder_edges.append(
+                        SeedGraphEdge(
+                            source_id=stk_id,
+                            target_id=e_id,
+                            relation_type="AFFECTED_BY",
+                            description=f"{stk.group}受{entity.name}影響",
+                            weight=entity.relevance,
+                        )
+                    )
 
         # ------------------------------------------------------------------
         # Step 4: timeline events → PRECEDES edges
@@ -180,23 +184,27 @@ class SeedGraphInjector:
                 if norm in existing_titles:
                     event_ids.append(existing_titles[norm])
                     continue
-                timeline_nodes.append(SeedGraphNode(
-                    id=ev_id,
-                    entity_type="Event",
-                    title=event.event[:60],
-                    description=f"時間：{event.date_hint}" if event.date_hint else event.event,
-                    properties={"date_hint": event.date_hint, "source": "seed"},
-                ))
+                timeline_nodes.append(
+                    SeedGraphNode(
+                        id=ev_id,
+                        entity_type="Event",
+                        title=event.event[:60],
+                        description=f"時間：{event.date_hint}" if event.date_hint else event.event,
+                        properties={"date_hint": event.date_hint, "source": "seed"},
+                    )
+                )
                 event_ids.append(ev_id)
 
             for i in range(len(event_ids) - 1):
-                timeline_edges.append(SeedGraphEdge(
-                    source_id=event_ids[i],
-                    target_id=event_ids[i + 1],
-                    relation_type="PRECEDES",
-                    description="時間順序",
-                    weight=1.0,
-                ))
+                timeline_edges.append(
+                    SeedGraphEdge(
+                        source_id=event_ids[i],
+                        target_id=event_ids[i + 1],
+                        relation_type="PRECEDES",
+                        description="時間順序",
+                        weight=1.0,
+                    )
+                )
 
         # ------------------------------------------------------------------
         # Step 5: key_claims → RELATED_TO edges between co-mentioned entities
@@ -216,13 +224,15 @@ class SeedGraphInjector:
             # Connect pairs of co-mentioned entities
             for i in range(len(mentioned)):
                 for j in range(i + 1, len(mentioned)):
-                    claim_edges.append(SeedGraphEdge(
-                        source_id=mentioned[i],
-                        target_id=mentioned[j],
-                        relation_type="RELATED_TO",
-                        description=claim[:120],
-                        weight=0.8,
-                    ))
+                    claim_edges.append(
+                        SeedGraphEdge(
+                            source_id=mentioned[i],
+                            target_id=mentioned[j],
+                            relation_type="RELATED_TO",
+                            description=claim[:120],
+                            weight=0.8,
+                        )
+                    )
 
         # ------------------------------------------------------------------
         # Step 6: persist all
@@ -234,7 +244,9 @@ class SeedGraphInjector:
 
         logger.info(
             "SeedGraphInjector: graph=%s injected %d nodes, %d edges",
-            graph_id, node_count, edge_count,
+            graph_id,
+            node_count,
+            edge_count,
         )
         return {"seed_nodes": node_count, "seed_edges": edge_count}
 

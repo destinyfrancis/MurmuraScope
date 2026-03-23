@@ -4,10 +4,11 @@ Detects unknown multiple structural breaks in historical data, allowing the
 forecaster to dynamically truncate the training window or add dummy variables
 at break points rather than using hardcoded historical dates.
 """
+
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 import numpy as np
 
@@ -23,17 +24,17 @@ logger = get_logger("structural_break_detector")
 
 @dataclass(frozen=True)
 class BreakPoint:
-    index: int          # position in the series
-    confidence: float   # 0.0-1.0 confidence that this is a real break
-    direction: str      # 'up', 'down', or 'level_shift'
+    index: int  # position in the series
+    confidence: float  # 0.0-1.0 confidence that this is a real break
+    direction: str  # 'up', 'down', or 'level_shift'
 
 
 @dataclass(frozen=True)
 class BreakDetectionResult:
     break_points: tuple[BreakPoint, ...]
     n_breaks: int
-    recommended_start_index: int   # truncate training before this index
-    method: str                    # 'cusum', 'bai_perron', or 'none'
+    recommended_start_index: int  # truncate training before this index
+    method: str  # 'cusum', 'bai_perron', or 'none'
     has_breaks: bool
 
 
@@ -95,10 +96,7 @@ def _compute_confidence(series: np.ndarray, break_idx: int) -> float:
     # Between-group variance as fraction of total variance
     n_pre = len(pre)
     n_post = len(post)
-    between_var = (
-        n_pre * (mean_pre - mean_total) ** 2
-        + n_post * (mean_post - mean_total) ** 2
-    ) / n
+    between_var = (n_pre * (mean_pre - mean_total) ** 2 + n_post * (mean_post - mean_total) ** 2) / n
 
     confidence = min(1.0, between_var / var_total)
     return round(float(confidence), 4)
@@ -127,8 +125,8 @@ def _variance_ratio_breaks(
     raw_breaks: list[int] = []
 
     for i in range(window, n - window):
-        var_left = float(np.var(series[max(0, i - window):i]))
-        var_right = float(np.var(series[i:i + window]))
+        var_left = float(np.var(series[max(0, i - window) : i]))
+        var_right = float(np.var(series[i : i + window]))
 
         if var_left <= 0 and var_right <= 0:
             continue
@@ -178,7 +176,10 @@ def _cusum_breaks(series: np.ndarray, alpha: float = 0.05) -> list[int]:
 
     try:
         rresid, rvar, rreg, recursive_coefs, rmse = recursive_olsresiduals(
-            result, skip=5, alpha=alpha, order_by=None,
+            result,
+            skip=5,
+            alpha=alpha,
+            order_by=None,
         )
     except Exception as exc:
         logger.debug("recursive_olsresiduals failed: %s", exc)
@@ -187,7 +188,7 @@ def _cusum_breaks(series: np.ndarray, alpha: float = 0.05) -> list[int]:
     # CUSUM of squares: identify where cumulative squared residuals
     # deviate significantly from the expected linear path
     resid_arr = np.asarray(rresid, dtype=np.float64)
-    cusum_sq = np.cumsum(resid_arr ** 2)
+    cusum_sq = np.cumsum(resid_arr**2)
     total_sq = float(cusum_sq[-1]) if cusum_sq[-1] != 0 else 1.0
 
     # Normalise to [0, 1]
@@ -279,7 +280,8 @@ def detect_structural_breaks(
     if n < min_series_length:
         logger.debug(
             "detect_structural_breaks: series too short (n=%d < %d), returning no-break",
-            n, min_series_length,
+            n,
+            min_series_length,
         )
         return _no_break
 
@@ -293,7 +295,8 @@ def detect_structural_breaks(
             method_used = "cusum"
             logger.debug(
                 "detect_structural_breaks: CUSUM found %d candidate(s): %s",
-                len(raw_indices), raw_indices,
+                len(raw_indices),
+                raw_indices,
             )
     except Exception as exc:
         logger.debug("detect_structural_breaks: CUSUM error (%s), falling back", exc)
@@ -307,7 +310,8 @@ def detect_structural_breaks(
             method_used = "bai_perron"
             logger.debug(
                 "detect_structural_breaks: variance-ratio found %d candidate(s): %s",
-                len(raw_indices), raw_indices,
+                len(raw_indices),
+                raw_indices,
             )
 
     if not raw_indices:
@@ -320,15 +324,19 @@ def detect_structural_breaks(
         if confidence < confidence_threshold:
             logger.debug(
                 "detect_structural_breaks: dropping break at index=%d (confidence=%.3f < %.3f)",
-                idx, confidence, confidence_threshold,
+                idx,
+                confidence,
+                confidence_threshold,
             )
             continue
         direction = _classify_direction(arr, idx)
-        break_points.append(BreakPoint(
-            index=idx,
-            confidence=confidence,
-            direction=direction,
-        ))
+        break_points.append(
+            BreakPoint(
+                index=idx,
+                confidence=confidence,
+                direction=direction,
+            )
+        )
 
     if not break_points:
         return _no_break
@@ -340,9 +348,11 @@ def detect_structural_breaks(
     recommended_start = last_break  # train from this index forward
 
     logger.info(
-        "detect_structural_breaks: %d break(s) detected via '%s'; "
-        "recommended_start_index=%d (series length=%d)",
-        len(break_points), method_used, recommended_start, n,
+        "detect_structural_breaks: %d break(s) detected via '%s'; recommended_start_index=%d (series length=%d)",
+        len(break_points),
+        method_used,
+        recommended_start,
+        n,
     )
 
     return BreakDetectionResult(

@@ -56,6 +56,7 @@ except ImportError as exc:
 # IPC
 # ---------------------------------------------------------------------------
 
+
 def emit(msg_type: str, data: dict[str, Any]) -> None:
     sys.stdout.write(json.dumps({"type": msg_type, "data": data}, ensure_ascii=False) + "\n")
     sys.stdout.flush()
@@ -88,13 +89,16 @@ def emit_new_posts(db_path: str, round_num: int, last_post_id: int) -> int:
             content = (row["content"] or "").strip()
             if not content:
                 continue
-            emit("post", {
-                "platform": "twitter",
-                "source": "agent",
-                "username": row["name"] or "Agent",
-                "content": content[:300],
-                "round": round_num,
-            })
+            emit(
+                "post",
+                {
+                    "platform": "twitter",
+                    "source": "agent",
+                    "username": row["name"] or "Agent",
+                    "content": content[:300],
+                    "round": round_num,
+                },
+            )
         if rows:
             return max(row["post_id"] for row in rows)
     except Exception as exc:
@@ -103,17 +107,38 @@ def emit_new_posts(db_path: str, round_num: int, last_post_id: int) -> int:
 
 
 # Content actions whose info payload may contain post text
-_CONTENT_ACTIONS = frozenset({
-    "create_post", "repost", "quote_post", "create_comment",
-})
+_CONTENT_ACTIONS = frozenset(
+    {
+        "create_post",
+        "repost",
+        "quote_post",
+        "create_comment",
+    }
+)
 
 # All action types we track (non-content actions logged without text)
-_TRACKED_ACTIONS = frozenset({
-    "create_post", "like_post", "unlike_post", "dislike_post",
-    "follow", "unfollow", "repost", "quote_post", "create_comment",
-    "like_comment", "dislike_comment", "do_nothing", "mute", "unmute",
-    "search_posts", "search_user", "trend", "refresh",
-})
+_TRACKED_ACTIONS = frozenset(
+    {
+        "create_post",
+        "like_post",
+        "unlike_post",
+        "dislike_post",
+        "follow",
+        "unfollow",
+        "repost",
+        "quote_post",
+        "create_comment",
+        "like_comment",
+        "dislike_comment",
+        "do_nothing",
+        "mute",
+        "unmute",
+        "search_posts",
+        "search_user",
+        "trend",
+        "refresh",
+    }
+)
 
 
 def emit_new_actions(db_path: str, round_num: int, last_trace_ts: str) -> str:
@@ -166,14 +191,17 @@ def emit_new_actions(db_path: str, round_num: int, last_trace_ts: str) -> str:
             except (json.JSONDecodeError, TypeError):
                 info = {}
 
-            emit("action", {
-                "platform": "twitter",
-                "source": "agent",
-                "action_type": action,
-                "username": username,
-                "round": round_num,
-                "info": info,
-            })
+            emit(
+                "action",
+                {
+                    "platform": "twitter",
+                    "source": "agent",
+                    "action_type": action,
+                    "username": username,
+                    "round": round_num,
+                    "info": info,
+                },
+            )
 
             ts = row["created_at"] or ""
             if ts > max_ts:
@@ -222,6 +250,7 @@ def build_model(config: dict[str, Any]) -> Any:
 # Shock injection
 # ---------------------------------------------------------------------------
 
+
 def get_shocks_for_round(shocks: list[dict], round_num: int) -> list[dict]:
     return [s for s in shocks if s.get("round_number") == round_num]
 
@@ -243,13 +272,16 @@ async def inject_shock(env: Any, agent_graph: Any, shock: dict) -> None:
     try:
         await env.step({agent: manual})
         logger.info("Shock '%s' injected at round %d", shock.get("shock_type", ""), shock.get("round_number", -1))
-        emit("post", {
-            "platform": "twitter",
-            "source": "shock",
-            "shock_type": shock.get("shock_type", ""),
-            "round": shock.get("round_number", -1),
-            "content": post_content[:200],
-        })
+        emit(
+            "post",
+            {
+                "platform": "twitter",
+                "source": "shock",
+                "shock_type": shock.get("shock_type", ""),
+                "round": shock.get("round_number", -1),
+                "content": post_content[:200],
+            },
+        )
     except Exception as exc:
         logger.error("Shock injection failed: %s", exc)
 
@@ -357,21 +389,25 @@ async def run_simulation(config: dict[str, Any]) -> None:
             logger.error("Round %d error: %s", round_num, exc)
             emit("error", {"platform": "twitter", "round": round_num, "message": str(exc)})
 
-    emit("complete", {
-        "platform": "twitter",
-        "session_id": session_id,
-        "rounds_completed": last_round,
-        "total_rounds": round_count,
-        "agent_count": agent_count,
-        "total_actions": total_actions,
-        "db_path": db_path,
-    })
+    emit(
+        "complete",
+        {
+            "platform": "twitter",
+            "session_id": session_id,
+            "rounds_completed": last_round,
+            "total_rounds": round_count,
+            "agent_count": agent_count,
+            "total_actions": total_actions,
+            "db_path": db_path,
+        },
+    )
     logger.info("Simulation complete — %d rounds, %d total actions", last_round, total_actions)
 
 
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="MurmuraScope Twitter Simulation")

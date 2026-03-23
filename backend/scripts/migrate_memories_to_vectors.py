@@ -54,14 +54,16 @@ async def migrate(batch_size: int = BATCH_SIZE) -> None:
         sid = row["session_id"]
         if sid not in by_session:
             by_session[sid] = []
-        by_session[sid].append({
-            "memory_id": row["id"],
-            "agent_id": row["agent_id"],
-            "round_number": row["round_number"],
-            "memory_text": row["memory_text"],
-            "salience_score": row["salience_score"],
-            "memory_type": row["memory_type"],
-        })
+        by_session[sid].append(
+            {
+                "memory_id": row["id"],
+                "agent_id": row["agent_id"],
+                "round_number": row["round_number"],
+                "memory_text": row["memory_text"],
+                "salience_score": row["salience_score"],
+                "memory_type": row["memory_type"],
+            }
+        )
 
     total = 0
     for session_id, memories in by_session.items():

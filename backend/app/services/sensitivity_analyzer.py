@@ -13,9 +13,9 @@ Usage::
     for row in report["sensitivities"]:
         print(row["parameter"], row["metric"], row["sensitivity_score"])
 """
+
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 from typing import Any
 
@@ -69,8 +69,8 @@ class SensitivityRow:
     parameter: str
     metric: str
     baseline_coefficient: float
-    sensitivity_score: float   # normalised change in directional accuracy [0, 1]
-    direction: str             # "positive" | "negative" | "flat"
+    sensitivity_score: float  # normalised change in directional accuracy [0, 1]
+    direction: str  # "positive" | "negative" | "flat"
 
 
 @dataclass(frozen=True)
@@ -86,11 +86,12 @@ class SobolResult:
         total_order: {param__metric: ST index} — direct + interaction effects.
         summary: Human-readable description.
     """
+
     period_start: str
     period_end: str
     parameters: list[str]
     metrics: list[str]
-    first_order: dict[str, float]   # key = "param__metric"
+    first_order: dict[str, float]  # key = "param__metric"
     total_order: dict[str, float]
     summary: str
 
@@ -154,9 +155,7 @@ class SensitivityAnalyzer:
             logger.warning("SensitivityAnalyzer: baseline validation failed: %s", exc)
             return _empty_report(period_start, period_end)
 
-        baseline_accuracy: dict[str, float] = {
-            r.metric: r.directional_accuracy for r in baseline_results
-        }
+        baseline_accuracy: dict[str, float] = {r.metric: r.directional_accuracy for r in baseline_results}
 
         if not baseline_accuracy:
             return _empty_report(period_start, period_end)
@@ -191,7 +190,9 @@ class SensitivityAnalyzer:
                 except Exception as exc:
                     logger.debug(
                         "SensitivityAnalyzer: sweep failed param=%s metric=%s: %s",
-                        param, metric, exc,
+                        param,
+                        metric,
+                        exc,
                     )
                     continue
 
@@ -215,13 +216,15 @@ class SensitivityAnalyzer:
                 else:
                     direction = "flat"
 
-                rows.append(SensitivityRow(
-                    parameter=param,
-                    metric=metric,
-                    baseline_coefficient=round(baseline_coeff, 6),
-                    sensitivity_score=round(sensitivity_score, 4),
-                    direction=direction,
-                ))
+                rows.append(
+                    SensitivityRow(
+                        parameter=param,
+                        metric=metric,
+                        baseline_coefficient=round(baseline_coeff, 6),
+                        sensitivity_score=round(sensitivity_score, 4),
+                        direction=direction,
+                    )
+                )
 
         rows.sort(key=lambda r: r.sensitivity_score, reverse=True)
 
@@ -262,7 +265,7 @@ class SensitivityAnalyzer:
         parameters: list[str] | None = None,
         metrics: list[str] | None = None,
         n_samples: int = 64,
-    ) -> "SobolResult":
+    ) -> SobolResult:
         """Sobol global sensitivity analysis using SALib Saltelli sampling.
 
         Generates N*(2D+2) parameter combinations via Saltelli sampler,
@@ -281,14 +284,18 @@ class SensitivityAnalyzer:
             SobolResult with first_order and total_order index dicts.
         """
         try:
-            from SALib.sample import sobol as saltelli  # noqa: PLC0415
-            from SALib.analyze import sobol as sobol_analyze  # noqa: PLC0415
             import numpy as np  # noqa: PLC0415
+            from SALib.analyze import sobol as sobol_analyze  # noqa: PLC0415
+            from SALib.sample import sobol as saltelli  # noqa: PLC0415
         except ImportError:
             logger.error("SALib not installed — run: pip install SALib")
             return SobolResult(
-                period_start=period_start, period_end=period_end,
-                parameters=[], metrics=[], first_order={}, total_order={},
+                period_start=period_start,
+                period_end=period_end,
+                parameters=[],
+                metrics=[],
+                first_order={},
+                total_order={},
                 summary="SALib not installed.",
             )
 
@@ -325,18 +332,18 @@ class SensitivityAnalyzer:
 
         if not all_s1:
             return SobolResult(
-                period_start=period_start, period_end=period_end,
-                parameters=sweep_params, metrics=sweep_metrics,
-                first_order={}, total_order={},
+                period_start=period_start,
+                period_end=period_end,
+                parameters=sweep_params,
+                metrics=sweep_metrics,
+                first_order={},
+                total_order={},
                 summary=f"Insufficient data for Sobol analysis ({period_start}–{period_end}).",
             )
 
         top3 = sorted(all_st.items(), key=lambda x: x[1], reverse=True)[:3]
         top_str = ", ".join(f"{k}={v:.3f}" for k, v in top3)
-        summary = (
-            f"Sobol analysis ({period_start}–{period_end}): "
-            f"{len(all_s1)} indices computed. Top ST: {top_str}."
-        )
+        summary = f"Sobol analysis ({period_start}–{period_end}): {len(all_s1)} indices computed. Top ST: {top_str}."
         logger.info("run_sobol complete: %s", summary)
 
         return SobolResult(
@@ -454,9 +461,7 @@ def _make_summary(rows: list[SensitivityRow], start: str, end: str) -> str:
         f"(score={top.sensitivity_score:.3f}, direction={top.direction}).",
     ]
     if high_sens:
-        parts.append(
-            f"{len(high_sens)} pairs show high sensitivity (score ≥ 0.10) — prioritise recalibration."
-        )
+        parts.append(f"{len(high_sens)} pairs show high sensitivity (score ≥ 0.10) — prioritise recalibration.")
     if len(flat) == len(rows):
         parts.append("All parameters appear flat — model may be underspecified or data is insufficient.")
 
@@ -552,8 +557,7 @@ async def _run_sobol_for_metric(
     try:
         Si = sobol_analyze.analyze(problem, Y, calc_second_order=False, print_to_console=False)
         return {
-            param: (round(float(Si["S1"][j]), 4), round(float(Si["ST"][j]), 4))
-            for j, param in enumerate(sweep_params)
+            param: (round(float(Si["S1"][j]), 4), round(float(Si["ST"][j]), 4)) for j, param in enumerate(sweep_params)
         }
     except Exception as exc:
         logger.warning("Sobol analyze failed for metric=%s: %s", metric, exc)

@@ -17,7 +17,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from backend.app.services.calibration_config import CalibrationParams, DEFAULT_CALIBRATION
+from backend.app.services.calibration_config import DEFAULT_CALIBRATION
 from backend.app.services.macro_controller import MacroController
 from backend.app.services.macro_shocks import (
     SHOCK_HANDLERS,
@@ -40,7 +40,6 @@ from backend.app.services.macro_state import (
     MacroState,
     apply_overrides,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -149,9 +148,7 @@ class TestShockHandlers:
         assert result.median_monthly_income < baseline.median_monthly_income
 
     def test_policy_change_updates_flags(self, baseline: MacroState) -> None:
-        result = _shock_policy_change(
-            baseline, {"new_flags": {"新政策": True}, "mortgage_cap": 0.80}
-        )
+        result = _shock_policy_change(baseline, {"new_flags": {"新政策": True}, "mortgage_cap": 0.80})
         assert result.policy_flags["新政策"] is True
         assert result.mortgage_cap == 0.80
 
@@ -197,9 +194,7 @@ class TestShockHandlers:
 
     def test_all_shock_types_have_handlers(self) -> None:
         for shock_type in VALID_SHOCK_TYPES:
-            assert shock_type in SHOCK_HANDLERS, (
-                f"Shock type '{shock_type}' missing from SHOCK_HANDLERS"
-            )
+            assert shock_type in SHOCK_HANDLERS, f"Shock type '{shock_type}' missing from SHOCK_HANDLERS"
 
     def test_all_handlers_return_new_state(self, baseline: MacroState) -> None:
         for shock_type, handler in SHOCK_HANDLERS.items():
@@ -216,9 +211,7 @@ class TestShockHandlers:
 class TestSecondOrderEffects:
     """Tests for _apply_second_order cascading effects."""
 
-    def test_property_crash_triggers_unemployment_rise(
-        self, baseline: MacroState
-    ) -> None:
+    def test_property_crash_triggers_unemployment_rise(self, baseline: MacroState) -> None:
         crashed = replace(
             baseline,
             ccl_index=baseline.ccl_index * 0.80,  # 20% drop
@@ -350,14 +343,10 @@ class TestSentimentFeedback:
         assert result.consumer_confidence == baseline.consumer_confidence
 
     @pytest.mark.asyncio
-    async def test_negative_sentiment_decreases_confidence(
-        self, baseline: MacroState
-    ) -> None:
+    async def test_negative_sentiment_decreases_confidence(self, baseline: MacroState) -> None:
         ctrl = MacroController()
 
-        neg_rows = [
-            {"sentiment": "negative", "topics": "[]"} for _ in range(8)
-        ] + [
+        neg_rows = [{"sentiment": "negative", "topics": "[]"} for _ in range(8)] + [
             {"sentiment": "positive", "topics": "[]"} for _ in range(2)
         ]
 
@@ -382,14 +371,10 @@ class TestSentimentFeedback:
         assert result.consumer_confidence < baseline.consumer_confidence
 
     @pytest.mark.asyncio
-    async def test_emigration_topic_decreases_migration(
-        self, baseline: MacroState
-    ) -> None:
+    async def test_emigration_topic_decreases_migration(self, baseline: MacroState) -> None:
         ctrl = MacroController()
 
-        rows = [
-            {"sentiment": "negative", "topics": '["emigration"]'} for _ in range(5)
-        ] + [
+        rows = [{"sentiment": "negative", "topics": '["emigration"]'} for _ in range(5)] + [
             {"sentiment": "neutral", "topics": "[]"} for _ in range(5)
         ]
 

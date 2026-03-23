@@ -10,6 +10,7 @@ Design:
   - All models are frozen Pydantic (immutable).
   - Gracefully handles missing/partial LLM responses.
 """
+
 from __future__ import annotations
 
 import json

@@ -2,39 +2,39 @@
 
 from __future__ import annotations
 
-import pytest
 from dataclasses import replace
 
+import pytest
+
+from backend.app.services.macro_shocks import (
+    SHOCK_HANDLERS,
+    _apply_second_order,
+    _shock_china_demand_collapse,
+    _shock_china_slowdown,
+    _shock_china_stimulus,
+    _shock_emigration_wave,
+    _shock_fed_rate_cut,
+    _shock_fed_rate_hike,
+    _shock_greater_bay_boost,
+    _shock_interest_rate_hike,
+    _shock_market_rally,
+    _shock_policy_change,
+    _shock_property_crash,
+    _shock_rcep_benefit,
+    _shock_shenzhen_magnet,
+    _shock_supply_chain_disruption,
+    _shock_taiwan_strait_ease,
+    _shock_taiwan_strait_tension,
+    _shock_tariff_increase,
+    _shock_unemployment_spike,
+    apply_shock,
+)
 from backend.app.services.macro_state import (
-    MacroState,
     BASELINE_AVG_SQFT_PRICE,
     BASELINE_STAMP_DUTY,
     VALID_SHOCK_TYPES,
+    MacroState,
 )
-from backend.app.services.macro_shocks import (
-    SHOCK_HANDLERS,
-    apply_shock,
-    _apply_second_order,
-    _shock_interest_rate_hike,
-    _shock_property_crash,
-    _shock_unemployment_spike,
-    _shock_policy_change,
-    _shock_market_rally,
-    _shock_emigration_wave,
-    _shock_fed_rate_hike,
-    _shock_fed_rate_cut,
-    _shock_china_slowdown,
-    _shock_china_stimulus,
-    _shock_taiwan_strait_tension,
-    _shock_taiwan_strait_ease,
-    _shock_shenzhen_magnet,
-    _shock_greater_bay_boost,
-    _shock_tariff_increase,
-    _shock_supply_chain_disruption,
-    _shock_china_demand_collapse,
-    _shock_rcep_benefit,
-)
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

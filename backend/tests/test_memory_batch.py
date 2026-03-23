@@ -1,8 +1,10 @@
 """Tests for batch memory salience evaluation."""
+
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock
+
+import pytest
 
 
 @pytest.mark.asyncio
@@ -10,17 +12,10 @@ async def test_batch_memory_processing():
     from backend.app.services.agent_memory import AgentMemoryService
 
     mock_llm = AsyncMock()
-    mock_llm.chat_json = AsyncMock(
-        return_value={
-            "salience_scores": [0.8, 0.6, 0.4, 0.7, 0.5, 0.3, 0.9, 0.2, 0.6, 0.5]
-        }
-    )
+    mock_llm.chat_json = AsyncMock(return_value={"salience_scores": [0.8, 0.6, 0.4, 0.7, 0.5, 0.3, 0.9, 0.2, 0.6, 0.5]})
 
     svc = AgentMemoryService(llm_client=mock_llm)
-    agent_memories = [
-        {"agent_id": f"a{i}", "memory_text": f"Memory {i}", "round": 5}
-        for i in range(10)
-    ]
+    agent_memories = [{"agent_id": f"a{i}", "memory_text": f"Memory {i}", "round": 5} for i in range(10)]
     scores = await svc.batch_evaluate_salience(agent_memories)
 
     assert len(scores) == 10
@@ -35,10 +30,7 @@ async def test_batch_memory_multiple_batches():
     mock_llm.chat_json = AsyncMock(return_value={"salience_scores": [0.5] * 10})
 
     svc = AgentMemoryService(llm_client=mock_llm)
-    agent_memories = [
-        {"agent_id": f"a{i}", "memory_text": f"Memory {i}", "round": 5}
-        for i in range(25)
-    ]
+    agent_memories = [{"agent_id": f"a{i}", "memory_text": f"Memory {i}", "round": 5} for i in range(25)]
     scores = await svc.batch_evaluate_salience(agent_memories)
 
     assert len(scores) == 25
@@ -52,15 +44,10 @@ async def test_batch_memory_clamps_scores():
 
     mock_llm = AsyncMock()
     # Return out-of-range values
-    mock_llm.chat_json = AsyncMock(
-        return_value={"salience_scores": [-0.5, 1.5, 0.7]}
-    )
+    mock_llm.chat_json = AsyncMock(return_value={"salience_scores": [-0.5, 1.5, 0.7]})
 
     svc = AgentMemoryService(llm_client=mock_llm)
-    agent_memories = [
-        {"agent_id": f"a{i}", "memory_text": f"Memory {i}", "round": 1}
-        for i in range(3)
-    ]
+    agent_memories = [{"agent_id": f"a{i}", "memory_text": f"Memory {i}", "round": 1} for i in range(3)]
     scores = await svc.batch_evaluate_salience(agent_memories, batch_size=10)
 
     assert scores[0] == 0.0
@@ -77,10 +64,7 @@ async def test_batch_memory_llm_error_fallback():
     mock_llm.chat_json = AsyncMock(side_effect=RuntimeError("LLM unavailable"))
 
     svc = AgentMemoryService(llm_client=mock_llm)
-    agent_memories = [
-        {"agent_id": f"a{i}", "memory_text": f"Memory {i}", "round": 1}
-        for i in range(5)
-    ]
+    agent_memories = [{"agent_id": f"a{i}", "memory_text": f"Memory {i}", "round": 1} for i in range(5)]
     scores = await svc.batch_evaluate_salience(agent_memories)
 
     assert len(scores) == 5
@@ -98,10 +82,7 @@ async def test_batch_memory_partial_scores():
     )
 
     svc = AgentMemoryService(llm_client=mock_llm)
-    agent_memories = [
-        {"agent_id": f"a{i}", "memory_text": f"Memory {i}", "round": 1}
-        for i in range(5)
-    ]
+    agent_memories = [{"agent_id": f"a{i}", "memory_text": f"Memory {i}", "round": 1} for i in range(5)]
     scores = await svc.batch_evaluate_salience(agent_memories, batch_size=10)
 
     assert len(scores) == 5

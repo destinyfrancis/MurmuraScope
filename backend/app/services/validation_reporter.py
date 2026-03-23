@@ -11,6 +11,7 @@ Usage::
     report = await reporter.generate("2022-Q1", "2023-Q4")
     print(report["summary"])
 """
+
 from __future__ import annotations
 
 from dataclasses import asdict
@@ -25,17 +26,18 @@ from backend.app.utils.logger import get_logger
 logger = get_logger(__name__)
 
 # Thresholds for interpreting metric quality.
-_DIRECTIONAL_GOOD = 0.65   # >= 65% directional accuracy is considered good
-_PEARSON_GOOD = 0.50       # |r| >= 0.50 is considered meaningful correlation
-_MAPE_GOOD = 0.15          # MAPE <= 15% is considered good
+_DIRECTIONAL_GOOD = 0.65  # >= 65% directional accuracy is considered good
+_PEARSON_GOOD = 0.50  # |r| >= 0.50 is considered meaningful correlation
+_MAPE_GOOD = 0.15  # MAPE <= 15% is considered good
 
 _GRADE_THRESHOLDS: list[tuple[float, str]] = [
     (0.80, "A"),
     (0.65, "B"),
     (0.50, "C"),
     (0.35, "D"),
-    (0.0,  "F"),
+    (0.0, "F"),
 ]
+
 
 def _climatological_brier(base_rate: float) -> float:
     """Brier score of a climatological (always-predict-base-rate) forecast.
@@ -158,12 +160,14 @@ class ValidationReporter:
         metric_rows = []
         for r in results:
             score = _score_metric(r)
-            metric_rows.append({
-                **asdict(r),
-                "composite_score": round(score, 4),
-                "grade": _grade(score),
-                "interpretation": _interpret(r),
-            })
+            metric_rows.append(
+                {
+                    **asdict(r),
+                    "composite_score": round(score, 4),
+                    "grade": _grade(score),
+                    "interpretation": _interpret(r),
+                }
+            )
 
         metric_rows.sort(key=lambda x: x["composite_score"], reverse=True)
 
@@ -171,29 +175,25 @@ class ValidationReporter:
         overall_score = sum(scores) / len(scores)
         overall_grade = _grade(overall_score)
 
-        good_metrics = [
-            row["metric"] for row in metric_rows if row["composite_score"] >= 0.50
-        ]
-        poor_metrics = [
-            row["metric"] for row in metric_rows if row["composite_score"] < 0.35
-        ]
+        good_metrics = [row["metric"] for row in metric_rows if row["composite_score"] >= 0.50]
+        poor_metrics = [row["metric"] for row in metric_rows if row["composite_score"] < 0.35]
 
         summary_parts: list[str] = [
             f"Validated {len(results)} metrics for {period_start}–{period_end}.",
             f"Overall grade: {overall_grade} (score={overall_score:.2f}).",
         ]
         if good_metrics:
-            summary_parts.append(
-                f"Strong predictors: {', '.join(good_metrics)}."
-            )
+            summary_parts.append(f"Strong predictors: {', '.join(good_metrics)}.")
         if poor_metrics:
-            summary_parts.append(
-                f"Needs recalibration: {', '.join(poor_metrics)}."
-            )
+            summary_parts.append(f"Needs recalibration: {', '.join(poor_metrics)}.")
 
         logger.info(
             "ValidationReport %s→%s: grade=%s score=%.2f metrics=%d",
-            period_start, period_end, overall_grade, overall_score, len(results),
+            period_start,
+            period_end,
+            overall_grade,
+            overall_score,
+            len(results),
         )
 
         return {

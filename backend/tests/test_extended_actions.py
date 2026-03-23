@@ -9,7 +9,6 @@ Covers:
 
 from __future__ import annotations
 
-import json
 import math
 import os
 from unittest.mock import AsyncMock, patch
@@ -27,7 +26,6 @@ from backend.app.models.action_types import (
     ExtendedActionType,
     get_category,
 )
-
 
 # ---------------------------------------------------------------------------
 # ActionType model tests
@@ -52,10 +50,7 @@ class TestExtendedActionType:
 
     def test_content_creation_actions(self):
         """Content creation category should include post/repost/comment/quote."""
-        content_types = {
-            at for at, cat in ACTION_CATEGORY_MAP.items()
-            if cat == ActionCategory.CONTENT_CREATION
-        }
+        content_types = {at for at, cat in ACTION_CATEGORY_MAP.items() if cat == ActionCategory.CONTENT_CREATION}
         assert ExtendedActionType.CREATE_POST in content_types
         assert ExtendedActionType.REPOST in content_types
         assert ExtendedActionType.QUOTE_POST in content_types
@@ -64,10 +59,7 @@ class TestExtendedActionType:
 
     def test_social_management_actions(self):
         """Social management category should include follow/unfollow/mute."""
-        social = {
-            at for at, cat in ACTION_CATEGORY_MAP.items()
-            if cat == ActionCategory.SOCIAL_MANAGEMENT
-        }
+        social = {at for at, cat in ACTION_CATEGORY_MAP.items() if cat == ActionCategory.SOCIAL_MANAGEMENT}
         assert ExtendedActionType.FOLLOW in social
         assert ExtendedActionType.UNFOLLOW in social
         assert ExtendedActionType.MUTE in social
@@ -75,10 +67,7 @@ class TestExtendedActionType:
 
     def test_passive_actions(self):
         """Passive category should include do_nothing and refresh."""
-        passive = {
-            at for at, cat in ACTION_CATEGORY_MAP.items()
-            if cat == ActionCategory.PASSIVE
-        }
+        passive = {at for at, cat in ACTION_CATEGORY_MAP.items() if cat == ActionCategory.PASSIVE}
         assert ExtendedActionType.DO_NOTHING in passive
         assert ExtendedActionType.REFRESH in passive
 
@@ -118,13 +107,12 @@ class TestExtendedActionType:
 # ActionLogger.log_action() tests
 # ---------------------------------------------------------------------------
 
+
 @pytest_asyncio.fixture()
 async def action_db(tmp_path):
     """Create a temporary DB with simulation_actions table."""
     db_path = str(tmp_path / "test_actions.db")
-    schema_path = os.path.join(
-        os.path.dirname(__file__), "..", "database", "schema.sql"
-    )
+    schema_path = os.path.join(os.path.dirname(__file__), "..", "database", "schema.sql")
     async with aiosqlite.connect(db_path) as db:
         with open(schema_path, encoding="utf-8") as f:
             await db.executescript(f.read())
@@ -256,9 +244,18 @@ class TestActionDiversity:
     def test_uniform_distribution_max_entropy(self):
         """12 equally distributed types yield entropy = log2(12) ~ 3.585."""
         types = [
-            "create_post", "like_post", "dislike_post", "follow",
-            "unfollow", "repost", "quote_post", "create_comment",
-            "do_nothing", "mute", "search_posts", "trend",
+            "create_post",
+            "like_post",
+            "dislike_post",
+            "follow",
+            "unfollow",
+            "repost",
+            "quote_post",
+            "create_comment",
+            "do_nothing",
+            "mute",
+            "search_posts",
+            "trend",
         ]
         counts = {t: 100 for t in types}
         entropy = _compute_entropy(counts)

@@ -6,9 +6,6 @@ All methods access SimulationRunner state via ``self`` (cooperative MRO).
 
 from __future__ import annotations
 
-from typing import Any
-
-from backend.app.utils.db import get_db
 from backend.app.utils.logger import get_logger
 
 logger = get_logger("simulation_hooks.social")
@@ -25,15 +22,14 @@ class SocialHooksMixin:
         """Detect echo chambers and apply filter-bubble dampening."""
         try:
             from backend.app.services.social_network import SocialNetworkBuilder  # noqa: PLC0415
+
             if self._social_network is None:
                 self._social_network = SocialNetworkBuilder()
 
             echo_result = await self._social_network.detect_echo_chambers(session_id)
             self._echo_chamber_result = echo_result
 
-            await self._social_network.persist_echo_chamber_result(
-                session_id, round_number, echo_result
-            )
+            await self._social_network.persist_echo_chamber_result(session_id, round_number, echo_result)
 
             if echo_result.num_clusters > 1:
                 dampened = await self._social_network.apply_echo_chamber_dampening(
@@ -55,7 +51,8 @@ class SocialHooksMixin:
         except Exception:
             logger.exception(
                 "_process_echo_chambers failed session=%s round=%d",
-                session_id, round_number,
+                session_id,
+                round_number,
             )
 
     async def _process_community_summaries(
@@ -65,8 +62,8 @@ class SocialHooksMixin:
     ) -> None:
         """Generate GraphRAG community summaries for current echo chamber clusters."""
         try:
-            from backend.app.services.social_network import SocialNetworkBuilder  # noqa: PLC0415
             from backend.app.services.graph_rag import GraphRAGService  # noqa: PLC0415
+            from backend.app.services.social_network import SocialNetworkBuilder  # noqa: PLC0415
 
             if self._social_network is None:
                 self._social_network = SocialNetworkBuilder()
@@ -76,26 +73,29 @@ class SocialHooksMixin:
             if echo_result.num_clusters <= 1:
                 logger.debug(
                     "Skipping community summaries: only %d cluster(s) session=%s",
-                    echo_result.num_clusters, session_id,
+                    echo_result.num_clusters,
+                    session_id,
                 )
                 return
 
             from backend.app.utils.llm_client import get_default_client  # noqa: PLC0415
+
             graph_rag = GraphRAGService(
                 vector_store=self._vector_store,
                 llm_client=get_default_client(),
             )
-            summaries = await graph_rag.generate_community_summaries(
-                session_id, round_number, echo_result
-            )
+            summaries = await graph_rag.generate_community_summaries(session_id, round_number, echo_result)
             logger.info(
                 "_process_community_summaries: %d summaries session=%s round=%d",
-                len(summaries), session_id, round_number,
+                len(summaries),
+                session_id,
+                round_number,
             )
         except Exception:
             logger.exception(
                 "_process_community_summaries failed session=%s round=%d",
-                session_id, round_number,
+                session_id,
+                round_number,
             )
 
     async def _process_group_formation(
@@ -106,16 +106,20 @@ class SocialHooksMixin:
         """Detect and form new agent groups from trust network clusters."""
         try:
             from backend.app.services.collective_actions import process_group_formation  # noqa: PLC0415
+
             groups = await process_group_formation(session_id, round_num)
             if groups:
                 logger.info(
                     "_process_group_formation session=%s round=%d new_groups=%d",
-                    session_id, round_num, len(groups),
+                    session_id,
+                    round_num,
+                    len(groups),
                 )
         except Exception:
             logger.exception(
                 "_process_group_formation failed session=%s round=%d",
-                session_id, round_num,
+                session_id,
+                round_num,
             )
 
     async def _process_collective_action_momentum(
@@ -126,15 +130,18 @@ class SocialHooksMixin:
         """Update collective action momentum for all active actions this round."""
         try:
             from backend.app.services.collective_actions import process_collective_action_momentum  # noqa: PLC0415
+
             await process_collective_action_momentum(session_id, round_num)
             logger.debug(
                 "_process_collective_action_momentum done session=%s round=%d",
-                session_id, round_num,
+                session_id,
+                round_num,
             )
         except Exception:
             logger.exception(
                 "_process_collective_action_momentum failed session=%s round=%d",
-                session_id, round_num,
+                session_id,
+                round_num,
             )
 
     async def _process_wealth_transfers(
@@ -152,6 +159,7 @@ class SocialHooksMixin:
                 return
 
             from backend.app.services.agent_factory import AgentProfile  # noqa: PLC0415
+
             profiles_by_id: dict[int, AgentProfile] = {}
             for r in rows:
                 try:
@@ -185,6 +193,7 @@ class SocialHooksMixin:
                 macro_state = self._macro_state.get(session_id)
             if macro_state is None:
                 from backend.app.services.macro_controller import MacroController  # noqa: PLC0415
+
                 macro_state = await MacroController().get_baseline()
 
             transfers = await process_wealth_transfers(
@@ -195,12 +204,15 @@ class SocialHooksMixin:
             )
             logger.debug(
                 "_process_wealth_transfers session=%s round=%d transfers=%d",
-                session_id, round_num, len(transfers),
+                session_id,
+                round_num,
+                len(transfers),
             )
         except Exception:
             logger.exception(
                 "_process_wealth_transfers failed session=%s round=%d",
-                session_id, round_num,
+                session_id,
+                round_num,
             )
 
     async def _process_media_influence(
@@ -211,12 +223,11 @@ class SocialHooksMixin:
         """Propagate media influence on agent political stances."""
         try:
             from backend.app.services.media_influence import MediaInfluenceModel  # noqa: PLC0415
+
             if self._media_model is None:
                 self._media_model = MediaInfluenceModel()
 
-            result = await self._media_model.propagate_media_influence(
-                session_id, round_number
-            )
+            result = await self._media_model.propagate_media_influence(session_id, round_number)
             logger.info(
                 "Media influence applied session=%s round=%d influenced=%d",
                 session_id,
@@ -237,7 +248,7 @@ class SocialHooksMixin:
     ) -> None:
         """Run fact-checking and fabricated content generation this round."""
         try:
-            from backend.app.services.info_warfare import process_fact_checks, process_fabrication  # noqa: PLC0415
+            from backend.app.services.info_warfare import process_fabrication, process_fact_checks  # noqa: PLC0415
             from backend.app.utils.db import get_db  # noqa: PLC0415
 
             async with get_db() as db:
@@ -251,6 +262,7 @@ class SocialHooksMixin:
                 return
 
             from backend.app.services.agent_factory import AgentProfile  # noqa: PLC0415
+
             profiles_by_id: dict[int, AgentProfile] = {}
             for r in rows:
                 try:
@@ -281,12 +293,16 @@ class SocialHooksMixin:
 
             logger.debug(
                 "_process_info_warfare session=%s round=%d checks=%d fabrications=%d",
-                session_id, round_num, len(checks), len(fabrications),
+                session_id,
+                round_num,
+                len(checks),
+                len(fabrications),
             )
         except Exception:
             logger.exception(
                 "_process_info_warfare failed session=%s round=%d",
-                session_id, round_num,
+                session_id,
+                round_num,
             )
 
     async def _process_polarization(
@@ -297,23 +313,27 @@ class SocialHooksMixin:
         """Compute and persist polarization index for the current round."""
         try:
             from backend.app.services.social_network import SocialNetworkBuilder  # noqa: PLC0415
+
             if self._social_network is None:
                 self._social_network = SocialNetworkBuilder()
 
-            result = await self._social_network.compute_polarization_index(
-                session_id, round_number
-            )
+            result = await self._social_network.compute_polarization_index(session_id, round_number)
             await self._social_network.persist_polarization_result(session_id, result)
 
             logger.info(
                 "Polarization index=%.4f session=%s round=%d (mod=%.4f, var=%.4f, host=%.4f)",
-                result.polarization_index, session_id, round_number,
-                result.modularity, result.opinion_variance, result.cross_cluster_hostility,
+                result.polarization_index,
+                session_id,
+                round_number,
+                result.modularity,
+                result.opinion_variance,
+                result.cross_cluster_hostility,
             )
         except Exception:
             logger.exception(
                 "_process_polarization failed session=%s round=%d",
-                session_id, round_number,
+                session_id,
+                round_number,
             )
 
     # ------------------------------------------------------------------
@@ -331,10 +351,11 @@ class SocialHooksMixin:
         Contagion strength is modulated by trust score and target dominance.
         """
         try:
-            from backend.app.services.emotional_engine import EmotionalEngine  # noqa: PLC0415
-            from backend.app.utils.db import get_db  # noqa: PLC0415
             from dataclasses import replace as dc_replace  # noqa: PLC0415
             from typing import Any as _Any  # noqa: PLC0415
+
+            from backend.app.services.emotional_engine import EmotionalEngine  # noqa: PLC0415
+            from backend.app.utils.db import get_db  # noqa: PLC0415
 
             engine = EmotionalEngine()
 
@@ -367,10 +388,7 @@ class SocialHooksMixin:
                 trust_neighbors.setdefault(a_id, []).append((b_id, score))
 
             # Find high-arousal agents (arousal > 0.6)
-            high_arousal = {
-                aid: state for aid, state in states.items()
-                if state.arousal > 0.6
-            }
+            high_arousal = {aid: state for aid, state in states.items() if state.arousal > 0.6}
 
             if not high_arousal:
                 return
@@ -385,9 +403,7 @@ class SocialHooksMixin:
                         continue
 
                     # Contagion strength modulated by trust and target dominance
-                    contagion_strength = (
-                        trust_score * source_state.arousal * (1.0 - target_state.dominance)
-                    )
+                    contagion_strength = trust_score * source_state.arousal * (1.0 - target_state.dominance)
                     contagion_strength = max(0.0, min(1.0, contagion_strength))
 
                     if contagion_strength < 0.05:
@@ -413,12 +429,16 @@ class SocialHooksMixin:
 
                 logger.debug(
                     "_process_emotional_contagion session=%s round=%d modified=%d high_arousal=%d",
-                    session_id, round_num, len(modified_states), len(high_arousal),
+                    session_id,
+                    round_num,
+                    len(modified_states),
+                    len(high_arousal),
                 )
         except Exception:
             logger.exception(
                 "_process_emotional_contagion failed session=%s round=%d",
-                session_id, round_num,
+                session_id,
+                round_num,
             )
 
     # ------------------------------------------------------------------
@@ -432,8 +452,8 @@ class SocialHooksMixin:
     ) -> None:
         """Record metric snapshot and check for phase transitions each round."""
         try:
-            from backend.app.services.emergence_guards import PhaseTransitionDetector  # noqa: PLC0415
             from backend.app.models.emergence import MetricSnapshot  # noqa: PLC0415
+            from backend.app.services.emergence_guards import PhaseTransitionDetector  # noqa: PLC0415
 
             if not hasattr(self, "_phase_transition_detector"):
                 self._phase_transition_detector = PhaseTransitionDetector()
@@ -450,6 +470,7 @@ class SocialHooksMixin:
 
             # Sentiment mean from this round's actions
             from backend.app.utils.db import get_db  # noqa: PLC0415
+
             async with get_db() as db:
                 cursor = await db.execute(
                     """SELECT AVG(CASE sentiment
@@ -511,42 +532,52 @@ class SocialHooksMixin:
                 # Push alerts via WebSocket
                 try:
                     from backend.app.api.ws import push_progress  # noqa: PLC0415
+
                     for alert in alerts:
-                        await push_progress(session_id, {
-                            "type": "emergence_alert",
-                            "data": {
-                                "metric": alert.metric_name,
-                                "severity": alert.severity,
-                                "z_score": alert.z_score,
-                                "delta": alert.delta,
-                                "round": round_number,
-                                "direction": alert.direction,
+                        await push_progress(
+                            session_id,
+                            {
+                                "type": "emergence_alert",
+                                "data": {
+                                    "metric": alert.metric_name,
+                                    "severity": alert.severity,
+                                    "z_score": alert.z_score,
+                                    "delta": alert.delta,
+                                    "round": round_number,
+                                    "direction": alert.direction,
+                                },
                             },
-                        })
+                        )
                 except Exception:
                     pass  # WebSocket push is best-effort
 
         except Exception:
             logger.exception(
                 "_process_emergence_monitoring failed session=%s round=%d",
-                session_id, round_number,
+                session_id,
+                round_number,
             )
 
     async def _run_bias_probe(self, session_id: str) -> None:
         """Run BiasProbe at simulation start to detect LLM directional bias."""
         try:
             from backend.app.services.emergence_guards import BiasProbe  # noqa: PLC0415
+
             probe = BiasProbe()
             result = await probe.probe(session_id, sample_size=30)
             if result.bias_detected:
                 logger.warning(
                     "BIAS DETECTED session=%s: agreement=%.2f, persona_compliance=%.2f",
-                    session_id, result.agreement_rate, result.persona_compliance,
+                    session_id,
+                    result.agreement_rate,
+                    result.persona_compliance,
                 )
             else:
                 logger.info(
                     "BiasProbe OK session=%s: agreement=%.2f, compliance=%.2f",
-                    session_id, result.agreement_rate, result.persona_compliance,
+                    session_id,
+                    result.agreement_rate,
+                    result.persona_compliance,
                 )
         except Exception:
             logger.exception("_run_bias_probe failed session=%s", session_id)
@@ -598,14 +629,20 @@ class SocialHooksMixin:
             logger.info(
                 "_process_network_evolution session=%s round=%d "
                 "events=%d formed=%d dissolved=%d bridges=%d triadic=%d shifts=%d",
-                session_id, round_num, len(events),
-                stats.ties_formed, stats.ties_dissolved,
-                stats.bridges_detected, stats.triadic_closures, stats.cluster_shifts,
+                session_id,
+                round_num,
+                len(events),
+                stats.ties_formed,
+                stats.ties_dissolved,
+                stats.bridges_detected,
+                stats.triadic_closures,
+                stats.cluster_shifts,
             )
         except Exception:
             logger.exception(
                 "_process_network_evolution failed session=%s round=%d",
-                session_id, round_num,
+                session_id,
+                round_num,
             )
 
     # ------------------------------------------------------------------
@@ -619,16 +656,14 @@ class SocialHooksMixin:
     ) -> None:
         """Rank posts for all agents and compute filter bubble metrics."""
         try:
-            from backend.app.services.feed_ranker import FeedRankingEngine  # noqa: PLC0415
             from backend.app.models.recommendation import FeedAlgorithm  # noqa: PLC0415
+            from backend.app.services.feed_ranker import FeedRankingEngine  # noqa: PLC0415
             from backend.app.utils.db import get_db  # noqa: PLC0415
 
             engine = FeedRankingEngine()
 
             # Get feed algorithm from preset config
-            feed_algo_str = getattr(
-                self._preset.hook_config, "feed_algorithm", "engagement_first"
-            )
+            feed_algo_str = getattr(self._preset.hook_config, "feed_algorithm", "engagement_first")
             try:
                 algorithm = FeedAlgorithm(feed_algo_str)
             except ValueError:
@@ -637,8 +672,7 @@ class SocialHooksMixin:
             async with get_db() as db:
                 # Load agent profiles for stance
                 cursor = await db.execute(
-                    "SELECT id, COALESCE(political_stance, 0.5) "
-                    "FROM agent_profiles WHERE session_id = ?",
+                    "SELECT id, COALESCE(political_stance, 0.5) FROM agent_profiles WHERE session_id = ?",
                     (session_id,),
                 )
                 agent_rows = await cursor.fetchall()
@@ -671,21 +705,22 @@ class SocialHooksMixin:
 
                 # Persist feeds and bubble report
                 await engine.persist_feeds(session_id, feeds, db)
-                report = await engine.compute_bubble_report(
-                    session_id, round_num, algorithm, bubble_indices
-                )
+                report = await engine.compute_bubble_report(session_id, round_num, algorithm, bubble_indices)
                 await engine.persist_bubble_report(report, db)
 
             logger.info(
-                "_process_feed_ranking session=%s round=%d agents=%d "
-                "algorithm=%s avg_bubble=%.3f",
-                session_id, round_num, len(feeds),
-                algorithm.value, report.avg_bubble_score,
+                "_process_feed_ranking session=%s round=%d agents=%d algorithm=%s avg_bubble=%.3f",
+                session_id,
+                round_num,
+                len(feeds),
+                algorithm.value,
+                report.avg_bubble_score,
             )
         except Exception:
             logger.exception(
                 "_process_feed_ranking failed session=%s round=%d",
-                session_id, round_num,
+                session_id,
+                round_num,
             )
 
     async def _process_virality_scoring(
@@ -705,26 +740,33 @@ class SocialHooksMixin:
 
             logger.info(
                 "_process_virality_scoring session=%s round=%d posts_scored=%d",
-                session_id, round_num, len(scores),
+                session_id,
+                round_num,
+                len(scores),
             )
         except Exception:
             logger.exception(
                 "_process_virality_scoring failed session=%s round=%d",
-                session_id, round_num,
+                session_id,
+                round_num,
             )
 
     async def _generate_emergence_scorecard(self, session_id: str) -> None:
         """Generate emergence scorecard at simulation completion."""
         try:
             from backend.app.services.emergence_scorecard import EmergenceScorecardGenerator  # noqa: PLC0415
+
             generator = EmergenceScorecardGenerator()
             scorecard = await generator.generate(session_id)
             logger.info(
                 "Emergence scorecard session=%s: grade=%s, emergence_ratio=%.2f, bias=%.2f",
-                session_id, scorecard.grade, scorecard.emergence_ratio,
+                session_id,
+                scorecard.grade,
+                scorecard.emergence_ratio,
                 scorecard.bias_contamination,
             )
         except Exception:
             logger.exception(
-                "_generate_emergence_scorecard failed session=%s", session_id,
+                "_generate_emergence_scorecard failed session=%s",
+                session_id,
             )

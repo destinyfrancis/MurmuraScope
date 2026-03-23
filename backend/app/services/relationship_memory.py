@@ -9,6 +9,7 @@ the metadata JSON column.  No new DB tables are required.
 LanceDB vector search is used for semantic retrieval (same infrastructure as
 AgentMemoryService).  LLM cost: 0.
 """
+
 from __future__ import annotations
 
 import json
@@ -71,14 +72,15 @@ class RelationshipMemoryService:
                          salience_score, memory_type, metadata)
                     VALUES (?, ?, ?, ?, ?, 'relationship', ?)
                     """,
-                    (session_id, agent_id, content, round_number,
-                     salience, metadata_json),
+                    (session_id, agent_id, content, round_number, salience, metadata_json),
                 )
                 await db.commit()
         except Exception:
             logger.exception(
                 "store_interaction_memory failed session=%s agent=%s related=%s",
-                session_id, agent_id, related_agent_id,
+                session_id,
+                agent_id,
+                related_agent_id,
             )
 
     # ------------------------------------------------------------------
@@ -130,7 +132,8 @@ class RelationshipMemoryService:
         except Exception:
             logger.exception(
                 "retrieve_relationship_memories failed session=%s agent=%s",
-                session_id, agent_id,
+                session_id,
+                agent_id,
             )
             return []
 
@@ -140,12 +143,14 @@ class RelationshipMemoryService:
                 meta = json.loads(row[3]) if row[3] else {}
             except (json.JSONDecodeError, TypeError):
                 meta = {}
-            result.append({
-                "content": row[0],
-                "round_number": row[1],
-                "salience": row[2],
-                "metadata": meta,
-            })
+            result.append(
+                {
+                    "content": row[0],
+                    "round_number": row[1],
+                    "salience": row[2],
+                    "metadata": meta,
+                }
+            )
         return result
 
     # ------------------------------------------------------------------

@@ -9,11 +9,10 @@ import json
 import pytest
 
 from backend.app.services.agent_factory import (
-    AGE_BRACKET_RANGES,
-    AgentFactory,
-    AgentProfile,
     DISTRICT_WEIGHTS,
     HOUSING_WEIGHTS,
+    AgentFactory,
+    AgentProfile,
 )
 from backend.app.services.profile_generator import (
     ProfileGenerator,
@@ -23,7 +22,6 @@ from backend.app.services.profile_generator import (
     _property_concern,
     _trait_level,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -110,36 +108,72 @@ class TestDescribePersonality:
 class TestPoliticalStanceDesc:
     def test_pro_establishment(self):
         profile = AgentProfile(
-            id=1, agent_type="npc", age=50, sex="M", district="沙田",
-            occupation="文員", income_bracket="$15,000-$24,999",
-            education_level="中學", marital_status="已婚",
-            housing_type="公屋", openness=0.5, conscientiousness=0.5,
-            extraversion=0.5, agreeableness=0.5, neuroticism=0.5,
-            monthly_income=16_000, savings=100_000, political_stance=0.1,
+            id=1,
+            agent_type="npc",
+            age=50,
+            sex="M",
+            district="沙田",
+            occupation="文員",
+            income_bracket="$15,000-$24,999",
+            education_level="中學",
+            marital_status="已婚",
+            housing_type="公屋",
+            openness=0.5,
+            conscientiousness=0.5,
+            extraversion=0.5,
+            agreeableness=0.5,
+            neuroticism=0.5,
+            monthly_income=16_000,
+            savings=100_000,
+            political_stance=0.1,
         )
         desc = _political_stance_desc(profile)
         assert "建制" in desc
 
     def test_pro_democracy(self):
         profile = AgentProfile(
-            id=2, agent_type="npc", age=25, sex="F", district="灣仔",
-            occupation="專業人員", income_bracket="$40,000-$59,999",
-            education_level="學位或以上", marital_status="未婚",
-            housing_type="私人住宅", openness=0.8, conscientiousness=0.6,
-            extraversion=0.7, agreeableness=0.5, neuroticism=0.4,
-            monthly_income=45_000, savings=200_000, political_stance=0.9,
+            id=2,
+            agent_type="npc",
+            age=25,
+            sex="F",
+            district="灣仔",
+            occupation="專業人員",
+            income_bracket="$40,000-$59,999",
+            education_level="學位或以上",
+            marital_status="未婚",
+            housing_type="私人住宅",
+            openness=0.8,
+            conscientiousness=0.6,
+            extraversion=0.7,
+            agreeableness=0.5,
+            neuroticism=0.4,
+            monthly_income=45_000,
+            savings=200_000,
+            political_stance=0.9,
         )
         desc = _political_stance_desc(profile)
         assert "民主" in desc
 
     def test_neutral(self):
         profile = AgentProfile(
-            id=3, agent_type="npc", age=40, sex="M", district="觀塘",
-            occupation="文員", income_bracket="$15,000-$24,999",
-            education_level="中學", marital_status="已婚",
-            housing_type="公屋", openness=0.5, conscientiousness=0.5,
-            extraversion=0.5, agreeableness=0.5, neuroticism=0.5,
-            monthly_income=16_000, savings=80_000, political_stance=0.5,
+            id=3,
+            agent_type="npc",
+            age=40,
+            sex="M",
+            district="觀塘",
+            occupation="文員",
+            income_bracket="$15,000-$24,999",
+            education_level="中學",
+            marital_status="已婚",
+            housing_type="公屋",
+            openness=0.5,
+            conscientiousness=0.5,
+            extraversion=0.5,
+            agreeableness=0.5,
+            neuroticism=0.5,
+            monthly_income=16_000,
+            savings=80_000,
+            political_stance=0.5,
         )
         desc = _political_stance_desc(profile)
         assert "中立" in desc
@@ -207,20 +241,42 @@ class TestGenerateUsername:
 
     def test_different_for_different_profiles(self, factory):
         p1 = AgentProfile(
-            id=1, agent_type="npc", age=30, sex="M", district="沙田",
-            occupation="文員", income_bracket="$15,000-$24,999",
-            education_level="中學", marital_status="未婚",
-            housing_type="公屋", openness=0.5, conscientiousness=0.5,
-            extraversion=0.5, agreeableness=0.5, neuroticism=0.5,
-            monthly_income=16_000, savings=50_000,
+            id=1,
+            agent_type="npc",
+            age=30,
+            sex="M",
+            district="沙田",
+            occupation="文員",
+            income_bracket="$15,000-$24,999",
+            education_level="中學",
+            marital_status="未婚",
+            housing_type="公屋",
+            openness=0.5,
+            conscientiousness=0.5,
+            extraversion=0.5,
+            agreeableness=0.5,
+            neuroticism=0.5,
+            monthly_income=16_000,
+            savings=50_000,
         )
         p2 = AgentProfile(
-            id=2, agent_type="npc", age=30, sex="M", district="觀塘",
-            occupation="文員", income_bracket="$15,000-$24,999",
-            education_level="中學", marital_status="未婚",
-            housing_type="公屋", openness=0.5, conscientiousness=0.5,
-            extraversion=0.5, agreeableness=0.5, neuroticism=0.5,
-            monthly_income=16_000, savings=50_000,
+            id=2,
+            agent_type="npc",
+            age=30,
+            sex="M",
+            district="觀塘",
+            occupation="文員",
+            income_bracket="$15,000-$24,999",
+            education_level="中學",
+            marital_status="未婚",
+            housing_type="公屋",
+            openness=0.5,
+            conscientiousness=0.5,
+            extraversion=0.5,
+            agreeableness=0.5,
+            neuroticism=0.5,
+            monthly_income=16_000,
+            savings=50_000,
         )
         assert factory.generate_username(p1) != factory.generate_username(p2)
 
@@ -321,24 +377,46 @@ class TestToOasisJson:
 class TestGetPersonalConcerns:
     def test_public_housing_low_income(self):
         profile = AgentProfile(
-            id=1, agent_type="npc", age=55, sex="F", district="黃大仙",
-            occupation="非技術工人", income_bracket="<$8,000",
-            education_level="小學或以下", marital_status="已婚",
-            housing_type="公屋", openness=0.4, conscientiousness=0.5,
-            extraversion=0.3, agreeableness=0.6, neuroticism=0.7,
-            monthly_income=7_500, savings=30_000,
+            id=1,
+            agent_type="npc",
+            age=55,
+            sex="F",
+            district="黃大仙",
+            occupation="非技術工人",
+            income_bracket="<$8,000",
+            education_level="小學或以下",
+            marital_status="已婚",
+            housing_type="公屋",
+            openness=0.4,
+            conscientiousness=0.5,
+            extraversion=0.3,
+            agreeableness=0.6,
+            neuroticism=0.7,
+            monthly_income=7_500,
+            savings=30_000,
         )
         concerns = _get_personal_concerns(profile)
         assert "公屋" in concerns or "街市" in concerns or "生活費" in concerns
 
     def test_private_housing_high_income(self):
         profile = AgentProfile(
-            id=2, agent_type="npc", age=42, sex="M", district="中西區",
-            occupation="經理及行政人員", income_bracket="$60,000+",
-            education_level="學位或以上", marital_status="已婚",
-            housing_type="私人住宅", openness=0.6, conscientiousness=0.7,
-            extraversion=0.5, agreeableness=0.5, neuroticism=0.3,
-            monthly_income=65_000, savings=1_200_000,
+            id=2,
+            agent_type="npc",
+            age=42,
+            sex="M",
+            district="中西區",
+            occupation="經理及行政人員",
+            income_bracket="$60,000+",
+            education_level="學位或以上",
+            marital_status="已婚",
+            housing_type="私人住宅",
+            openness=0.6,
+            conscientiousness=0.7,
+            extraversion=0.5,
+            agreeableness=0.5,
+            neuroticism=0.3,
+            monthly_income=65_000,
+            savings=1_200_000,
         )
         concerns = _get_personal_concerns(profile)
         assert isinstance(concerns, str)
@@ -346,12 +424,23 @@ class TestGetPersonalConcerns:
 
     def test_temporary_housing(self):
         profile = AgentProfile(
-            id=3, agent_type="npc", age=30, sex="M", district="深水埗",
-            occupation="非技術工人", income_bracket="<$8,000",
-            education_level="中學", marital_status="未婚",
-            housing_type="臨時／其他", openness=0.4, conscientiousness=0.4,
-            extraversion=0.5, agreeableness=0.5, neuroticism=0.6,
-            monthly_income=7_000, savings=5_000,
+            id=3,
+            agent_type="npc",
+            age=30,
+            sex="M",
+            district="深水埗",
+            occupation="非技術工人",
+            income_bracket="<$8,000",
+            education_level="中學",
+            marital_status="未婚",
+            housing_type="臨時／其他",
+            openness=0.4,
+            conscientiousness=0.4,
+            extraversion=0.5,
+            agreeableness=0.5,
+            neuroticism=0.6,
+            monthly_income=7_000,
+            savings=5_000,
         )
         concerns = _get_personal_concerns(profile)
         assert "劏房" in concerns or "上樓" in concerns
@@ -366,12 +455,23 @@ class TestPropertyConcern:
     def test_all_housing_types_covered(self):
         for housing in HOUSING_WEIGHTS:
             profile = AgentProfile(
-                id=99, agent_type="npc", age=40, sex="M", district="沙田",
-                occupation="文員", income_bracket="$15,000-$24,999",
-                education_level="中學", marital_status="已婚",
-                housing_type=housing, openness=0.5, conscientiousness=0.5,
-                extraversion=0.5, agreeableness=0.5, neuroticism=0.5,
-                monthly_income=16_000, savings=80_000,
+                id=99,
+                agent_type="npc",
+                age=40,
+                sex="M",
+                district="沙田",
+                occupation="文員",
+                income_bracket="$15,000-$24,999",
+                education_level="中學",
+                marital_status="已婚",
+                housing_type=housing,
+                openness=0.5,
+                conscientiousness=0.5,
+                extraversion=0.5,
+                agreeableness=0.5,
+                neuroticism=0.5,
+                monthly_income=16_000,
+                savings=80_000,
             )
             concern = _property_concern(profile)
             assert isinstance(concern, str)

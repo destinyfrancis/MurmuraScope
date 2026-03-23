@@ -22,8 +22,8 @@ from typing import Any
 
 import numpy as np
 
-from backend.app.models.ensemble import DistributionBand, EnsembleResult
-from backend.app.services.ensemble_analyzer import EnsembleAnalyzer, PERTURBABLE_FIELDS
+from backend.app.models.ensemble import EnsembleResult
+from backend.app.services.ensemble_analyzer import PERTURBABLE_FIELDS, EnsembleAnalyzer
 from backend.app.services.macro_state import MacroState, apply_overrides
 from backend.app.utils.db import get_db
 from backend.app.utils.logger import get_logger
@@ -39,16 +39,16 @@ DEFAULT_PERTURBATION_STD: float = 0.05
 
 # Clamp bounds for each perturbable field to keep values physically sane
 _FIELD_CLAMPS: dict[str, tuple[float, float]] = {
-    "hibor_1m":           (0.001,  0.20),
-    "unemployment_rate":  (0.005,  0.25),
-    "ccl_index":          (40.0,   350.0),
-    "hsi_level":          (5_000,  80_000),
-    "consumer_confidence":(15.0,   130.0),
-    "gdp_growth":         (-0.15,  0.20),
-    "net_migration":      (-250_000, 100_000),
-    "fed_rate":           (0.0,    0.15),
-    "china_gdp_growth":   (-0.10,  0.15),
-    "taiwan_strait_risk": (0.0,    1.0),
+    "hibor_1m": (0.001, 0.20),
+    "unemployment_rate": (0.005, 0.25),
+    "ccl_index": (40.0, 350.0),
+    "hsi_level": (5_000, 80_000),
+    "consumer_confidence": (15.0, 130.0),
+    "gdp_growth": (-0.15, 0.20),
+    "net_migration": (-250_000, 100_000),
+    "fed_rate": (0.0, 0.15),
+    "china_gdp_growth": (-0.10, 0.15),
+    "taiwan_strait_risk": (0.0, 1.0),
 }
 
 # Maximum parallel trials to avoid spawning too many subprocesses simultaneously
@@ -58,6 +58,7 @@ _MAX_CONCURRENT_TRIALS: int = 3
 # ---------------------------------------------------------------------------
 # Frozen result for a single trial
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class TrialRecord:
@@ -128,7 +129,10 @@ class EnsembleRunner:
 
         logger.info(
             "EnsembleRunner.run_ensemble session=%s n_trials=%d std=%.3f dry_run=%s",
-            session_id, n_trials, perturbation_std, dry_run,
+            session_id,
+            n_trials,
+            perturbation_std,
+            dry_run,
         )
         self._dry_run = dry_run
 
@@ -138,8 +142,7 @@ class EnsembleRunner:
         # Generate perturbed MacroStates
         rng = np.random.default_rng(seed=None)
         perturbations: list[dict[str, float]] = [
-            _perturb_macro_fields(parent_macro, rng, perturbation_std)
-            for _ in range(n_trials)
+            _perturb_macro_fields(parent_macro, rng, perturbation_std) for _ in range(n_trials)
         ]
 
         # Create branch sessions and run trials
@@ -148,8 +151,9 @@ class EnsembleRunner:
 
         # Run in batches of _MAX_CONCURRENT_TRIALS
         import asyncio
+
         for batch_start in range(0, len(trial_batch), _MAX_CONCURRENT_TRIALS):
-            batch = trial_batch[batch_start: batch_start + _MAX_CONCURRENT_TRIALS]
+            batch = trial_batch[batch_start : batch_start + _MAX_CONCURRENT_TRIALS]
             tasks = [
                 self._run_single_trial(
                     parent_session_id=session_id,
@@ -171,14 +175,12 @@ class EnsembleRunner:
         # Persist trial metadata
         await self._persist_trial_metadata(session_id, trial_records)
 
-        completed_ids = [
-            r.branch_session_id
-            for r in trial_records
-            if r.status == "completed"
-        ]
+        completed_ids = [r.branch_session_id for r in trial_records if r.status == "completed"]
         logger.info(
             "Ensemble run completed: %d/%d trials succeeded session=%s",
-            len(completed_ids), n_trials, session_id,
+            len(completed_ids),
+            n_trials,
+            session_id,
         )
 
         # Compute percentiles across completed trials
@@ -187,9 +189,7 @@ class EnsembleRunner:
             trial_session_ids=completed_ids,
         )
 
-    async def get_trial_metadata(
-        self, session_id: str
-    ) -> list[dict[str, Any]]:
+    async def get_trial_metadata(self, session_id: str) -> list[dict[str, Any]]:
         """Return metadata for all trials of a given parent session.
 
         Args:
@@ -223,23 +223,23 @@ class EnsembleRunner:
                 pert = json.loads(row[2] if isinstance(row, (list, tuple)) else row["perturbation_json"])
             except (json.JSONDecodeError, TypeError):
                 pert = {}
-            results.append({
-                "trial_index": row[0] if isinstance(row, (list, tuple)) else row["trial_index"],
-                "branch_session_id": row[1] if isinstance(row, (list, tuple)) else row["branch_session_id"],
-                "perturbation": pert,
-                "status": row[3] if isinstance(row, (list, tuple)) else row["status"],
-                "error_message": row[4] if isinstance(row, (list, tuple)) else row["error_message"],
-                "created_at": row[5] if isinstance(row, (list, tuple)) else row["created_at"],
-            })
+            results.append(
+                {
+                    "trial_index": row[0] if isinstance(row, (list, tuple)) else row["trial_index"],
+                    "branch_session_id": row[1] if isinstance(row, (list, tuple)) else row["branch_session_id"],
+                    "perturbation": pert,
+                    "status": row[3] if isinstance(row, (list, tuple)) else row["status"],
+                    "error_message": row[4] if isinstance(row, (list, tuple)) else row["error_message"],
+                    "created_at": row[5] if isinstance(row, (list, tuple)) else row["created_at"],
+                }
+            )
         return results
 
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
 
-    async def _load_parent_session(
-        self, session_id: str
-    ) -> tuple[dict[str, Any], MacroState]:
+    async def _load_parent_session(self, session_id: str) -> tuple[dict[str, Any], MacroState]:
         """Load parent session config and construct its MacroState.
 
         Args:
@@ -324,9 +324,7 @@ class EnsembleRunner:
             # Run the simulation for this branch
             await self._execute_trial_simulation(branch_id, branch_config)
 
-            logger.info(
-                "Trial %d completed branch=%s", trial_index, branch_id
-            )
+            logger.info("Trial %d completed branch=%s", trial_index, branch_id)
             return TrialRecord(
                 trial_index=trial_index,
                 branch_session_id=branch_id,
@@ -338,7 +336,9 @@ class EnsembleRunner:
             error_msg = str(exc)
             logger.warning(
                 "Trial %d failed branch=%s: %s",
-                trial_index, branch_id, error_msg,
+                trial_index,
+                branch_id,
+                error_msg,
             )
             # Mark branch as failed in DB
             try:
@@ -384,10 +384,7 @@ class EnsembleRunner:
                     (parent_session_id,),
                 )
             ).fetchone()
-            scenario_type = (
-                (row[0] if isinstance(row, (list, tuple)) else row["scenario_type"])
-                if row else "property"
-            )
+            scenario_type = (row[0] if isinstance(row, (list, tuple)) else row["scenario_type"]) if row else "property"
 
             await db.execute(
                 """
@@ -577,9 +574,9 @@ class EnsembleRunner:
             branch_id: Branch session UUID.
             config: Branch config dict (includes 'macro_overrides').
         """
-        from backend.app.services.simulation_runner import SimulationRunner  # noqa: PLC0415
         from backend.app.services.macro_controller import MacroController  # noqa: PLC0415
         from backend.app.services.macro_history import MacroHistoryService  # noqa: PLC0415
+        from backend.app.services.simulation_runner import SimulationRunner  # noqa: PLC0415
 
         macro_overrides = config.get("macro_overrides", {})
 
@@ -590,10 +587,7 @@ class EnsembleRunner:
             base_state = await mc.get_baseline_for_scenario(scenario_type)
 
             # Only override fields that exist in MacroState
-            valid_overrides = {
-                k: v for k, v in macro_overrides.items()
-                if hasattr(base_state, k)
-            }
+            valid_overrides = {k: v for k, v in macro_overrides.items() if hasattr(base_state, k)}
             perturbed_state = apply_overrides(base_state, valid_overrides)
 
             history_svc = MacroHistoryService()
@@ -664,9 +658,7 @@ class EnsembleRunner:
                 )
                 await db.commit()
         except Exception:
-            logger.exception(
-                "_persist_trial_metadata failed session=%s", parent_session_id
-            )
+            logger.exception("_persist_trial_metadata failed session=%s", parent_session_id)
 
 
 # ---------------------------------------------------------------------------
@@ -730,6 +722,4 @@ async def _ensure_trial_table(db: Any) -> None:
             UNIQUE(parent_session_id, trial_index)
         )
     """)
-    await db.execute(
-        "CREATE INDEX IF NOT EXISTS idx_ensemble_trials_parent ON ensemble_trials(parent_session_id)"
-    )
+    await db.execute("CREATE INDEX IF NOT EXISTS idx_ensemble_trials_parent ON ensemble_trials(parent_session_id)")

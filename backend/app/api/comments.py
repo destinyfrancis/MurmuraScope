@@ -22,6 +22,7 @@ logger = get_logger("api.comments")
 # Request models
 # ---------------------------------------------------------------------------
 
+
 class CreateCommentRequest(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -33,6 +34,7 @@ class CreateCommentRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # POST /simulation/{session_id}/comments — add comment
 # ---------------------------------------------------------------------------
+
 
 @router.post("/{session_id}/comments", response_model=APIResponse)
 async def create_comment(session_id: str, req: CreateCommentRequest) -> APIResponse:
@@ -81,6 +83,7 @@ async def create_comment(session_id: str, req: CreateCommentRequest) -> APIRespo
 # GET /simulation/{session_id}/comments — list comments
 # ---------------------------------------------------------------------------
 
+
 @router.get("/{session_id}/comments", response_model=APIResponse)
 async def list_comments(session_id: str) -> APIResponse:
     async with get_db() as db:
@@ -119,6 +122,7 @@ async def list_comments(session_id: str) -> APIResponse:
 # ---------------------------------------------------------------------------
 # DELETE /simulation/{session_id}/comments/{comment_id} — delete own comment
 # ---------------------------------------------------------------------------
+
 
 @router.delete("/{session_id}/comments/{comment_id}", response_model=APIResponse)
 async def delete_comment(

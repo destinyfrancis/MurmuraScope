@@ -27,12 +27,12 @@ Usage::
 from __future__ import annotations
 
 import dataclasses
-from typing import Sequence
+from collections.abc import Sequence
 
 import aiosqlite
 
 from backend.app.services.agent_factory import AgentProfile
-from backend.app.services.consumer_model import ConsumerModel, SpendingProfile
+from backend.app.services.consumer_model import ConsumerModel
 from backend.app.services.macro_state import MacroState
 from backend.app.utils.db import get_db
 from backend.app.utils.logger import get_logger
@@ -171,13 +171,15 @@ class ConsumptionTracker:
         for agent_profile, spending in zip(profiles, spending_profiles):
             for category in _CATEGORIES:
                 amount_pct = float(getattr(spending, category, 0.0))
-                rows.append((
-                    session_id,
-                    agent_profile.id,
-                    round_number,
-                    category,
-                    amount_pct,
-                ))
+                rows.append(
+                    (
+                        session_id,
+                        agent_profile.id,
+                        round_number,
+                        category,
+                        amount_pct,
+                    )
+                )
 
         if not rows:
             return 0
@@ -197,13 +199,17 @@ class ConsumptionTracker:
         except Exception:
             logger.exception(
                 "track_round: DB write failed session=%s round=%d",
-                session_id, round_number,
+                session_id,
+                round_number,
             )
             return 0
 
         logger.debug(
             "track_round: inserted %d rows session=%s round=%d agents=%d",
-            len(rows), session_id, round_number, len(profiles),
+            len(rows),
+            session_id,
+            round_number,
+            len(profiles),
         )
         return len(rows)
 
@@ -249,9 +255,7 @@ class ConsumptionTracker:
                 )
                 rows = await cursor.fetchall()
         except Exception:
-            logger.exception(
-                "get_consumption_trends: DB read failed session=%s", session_id
-            )
+            logger.exception("get_consumption_trends: DB read failed session=%s", session_id)
             return []
 
         summaries: list[RoundConsumptionSummary] = []
@@ -264,8 +268,7 @@ class ConsumptionTracker:
             avg_healthcare = float(row[7] or 0.0)
 
             total_consumption = (
-                avg_food + avg_housing + avg_transport
-                + avg_entertainment + avg_education + avg_healthcare
+                avg_food + avg_housing + avg_transport + avg_entertainment + avg_education + avg_healthcare
             )
             avg_savings_rate = max(0.0, round(1.0 - total_consumption, 4))
 
@@ -279,18 +282,20 @@ class ConsumptionTracker:
             }
             dominant = max(category_avgs, key=lambda k: category_avgs[k])
 
-            summaries.append(RoundConsumptionSummary(
-                round_number=int(row[0]),
-                agent_count=int(row[1] or 0),
-                avg_food=round(avg_food, 4),
-                avg_housing=round(avg_housing, 4),
-                avg_transport=round(avg_transport, 4),
-                avg_entertainment=round(avg_entertainment, 4),
-                avg_education=round(avg_education, 4),
-                avg_healthcare=round(avg_healthcare, 4),
-                avg_savings_rate=avg_savings_rate,
-                dominant_category=dominant,
-            ))
+            summaries.append(
+                RoundConsumptionSummary(
+                    round_number=int(row[0]),
+                    agent_count=int(row[1] or 0),
+                    avg_food=round(avg_food, 4),
+                    avg_housing=round(avg_housing, 4),
+                    avg_transport=round(avg_transport, 4),
+                    avg_entertainment=round(avg_entertainment, 4),
+                    avg_education=round(avg_education, 4),
+                    avg_healthcare=round(avg_healthcare, 4),
+                    avg_savings_rate=avg_savings_rate,
+                    dominant_category=dominant,
+                )
+            )
 
         return summaries
 
@@ -329,7 +334,8 @@ class ConsumptionTracker:
         except Exception:
             logger.exception(
                 "get_agent_consumption: DB read failed session=%s agent=%d",
-                session_id, agent_id,
+                session_id,
+                agent_id,
             )
             return []
 

@@ -1,25 +1,28 @@
 # backend/tests/test_surrogate_model.py
 """Tests for SurrogateModel — Phase A belief→decision surrogate."""
+
 from __future__ import annotations
+
 import pytest
+
+from backend.app.services.multi_run_orchestrator import CanonicalResult, MultiRunOrchestrator
 from backend.app.services.surrogate_model import SurrogateModel, SurrogateModelResult
-from backend.app.services.multi_run_orchestrator import (
-    MultiRunOrchestrator, CanonicalResult
-)
 
 
 def _make_training_rows():
     """Simulate Phase A belief + decision rows."""
     rows = []
     for i in range(60):
-        rows.append({
-            "agent_id": f"a_{i}",
-            "round_number": i % 10,
-            "decision_type": "escalate" if i % 3 != 0 else "ceasefire",
-            "belief_snapshot": '{"escalation_index": 0.7, "diplomatic_pressure": 0.3}'
-                               if i % 3 != 0
-                               else '{"escalation_index": 0.3, "diplomatic_pressure": 0.7}',
-        })
+        rows.append(
+            {
+                "agent_id": f"a_{i}",
+                "round_number": i % 10,
+                "decision_type": "escalate" if i % 3 != 0 else "ceasefire",
+                "belief_snapshot": '{"escalation_index": 0.7, "diplomatic_pressure": 0.3}'
+                if i % 3 != 0
+                else '{"escalation_index": 0.3, "diplomatic_pressure": 0.7}',
+            }
+        )
     return rows
 
 

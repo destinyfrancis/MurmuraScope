@@ -12,37 +12,36 @@ import math
 from typing import Any
 
 from backend.app.services.calibration_config import (
-    CalibrationParams,
     DEFAULT_CALIBRATION,
+    CalibrationParams,
 )
-
+from backend.app.services.macro_posts import SHOCK_POST_GENERATORS
+from backend.app.services.macro_shocks import SHOCK_HANDLERS
 from backend.app.services.macro_state import (  # noqa: F401 — re-exports
-    MacroState,
-    VALID_SHOCK_TYPES,
     BASELINE_AVG_SQFT_PRICE,
     BASELINE_STAMP_DUTY,
-    SHOCK_INTEREST_RATE_HIKE,
-    SHOCK_PROPERTY_CRASH,
-    SHOCK_UNEMPLOYMENT_SPIKE,
-    SHOCK_POLICY_CHANGE,
-    SHOCK_MARKET_RALLY,
-    SHOCK_EMIGRATION_WAVE,
-    SHOCK_FED_RATE_HIKE,
-    SHOCK_FED_RATE_CUT,
+    SHOCK_CHINA_DEMAND_COLLAPSE,
     SHOCK_CHINA_SLOWDOWN,
     SHOCK_CHINA_STIMULUS,
-    SHOCK_TAIWAN_STRAIT_TENSION,
-    SHOCK_TAIWAN_STRAIT_EASE,
-    SHOCK_SHENZHEN_MAGNET,
+    SHOCK_EMIGRATION_WAVE,
+    SHOCK_FED_RATE_CUT,
+    SHOCK_FED_RATE_HIKE,
     SHOCK_GREATER_BAY_BOOST,
-    SHOCK_TARIFF_INCREASE,
-    SHOCK_SUPPLY_CHAIN_DISRUPTION,
-    SHOCK_CHINA_DEMAND_COLLAPSE,
+    SHOCK_INTEREST_RATE_HIKE,
+    SHOCK_MARKET_RALLY,
+    SHOCK_POLICY_CHANGE,
+    SHOCK_PROPERTY_CRASH,
     SHOCK_RCEP_BENEFIT,
+    SHOCK_SHENZHEN_MAGNET,
+    SHOCK_SUPPLY_CHAIN_DISRUPTION,
+    SHOCK_TAIWAN_STRAIT_EASE,
+    SHOCK_TAIWAN_STRAIT_TENSION,
+    SHOCK_TARIFF_INCREASE,
+    SHOCK_UNEMPLOYMENT_SPIKE,
+    VALID_SHOCK_TYPES,
+    MacroState,
     apply_overrides,
 )
-from backend.app.services.macro_shocks import SHOCK_HANDLERS
-from backend.app.services.macro_posts import SHOCK_POST_GENERATORS
 
 logger = logging.getLogger(__name__)
 
@@ -107,8 +106,7 @@ async def _load_user_data_points(session_id: str) -> dict[str, float]:
     try:
         async with get_db() as db:
             cursor = await db.execute(
-                "SELECT metric, value FROM user_data_points "
-                "WHERE session_id=? ORDER BY timestamp DESC",
+                "SELECT metric, value FROM user_data_points WHERE session_id=? ORDER BY timestamp DESC",
                 (session_id,),
             )
             user_rows = await cursor.fetchall()
@@ -142,12 +140,14 @@ async def _load_from_data_lake(
     if domain_pack_id != "hk_city":
         try:
             from backend.app.domain.base import DomainPackRegistry  # noqa: PLC0415
+
             pack = DomainPackRegistry.get(domain_pack_id)
             if pack.macro_baselines:
                 result = {k: float(v) for k, v in pack.macro_baselines.items()}
                 logger.info(
                     "_load_from_data_lake: loaded %d baselines from pack '%s'",
-                    len(result), domain_pack_id,
+                    len(result),
+                    domain_pack_id,
                 )
         except (KeyError, Exception):
             logger.debug(
@@ -206,7 +206,8 @@ async def _load_from_data_lake(
         if user_data:
             logger.info(
                 "_load_from_data_lake: applying %d user data overrides for session=%s",
-                len(user_data), session_id,
+                len(user_data),
+                session_id,
             )
             result.update(user_data)
 
@@ -219,11 +220,11 @@ class MacroController:
     # Lag rules: how many rounds of delay before sentiment affects each indicator
     _SENTIMENT_LAG: dict[str, int] = {
         "consumer_confidence": 0,  # immediate
-        "hsi_level": 0,            # market reacts fast
-        "ccl_index": 2,            # property market is slow
-        "unemployment_rate": 2,    # labour market is slow
-        "gdp_growth": 3,           # GDP is lagging
-        "net_migration": 4,        # emigration decisions are slow
+        "hsi_level": 0,  # market reacts fast
+        "ccl_index": 2,  # property market is slow
+        "unemployment_rate": 2,  # labour market is slow
+        "gdp_growth": 3,  # GDP is lagging
+        "net_migration": 4,  # emigration decisions are slow
     }
 
     def __init__(self) -> None:
@@ -346,9 +347,7 @@ class MacroController:
             return apply_overrides(base, overrides)
         return base
 
-    async def create_scenario(
-        self, name: str, overrides: dict[str, Any]
-    ) -> MacroState:
+    async def create_scenario(self, name: str, overrides: dict[str, Any]) -> MacroState:
         """Create a named scenario by applying overrides to the baseline."""
         baseline = await self.get_baseline()
         scenario = apply_overrides(baseline, overrides)
@@ -376,10 +375,7 @@ class MacroController:
             valid_types = VALID_SHOCK_TYPES
 
         if shock_type not in valid_types:
-            raise ValueError(
-                f"Unknown shock type '{shock_type}'. "
-                f"Valid types: {sorted(valid_types)}"
-            )
+            raise ValueError(f"Unknown shock type '{shock_type}'. Valid types: {sorted(valid_types)}")
 
         handler = SHOCK_HANDLERS.get(shock_type)
         if handler is None:
@@ -393,9 +389,7 @@ class MacroController:
 
         generator = SHOCK_POST_GENERATORS.get(shock_type)
         if generator is None:
-            raise NotImplementedError(
-                f"Post generator for '{shock_type}' not registered"
-            )
+            raise NotImplementedError(f"Post generator for '{shock_type}' not registered")
         return generator(state)
 
     async def update_from_actions(
@@ -446,7 +440,8 @@ class MacroController:
         except Exception:
             logger.exception(
                 "update_from_actions: DB read failed session=%s round=%d",
-                session_id, round_number,
+                session_id,
+                round_number,
             )
             return current_state
 
@@ -478,11 +473,13 @@ class MacroController:
         neg_ratio = neg_count / total
 
         # Store current sentiment in lag buffer (keep last 5 rounds)
-        self._sentiment_buffer.append({
-            "pos_ratio": pos_ratio,
-            "neg_ratio": neg_ratio,
-            "round": round_number,
-        })
+        self._sentiment_buffer.append(
+            {
+                "pos_ratio": pos_ratio,
+                "neg_ratio": neg_ratio,
+                "round": round_number,
+            }
+        )
         if len(self._sentiment_buffer) > 5:
             self._sentiment_buffer = self._sentiment_buffer[-5:]
 
@@ -527,13 +524,9 @@ class MacroController:
         neg_conf = _get_lagged_ratio("consumer_confidence", "neg")
         pos_conf = _get_lagged_ratio("consumer_confidence", "pos")
         if neg_conf > calibration.neg_threshold:
-            new_consumer_confidence = round(
-                new_consumer_confidence - calibration.confidence_delta_neg, 2
-            )
+            new_consumer_confidence = round(new_consumer_confidence - calibration.confidence_delta_neg, 2)
         elif pos_conf > calibration.pos_threshold:
-            new_consumer_confidence = round(
-                new_consumer_confidence + calibration.confidence_delta_pos, 2
-            )
+            new_consumer_confidence = round(new_consumer_confidence + calibration.confidence_delta_pos, 2)
 
         # GDP reacts with lag 3
         neg_gdp = _get_lagged_ratio("gdp_growth", "neg")
@@ -561,17 +554,12 @@ class MacroController:
             employment_freq > calibration.employment_topic_threshold
             and neg_ratio > calibration.secondary_sentiment_threshold
         ):
-            new_unemployment_rate = round(
-                new_unemployment_rate + calibration.employment_neg_unemployment_delta, 4
-            )
+            new_unemployment_rate = round(new_unemployment_rate + calibration.employment_neg_unemployment_delta, 4)
 
         if emigration_freq > calibration.emigration_threshold:
             new_net_migration = new_net_migration - calibration.emigration_net_migration_delta
 
-        if (
-            stock_freq > calibration.stock_topic_threshold
-            and pos_ratio > calibration.secondary_sentiment_threshold
-        ):
+        if stock_freq > calibration.stock_topic_threshold and pos_ratio > calibration.secondary_sentiment_threshold:
             new_hsi_level = round(new_hsi_level * calibration.stock_pos_hsi_factor, 0)
 
         # Clamp to safe ranges
@@ -579,15 +567,9 @@ class MacroController:
             calibration.clamp_confidence_min,
             min(calibration.clamp_confidence_max, new_consumer_confidence),
         )
-        new_gdp_growth = max(
-            calibration.clamp_gdp_min, min(calibration.clamp_gdp_max, new_gdp_growth)
-        )
-        new_hsi_level = max(
-            calibration.clamp_hsi_min, min(calibration.clamp_hsi_max, new_hsi_level)
-        )
-        new_ccl_index = max(
-            calibration.clamp_ccl_min, min(calibration.clamp_ccl_max, new_ccl_index)
-        )
+        new_gdp_growth = max(calibration.clamp_gdp_min, min(calibration.clamp_gdp_max, new_gdp_growth))
+        new_hsi_level = max(calibration.clamp_hsi_min, min(calibration.clamp_hsi_max, new_hsi_level))
+        new_ccl_index = max(calibration.clamp_ccl_min, min(calibration.clamp_ccl_max, new_ccl_index))
         new_unemployment_rate = max(
             calibration.clamp_unemployment_min,
             min(calibration.clamp_unemployment_max, new_unemployment_rate),
@@ -598,6 +580,7 @@ class MacroController:
         )
 
         from dataclasses import replace as _replace  # noqa: PLC0415
+
         return _replace(
             current_state,
             consumer_confidence=new_consumer_confidence,
@@ -628,8 +611,8 @@ class MacroController:
             Dict mapping indicator name → ForecastPoint (or plain float).
         """
         from backend.app.services.time_series_forecaster import (  # noqa: PLC0415
-            TimeSeriesForecaster,
             SUPPORTED_METRICS,
+            TimeSeriesForecaster,
         )
 
         forecaster = TimeSeriesForecaster()
@@ -641,13 +624,9 @@ class MacroController:
                 if forecast_result.points:
                     result[metric] = forecast_result.points[0]
             except Exception:
-                logger.debug(
-                    "get_forecast_adjusted_baseline: forecaster failed for metric=%s", metric
-                )
+                logger.debug("get_forecast_adjusted_baseline: forecaster failed for metric=%s", metric)
 
-        logger.info(
-            "Forecast-adjusted baseline ready: %d indicators", len(result)
-        )
+        logger.info("Forecast-adjusted baseline ready: %d indicators", len(result))
         return result
 
     async def apply_agent_actions_feedback(
@@ -737,16 +716,12 @@ class MacroController:
         # EMA smoothing: 30% weight on new signal, 70% on current state
         raw_labour_signal = _logistic_delta(resign_ratio - seek_ratio, k=8.0, cap=0.003)
         labour_delta = _EMA_ALPHA * raw_labour_signal
-        new_unemployment = round(
-            max(0.01, min(0.30, current_state.unemployment_rate + labour_delta)), 4
-        )
+        new_unemployment = round(max(0.01, min(0.30, current_state.unemployment_rate + labour_delta)), 4)
 
         # Wealth/confidence micro-feedback — logistic S-curve saturates at ±1.5
         raw_wealth_signal = _logistic_delta(invest_ratio - divest_ratio, k=6.0, cap=1.5)
         wealth_delta = _EMA_ALPHA * raw_wealth_signal
-        new_confidence = round(
-            max(10.0, min(100.0, current_state.consumer_confidence + wealth_delta)), 2
-        )
+        new_confidence = round(max(10.0, min(100.0, current_state.consumer_confidence + wealth_delta)), 2)
 
         if new_unemployment == current_state.unemployment_rate and new_confidence == current_state.consumer_confidence:
             return current_state
@@ -755,13 +730,18 @@ class MacroController:
             "apply_agent_actions_feedback session=%s round=%d "
             "seek=%.1f%% resign=%.1f%% invest=%.1f%% divest=%.1f%% "
             "→ Δunemployment=%.4f Δconfidence=%.2f",
-            session_id, round_number,
-            seek_ratio * 100, resign_ratio * 100,
-            invest_ratio * 100, divest_ratio * 100,
-            labour_delta, wealth_delta,
+            session_id,
+            round_number,
+            seek_ratio * 100,
+            resign_ratio * 100,
+            invest_ratio * 100,
+            divest_ratio * 100,
+            labour_delta,
+            wealth_delta,
         )
 
         from dataclasses import replace as _replace  # noqa: PLC0415
+
         micro_adjusted = _replace(
             current_state,
             unemployment_rate=new_unemployment,
@@ -771,9 +751,7 @@ class MacroController:
         return apply_cross_macro_linkages(micro_adjusted)
 
     @staticmethod
-    def _apply_overrides(
-        state: MacroState, overrides: dict[str, Any]
-    ) -> MacroState:
+    def _apply_overrides(state: MacroState, overrides: dict[str, Any]) -> MacroState:
         """Backward-compatible static method — delegates to module-level function."""
         return apply_overrides(state, overrides)
 
@@ -836,9 +814,7 @@ def apply_cross_macro_linkages(state: MacroState) -> MacroState:
     new_confidence = round(max(10.0, min(100.0, state.consumer_confidence + confidence_delta)), 2)
     new_unemployment = round(max(0.01, min(0.30, state.unemployment_rate + mig_to_u * dampen)), 4)
     new_hsi = round(max(1_000.0, state.hsi_level + gdp_to_hsi * dampen), 2)
-    new_gdp_growth = round(
-        max(-0.15, min(0.15, state.gdp_growth + gdp_phillips_delta * dampen)), 4
-    )
+    new_gdp_growth = round(max(-0.15, min(0.15, state.gdp_growth + gdp_phillips_delta * dampen)), 4)
     new_ccl_index = round(max(50.0, state.ccl_index + ccl_from_rate * dampen), 2)
 
     if (
@@ -851,8 +827,7 @@ def apply_cross_macro_linkages(state: MacroState) -> MacroState:
         return state
 
     logger.debug(
-        "apply_cross_macro_linkages: Δconfidence=%.2f Δunemployment=%.4f Δhsi=%.1f "
-        "Δgdp_growth=%.4f Δccl_index=%.2f",
+        "apply_cross_macro_linkages: Δconfidence=%.2f Δunemployment=%.4f Δhsi=%.1f Δgdp_growth=%.4f Δccl_index=%.2f",
         new_confidence - state.consumer_confidence,
         new_unemployment - state.unemployment_rate,
         new_hsi - state.hsi_level,

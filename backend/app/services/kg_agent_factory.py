@@ -64,6 +64,7 @@ _MIN_FALLBACK_AGENTS = 1
 async def _load_persona_keys(graph_id: str) -> list[str]:
     """Load agent_type_key values from seed_persona_templates for graph_id."""
     from backend.app.utils.db import get_db  # noqa: PLC0415
+
     try:
         async with get_db() as db:
             rows = await db.execute_fetchall(
@@ -108,7 +109,7 @@ class KGAgentFactory:
         cls,
         graph_id: str,
         llm_client: LLMClient | None = None,
-    ) -> "KGAgentFactory":
+    ) -> KGAgentFactory:
         """Async factory that pre-loads persona keys for template alignment.
 
         Existing callers using KGAgentFactory() directly continue to work
@@ -169,8 +170,7 @@ class KGAgentFactory:
 
         if not eligible_nodes:
             logger.warning(
-                "No agent-eligible nodes found among %d KG nodes; "
-                "falling back to all nodes",
+                "No agent-eligible nodes found among %d KG nodes; falling back to all nodes",
                 len(nodes),
             )
             # Last-resort: treat all nodes as eligible so we always produce
@@ -263,9 +263,7 @@ class KGAgentFactory:
                 agreeableness=p.agreeableness,
                 openness=p.openness,
             )
-        logger.debug(
-            "infer_attachment_styles: %d styles generated", len(result)
-        )
+        logger.debug("infer_attachment_styles: %d styles generated", len(result))
         return result
 
     def generate_agents_csv(
@@ -332,23 +330,17 @@ class KGAgentFactory:
                     {"role": "system", "content": AGENT_ELIGIBLE_FILTER_SYSTEM},
                     {
                         "role": "user",
-                        "content": AGENT_ELIGIBLE_FILTER_USER.format(
-                            nodes_json=nodes_json
-                        ),
+                        "content": AGENT_ELIGIBLE_FILTER_USER.format(nodes_json=nodes_json),
                     },
                 ],
                 temperature=0.2,
                 max_tokens=4096,
             )
-            eligible_ids: set[str] = {
-                entry["node_id"] for entry in result.get("eligible", [])
-            }
+            eligible_ids: set[str] = {entry["node_id"] for entry in result.get("eligible", [])}
             eligible = [n for n in nodes if str(n.get("id", "")) in eligible_ids]
 
             if not eligible:
-                logger.warning(
-                    "LLM filter returned 0 eligible nodes; using heuristic fallback"
-                )
+                logger.warning("LLM filter returned 0 eligible nodes; using heuristic fallback")
                 return self._heuristic_filter(nodes)
 
             return eligible
@@ -375,10 +367,26 @@ class KGAgentFactory:
         """
         _ACTOR_KEYWORDS = frozenset(
             {
-                "person", "people", "country", "nation", "government",
-                "military", "army", "organization", "organisation", "company",
-                "corporation", "media", "outlet", "party", "movement",
-                "institution", "leader", "minister", "president", "figure",
+                "person",
+                "people",
+                "country",
+                "nation",
+                "government",
+                "military",
+                "army",
+                "organization",
+                "organisation",
+                "company",
+                "corporation",
+                "media",
+                "outlet",
+                "party",
+                "movement",
+                "institution",
+                "leader",
+                "minister",
+                "president",
+                "figure",
             }
         )
 
@@ -450,15 +458,11 @@ class KGAgentFactory:
                 max_tokens=8192,
             )
         except Exception as exc:  # noqa: BLE001
-            raise RuntimeError(
-                f"LLM profile generation failed: {exc}"
-            ) from exc
+            raise RuntimeError(f"LLM profile generation failed: {exc}") from exc
 
         raw_agents: list[dict[str, Any]] = result.get("agents", [])
         if not raw_agents:
-            raise RuntimeError(
-                "LLM returned no agents in profile generation response"
-            )
+            raise RuntimeError("LLM returned no agents in profile generation response")
 
         profiles: list[UniversalAgentProfile] = []
         for raw in raw_agents:
@@ -467,9 +471,7 @@ class KGAgentFactory:
                 profiles.append(profile)
 
         if not profiles:
-            raise RuntimeError(
-                "No valid agent profiles could be parsed from LLM response"
-            )
+            raise RuntimeError("No valid agent profiles could be parsed from LLM response")
 
         return profiles
 
@@ -499,10 +501,7 @@ class KGAgentFactory:
         if not profiles:
             return []
 
-        summaries = [
-            {"agent_id": p.id, "name": p.name, "role": p.role, "entity_type": p.entity_type}
-            for p in profiles
-        ]
+        summaries = [{"agent_id": p.id, "name": p.name, "role": p.role, "entity_type": p.entity_type} for p in profiles]
         prompt_user = (
             f"Scenario: {seed_text[:400]}\n"
             f"Active metrics: {list(active_metrics)}\n\n"
@@ -535,15 +534,17 @@ class KGAgentFactory:
         for profile in profiles:
             fp_data = fp_by_id.get(profile.id, {})
             try:
-                result.append(CognitiveFingerprint(
-                    agent_id=profile.id,
-                    values=_parse_values(fp_data.get("values", {})),
-                    info_diet=tuple(fp_data.get("info_diet", ["general"])),
-                    group_memberships=tuple(fp_data.get("group_memberships", [])),
-                    susceptibility={str(k): float(v) for k, v in fp_data.get("susceptibility", {}).items()},
-                    confirmation_bias=float(fp_data.get("confirmation_bias", 0.5)),
-                    conformity=float(fp_data.get("conformity", 0.5)),
-                ))
+                result.append(
+                    CognitiveFingerprint(
+                        agent_id=profile.id,
+                        values=_parse_values(fp_data.get("values", {})),
+                        info_diet=tuple(fp_data.get("info_diet", ["general"])),
+                        group_memberships=tuple(fp_data.get("group_memberships", [])),
+                        susceptibility={str(k): float(v) for k, v in fp_data.get("susceptibility", {}).items()},
+                        confirmation_bias=float(fp_data.get("confirmation_bias", 0.5)),
+                        conformity=float(fp_data.get("conformity", 0.5)),
+                    )
+                )
             except (ValueError, TypeError):
                 result.append(_default_fingerprint(profile.id))
 
@@ -574,35 +575,34 @@ class KGAgentFactory:
         """
         from dataclasses import replace as dc_replace  # noqa: PLC0415
 
-        _VALID_STYLES = frozenset({
-            "formal_academic",
-            "casual_gen_z",
-            "strategic_institutional",
-            "emotional_personal",
-            "analytical_professional",
-            "activist_ideological",
-        })
+        _VALID_STYLES = frozenset(
+            {
+                "formal_academic",
+                "casual_gen_z",
+                "strategic_institutional",
+                "emotional_personal",
+                "analytical_professional",
+                "activist_ideological",
+            }
+        )
 
         if not profiles:
             return []
 
-        summaries = [
-            {"agent_id": p.id, "name": p.name, "role": p.role, "entity_type": p.entity_type}
-            for p in profiles
-        ]
+        summaries = [{"agent_id": p.id, "name": p.name, "role": p.role, "entity_type": p.entity_type} for p in profiles]
         prompt_user = (
             f"Scenario: {seed_text[:400]}\n\n"
             "For each agent below, generate a voice profile JSON with fields:\n"
             "- agent_id (string, must match input)\n"
-            "- communication_style: one of \"formal_academic\", \"casual_gen_z\","
-            " \"strategic_institutional\", \"emotional_personal\","
-            " \"analytical_professional\", \"activist_ideological\"\n"
+            '- communication_style: one of "formal_academic", "casual_gen_z",'
+            ' "strategic_institutional", "emotional_personal",'
+            ' "analytical_professional", "activist_ideological"\n'
             "- vocabulary_hints: list of 3-5 characteristic vocabulary or metaphor"
-            " types (short phrases), e.g. [\"法律術語\", \"程序正義\"] or"
-            " [\"遊戲比喻\", \"Z世代流行語\"]\n"
+            ' types (short phrases), e.g. ["法律術語", "程序正義"] or'
+            ' ["遊戲比喻", "Z世代流行語"]\n'
             "- platform_persona: 1-2 sentences describing how they post differently"
-            " on different platforms, e.g. \"Facebook: 長篇分析，引用數據；"
-            "Instagram: 短句+話題標籤，情緒化表達\"\n\n"
+            ' on different platforms, e.g. "Facebook: 長篇分析，引用數據；'
+            'Instagram: 短句+話題標籤，情緒化表達"\n\n'
             f"Agents: {summaries}\n\n"
             'Return JSON: {"voice_profiles": [...]}'
         )
@@ -610,8 +610,7 @@ class KGAgentFactory:
             {
                 "role": "system",
                 "content": (
-                    "You are a communications expert generating distinct voice"
-                    " profiles for simulation agents."
+                    "You are a communications expert generating distinct voice profiles for simulation agents."
                 ),
             },
             {"role": "user", "content": prompt_user},
@@ -633,9 +632,7 @@ class KGAgentFactory:
             try:
                 raw_style = str(vd.get("communication_style", ""))
                 comm_style = raw_style if raw_style in _VALID_STYLES else ""
-                vocab_hints = tuple(
-                    str(h) for h in vd.get("vocabulary_hints", []) if h
-                )[:5]
+                vocab_hints = tuple(str(h) for h in vd.get("vocabulary_hints", []) if h)[:5]
                 plat_persona = str(vd.get("platform_persona", ""))
                 enriched.append(
                     dc_replace(
@@ -646,9 +643,7 @@ class KGAgentFactory:
                     )
                 )
             except (TypeError, ValueError):
-                logger.debug(
-                    "Voice field parse failed for agent %s — keeping defaults", profile.id
-                )
+                logger.debug("Voice field parse failed for agent %s — keeping defaults", profile.id)
                 enriched.append(profile)
 
         return enriched
@@ -680,24 +675,16 @@ class KGAgentFactory:
             # Convert stance_axes from dict to tuple-of-tuples
             raw_stance = raw.get("stance_axes", {})
             if isinstance(raw_stance, dict):
-                stance_axes: tuple[tuple[str, float], ...] = tuple(
-                    (str(k), float(v)) for k, v in raw_stance.items()
-                )
+                stance_axes: tuple[tuple[str, float], ...] = tuple((str(k), float(v)) for k, v in raw_stance.items())
             else:
                 stance_axes = tuple()
 
             # Convert relationships from dict or list to tuple-of-tuples
             raw_rels = raw.get("relationships", {})
             if isinstance(raw_rels, dict):
-                relationships: tuple[tuple[str, str], ...] = tuple(
-                    (str(k), str(v)) for k, v in raw_rels.items()
-                )
+                relationships: tuple[tuple[str, str], ...] = tuple((str(k), str(v)) for k, v in raw_rels.items())
             elif isinstance(raw_rels, list):
-                relationships = tuple(
-                    (str(item[0]), str(item[1]))
-                    for item in raw_rels
-                    if len(item) >= 2
-                )
+                relationships = tuple((str(item[0]), str(item[1])) for item in raw_rels if len(item) >= 2)
             else:
                 relationships = tuple()
 
@@ -754,6 +741,7 @@ def _parse_values(raw: dict) -> dict[str, float]:
 
 def _default_fingerprint(agent_id: str):
     from backend.app.models.cognitive_fingerprint import CognitiveFingerprint  # noqa: PLC0415
+
     return CognitiveFingerprint(
         agent_id=agent_id,
         values={"authority": 0.5, "openness": 0.5, "loyalty": 0.5},

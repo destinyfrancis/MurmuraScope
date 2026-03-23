@@ -23,7 +23,6 @@ from backend.app.services.validation_suite import (
     validate_stationarity,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -160,9 +159,7 @@ class TestGrangerCausalityCorrelated:
         for t in range(1, n):
             y[t] = 0.7 * x[t - 1] + noise[t]
 
-        result = validate_granger_causality(
-            x.tolist(), y.tolist(), "x_cause", "y_effect", max_lag=4
-        )
+        result = validate_granger_causality(x.tolist(), y.tolist(), "x_cause", "y_effect", max_lag=4)
 
         assert isinstance(result, GrangerResult)
         assert result.is_significant is True
@@ -242,9 +239,7 @@ class TestTheilsU:
 
         result = validate_forecast_accuracy(actuals, preds, "bad_model")
 
-        assert result.theils_u > 1.0, (
-            f"Expected Theil's U > 1.0 for a model worse than naive, got {result.theils_u}"
-        )
+        assert result.theils_u > 1.0, f"Expected Theil's U > 1.0 for a model worse than naive, got {result.theils_u}"
 
     def test_better_than_naive(self) -> None:
         # Actuals follow a clear trend; model tracks it well.
@@ -253,9 +248,7 @@ class TestTheilsU:
 
         result = validate_forecast_accuracy(actuals, preds, "good_model")
 
-        assert result.theils_u < 1.0, (
-            f"Expected Theil's U < 1.0 for a model tracking the trend, got {result.theils_u}"
-        )
+        assert result.theils_u < 1.0, f"Expected Theil's U < 1.0 for a model tracking the trend, got {result.theils_u}"
 
 
 # ---------------------------------------------------------------------------
@@ -301,17 +294,29 @@ class TestValidationReport:
 
     def test_populated_report(self) -> None:
         stat = StationarityResult(
-            metric="cpi", adf_statistic=-3.5, p_value=0.01,
-            is_stationary=True, lags_used=2, differencing_applied=False,
+            metric="cpi",
+            adf_statistic=-3.5,
+            p_value=0.01,
+            is_stationary=True,
+            lags_used=2,
+            differencing_applied=False,
             kpss_p_value=0.10,
         )
         granger = GrangerResult(
-            cause_metric="sentiment", effect_metric="cpi",
-            max_lag=4, best_lag=2, p_value=0.03, is_significant=True,
+            cause_metric="sentiment",
+            effect_metric="cpi",
+            max_lag=4,
+            best_lag=2,
+            p_value=0.03,
+            is_significant=True,
         )
         acc = ForecastAccuracy(
-            metric="cpi", mape=5.0, rmse=0.8, theils_u=0.9,
-            n_observations=20, data_quality="adequate",
+            metric="cpi",
+            mape=5.0,
+            rmse=0.8,
+            theils_u=0.9,
+            n_observations=20,
+            data_quality="adequate",
         )
 
         report = ValidationReport(

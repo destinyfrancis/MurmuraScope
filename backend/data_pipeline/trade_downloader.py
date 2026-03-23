@@ -32,12 +32,12 @@ _HKSAR_TRADE_RESOURCE_ID = "29cc1dca-af8c-4a37-a9fd-0e1cb83b58e0"  # HKSAR trade
 class TradeRecord:
     """Immutable single trade metric record."""
 
-    date: str           # YYYY-MM or YYYY-QN format
-    category: str       # always "trade"
-    metric: str         # e.g. "total_exports", "china_trade_pct"
+    date: str  # YYYY-MM or YYYY-QN format
+    category: str  # always "trade"
+    metric: str  # e.g. "total_exports", "china_trade_pct"
     value: float
-    unit: str           # "HKD_million", "pct", etc.
-    source: str         # "data.gov.hk" or "fallback"
+    unit: str  # "HKD_million", "pct", etc.
+    source: str  # "data.gov.hk" or "fallback"
 
 
 @dataclass(frozen=True)
@@ -47,7 +47,6 @@ class TradeDownloadResult:
     records: tuple[TradeRecord, ...]
     row_count: int
     error: str | None
-
 
 
 # NOTE: All hardcoded fallback data removed.
@@ -175,7 +174,6 @@ class TradeDownloader:
         return records
 
 
-
 # ---------------------------------------------------------------------------
 # Module-level convenience function (matches pattern of other downloaders)
 # ---------------------------------------------------------------------------
@@ -201,9 +199,7 @@ async def download_all_trade(
     for i, result in enumerate(results):
         if isinstance(result, Exception):
             logger.error("Trade download task %d failed: %s", i, result)
-            output.append(
-                TradeDownloadResult(records=(), row_count=0, error=str(result))
-            )
+            output.append(TradeDownloadResult(records=(), row_count=0, error=str(result)))
         else:
             output.append(result)  # type: ignore[arg-type]
 

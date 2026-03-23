@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from backend.app.domain.base import DemographicsSpec, PromptLocale, SentimentLexicon
+from backend.app.domain.base import PromptLocale, SentimentLexicon
 
 EN_US_LOCALE = PromptLocale(
     language_code="en-US",
@@ -35,16 +35,9 @@ EN_US_LOCALE = PromptLocale(
         "Subsidized": "You live in subsidized housing with below-market rent.",
     },
     concern_templates={
-        "low_income": (
-            "You worry about making ends meet, healthcare costs, and affording groceries."
-        ),
-        "mid_income": (
-            "You're concerned about saving for retirement, your children's education, "
-            "and housing costs."
-        ),
-        "high_income": (
-            "You focus on investment returns, tax optimization, and wealth preservation."
-        ),
+        "low_income": ("You worry about making ends meet, healthcare costs, and affording groceries."),
+        "mid_income": ("You're concerned about saving for retirement, your children's education, and housing costs."),
+        "high_income": ("You focus on investment returns, tax optimization, and wealth preservation."),
     },
     posting_guidelines=(
         "You post on social media like Reddit/Twitter. You share opinions about markets, "
@@ -54,22 +47,79 @@ EN_US_LOCALE = PromptLocale(
 )
 
 EN_US_SENTIMENT = SentimentLexicon(
-    positive_keywords=frozenset({
-        "bullish", "rally", "growth", "confident", "recovery", "upside",
-        "optimistic", "boom", "surge", "gain", "profit", "strong",
-        "breakthrough", "innovation", "opportunity", "upgrade",
-        "positive", "improving", "thriving", "expanding", "hiring",
-        "beat", "outperform", "record", "milestone", "success",
-    }),
-    negative_keywords=frozenset({
-        "bearish", "crash", "recession", "layoffs", "inflation", "downside",
-        "pessimistic", "bust", "plunge", "loss", "deficit", "weak",
-        "crisis", "collapse", "default", "downgrade", "selloff",
-        "negative", "declining", "struggling", "contracting", "firing",
-        "miss", "underperform", "warning", "risk", "failure",
-    }),
-    intensifiers=frozenset({
-        "very", "extremely", "absolutely", "significantly", "dramatically",
-        "massively", "incredibly", "hugely", "totally", "completely",
-    }),
+    positive_keywords=frozenset(
+        {
+            "bullish",
+            "rally",
+            "growth",
+            "confident",
+            "recovery",
+            "upside",
+            "optimistic",
+            "boom",
+            "surge",
+            "gain",
+            "profit",
+            "strong",
+            "breakthrough",
+            "innovation",
+            "opportunity",
+            "upgrade",
+            "positive",
+            "improving",
+            "thriving",
+            "expanding",
+            "hiring",
+            "beat",
+            "outperform",
+            "record",
+            "milestone",
+            "success",
+        }
+    ),
+    negative_keywords=frozenset(
+        {
+            "bearish",
+            "crash",
+            "recession",
+            "layoffs",
+            "inflation",
+            "downside",
+            "pessimistic",
+            "bust",
+            "plunge",
+            "loss",
+            "deficit",
+            "weak",
+            "crisis",
+            "collapse",
+            "default",
+            "downgrade",
+            "selloff",
+            "negative",
+            "declining",
+            "struggling",
+            "contracting",
+            "firing",
+            "miss",
+            "underperform",
+            "warning",
+            "risk",
+            "failure",
+        }
+    ),
+    intensifiers=frozenset(
+        {
+            "very",
+            "extremely",
+            "absolutely",
+            "significantly",
+            "dramatically",
+            "massively",
+            "incredibly",
+            "hugely",
+            "totally",
+            "completely",
+        }
+    ),
 )

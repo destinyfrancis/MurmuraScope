@@ -1,10 +1,11 @@
 # backend/tests/test_emergence_tracker.py
 """Tests for EmergenceTracker: FactionMapper, TippingPointDetector, NarrativeTracer."""
+
 from __future__ import annotations
+
 import pytest
-from backend.app.services.emergence_tracker import (
-    FactionMapper, TippingPointDetector, TippingPoint
-)
+
+from backend.app.services.emergence_tracker import FactionMapper, TippingPoint, TippingPointDetector
 
 
 def _make_agent_beliefs(n: int, split: bool = False) -> dict[str, dict[str, float]]:
@@ -121,11 +122,7 @@ def test_faction_mapping_is_deterministic():
     )
 
     def _partition_map(snapshot):
-        return {
-            agent_id: faction.faction_id
-            for faction in snapshot.factions
-            for agent_id in faction.member_agent_ids
-        }
+        return {agent_id: faction.faction_id for faction in snapshot.factions for agent_id in faction.member_agent_ids}
 
     assert _partition_map(result1) == _partition_map(result2), (
         "Faction mapping must be deterministic for identical inputs"
@@ -149,21 +146,24 @@ def test_jsd_adaptive_bins_with_zero():
 @pytest.mark.unit
 def test_jsd_adaptive_bin_count_formula():
     """Adaptive n_bins formula: max(5, min(20, n_agents // 10))."""
+
     # Test the formula directly
     def _expected_bins(n_agents: int) -> int:
         return max(5, min(20, n_agents // 10))
 
-    assert _expected_bins(20) == 5    # small → floor at 5
+    assert _expected_bins(20) == 5  # small → floor at 5
     assert _expected_bins(100) == 10  # medium
     assert _expected_bins(200) == 20  # large → capped at 20
-    assert _expected_bins(50) == 5    # 50//10=5 → exactly at floor
+    assert _expected_bins(50) == 5  # 50//10=5 → exactly at floor
 
 
 @pytest.mark.unit
 def test_narrative_entry_creation():
     """NarrativeEntry must be creatable and frozen."""
     import dataclasses
+
     from backend.app.services.emergence_tracker import NarrativeEntry
+
     entry = NarrativeEntry(
         simulation_id="sim_001",
         agent_id="agent_0",

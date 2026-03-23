@@ -1,10 +1,11 @@
 """Real Estate Market DomainPack for MurmuraScope."""
+
 from __future__ import annotations
 
 from backend.app.domain.base import (
+    DecisionThresholds,
     DomainPack,
     DomainPackRegistry,
-    DecisionThresholds,
     MacroImpactDeltas,
     MetricSpec,
     ShockTypeSpec,
@@ -23,9 +24,7 @@ _RE_SHOCK_SPECS: tuple[ShockTypeSpec, ...] = (
     ShockTypeSpec("foreign_capital_inflow", "外資湧入", "Foreign Capital Inflow"),
 )
 
-_RE_VALID_SHOCK_TYPES: frozenset[str] = frozenset(
-    spec.id for spec in _RE_SHOCK_SPECS
-)
+_RE_VALID_SHOCK_TYPES: frozenset[str] = frozenset(spec.id for spec in _RE_SHOCK_SPECS)
 
 # ---------------------------------------------------------------------------
 # Metric specs
@@ -37,9 +36,7 @@ _RE_METRICS: tuple[MetricSpec, ...] = (
     MetricSpec("transaction_volume", "property", "transaction_volume", 4),
 )
 
-_RE_DEFAULT_FORECAST_METRICS: tuple[str, ...] = tuple(
-    m.name for m in _RE_METRICS
-)
+_RE_DEFAULT_FORECAST_METRICS: tuple[str, ...] = tuple(m.name for m in _RE_METRICS)
 
 # ---------------------------------------------------------------------------
 # Monte Carlo constants
@@ -102,7 +99,7 @@ _RE_DECISION_THRESHOLDS = DecisionThresholds(
 # ---------------------------------------------------------------------------
 
 _RE_MACRO_IMPACT_DELTAS = MacroImpactDeltas(
-    buy_property_ccl_delta=0.5,   # Property domain: stronger price feedback
+    buy_property_ccl_delta=0.5,  # Property domain: stronger price feedback
     emigrate_net_mig_delta=-50,
     invest_stocks_hsi_delta=0.0,
     have_child_confidence_delta=0.2,
@@ -142,8 +139,14 @@ REAL_ESTATE_PACK = DomainPack(
     decision_thresholds=_RE_DECISION_THRESHOLDS,
     macro_impact_deltas=_RE_MACRO_IMPACT_DELTAS,
     keywords=(
-        "地產", "real estate", "mortgage", "樓價", "ccl",
-        "rent", "housing", "property price",
+        "地產",
+        "real estate",
+        "mortgage",
+        "樓價",
+        "ccl",
+        "rent",
+        "housing",
+        "property price",
     ),
 )
 

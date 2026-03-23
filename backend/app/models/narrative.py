@@ -1,4 +1,5 @@
 """Natural language report models for trend narrative generation."""
+
 from __future__ import annotations
 
 from datetime import datetime

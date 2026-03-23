@@ -1,11 +1,10 @@
 """Public Narrative DomainPack for MurmuraScope."""
+
 from __future__ import annotations
 
 from backend.app.domain.base import (
     DomainPack,
     DomainPackRegistry,
-    DecisionThresholds,
-    MacroImpactDeltas,
     MetricSpec,
     ShockTypeSpec,
 )
@@ -23,9 +22,7 @@ _PN_SHOCK_SPECS: tuple[ShockTypeSpec, ...] = (
     ShockTypeSpec("whistleblower_leak", "揭密泄露", "Whistleblower Leak"),
 )
 
-_PN_VALID_SHOCK_TYPES: frozenset[str] = frozenset(
-    spec.id for spec in _PN_SHOCK_SPECS
-)
+_PN_VALID_SHOCK_TYPES: frozenset[str] = frozenset(spec.id for spec in _PN_SHOCK_SPECS)
 
 # ---------------------------------------------------------------------------
 # Metric specs
@@ -37,9 +34,7 @@ _PN_METRICS: tuple[MetricSpec, ...] = (
     MetricSpec("polarization_index", "sentiment", "polarization_index", 4),
 )
 
-_PN_DEFAULT_FORECAST_METRICS: tuple[str, ...] = tuple(
-    m.name for m in _PN_METRICS
-)
+_PN_DEFAULT_FORECAST_METRICS: tuple[str, ...] = tuple(m.name for m in _PN_METRICS)
 
 # ---------------------------------------------------------------------------
 # Monte Carlo constants
@@ -85,8 +80,14 @@ PUBLIC_NARRATIVE_PACK = DomainPack(
     correlated_vars=_PN_CORRELATED_VARS,
     mc_default_metrics=_PN_MC_DEFAULT_METRICS,
     keywords=(
-        "輿論", "narrative", "media", "民意", "protest",
-        "public opinion", "social media", "misinformation",
+        "輿論",
+        "narrative",
+        "media",
+        "民意",
+        "protest",
+        "public opinion",
+        "social media",
+        "misinformation",
     ),
 )
 

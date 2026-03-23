@@ -10,6 +10,7 @@ Usage::
     python -m backend.scripts.scale_benchmark --target 3k --profile-hook _process_round_trust
     python -m backend.scripts.scale_benchmark --target 1k --algorithm engagement_first
 """
+
 from __future__ import annotations
 
 import argparse
@@ -114,6 +115,7 @@ async def run_benchmark(
     try:
         # ru_maxrss is in bytes on Linux, kilobytes on macOS
         import sys
+
         rusage = resource.getrusage(resource.RUSAGE_SELF)
         if sys.platform == "darwin":
             peak_bytes = rusage.ru_maxrss  # already bytes on macOS
@@ -268,9 +270,7 @@ def main() -> None:
 
     all_passed = True
     for target in targets_to_run:
-        result = asyncio.run(
-            run_benchmark(target, algorithm=args.algorithm, profile_hook=args.profile_hook)
-        )
+        result = asyncio.run(run_benchmark(target, algorithm=args.algorithm, profile_hook=args.profile_hook))
         _write_result(result, args.output)
         if not result.passed:
             all_passed = False

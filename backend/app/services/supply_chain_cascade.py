@@ -9,6 +9,7 @@ Design:
   - Recovery delay: 3 rounds to find alternate sourcing
   - Bullwhip amplification: each hop amplifies impact by 10%
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -19,12 +20,14 @@ from backend.app.utils.logger import get_logger
 logger = get_logger("supply_chain_cascade")
 
 # Supply-chain edge types that represent upstream-downstream dependency
-_SUPPLY_EDGE_TYPES = frozenset({
-    "SUPPLIES_TO",
-    "BUYS_FROM",
-    "DEPENDS_ON",
-    "DISTRIBUTES",
-})
+_SUPPLY_EDGE_TYPES = frozenset(
+    {
+        "SUPPLIES_TO",
+        "BUYS_FROM",
+        "DEPENDS_ON",
+        "DISTRIBUTES",
+    }
+)
 
 # Bullwhip amplification per hop (10%)
 _BULLWHIP_FACTOR = 0.10
@@ -38,10 +41,10 @@ class CascadeEffect:
     """Immutable record of a supply chain cascade impact on a downstream entity."""
 
     target_entity_id: str
-    revenue_impact: float      # negative = loss
+    revenue_impact: float  # negative = loss
     source_entity_id: str
     hop_distance: int
-    recovery_rounds: int       # rounds until effect fades
+    recovery_rounds: int  # rounds until effect fades
 
 
 async def propagate_supply_chain_shock(
@@ -87,9 +90,7 @@ async def propagate_supply_chain_shock(
     # BFS cascade propagation
     effects: list[CascadeEffect] = []
     # Track: (entity_id, impact_magnitude, hop) — impact_magnitude is positive (loss fraction)
-    current_wave: list[tuple[str, float, str]] = [
-        (eid, 1.0, eid) for eid in failed_entity_ids
-    ]
+    current_wave: list[tuple[str, float, str]] = [(eid, 1.0, eid) for eid in failed_entity_ids]
     visited: set[str] = set(failed_entity_ids)
 
     for hop in range(1, max_hops + 1):

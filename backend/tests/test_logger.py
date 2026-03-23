@@ -1,9 +1,9 @@
 """Tests for backend/app/utils/logger.py — setup_logging + get_logger."""
+
 from __future__ import annotations
 
 import logging
 import os
-
 from unittest.mock import patch
 
 
@@ -17,9 +17,7 @@ def test_setup_logging_creates_file_handler(tmp_path):
     root.handlers.clear()
     with patch.dict(os.environ, {"LOG_FILE": str(log_path), "LOG_LEVEL": "DEBUG"}):
         result = lg.setup_logging(logger_name="murmuroscope_test")
-    file_handlers = [
-        h for h in result.handlers if isinstance(h, logging.handlers.RotatingFileHandler)
-    ]
+    file_handlers = [h for h in result.handlers if isinstance(h, logging.handlers.RotatingFileHandler)]
     assert len(file_handlers) == 1
     assert result.level == logging.DEBUG
 

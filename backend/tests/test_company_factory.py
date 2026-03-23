@@ -18,8 +18,6 @@ import pytest
 
 from backend.app.models.company import CompanyProfile, CompanyType
 from backend.app.services.company_factory import (
-    DEFAULT_SECTOR_DIST,
-    DEFAULT_SIZE_DIST,
     CompanyFactory,
     _normalise,
 )
@@ -30,7 +28,6 @@ from backend.app.services.supply_chain_builder import (
     SupplyChainEdge,
     SupplyChainGraph,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -193,9 +190,7 @@ class TestCompanyFactoryGenerate:
         """Custom distribution overrides default."""
         factory = CompanyFactory(rng_seed=22)
         custom_dist = {"finance": 1.0}  # All finance
-        companies = await factory.generate_companies(
-            "sess-008", count=10, sector_distribution=custom_dist
-        )
+        companies = await factory.generate_companies("sess-008", count=10, sector_distribution=custom_dist)
         assert all(c.industry_sector == "finance" for c in companies)
 
     @pytest.mark.asyncio
@@ -437,8 +432,7 @@ class TestSupplyChainBuilder:
         builder = SupplyChainBuilder(rng_seed=6)
         n_companies = 8
         positions = [
-            (i + 1, ["upstream", "midstream", "downstream"][i % 3], "import_export")
-            for i in range(n_companies)
+            (i + 1, ["upstream", "midstream", "downstream"][i % 3], "import_export") for i in range(n_companies)
         ]
         companies = self._make_companies(session_id, positions)
 
@@ -484,7 +478,7 @@ class TestB2BAutoTriggerDetection:
             ("trade", True),
             ("supply_chain", True),
             ("enterprise", True),
-            ("B2B_TRADE", True),        # case-insensitive
+            ("B2B_TRADE", True),  # case-insensitive
             ("property", False),
             ("emigration", False),
             ("fertility", False),
@@ -619,10 +613,12 @@ class TestCreateSimulationB2BIntegration:
         from backend.app.api.simulation import create_simulation
         from backend.app.models.request import SimulationCreateRequest
 
-        req = SimulationCreateRequest(**self._base_request(
-            scenario_type="property",
-            company_count=10,
-        ))
+        req = SimulationCreateRequest(
+            **self._base_request(
+                scenario_type="property",
+                company_count=10,
+            )
+        )
         mock_companies = [_make_profile(id=i + 1, session_id="any") for i in range(10)]
 
         with (
@@ -643,9 +639,7 @@ class TestCreateSimulationB2BIntegration:
         mock_cf.return_value.generate_companies.assert_awaited_once()
         # Verify count passed matches request
         call_kwargs = mock_cf.return_value.generate_companies.call_args
-        count_arg = call_kwargs.kwargs.get("count") or (
-            call_kwargs.args[1] if len(call_kwargs.args) >= 2 else None
-        )
+        count_arg = call_kwargs.kwargs.get("count") or (call_kwargs.args[1] if len(call_kwargs.args) >= 2 else None)
         assert count_arg == 10
 
     @pytest.mark.asyncio
@@ -669,9 +663,7 @@ class TestCreateSimulationB2BIntegration:
         ):
             _wire_mocks(mock_af, mock_pg, mock_mc, mock_sm, mock_get_db)
             # Make generate_companies raise an error
-            mock_cf.return_value.generate_companies = AsyncMock(
-                side_effect=RuntimeError("DB connection failed")
-            )
+            mock_cf.return_value.generate_companies = AsyncMock(side_effect=RuntimeError("DB connection failed"))
             result = await create_simulation(req)
 
         # Should still succeed — B2B generation is non-fatal
@@ -710,10 +702,12 @@ class TestCreateSimulationB2BIntegration:
         from backend.app.api.simulation import create_simulation
         from backend.app.models.request import SimulationCreateRequest
 
-        req = SimulationCreateRequest(**self._base_request(
-            scenario_type="b2b",
-            company_count=5,
-        ))
+        req = SimulationCreateRequest(
+            **self._base_request(
+                scenario_type="b2b",
+                company_count=5,
+            )
+        )
         mock_companies = [_make_profile(id=i + 1, session_id="any") for i in range(5)]
 
         with (
@@ -743,7 +737,6 @@ class TestCreateSimulationB2BIntegration:
 
 def _wire_mocks(mock_af, mock_pg, mock_mc, mock_sm, mock_get_db):
     """Configure the common service mocks used by create_simulation."""
-    from backend.app.models.project import SimMode, SessionStatus
 
     # AgentFactory
     mock_af.return_value.generate_population.return_value = []
@@ -758,12 +751,8 @@ def _wire_mocks(mock_af, mock_pg, mock_mc, mock_sm, mock_get_db):
 
     # SimulationManager
     session_id = str(uuid.uuid4())
-    mock_sm.return_value.create_session = AsyncMock(
-        return_value={"session_id": session_id, "status": "created"}
-    )
-    mock_sm.return_value.get_session = AsyncMock(
-        return_value={"session_id": session_id, "status": "created"}
-    )
+    mock_sm.return_value.create_session = AsyncMock(return_value={"session_id": session_id, "status": "created"})
+    mock_sm.return_value.get_session = AsyncMock(return_value={"session_id": session_id, "status": "created"})
 
     # DB context manager for config_json update
     import json as _json

@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
-
 # ---------------------------------------------------------------------------
 # Enumerations
 # ---------------------------------------------------------------------------
@@ -82,13 +81,13 @@ class CompanyProfile:
     company_name: str
     company_type: str
     industry_sector: str
-    company_size: str          # sme / mnc / startup
+    company_size: str  # sme / mnc / startup
     district: str
     supply_chain_position: str  # upstream / midstream / downstream
     annual_revenue_hkd: int
     employee_count: int
-    china_exposure: float       # 0–1
-    export_ratio: float         # 0–1
+    china_exposure: float  # 0–1
+    export_ratio: float  # 0–1
 
 
 @dataclass(frozen=True)

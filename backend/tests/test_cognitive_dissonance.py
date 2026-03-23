@@ -1,4 +1,5 @@
 """Tests for DissonanceDetector and CognitiveDissonance models (Phase 3)."""
+
 from __future__ import annotations
 
 import random
@@ -8,17 +9,15 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from backend.app.models.emotional_state import (
-    BELIEF_CORRELATIONS,
-    CORE_BELIEF_TOPICS,
     Belief,
     CognitiveDissonance,
 )
 from backend.app.services.cognitive_dissonance import DissonanceDetector
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_profile(
     agent_id: int = 1,
@@ -41,6 +40,7 @@ def _belief(topic: str, stance: float, confidence: float = 0.6) -> Belief:
 # ---------------------------------------------------------------------------
 # Model tests
 # ---------------------------------------------------------------------------
+
 
 def test_cognitive_dissonance_creation():
     """CognitiveDissonance is a frozen dataclass."""
@@ -69,6 +69,7 @@ def test_cognitive_dissonance_replace():
 # detect() tests
 # ---------------------------------------------------------------------------
 
+
 def test_detect_no_conflict_consistent_beliefs():
     """Consistent beliefs (positive corr, same direction) should produce low dissonance."""
     det = DissonanceDetector()
@@ -89,8 +90,8 @@ def test_detect_belief_belief_conflict():
     # property_outlook and economy_outlook are positively correlated
     # If one is positive and other negative → conflict
     beliefs = [
-        _belief("property_outlook", 0.8),    # bullish
-        _belief("economy_outlook", -0.8),    # bearish
+        _belief("property_outlook", 0.8),  # bullish
+        _belief("economy_outlook", -0.8),  # bearish
     ]
     profile = _make_profile()
     result = det.detect(beliefs, [], profile)
@@ -102,9 +103,9 @@ def test_detect_action_belief_gap_emigrate():
     """Emigrating while believing social_stability is positive creates dissonance."""
     det = DissonanceDetector()
     beliefs = [
-        _belief("social_stability", 0.8),    # believes society is stable
+        _belief("social_stability", 0.8),  # believes society is stable
     ]
-    actions = ["emigrate"]                   # but decides to emigrate
+    actions = ["emigrate"]  # but decides to emigrate
     profile = _make_profile()
     result = det.detect(beliefs, actions, profile)
     assert result.action_belief_gap > 0.0
@@ -114,7 +115,7 @@ def test_detect_action_belief_gap_buy_bearish():
     """Buying property while bearish creates dissonance."""
     det = DissonanceDetector()
     beliefs = [
-        _belief("property_outlook", -0.7),   # bearish on property
+        _belief("property_outlook", -0.7),  # bearish on property
     ]
     actions = ["buy_property"]
     profile = _make_profile()
@@ -170,10 +171,7 @@ def test_detect_high_neuroticism_favors_denial():
     ]
     p_neurotic = _make_profile(neuroticism=0.95, openness=0.1)
     rng = random.Random(42)
-    strategies = [
-        det.detect(beliefs, ["emigrate"], p_neurotic, rng=rng).resolution_strategy
-        for _ in range(30)
-    ]
+    strategies = [det.detect(beliefs, ["emigrate"], p_neurotic, rng=rng).resolution_strategy for _ in range(30)]
     denial_count = strategies.count("denial")
     belief_change_count = strategies.count("belief_change")
     assert denial_count >= belief_change_count
@@ -188,10 +186,7 @@ def test_detect_high_openness_favors_belief_change():
     ]
     p_open = _make_profile(neuroticism=0.1, openness=0.95)
     rng = random.Random(42)
-    strategies = [
-        det.detect(beliefs, ["emigrate"], p_open, rng=rng).resolution_strategy
-        for _ in range(30)
-    ]
+    strategies = [det.detect(beliefs, ["emigrate"], p_open, rng=rng).resolution_strategy for _ in range(30)]
     belief_change_count = strategies.count("belief_change")
     # Should have some belief_change (not necessarily dominant, but present)
     assert belief_change_count > 0
@@ -201,6 +196,7 @@ def test_detect_high_openness_favors_belief_change():
 # apply_resolution() tests
 # ---------------------------------------------------------------------------
 
+
 def test_apply_resolution_denial_no_change():
     """Denial strategy: beliefs unchanged, arousal_delta = 0.1."""
     det = DissonanceDetector()
@@ -209,7 +205,9 @@ def test_apply_resolution_denial_no_change():
         _belief("economy_outlook", -0.8),
     ]
     cd = CognitiveDissonance(
-        agent_id=1, session_id="s", round_number=1,
+        agent_id=1,
+        session_id="s",
+        round_number=1,
         dissonance_score=0.6,
         conflicting_pairs=(("property_outlook", "economy_outlook"),),
         resolution_strategy="denial",
@@ -225,11 +223,13 @@ def test_apply_resolution_rationalization_confidence_reduced():
     """Rationalization: weaker belief's confidence reduced by ×0.7."""
     det = DissonanceDetector()
     beliefs = [
-        _belief("property_outlook", 0.8, confidence=0.4),   # weaker
-        _belief("economy_outlook", -0.8, confidence=0.8),   # stronger
+        _belief("property_outlook", 0.8, confidence=0.4),  # weaker
+        _belief("economy_outlook", -0.8, confidence=0.8),  # stronger
     ]
     cd = CognitiveDissonance(
-        agent_id=1, session_id="s", round_number=1,
+        agent_id=1,
+        session_id="s",
+        round_number=1,
         dissonance_score=0.6,
         conflicting_pairs=(("property_outlook", "economy_outlook"),),
         resolution_strategy="rationalization",
@@ -246,11 +246,13 @@ def test_apply_resolution_belief_change():
     det = DissonanceDetector()
     # property + economy corr=0.6 (positive); property=0.8, economy=-0.8
     beliefs = [
-        _belief("property_outlook", 0.8, confidence=0.4),   # weaker
-        _belief("economy_outlook", -0.8, confidence=0.8),   # stronger
+        _belief("property_outlook", 0.8, confidence=0.4),  # weaker
+        _belief("economy_outlook", -0.8, confidence=0.8),  # stronger
     ]
     cd = CognitiveDissonance(
-        agent_id=1, session_id="s", round_number=1,
+        agent_id=1,
+        session_id="s",
+        round_number=1,
         dissonance_score=0.7,
         conflicting_pairs=(("property_outlook", "economy_outlook"),),
         resolution_strategy="belief_change",
@@ -268,7 +270,9 @@ def test_apply_resolution_none_no_change():
     det = DissonanceDetector()
     beliefs = [_belief("property_outlook", 0.5)]
     cd = CognitiveDissonance(
-        agent_id=1, session_id="s", round_number=1,
+        agent_id=1,
+        session_id="s",
+        round_number=1,
         dissonance_score=0.2,
         conflicting_pairs=(),
         resolution_strategy="none",
@@ -281,6 +285,7 @@ def test_apply_resolution_none_no_change():
 # ---------------------------------------------------------------------------
 # batch_detect_and_resolve() tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_batch_detect_and_resolve():
@@ -338,6 +343,7 @@ async def test_batch_detect_denial_creates_pending_delta():
     denial_found = False
     for seed in range(100):
         import random as _r
+
         rng = _r.Random(seed)
         raw = det.detect(agent_beliefs[1], [], profiles[1], rng=rng)
         if raw.resolution_strategy == "denial":
@@ -351,6 +357,7 @@ async def test_batch_detect_denial_creates_pending_delta():
 # persist_dissonance tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_persist_dissonance():
     """persist_dissonance should call executemany and commit."""
@@ -358,8 +365,11 @@ async def test_persist_dissonance():
     mock_db = AsyncMock()
     results = [
         CognitiveDissonance(
-            agent_id=1, session_id="s", round_number=2,
-            dissonance_score=0.6, resolution_strategy="denial",
+            agent_id=1,
+            session_id="s",
+            round_number=2,
+            dissonance_score=0.6,
+            resolution_strategy="denial",
         ),
     ]
     await det.persist_dissonance(results, mock_db)

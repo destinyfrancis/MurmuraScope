@@ -7,7 +7,7 @@ Caches results for 10 minutes to respect rate limits.
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from backend.app.utils.logger import get_logger
@@ -21,6 +21,7 @@ _CACHE_TTL_SECONDS = 600  # 10 minutes
 @dataclass(frozen=True)
 class PolymarketContract:
     """Immutable representation of a Polymarket prediction contract."""
+
     id: str
     question: str
     description: str
@@ -47,7 +48,9 @@ class PolymarketClient:
         self._cache = _MODULE_CACHE
 
     async def fetch_active_markets(
-        self, category: str | None = None, limit: int = 50,
+        self,
+        category: str | None = None,
+        limit: int = 50,
     ) -> list[PolymarketContract]:
         """Fetch active (non-closed) markets from Gamma API.
 
@@ -64,6 +67,7 @@ class PolymarketClient:
 
         try:
             import httpx
+
             async with httpx.AsyncClient(timeout=15.0) as client:
                 resp = await client.get(f"{_GAMMA_API_BASE}/markets", params=params)
                 resp.raise_for_status()
@@ -86,6 +90,7 @@ class PolymarketClient:
 
         try:
             import httpx
+
             async with httpx.AsyncClient(timeout=15.0) as client:
                 resp = await client.get(f"{_GAMMA_API_BASE}/markets", params={"slug": slug})
                 resp.raise_for_status()
@@ -106,10 +111,7 @@ class PolymarketClient:
         # Gamma API doesn't have search — fetch all and filter locally
         all_markets = await self.fetch_active_markets(limit=200)
         query_lower = query.lower()
-        matched = [
-            c for c in all_markets
-            if query_lower in c.question.lower() or query_lower in c.description.lower()
-        ]
+        matched = [c for c in all_markets if query_lower in c.question.lower() or query_lower in c.description.lower()]
         return matched[:limit]
 
     def _get_cached(self, key: str) -> Any | None:
@@ -132,6 +134,7 @@ def _parse_contract(raw: dict[str, Any]) -> PolymarketContract | None:
         outcomes_raw = raw.get("outcomes", "")
         if isinstance(outcomes_raw, str):
             import json
+
             try:
                 outcomes_list = json.loads(outcomes_raw)
             except (json.JSONDecodeError, TypeError):
@@ -144,6 +147,7 @@ def _parse_contract(raw: dict[str, Any]) -> PolymarketContract | None:
         prices_raw = raw.get("outcomePrices", "")
         if isinstance(prices_raw, str):
             import json
+
             try:
                 prices_list = [float(p) for p in json.loads(prices_raw)]
             except (json.JSONDecodeError, TypeError, ValueError):

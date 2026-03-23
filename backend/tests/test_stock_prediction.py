@@ -7,7 +7,6 @@ forecaster, backtester, and API endpoints.
 from __future__ import annotations
 
 import dataclasses
-import math
 import re
 from contextlib import asynccontextmanager
 from typing import Any
@@ -29,16 +28,14 @@ class TestModels:
     def test_ticker_info_frozen(self):
         from backend.app.models.stock_forecast import TickerInfo
 
-        ti = TickerInfo(ticker="^HSI", name="恒生指數", asset_type="hk_index",
-                        sector_tag="broad", market="HK")
+        ti = TickerInfo(ticker="^HSI", name="恒生指數", asset_type="hk_index", sector_tag="broad", market="HK")
         with pytest.raises((AttributeError, dataclasses.FrozenInstanceError)):
             ti.ticker = "AAPL"  # type: ignore[misc]
 
     def test_ticker_info_to_dict(self):
         from backend.app.models.stock_forecast import TickerInfo
 
-        ti = TickerInfo(ticker="^HSI", name="恒生指數", asset_type="hk_index",
-                        sector_tag="broad", market="HK")
+        ti = TickerInfo(ticker="^HSI", name="恒生指數", asset_type="hk_index", sector_tag="broad", market="HK")
         d = ti.to_dict()
         assert d["ticker"] == "^HSI"
         assert d["name"] == "恒生指數"
@@ -52,16 +49,18 @@ class TestModels:
     def test_signal_contribution_frozen(self):
         from backend.app.models.stock_forecast import SignalContribution
 
-        sc = SignalContribution(signal_name="sentiment_net", signal_value=0.5,
-                                weight=0.035, contribution=0.0175, direction="bullish")
+        sc = SignalContribution(
+            signal_name="sentiment_net", signal_value=0.5, weight=0.035, contribution=0.0175, direction="bullish"
+        )
         with pytest.raises((AttributeError, dataclasses.FrozenInstanceError)):
             sc.signal_value = 0.9  # type: ignore[misc]
 
     def test_signal_contribution_to_dict(self):
         from backend.app.models.stock_forecast import SignalContribution
 
-        sc = SignalContribution(signal_name="sentiment_net", signal_value=0.5,
-                                weight=0.035, contribution=0.0175, direction="bullish")
+        sc = SignalContribution(
+            signal_name="sentiment_net", signal_value=0.5, weight=0.035, contribution=0.0175, direction="bullish"
+        )
         d = sc.to_dict()
         assert d["signal_name"] == "sentiment_net"
         assert d["signal_value"] == round(0.5, 4)
@@ -74,18 +73,30 @@ class TestModels:
     def test_stock_forecast_point_frozen(self):
         from backend.app.models.stock_forecast import StockForecastPoint
 
-        pt = StockForecastPoint(week="2024-W01", close=100.0, lower_80=95.0,
-                                upper_80=105.0, lower_95=90.0, upper_95=110.0,
-                                sentiment_adjusted=False)
+        pt = StockForecastPoint(
+            week="2024-W01",
+            close=100.0,
+            lower_80=95.0,
+            upper_80=105.0,
+            lower_95=90.0,
+            upper_95=110.0,
+            sentiment_adjusted=False,
+        )
         with pytest.raises((AttributeError, dataclasses.FrozenInstanceError)):
             pt.close = 999.0  # type: ignore[misc]
 
     def test_stock_forecast_point_to_dict(self):
         from backend.app.models.stock_forecast import StockForecastPoint
 
-        pt = StockForecastPoint(week="2024-W01", close=100.123456, lower_80=95.0,
-                                upper_80=105.0, lower_95=90.0, upper_95=110.0,
-                                sentiment_adjusted=True)
+        pt = StockForecastPoint(
+            week="2024-W01",
+            close=100.123456,
+            lower_80=95.0,
+            upper_80=105.0,
+            lower_95=90.0,
+            upper_95=110.0,
+            sentiment_adjusted=True,
+        )
         d = pt.to_dict()
         assert d["week"] == "2024-W01"
         assert d["close"] == round(100.123456, 2)
@@ -100,10 +111,19 @@ class TestModels:
     def test_stock_forecast_result_frozen(self):
         from backend.app.models.stock_forecast import StockForecastResult
 
-        r = StockForecastResult(ticker="^HSI", asset_type="hk_index", name="恒生指數",
-                                horizon=12, points=(), model_used="NaiveDrift",
-                                fit_quality="fair", data_quality="sufficient",
-                                signal_shift=0.0, signal_breakdown=(), session_id=None)
+        r = StockForecastResult(
+            ticker="^HSI",
+            asset_type="hk_index",
+            name="恒生指數",
+            horizon=12,
+            points=(),
+            model_used="NaiveDrift",
+            fit_quality="fair",
+            data_quality="sufficient",
+            signal_shift=0.0,
+            signal_breakdown=(),
+            session_id=None,
+        )
         with pytest.raises((AttributeError, dataclasses.FrozenInstanceError)):
             r.horizon = 99  # type: ignore[misc]
 
@@ -114,15 +134,31 @@ class TestModels:
             StockForecastResult,
         )
 
-        pt = StockForecastPoint(week="2024-W01", close=100.0, lower_80=95.0,
-                                upper_80=105.0, lower_95=90.0, upper_95=110.0,
-                                sentiment_adjusted=False)
-        sc = SignalContribution(signal_name="sentiment_net", signal_value=0.5,
-                                weight=0.035, contribution=0.0175, direction="bullish")
-        r = StockForecastResult(ticker="^HSI", asset_type="hk_index", name="恒生指數",
-                                horizon=12, points=(pt,), model_used="NaiveDrift",
-                                fit_quality="fair", data_quality="sufficient",
-                                signal_shift=0.05, signal_breakdown=(sc,), session_id="sess_1")
+        pt = StockForecastPoint(
+            week="2024-W01",
+            close=100.0,
+            lower_80=95.0,
+            upper_80=105.0,
+            lower_95=90.0,
+            upper_95=110.0,
+            sentiment_adjusted=False,
+        )
+        sc = SignalContribution(
+            signal_name="sentiment_net", signal_value=0.5, weight=0.035, contribution=0.0175, direction="bullish"
+        )
+        r = StockForecastResult(
+            ticker="^HSI",
+            asset_type="hk_index",
+            name="恒生指數",
+            horizon=12,
+            points=(pt,),
+            model_used="NaiveDrift",
+            fit_quality="fair",
+            data_quality="sufficient",
+            signal_shift=0.05,
+            signal_breakdown=(sc,),
+            session_id="sess_1",
+        )
         d = r.to_dict()
         assert d["ticker"] == "^HSI"
         assert len(d["points"]) == 1
@@ -135,10 +171,19 @@ class TestModels:
     def test_stock_forecast_result_default_values(self):
         from backend.app.models.stock_forecast import StockForecastResult
 
-        r = StockForecastResult(ticker="X", asset_type="hk_stock", name="Test",
-                                horizon=12, points=(), model_used="none",
-                                fit_quality="poor", data_quality="insufficient",
-                                signal_shift=0.0, signal_breakdown=(), session_id=None)
+        r = StockForecastResult(
+            ticker="X",
+            asset_type="hk_stock",
+            name="Test",
+            horizon=12,
+            points=(),
+            model_used="none",
+            fit_quality="poor",
+            data_quality="insufficient",
+            signal_shift=0.0,
+            signal_breakdown=(),
+            session_id=None,
+        )
         assert r.data_quality == "insufficient"
         assert r.signal_shift == 0.0
         assert r.points == ()
@@ -150,18 +195,24 @@ class TestModels:
     def test_stock_backtest_result_frozen(self):
         from backend.app.models.stock_forecast import StockBacktestResult
 
-        br = StockBacktestResult(ticker="^HSI", mape=0.05, rmse=100.0,
-                                 directional_accuracy=0.7, n_obs=8,
-                                 train_end="2024-W40", horizon=8)
+        br = StockBacktestResult(
+            ticker="^HSI", mape=0.05, rmse=100.0, directional_accuracy=0.7, n_obs=8, train_end="2024-W40", horizon=8
+        )
         with pytest.raises((AttributeError, dataclasses.FrozenInstanceError)):
             br.mape = 0.99  # type: ignore[misc]
 
     def test_stock_backtest_result_to_dict(self):
         from backend.app.models.stock_forecast import StockBacktestResult
 
-        br = StockBacktestResult(ticker="^HSI", mape=0.05123, rmse=102.456,
-                                 directional_accuracy=0.625, n_obs=8,
-                                 train_end="2024-W40", horizon=8)
+        br = StockBacktestResult(
+            ticker="^HSI",
+            mape=0.05123,
+            rmse=102.456,
+            directional_accuracy=0.625,
+            n_obs=8,
+            train_end="2024-W40",
+            horizon=8,
+        )
         d = br.to_dict()
         assert d["ticker"] == "^HSI"
         assert d["mape"] == round(0.05123, 4)
@@ -216,18 +267,24 @@ class TestStockDownloader:
     def test_weekly_record_is_frozen(self):
         from backend.data_pipeline.stock_downloader import WeeklyRecord
 
-        r = WeeklyRecord(ticker="^HSI", week_label="2024-W01",
-                         open=18000.0, high=18200.0, low=17800.0,
-                         close=18100.0, volume=1000000.0)
+        r = WeeklyRecord(
+            ticker="^HSI",
+            week_label="2024-W01",
+            open=18000.0,
+            high=18200.0,
+            low=17800.0,
+            close=18100.0,
+            volume=1000000.0,
+        )
         with pytest.raises((AttributeError, dataclasses.FrozenInstanceError)):
             r.close = 99.0  # type: ignore[misc]
 
     def test_weekly_record_fields(self):
         from backend.data_pipeline.stock_downloader import WeeklyRecord
 
-        r = WeeklyRecord(ticker="NVDA", week_label="2024-W10",
-                         open=800.0, high=850.0, low=780.0,
-                         close=840.0, volume=5000000.0)
+        r = WeeklyRecord(
+            ticker="NVDA", week_label="2024-W10", open=800.0, high=850.0, low=780.0, close=840.0, volume=5000000.0
+        )
         assert r.ticker == "NVDA"
         assert r.week_label == "2024-W10"
         assert r.open == 800.0
@@ -237,8 +294,9 @@ class TestStockDownloader:
         assert r.volume == 5000000.0
 
     def test_week_label_from_date_format(self):
-        from backend.data_pipeline.stock_downloader import _week_label_from_date
         import datetime
+
+        from backend.data_pipeline.stock_downloader import _week_label_from_date
 
         dt = datetime.datetime(2024, 3, 8)  # Friday, ISO week 10
         label = _week_label_from_date(dt)
@@ -247,8 +305,9 @@ class TestStockDownloader:
         assert label.startswith("2024-")
 
     def test_week_label_format_regex(self):
-        from backend.data_pipeline.stock_downloader import _week_label_from_date
         import datetime
+
+        from backend.data_pipeline.stock_downloader import _week_label_from_date
 
         for year in [2021, 2022, 2023, 2024]:
             dt = datetime.datetime(year, 6, 15)
@@ -257,8 +316,9 @@ class TestStockDownloader:
 
     def test_week_label_from_pandas_timestamp(self):
         """Verify _week_label_from_date handles pandas Timestamp via to_pydatetime."""
-        from backend.data_pipeline.stock_downloader import _week_label_from_date
         import datetime
+
+        from backend.data_pipeline.stock_downloader import _week_label_from_date
 
         # Create a mock that behaves like pandas Timestamp
         mock_ts = MagicMock()
@@ -272,6 +332,7 @@ class TestStockDownloader:
     async def test_download_stock_weekly_empty_data(self):
         """download_stock_weekly returns [] when yfinance returns empty DataFrame."""
         import pandas as pd
+
         from backend.data_pipeline.stock_downloader import download_stock_weekly
 
         mock_yf = MagicMock()
@@ -287,13 +348,18 @@ class TestStockDownloader:
     @pytest.mark.asyncio
     async def test_download_stock_weekly_valid_data(self):
         """download_stock_weekly calls to_thread and returns WeeklyRecord list."""
-        import pandas as pd
         from backend.data_pipeline.stock_downloader import WeeklyRecord, download_stock_weekly
 
         fake_records = [
-            WeeklyRecord(ticker="^HSI", week_label="2024-W01",
-                         open=18000.0, high=18200.0, low=17800.0,
-                         close=18100.0, volume=1000000.0)
+            WeeklyRecord(
+                ticker="^HSI",
+                week_label="2024-W01",
+                open=18000.0,
+                high=18200.0,
+                low=17800.0,
+                close=18100.0,
+                volume=1000000.0,
+            )
         ]
         with patch("asyncio.to_thread", new_callable=AsyncMock, return_value=fake_records):
             records = await download_stock_weekly("^HSI")
@@ -314,9 +380,15 @@ class TestStockDownloader:
         from backend.data_pipeline.stock_downloader import WeeklyRecord, upsert_weekly_records
 
         records = [
-            WeeklyRecord(ticker="^HSI", week_label="2024-W01",
-                         open=18000.0, high=18200.0, low=17800.0,
-                         close=18100.0, volume=1000000.0),
+            WeeklyRecord(
+                ticker="^HSI",
+                week_label="2024-W01",
+                open=18000.0,
+                high=18200.0,
+                low=17800.0,
+                close=18100.0,
+                volume=1000000.0,
+            ),
         ]
 
         db = await aiosqlite.connect(":memory:")
@@ -369,10 +441,14 @@ class TestStockDownloader:
         from backend.data_pipeline.stock_downloader import download_all_stocks
 
         # Patch download_stock_weekly and upsert_weekly_records
-        with patch("backend.data_pipeline.stock_downloader.download_stock_weekly",
-                   new_callable=AsyncMock, return_value=[]), \
-             patch("backend.data_pipeline.stock_downloader.upsert_weekly_records",
-                   new_callable=AsyncMock, return_value=0):
+        with (
+            patch(
+                "backend.data_pipeline.stock_downloader.download_stock_weekly", new_callable=AsyncMock, return_value=[]
+            ),
+            patch(
+                "backend.data_pipeline.stock_downloader.upsert_weekly_records", new_callable=AsyncMock, return_value=0
+            ),
+        ):
             results = await download_all_stocks()
 
         # Should return dict with 14 tickers
@@ -467,8 +543,9 @@ class TestSimulationSignals:
     """SimulationSignals frozen dataclass."""
 
     def test_simulation_signals_is_frozen(self):
-        from backend.app.services.signal_extractor import SimulationSignals
         import datetime
+
+        from backend.app.services.signal_extractor import SimulationSignals
 
         sig = SimulationSignals(
             session_id="s1",
@@ -478,8 +555,9 @@ class TestSimulationSignals:
             sig.sentiment_net = 0.9  # type: ignore[misc]
 
     def test_simulation_signals_default_values_all_zero(self):
-        from backend.app.services.signal_extractor import SimulationSignals
         import datetime
+
+        from backend.app.services.signal_extractor import SimulationSignals
 
         sig = SimulationSignals(
             session_id="s1",
@@ -601,7 +679,7 @@ class TestSignalExtractor:
         for i in range(4):
             await db.execute(
                 "INSERT INTO agent_decisions (session_id, round_number, agent_id, decision_type, action, reasoning, oasis_username) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (session_id, 1, 10 + i, "emigrate", "emigrate", "leaving", f"u{10+i}"),
+                (session_id, 1, 10 + i, "emigrate", "emigrate", "leaving", f"u{10 + i}"),
             )
         await db.commit()
 
@@ -631,7 +709,7 @@ class TestSignalExtractor:
             for j in range(5):
                 await db.execute(
                     "INSERT INTO agent_decisions (session_id, round_number, agent_id, decision_type, action, reasoning, oasis_username) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    (session_id, 1, i * 10 + j, dtype, "act", "reason", f"u{i*10+j}"),
+                    (session_id, 1, i * 10 + j, dtype, "act", "reason", f"u{i * 10 + j}"),
                 )
         await db.commit()
 
@@ -866,8 +944,10 @@ async def forecast_db():
     async def mock_get_db():
         yield db
 
-    with patch("backend.app.services.stock_forecaster.get_db", mock_get_db), \
-         patch("backend.app.services.signal_extractor.get_db", mock_get_db):
+    with (
+        patch("backend.app.services.stock_forecaster.get_db", mock_get_db),
+        patch("backend.app.services.signal_extractor.get_db", mock_get_db),
+    ):
         yield db
 
     await db.close()
@@ -882,8 +962,18 @@ async def _seed_market_data(db, ticker: str, n_weeks: int = 25, start_close: flo
             """INSERT OR REPLACE INTO market_data
                (date, asset_type, ticker, open, close, high, low, volume, source, granularity)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (week, "hk_index", ticker, close * 0.99, close, close * 1.01,
-             close * 0.98, 1000000.0, "yfinance_weekly", "weekly"),
+            (
+                week,
+                "hk_index",
+                ticker,
+                close * 0.99,
+                close,
+                close * 1.01,
+                close * 0.98,
+                1000000.0,
+                "yfinance_weekly",
+                "weekly",
+            ),
         )
     await db.commit()
 
@@ -993,16 +1083,21 @@ class TestSignalOverlay:
 
         return [
             StockForecastPoint(
-                week=f"2024-W{i + 1:02d}", close=100.0, lower_80=95.0,
-                upper_80=105.0, lower_95=90.0, upper_95=110.0,
+                week=f"2024-W{i + 1:02d}",
+                close=100.0,
+                lower_80=95.0,
+                upper_80=105.0,
+                lower_95=90.0,
+                upper_95=110.0,
                 sentiment_adjusted=False,
             )
             for i in range(n)
         ]
 
     def _make_signals(self, **overrides) -> Any:
-        from backend.app.services.signal_extractor import SimulationSignals
         import datetime
+
+        from backend.app.services.signal_extractor import SimulationSignals
 
         defaults = {
             "session_id": "s1",
@@ -1031,8 +1126,11 @@ class TestSignalOverlay:
         points = self._make_points()
         # Set all signals to 1.0 to force large positive shift
         signals = self._make_signals(
-            sentiment_net=1.0, finance_sentiment=1.0, hsi_sim_change=1.0,
-            ensemble_hsi_p50=1.0, invest_ratio=1.0,
+            sentiment_net=1.0,
+            finance_sentiment=1.0,
+            hsi_sim_change=1.0,
+            ensemble_hsi_p50=1.0,
+            invest_ratio=1.0,
         )
         _, shift = f._apply_signal_overlay(points, signals, "hk_index")
         assert shift <= 0.12
@@ -1044,8 +1142,11 @@ class TestSignalOverlay:
         f = StockForecaster()
         points = self._make_points()
         signals = self._make_signals(
-            emigration_rate=1.0, credit_stress=1.0, taiwan_strait_risk=1.0,
-            negative_virality=1.0, trust_erosion_rate=1.0,
+            emigration_rate=1.0,
+            credit_stress=1.0,
+            taiwan_strait_risk=1.0,
+            negative_virality=1.0,
+            trust_erosion_rate=1.0,
         )
         _, shift = f._apply_signal_overlay(points, signals, "hk_index")
         assert shift >= -0.12
@@ -1086,7 +1187,9 @@ class TestSignalOverlay:
 
         f = StockForecaster()
         signals = self._make_signals(
-            sentiment_net=0.5, finance_sentiment=0.3, emigration_rate=0.2,
+            sentiment_net=0.5,
+            finance_sentiment=0.3,
+            emigration_rate=0.2,
         )
         breakdown = f._compute_signal_breakdown(signals, "hk_index")
         if len(breakdown) >= 2:
@@ -1161,8 +1264,9 @@ class TestStockForecasterForecast:
         db = forecast_db
         await _seed_market_data(db, "^HSI", n_weeks=25)
 
-        from backend.app.services.signal_extractor import SimulationSignals
         import datetime
+
+        from backend.app.services.signal_extractor import SimulationSignals
 
         mock_signals = SimulationSignals(
             session_id="test-sess",
@@ -1174,8 +1278,7 @@ class TestStockForecasterForecast:
         from backend.app.services.stock_forecaster import StockForecaster
 
         forecaster = StockForecaster()
-        with patch.object(forecaster._extractor, "extract",
-                          new_callable=AsyncMock, return_value=mock_signals):
+        with patch.object(forecaster._extractor, "extract", new_callable=AsyncMock, return_value=mock_signals):
             result = await forecaster.forecast("^HSI", session_id="test-sess")
 
         assert result.session_id == "test-sess"
@@ -1297,8 +1400,18 @@ async def _seed_backtest_data(db, ticker: str, n_weeks: int = 50, start: float =
             """INSERT OR REPLACE INTO market_data
                (date, asset_type, ticker, open, close, high, low, volume, source, granularity)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (week, "hk_index", ticker, close * 0.99, close, close * 1.01,
-             close * 0.98, 1e6, "yfinance_weekly", "weekly"),
+            (
+                week,
+                "hk_index",
+                ticker,
+                close * 0.99,
+                close,
+                close * 1.01,
+                close * 0.98,
+                1e6,
+                "yfinance_weekly",
+                "weekly",
+            ),
         )
     await db.commit()
 
@@ -1416,7 +1529,7 @@ class TestStockBacktester:
 
         train = [("2024-W01", 100.0), ("2024-W02", 105.0)]
         actuals = [110.0, 115.0]  # both up
-        preds = [108.0, 112.0]    # both up
+        preds = [108.0, 112.0]  # both up
         acc = StockBacktester._compute_directional_accuracy(train, actuals, preds)
         assert acc == 1.0
 
@@ -1424,8 +1537,8 @@ class TestStockBacktester:
         from backend.app.services.stock_backtester import StockBacktester
 
         train = [("2024-W01", 100.0), ("2024-W02", 105.0)]
-        actuals = [95.0, 90.0]   # both down
-        preds = [110.0, 115.0]   # both predicted up
+        actuals = [95.0, 90.0]  # both down
+        preds = [110.0, 115.0]  # both predicted up
         acc = StockBacktester._compute_directional_accuracy(train, actuals, preds)
         assert acc == 0.0
 
@@ -1533,14 +1646,21 @@ class TestStockForecastAPI:
 
     @pytest.mark.asyncio
     async def test_get_forecast_valid_ticker_calls_forecaster(self):
-        from backend.app.models.stock_forecast import StockForecastResult
         from backend.app.api.stock_forecast import get_forecast
+        from backend.app.models.stock_forecast import StockForecastResult
 
         mock_result = StockForecastResult(
-            ticker="^HSI", asset_type="hk_index", name="恒生指數",
-            horizon=12, points=(), model_used="NaiveDrift",
-            fit_quality="fair", data_quality="insufficient",
-            signal_shift=0.0, signal_breakdown=(), session_id=None,
+            ticker="^HSI",
+            asset_type="hk_index",
+            name="恒生指數",
+            horizon=12,
+            points=(),
+            model_used="NaiveDrift",
+            fit_quality="fair",
+            data_quality="insufficient",
+            signal_shift=0.0,
+            signal_breakdown=(),
+            session_id=None,
         )
 
         with patch("backend.app.api.stock_forecast.StockForecaster") as MockForecaster:
@@ -1555,17 +1675,30 @@ class TestStockForecastAPI:
 
     @pytest.mark.asyncio
     async def test_get_forecast_response_structure(self):
-        from backend.app.models.stock_forecast import StockForecastPoint, StockForecastResult
         from backend.app.api.stock_forecast import get_forecast
+        from backend.app.models.stock_forecast import StockForecastPoint, StockForecastResult
 
-        pt = StockForecastPoint(week="2024-W01", close=18000.0, lower_80=17500.0,
-                                upper_80=18500.0, lower_95=17000.0, upper_95=19000.0,
-                                sentiment_adjusted=False)
+        pt = StockForecastPoint(
+            week="2024-W01",
+            close=18000.0,
+            lower_80=17500.0,
+            upper_80=18500.0,
+            lower_95=17000.0,
+            upper_95=19000.0,
+            sentiment_adjusted=False,
+        )
         mock_result = StockForecastResult(
-            ticker="^HSI", asset_type="hk_index", name="恒生指數",
-            horizon=12, points=(pt,), model_used="NaiveDrift",
-            fit_quality="fair", data_quality="sufficient",
-            signal_shift=0.05, signal_breakdown=(), session_id=None,
+            ticker="^HSI",
+            asset_type="hk_index",
+            name="恒生指數",
+            horizon=12,
+            points=(pt,),
+            model_used="NaiveDrift",
+            fit_quality="fair",
+            data_quality="sufficient",
+            signal_shift=0.05,
+            signal_breakdown=(),
+            session_id=None,
         )
 
         with patch("backend.app.api.stock_forecast.StockForecaster") as MockForecaster:
@@ -1589,14 +1722,21 @@ class TestStockForecastAPI:
 
     @pytest.mark.asyncio
     async def test_get_forecast_with_session_id(self):
-        from backend.app.models.stock_forecast import StockForecastResult
         from backend.app.api.stock_forecast import get_forecast
+        from backend.app.models.stock_forecast import StockForecastResult
 
         mock_result = StockForecastResult(
-            ticker="^HSI", asset_type="hk_index", name="恒生指數",
-            horizon=12, points=(), model_used="NaiveDrift",
-            fit_quality="fair", data_quality="insufficient",
-            signal_shift=0.05, signal_breakdown=(), session_id="sess-abc",
+            ticker="^HSI",
+            asset_type="hk_index",
+            name="恒生指數",
+            horizon=12,
+            points=(),
+            model_used="NaiveDrift",
+            fit_quality="fair",
+            data_quality="insufficient",
+            signal_shift=0.05,
+            signal_breakdown=(),
+            session_id="sess-abc",
         )
 
         with patch("backend.app.api.stock_forecast.StockForecaster") as MockForecaster:
@@ -1627,21 +1767,23 @@ class TestStockForecastAPI:
     async def test_get_forecast_backtest_unknown_ticker_returns_error(self):
         from backend.app.api.stock_forecast import get_forecast_backtest
 
-        response = await get_forecast_backtest(
-            ticker="FAKEXYZ", train_end="2024-W40", horizon=8
-        )
+        response = await get_forecast_backtest(ticker="FAKEXYZ", train_end="2024-W40", horizon=8)
         assert response.success is False
         assert "Unknown ticker" in response.error
 
     @pytest.mark.asyncio
     async def test_get_forecast_backtest_valid_ticker(self):
-        from backend.app.models.stock_forecast import StockBacktestResult
         from backend.app.api.stock_forecast import get_forecast_backtest
+        from backend.app.models.stock_forecast import StockBacktestResult
 
         mock_result = StockBacktestResult(
-            ticker="^HSI", mape=0.05, rmse=900.0,
-            directional_accuracy=0.6, n_obs=8,
-            train_end="2024-W40", horizon=8,
+            ticker="^HSI",
+            mape=0.05,
+            rmse=900.0,
+            directional_accuracy=0.6,
+            n_obs=8,
+            train_end="2024-W40",
+            horizon=8,
         )
 
         with patch("backend.app.api.stock_forecast.StockBacktester") as MockBacktester:
@@ -1649,9 +1791,7 @@ class TestStockForecastAPI:
             mock_instance.run = AsyncMock(return_value=mock_result)
             MockBacktester.return_value = mock_instance
 
-            response = await get_forecast_backtest(
-                ticker="^HSI", train_end="2024-W40", horizon=8
-            )
+            response = await get_forecast_backtest(ticker="^HSI", train_end="2024-W40", horizon=8)
 
         assert response.success is True
         assert response.data["ticker"] == "^HSI"
@@ -1659,13 +1799,17 @@ class TestStockForecastAPI:
 
     @pytest.mark.asyncio
     async def test_get_forecast_backtest_default_params(self):
-        from backend.app.models.stock_forecast import StockBacktestResult
         from backend.app.api.stock_forecast import get_forecast_backtest
+        from backend.app.models.stock_forecast import StockBacktestResult
 
         mock_result = StockBacktestResult(
-            ticker="^HSI", mape=0.05, rmse=900.0,
-            directional_accuracy=0.6, n_obs=8,
-            train_end="2024-W40", horizon=8,
+            ticker="^HSI",
+            mape=0.05,
+            rmse=900.0,
+            directional_accuracy=0.6,
+            n_obs=8,
+            train_end="2024-W40",
+            horizon=8,
         )
 
         with patch("backend.app.api.stock_forecast.StockBacktester") as MockBacktester:
@@ -1687,9 +1831,7 @@ class TestStockForecastAPI:
             mock_instance.run = AsyncMock(side_effect=ValueError("Train set too small"))
             MockBacktester.return_value = mock_instance
 
-            response = await get_forecast_backtest(
-                ticker="^HSI", train_end="2024-W40", horizon=8
-            )
+            response = await get_forecast_backtest(ticker="^HSI", train_end="2024-W40", horizon=8)
 
         assert response.success is False
         assert "Backtest validation error" in response.error
@@ -1697,6 +1839,7 @@ class TestStockForecastAPI:
     @pytest.mark.asyncio
     async def test_refresh_stock_data_returns_accepted(self):
         from fastapi import BackgroundTasks
+
         from backend.app.api.stock_forecast import refresh_stock_data
 
         bg_tasks = MagicMock(spec=BackgroundTasks)
@@ -1708,13 +1851,17 @@ class TestStockForecastAPI:
 
     @pytest.mark.asyncio
     async def test_get_summary_with_group_filter(self):
-        from backend.app.models.stock_forecast import StockBacktestResult
         from backend.app.api.stock_forecast import get_summary
+        from backend.app.models.stock_forecast import StockBacktestResult
 
         mock_result = StockBacktestResult(
-            ticker="^HSI", mape=0.05, rmse=900.0,
-            directional_accuracy=0.6, n_obs=8,
-            train_end="2024-W40", horizon=8,
+            ticker="^HSI",
+            mape=0.05,
+            rmse=900.0,
+            directional_accuracy=0.6,
+            n_obs=8,
+            train_end="2024-W40",
+            horizon=8,
         )
 
         with patch("backend.app.api.stock_forecast.StockBacktester") as MockBacktester:
@@ -1730,13 +1877,17 @@ class TestStockForecastAPI:
 
     @pytest.mark.asyncio
     async def test_get_summary_no_filter_returns_all(self):
-        from backend.app.models.stock_forecast import StockBacktestResult
         from backend.app.api.stock_forecast import get_summary
+        from backend.app.models.stock_forecast import StockBacktestResult
 
         mock_result = StockBacktestResult(
-            ticker="^HSI", mape=0.05, rmse=900.0,
-            directional_accuracy=0.6, n_obs=8,
-            train_end="2024-W40", horizon=8,
+            ticker="^HSI",
+            mape=0.05,
+            rmse=900.0,
+            directional_accuracy=0.6,
+            n_obs=8,
+            train_end="2024-W40",
+            horizon=8,
         )
 
         with patch("backend.app.api.stock_forecast.StockBacktester") as MockBacktester:
@@ -1871,8 +2022,9 @@ class TestWeekLabelOffset:
         assert year >= 2024
 
     def test_week_label_from_date_year_2024(self):
-        from backend.data_pipeline.stock_downloader import _week_label_from_date
         import datetime
+
+        from backend.data_pipeline.stock_downloader import _week_label_from_date
 
         dt = datetime.datetime(2024, 12, 31)
         label = _week_label_from_date(dt)
@@ -1967,9 +2119,11 @@ async def integration_db():
     async def mock_get_db():
         yield db
 
-    with patch("backend.app.services.stock_forecaster.get_db", mock_get_db), \
-         patch("backend.app.services.signal_extractor.get_db", mock_get_db), \
-         patch("backend.app.services.stock_backtester.get_db", mock_get_db):
+    with (
+        patch("backend.app.services.stock_forecaster.get_db", mock_get_db),
+        patch("backend.app.services.signal_extractor.get_db", mock_get_db),
+        patch("backend.app.services.stock_backtester.get_db", mock_get_db),
+    ):
         yield db
 
     await db.close()

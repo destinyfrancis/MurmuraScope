@@ -9,6 +9,7 @@ Additional utilities:
   - ``compute_crps``: Continuous Ranked Probability Score for probabilistic forecasts
   - ``RandomWalkDriftForecaster``: Random walk with drift (mean of first-differences)
 """
+
 from __future__ import annotations
 
 import math
@@ -53,10 +54,7 @@ class NaiveForecaster:
             avg = sum(history) / len(history)
             return [avg] * horizon
 
-        raise ValueError(
-            f"Unknown method: {method!r}. "
-            "Valid methods: 'last_value', 'naive', 'drift', 'mean'."
-        )
+        raise ValueError(f"Unknown method: {method!r}. Valid methods: 'last_value', 'naive', 'drift', 'mean'.")
 
 
 def compute_crps(actual: float, mean: float, std: float) -> float:

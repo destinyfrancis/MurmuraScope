@@ -5,13 +5,10 @@ Covers:
   - Risk appetite sigmoid steepness softening (-12 → -6)
   - Brier baseline using dataset prevalence instead of hardcoded 0.25
 """
+
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 import numpy as np
-import pytest
-
 
 # ---------------------------------------------------------------------------
 # 1. TDMI Permutation Null-Model
@@ -26,10 +23,7 @@ class TestTDMIPermutation:
         from backend.app.services.emergence_metrics import _permutation_threshold
 
         rng = np.random.RandomState(42)
-        pairs = [
-            (rng.randn(50), rng.randn(50))
-            for _ in range(5)
-        ]
+        pairs = [(rng.randn(50), rng.randn(50)) for _ in range(5)]
         threshold = _permutation_threshold(pairs, np)
         assert threshold is not None
         assert isinstance(threshold, float)
@@ -66,9 +60,7 @@ class TestTDMIPermutation:
         null_threshold = _permutation_threshold(pairs, np)
 
         assert null_threshold is not None
-        assert real_mi > null_threshold, (
-            f"Real MI ({real_mi:.4f}) should exceed null threshold ({null_threshold:.4f})"
-        )
+        assert real_mi > null_threshold, f"Real MI ({real_mi:.4f}) should exceed null threshold ({null_threshold:.4f})"
 
     def test_permutation_threshold_has_floor(self) -> None:
         """Threshold should be at least _EMERGENCE_THRESHOLD * 0.5."""
@@ -79,10 +71,7 @@ class TestTDMIPermutation:
 
         # Uniform data → near-zero null MI, but floor should apply
         rng = np.random.RandomState(42)
-        pairs = [
-            (rng.uniform(0, 1, size=50), rng.uniform(0, 1, size=50))
-            for _ in range(5)
-        ]
+        pairs = [(rng.uniform(0, 1, size=50), rng.uniform(0, 1, size=50)) for _ in range(5)]
         threshold = _permutation_threshold(pairs, np)
         assert threshold is not None
         assert threshold >= _EMERGENCE_THRESHOLD * 0.5
@@ -188,8 +177,8 @@ class TestBrierBaseline:
 
     def test_score_metric_uses_base_rate(self) -> None:
         """_score_metric should use base_rate from ValidationResult."""
-        from backend.app.services.validation_reporter import _score_metric
         from backend.app.services.retrospective_validator import ValidationResult
+        from backend.app.services.validation_reporter import _score_metric
 
         # Create a result with 70% base rate (imbalanced dataset)
         result = ValidationResult(

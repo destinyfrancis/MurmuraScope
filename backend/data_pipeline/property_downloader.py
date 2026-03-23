@@ -25,9 +25,9 @@ _WB_BASE = "https://api.worldbank.org/v2/country/HKG/indicator"
 # World Bank property/housing proxies for HK (CKAN data.gov.hk is permanently 404)
 _WB_INDICATORS: dict[str, tuple[str, str, str]] = {
     # key: (indicator_id, metric_name, unit)
-    "price_inflation": ("FP.CPI.TOTL.ZG",  "property_price_inflation", "percent"),
-    "fdi_pct_gdp":    ("BX.KLT.DINV.WD.GD.ZS", "fdi_pct_gdp", "percent"),
-    "gdp_per_capita":  ("NY.GDP.PCAP.CD",   "gdp_per_capita_usd", "usd"),
+    "price_inflation": ("FP.CPI.TOTL.ZG", "property_price_inflation", "percent"),
+    "fdi_pct_gdp": ("BX.KLT.DINV.WD.GD.ZS", "fdi_pct_gdp", "percent"),
+    "gdp_per_capita": ("NY.GDP.PCAP.CD", "gdp_per_capita_usd", "usd"),
 }
 
 RAW_DIR = Path("data/raw/property")
@@ -69,7 +69,9 @@ async def _download_wb_property(
     url = f"{_WB_BASE}/{indicator_id}"
     try:
         resp = await client.get(
-            url, params={"format": "json", "per_page": 60, "mrv": 60}, timeout=30.0,
+            url,
+            params={"format": "json", "per_page": 60, "mrv": 60},
+            timeout=30.0,
         )
         resp.raise_for_status()
         data = resp.json()
@@ -95,15 +97,17 @@ async def _download_wb_property(
             val = round(float(raw_val), 4)
         except (TypeError, ValueError):
             continue
-        records.append(PropertyRecord(
-            category="property",
-            metric=metric,
-            value=val,
-            unit=unit,
-            period=f"{year}-Q4",
-            source="World Bank",
-            source_url=url,
-        ))
+        records.append(
+            PropertyRecord(
+                category="property",
+                metric=metric,
+                value=val,
+                unit=unit,
+                period=f"{year}-Q4",
+                source="World Bank",
+                source_url=url,
+            )
+        )
 
     logger.info("World Bank %s (%s): %d records", indicator_key, indicator_id, len(records))
     return PropertyResult(
@@ -177,7 +181,8 @@ async def download_all_property(client: httpx.AsyncClient | None = None) -> list
 
         logger.info(
             "Property download complete: %d/%d datasets succeeded",
-            len(results), len(downloaders),
+            len(results),
+            len(downloaders),
         )
         return results
     finally:

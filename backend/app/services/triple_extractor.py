@@ -51,34 +51,21 @@ class MemoryTriple:
 # Each pattern is a tuple of (compiled_regex, handler_function).
 # Handler receives the match object and the agent_username, returns MemoryTriple or None.
 
-_WORRY_PATTERN = re.compile(
-    r"我(?:擔心|驚)(.{1,%d}?)(?:[，。！？\n]|$)" % _MAX_ENTITY_LEN
-)
+_WORRY_PATTERN = re.compile(r"我(?:擔心|驚)(.{1,%d}?)(?:[，。！？\n]|$)" % _MAX_ENTITY_LEN)
 
-_INCREASE_PATTERN = re.compile(
-    r"(.{1,%d}?)(?:升|加|上升|上漲|增加)(?:.{0,10}?)(?:[，。！？]|$)" % _MAX_ENTITY_LEN
-)
+_INCREASE_PATTERN = re.compile(r"(.{1,%d}?)(?:升|加|上升|上漲|增加)(?:.{0,10}?)(?:[，。！？]|$)" % _MAX_ENTITY_LEN)
 
-_DECREASE_PATTERN = re.compile(
-    r"(.{1,%d}?)(?:跌|減|下跌|下降|減少|縮水)(?:.{0,10}?)(?:[，。！？]|$)" % _MAX_ENTITY_LEN
-)
+_DECREASE_PATTERN = re.compile(r"(.{1,%d}?)(?:跌|減|下跌|下降|減少|縮水)(?:.{0,10}?)(?:[，。！？]|$)" % _MAX_ENTITY_LEN)
 
-_OBSERVE_PATTERN = re.compile(
-    r"我見到(.{1,%d}?)(?:[，。！？\n]|$)" % _MAX_ENTITY_LEN
-)
+_OBSERVE_PATTERN = re.compile(r"我見到(.{1,%d}?)(?:[，。！？\n]|$)" % _MAX_ENTITY_LEN)
 
 _CAUSE_PATTERN = re.compile(
-    r"(.{1,%d}?)(?:影響|導致|令到|使到|造成)(.{1,%d}?)(?:[，。！？\n]|$)"
-    % (_MAX_ENTITY_LEN, _MAX_ENTITY_LEN)
+    r"(.{1,%d}?)(?:影響|導致|令到|使到|造成)(.{1,%d}?)(?:[，。！？\n]|$)" % (_MAX_ENTITY_LEN, _MAX_ENTITY_LEN)
 )
 
-_SUPPORT_PATTERN = re.compile(
-    r"我(?:支持|贊成|同意)(.{1,%d}?)(?:[，。！？\n]|$)" % _MAX_ENTITY_LEN
-)
+_SUPPORT_PATTERN = re.compile(r"我(?:支持|贊成|同意)(.{1,%d}?)(?:[，。！？\n]|$)" % _MAX_ENTITY_LEN)
 
-_OPPOSE_PATTERN = re.compile(
-    r"我反對(.{1,%d}?)(?:[，。！？\n]|$)" % _MAX_ENTITY_LEN
-)
+_OPPOSE_PATTERN = re.compile(r"我反對(.{1,%d}?)(?:[，。！？\n]|$)" % _MAX_ENTITY_LEN)
 
 
 # ---------------------------------------------------------------------------
@@ -119,72 +106,86 @@ class TripleExtractor:
         for m in _WORRY_PATTERN.finditer(memory_text):
             obj = _clean(m.group(1))
             if obj:
-                triples.append(MemoryTriple(
-                    subject=agent_label,
-                    predicate="worries_about",
-                    object=obj,
-                ))
+                triples.append(
+                    MemoryTriple(
+                        subject=agent_label,
+                        predicate="worries_about",
+                        object=obj,
+                    )
+                )
 
         # 2. 「X升/加」 → (X, increases, value)
         for m in _INCREASE_PATTERN.finditer(memory_text):
             subj = _clean(m.group(1))
             if subj and _is_plausible_entity(subj):
-                triples.append(MemoryTriple(
-                    subject=subj,
-                    predicate="increases",
-                    object="value",
-                ))
+                triples.append(
+                    MemoryTriple(
+                        subject=subj,
+                        predicate="increases",
+                        object="value",
+                    )
+                )
 
         # 3. 「X跌/減」 → (X, decreases, value)
         for m in _DECREASE_PATTERN.finditer(memory_text):
             subj = _clean(m.group(1))
             if subj and _is_plausible_entity(subj):
-                triples.append(MemoryTriple(
-                    subject=subj,
-                    predicate="decreases",
-                    object="value",
-                ))
+                triples.append(
+                    MemoryTriple(
+                        subject=subj,
+                        predicate="decreases",
+                        object="value",
+                    )
+                )
 
         # 4. 「我見到X」 → (agent, observes, X)
         for m in _OBSERVE_PATTERN.finditer(memory_text):
             obj = _clean(m.group(1))
             if obj:
-                triples.append(MemoryTriple(
-                    subject=agent_label,
-                    predicate="observes",
-                    object=obj,
-                ))
+                triples.append(
+                    MemoryTriple(
+                        subject=agent_label,
+                        predicate="observes",
+                        object=obj,
+                    )
+                )
 
         # 5. 「X影響/導致Y」 → (X, causes, Y)
         for m in _CAUSE_PATTERN.finditer(memory_text):
             subj = _clean(m.group(1))
             obj = _clean(m.group(2))
             if subj and obj:
-                triples.append(MemoryTriple(
-                    subject=subj,
-                    predicate="causes",
-                    object=obj,
-                ))
+                triples.append(
+                    MemoryTriple(
+                        subject=subj,
+                        predicate="causes",
+                        object=obj,
+                    )
+                )
 
         # 6. 「我支持/贊成X」 → (agent, supports, X)
         for m in _SUPPORT_PATTERN.finditer(memory_text):
             obj = _clean(m.group(1))
             if obj:
-                triples.append(MemoryTriple(
-                    subject=agent_label,
-                    predicate="supports",
-                    object=obj,
-                ))
+                triples.append(
+                    MemoryTriple(
+                        subject=agent_label,
+                        predicate="supports",
+                        object=obj,
+                    )
+                )
 
         # 7. 「我反對X」 → (agent, opposes, X)
         for m in _OPPOSE_PATTERN.finditer(memory_text):
             obj = _clean(m.group(1))
             if obj:
-                triples.append(MemoryTriple(
-                    subject=agent_label,
-                    predicate="opposes",
-                    object=obj,
-                ))
+                triples.append(
+                    MemoryTriple(
+                        subject=agent_label,
+                        predicate="opposes",
+                        object=obj,
+                    )
+                )
 
         # Deduplicate while preserving order
         seen: set[tuple[str, str, str]] = set()
@@ -216,8 +217,5 @@ def _is_plausible_entity(text: str) -> bool:
     if len(text) < 1:
         return False
     # Must contain at least one Chinese character or ASCII letter/digit
-    has_content = any(
-        ("\u4e00" <= c <= "\u9fff") or c.isalnum()
-        for c in text
-    )
+    has_content = any(("\u4e00" <= c <= "\u9fff") or c.isalnum() for c in text)
     return has_content

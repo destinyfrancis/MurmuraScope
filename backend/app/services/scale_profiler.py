@@ -89,7 +89,10 @@ class ScaleProfiler:
         self._timings.append(timing)
         logger.debug(
             "hook=%s round=%d duration_ms=%.1f agents=%d",
-            hook_name, round_number, duration_ms, agent_count,
+            hook_name,
+            round_number,
+            duration_ms,
+            agent_count,
         )
         return timing
 
@@ -137,32 +140,21 @@ class ScaleProfiler:
         llm_calls_total = 0
 
         for t in self._timings:
-            hook_duration_sum[t.hook_name] = (
-                hook_duration_sum.get(t.hook_name, 0.0) + t.duration_ms
-            )
-            hook_duration_count[t.hook_name] = (
-                hook_duration_count.get(t.hook_name, 0) + 1
-            )
+            hook_duration_sum[t.hook_name] = hook_duration_sum.get(t.hook_name, 0.0) + t.duration_ms
+            hook_duration_count[t.hook_name] = hook_duration_count.get(t.hook_name, 0) + 1
             rounds_seen.add(t.round_number)
             db_queries_total += t.db_queries
             llm_calls_total += t.llm_calls
 
         hook_avg: dict[str, float] = {
-            name: hook_duration_sum[name] / hook_duration_count[name]
-            for name in hook_duration_sum
+            name: hook_duration_sum[name] / hook_duration_count[name] for name in hook_duration_sum
         }
 
         bottleneck = max(hook_avg, key=lambda k: hook_avg[k]) if hook_avg else ""
 
         rounds_completed = len(rounds_seen)
-        avg_round_s = (
-            total_duration_s / rounds_completed if rounds_completed > 0 else 0.0
-        )
-        throughput = (
-            agent_count * rounds_completed / total_duration_s
-            if total_duration_s > 0
-            else 0.0
-        )
+        avg_round_s = total_duration_s / rounds_completed if rounds_completed > 0 else 0.0
+        throughput = agent_count * rounds_completed / total_duration_s if total_duration_s > 0 else 0.0
 
         return BenchmarkResult(
             preset_name=preset_name,
@@ -185,7 +177,7 @@ class ScaleProfiler:
     # Persistence
     # ------------------------------------------------------------------
 
-    async def persist(self, result: BenchmarkResult, db: "aiosqlite.Connection") -> None:
+    async def persist(self, result: BenchmarkResult, db: aiosqlite.Connection) -> None:
         """Persist a BenchmarkResult to the scale_benchmarks table.
 
         The table must already exist (created by schema.sql).  Errors are

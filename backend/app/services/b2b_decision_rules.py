@@ -8,7 +8,7 @@ decision type, keeping LLM costs low by pre-filtering candidates.
 from __future__ import annotations
 
 import random
-from typing import Sequence
+from collections.abc import Sequence
 
 from backend.app.models.company import CompanyDecisionType, CompanyProfile
 from backend.app.services.macro_state import MacroState
@@ -20,8 +20,8 @@ logger = get_logger("b2b_decision_rules")
 # Sampling constants
 # ---------------------------------------------------------------------------
 
-_ELIGIBLE_SAMPLE_RATE: float = 0.20   # 20% of eligible companies per decision
-_MAX_PER_TYPE: int = 30               # hard cap per decision type per round
+_ELIGIBLE_SAMPLE_RATE: float = 0.20  # 20% of eligible companies per decision
+_MAX_PER_TYPE: int = 30  # hard cap per decision type per round
 
 
 def scale_thresholds(company_count: int) -> float:
@@ -44,30 +44,31 @@ def scale_thresholds(company_count: int) -> float:
         return 0.85
     return 1.0
 
+
 # ---------------------------------------------------------------------------
 # Expand thresholds
 # Source: HK GDP trend growth ~2.5% (2010-2023 average)
 # ---------------------------------------------------------------------------
 
-_EXPAND_MIN_GDP_GROWTH: float = 0.02       # expand when GDP growth > 2%
+_EXPAND_MIN_GDP_GROWTH: float = 0.02  # expand when GDP growth > 2%
 _EXPAND_MIN_CONSUMER_CONFIDENCE: float = 55.0  # above neutral sentiment
-_EXPAND_MAX_TARIFF: float = 0.15           # don't expand if tariffs very high
+_EXPAND_MAX_TARIFF: float = 0.15  # don't expand if tariffs very high
 
 # ---------------------------------------------------------------------------
 # Contract thresholds
 # Source: HK trade exposure — 60%+ of GDP is re-export/entrepot trade
 # ---------------------------------------------------------------------------
 
-_CONTRACT_MIN_TARIFF: float = 0.08         # tariff friction threshold
+_CONTRACT_MIN_TARIFF: float = 0.08  # tariff friction threshold
 _CONTRACT_MIN_LOGISTICS_COST: float = 1.20  # index > 1.20 = +20% above baseline
 _CONTRACT_MIN_CHINA_EXPOSURE: float = 0.50  # >50% revenue from China trade
-_CONTRACT_MIN_DISRUPTION: float = 0.30     # supply chain disruption severity
+_CONTRACT_MIN_DISRUPTION: float = 0.30  # supply chain disruption severity
 
 # ---------------------------------------------------------------------------
 # Relocate thresholds
 # ---------------------------------------------------------------------------
 
-_RELOCATE_MIN_DISRUPTION: float = 0.50     # severe disruption → consider relocate
+_RELOCATE_MIN_DISRUPTION: float = 0.50  # severe disruption → consider relocate
 _RELOCATE_MIN_CHINA_EXPOSURE: float = 0.70  # highly China-dependent
 _RELOCATE_GEOPOLITICAL_RISK: float = 0.60  # taiwan_strait_risk threshold
 
@@ -76,18 +77,18 @@ _RELOCATE_GEOPOLITICAL_RISK: float = 0.60  # taiwan_strait_risk threshold
 # Source: HK structural unemployment ~3% (C&SD 2015-2023 average)
 # ---------------------------------------------------------------------------
 
-_HIRE_MAX_UNEMPLOYMENT: float = 0.035      # hire when unemployment < 3.5% (tight labour)
-_HIRE_MIN_GDP: float = 0.025              # GDP growth > 2.5% signals expansion
-_HIRE_MIN_CONFIDENCE: float = 60.0         # above neutral consumer sentiment
+_HIRE_MAX_UNEMPLOYMENT: float = 0.035  # hire when unemployment < 3.5% (tight labour)
+_HIRE_MIN_GDP: float = 0.025  # GDP growth > 2.5% signals expansion
+_HIRE_MIN_CONFIDENCE: float = 60.0  # above neutral consumer sentiment
 
 # ---------------------------------------------------------------------------
 # Layoff thresholds
 # Source: HK recession definition — GDP < 1% typically triggers restructuring
 # ---------------------------------------------------------------------------
 
-_LAYOFF_MAX_GDP: float = 0.01             # layoff when GDP growth < 1%
-_LAYOFF_MIN_TARIFF: float = 0.10          # tariff pressure threshold
-_LAYOFF_MIN_DISRUPTION: float = 0.40      # significant supply chain disruption
+_LAYOFF_MAX_GDP: float = 0.01  # layoff when GDP growth < 1%
+_LAYOFF_MIN_TARIFF: float = 0.10  # tariff pressure threshold
+_LAYOFF_MIN_DISRUPTION: float = 0.40  # significant supply chain disruption
 _LAYOFF_MIN_COMPANY_EXPOSURE: float = 0.45  # company must be exposed to China trade
 
 # ---------------------------------------------------------------------------
@@ -95,21 +96,19 @@ _LAYOFF_MIN_COMPANY_EXPOSURE: float = 0.45  # company must be exposed to China t
 # Source: HK logistics hub — manufacturing/import-export sensitive to disruption
 # ---------------------------------------------------------------------------
 
-_STOCKPILE_MIN_DISRUPTION: float = 0.25    # pre-emptive stockpiling threshold
+_STOCKPILE_MIN_DISRUPTION: float = 0.25  # pre-emptive stockpiling threshold
 _STOCKPILE_MIN_LOGISTICS_COST: float = 1.10  # +10% logistics cost triggers action
-_STOCKPILE_RELEVANT_SECTORS: frozenset[str] = frozenset(
-    {"manufacturing", "import_export", "retail", "logistics"}
-)
+_STOCKPILE_RELEVANT_SECTORS: frozenset[str] = frozenset({"manufacturing", "import_export", "retail", "logistics"})
 
 # ---------------------------------------------------------------------------
 # Enter/Exit market thresholds
 # Source: HK startup ecosystem — 4,000+ startups (InvestHK 2023 survey)
 # ---------------------------------------------------------------------------
 
-_ENTER_MARKET_MIN_GDP: float = 0.03       # strong growth needed to enter
+_ENTER_MARKET_MIN_GDP: float = 0.03  # strong growth needed to enter
 _ENTER_MARKET_STARTUP_SIZES: frozenset[str] = frozenset({"startup", "sme"})
-_EXIT_MARKET_MAX_GDP: float = 0.005        # near-zero growth → exit trigger
-_EXIT_MARKET_MIN_TARIFF: float = 0.12      # high tariffs compress margins
+_EXIT_MARKET_MAX_GDP: float = 0.005  # near-zero growth → exit trigger
+_EXIT_MARKET_MIN_TARIFF: float = 0.12  # high tariffs compress margins
 
 
 # ---------------------------------------------------------------------------
@@ -241,8 +240,7 @@ def should_layoff(
         and company.china_exposure > _LAYOFF_MIN_COMPANY_EXPOSURE * s
     )
     disruption_pressure = (
-        macro_state.supply_chain_disruption > _LAYOFF_MIN_DISRUPTION * s
-        and company.export_ratio > 0.3 * s
+        macro_state.supply_chain_disruption > _LAYOFF_MIN_DISRUPTION * s and company.export_ratio > 0.3 * s
     )
     return (weak_economy or tariff_pressure) and (disruption_pressure or tariff_pressure)
 
@@ -308,10 +306,7 @@ def should_exit_market(
     s = scale_thresholds(company_count)
     stagnant = macro_state.gdp_growth < _EXIT_MARKET_MAX_GDP / s
     tariff_high = macro_state.import_tariff_rate > _EXIT_MARKET_MIN_TARIFF * s
-    exposed_and_disrupted = (
-        company.china_exposure > 0.65 * s
-        and macro_state.supply_chain_disruption > 0.50 * s
-    )
+    exposed_and_disrupted = company.china_exposure > 0.65 * s and macro_state.supply_chain_disruption > 0.50 * s
     return (stagnant and tariff_high) or exposed_and_disrupted
 
 
@@ -369,7 +364,8 @@ def filter_eligible_companies(
 
     total = len(companies)
     eligible: list[CompanyProfile] = [
-        c for c in companies
+        c
+        for c in companies
         if check_fn(c, macro_state, company_count=total)  # type: ignore[operator]
     ]
 

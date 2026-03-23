@@ -3,19 +3,19 @@
 Tests use an in-memory SQLite database seeded with minimal schema and data,
 then verify that the DuckDB scanner can read it correctly.
 """
+
 from __future__ import annotations
 
 import sqlite3
-import tempfile
 from pathlib import Path
 
 import pytest
 
 from backend.app.utils.duckdb_analytics import (
+    _EMPTY_RESULT,
+    HAS_DUCKDB,
     AnalyticsResult,
     DuckDBAnalytics,
-    HAS_DUCKDB,
-    _EMPTY_RESULT,
 )
 
 pytestmark = pytest.mark.skipif(not HAS_DUCKDB, reason="duckdb not installed")
@@ -78,8 +78,7 @@ def tmp_sqlite(tmp_path: Path) -> Path:
                 stance = 0.3 + 0.1 * agent_id + 0.05 * rnd
                 belief_rows.append(("sess1", str(agent_id), topic, stance, rnd))
     conn.executemany(
-        "INSERT INTO belief_states (session_id, agent_id, topic, stance, round_number) "
-        "VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO belief_states (session_id, agent_id, topic, stance, round_number) VALUES (?, ?, ?, ?, ?)",
         belief_rows,
     )
 

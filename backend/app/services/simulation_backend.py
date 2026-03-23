@@ -120,9 +120,7 @@ class OASISBackend:
     # SimulationBackend interface
     # ------------------------------------------------------------------
 
-    async def launch(
-        self, session_id: str, config: dict[str, Any]
-    ) -> asyncio.subprocess.Process:
+    async def launch(self, session_id: str, config: dict[str, Any]) -> asyncio.subprocess.Process:
         """Start a new OASIS subprocess using *config*.
 
         Args:
@@ -148,9 +146,7 @@ class OASISBackend:
             log_file=log_file,
             cwd=cwd,
         )
-        logger.info(
-            "OASISBackend: launched session %s PID %d", session_id, process.pid
-        )
+        logger.info("OASISBackend: launched session %s PID %d", session_id, process.pid)
         return process
 
     async def send_event(self, session_id: str, event: dict[str, Any]) -> None:
@@ -167,15 +163,11 @@ class OASISBackend:
 
         process = self._mgr.get_process(session_id)
         if process is None:
-            logger.warning(
-                "OASISBackend.send_event: no process for session %s", session_id
-            )
+            logger.warning("OASISBackend.send_event: no process for session %s", session_id)
             return
 
         if process.stdin is None or process.stdin.is_closing():
-            logger.warning(
-                "OASISBackend.send_event: stdin unavailable for session %s", session_id
-            )
+            logger.warning("OASISBackend.send_event: stdin unavailable for session %s", session_id)
             return
 
         try:
@@ -194,9 +186,7 @@ class OASISBackend:
                 exc,
             )
         except Exception:
-            logger.exception(
-                "OASISBackend.send_event: unexpected error for session %s", session_id
-            )
+            logger.exception("OASISBackend.send_event: unexpected error for session %s", session_id)
 
     async def stop(self, session_id: str) -> None:
         """Gracefully stop the OASIS subprocess (SIGTERM → SIGKILL).
@@ -210,9 +200,7 @@ class OASISBackend:
             await self._mgr.stop(session_id)
             logger.info("OASISBackend: session %s stopped", session_id)
         except ValueError:
-            logger.debug(
-                "OASISBackend.stop: session %s was not running", session_id
-            )
+            logger.debug("OASISBackend.stop: session %s was not running", session_id)
 
     async def cleanup(self, session_id: str) -> None:
         """Release all resources for *session_id*.

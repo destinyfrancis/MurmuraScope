@@ -140,9 +140,7 @@ class SimulationIPC:
     # Private helpers
     # -------------------------------------------------------------------
 
-    async def _load_agent_profile(
-        self, session_id: str, agent_id: int
-    ) -> dict[str, Any]:
+    async def _load_agent_profile(self, session_id: str, agent_id: int) -> dict[str, Any]:
         """Load agent profile from agent_profiles table.
 
         Raises:
@@ -157,9 +155,7 @@ class SimulationIPC:
             row = await cursor.fetchone()
 
         if row is None:
-            raise ValueError(
-                f"Agent {agent_id} not found in session {session_id}"
-            )
+            raise ValueError(f"Agent {agent_id} not found in session {session_id}")
 
         return {
             "id": row["id"],
@@ -265,16 +261,11 @@ async def _call_llm(prompt: str, system_prompt: str) -> str:
     if settings.DEEPSEEK_API_KEY:
         return await _call_deepseek(prompt, system_prompt, settings.DEEPSEEK_API_KEY)
 
-    logger.warning(
-        "No LLM API key configured for IPC. "
-        "Set DEEPSEEK_API_KEY in .env for agent interviews."
-    )
+    logger.warning("No LLM API key configured for IPC. Set DEEPSEEK_API_KEY in .env for agent interviews.")
     return "[LLM not configured] Unable to generate response."
 
 
-async def _call_deepseek(
-    prompt: str, system_prompt: str, api_key: str
-) -> str:
+async def _call_deepseek(prompt: str, system_prompt: str, api_key: str) -> str:
     """Call DeepSeek Chat API."""
     import httpx
 

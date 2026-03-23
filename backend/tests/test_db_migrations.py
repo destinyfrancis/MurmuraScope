@@ -1,14 +1,17 @@
 # backend/tests/test_db_migrations.py
 """Tests for apply_migrations() idempotency."""
+
 from __future__ import annotations
-import pytest
+
 from unittest.mock import patch
+
+import pytest
 
 
 def _make_tmp_settings(tmp_path, db_name: str):
     """Return a Settings-like object pointing at a temp DB."""
+
     from backend.app.config import Settings
-    from pathlib import Path
 
     db_file = tmp_path / db_name
     # Settings is frozen; create a fresh instance via construct (Pydantic v2)

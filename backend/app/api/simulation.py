@@ -12,18 +12,17 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
-from backend.app.api.auth import UserProfile, _limiter, get_optional_user
 
+from backend.app.api.auth import UserProfile, _limiter, get_optional_user
 from backend.app.models.request import (
-    SimulationCreateRequest,
-    SimulationStartRequest,
+    _B2B_SCENARIO_KEYWORDS,
     ConfigSuggestRequest,
     ScheduledShock,
-    _B2B_SCENARIO_KEYWORDS,
+    SimulationCreateRequest,
+    SimulationStartRequest,
 )
 from backend.app.models.response import APIResponse
 from backend.app.services.agent_factory import AgentFactory
@@ -31,11 +30,10 @@ from backend.app.services.company_factory import CompanyFactory
 from backend.app.services.macro_controller import MacroController
 from backend.app.services.profile_generator import ProfileGenerator
 from backend.app.services.simulation_manager import (
-    SimulationManager,
     generate_agents,
     get_simulation_manager,
-    store_agent_profiles,
     store_activity_profiles,
+    store_agent_profiles,
     store_universal_agent_profiles,
 )
 from backend.app.services.supply_chain_builder import SupplyChainBuilder
@@ -59,16 +57,24 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 async def list_sessions(limit: int = 20, offset: int = 0) -> APIResponse:
     """List all simulation sessions, newest first."""
     from backend.app.utils.db import get_db
+
     try:
         async with get_db() as db:
             total_row = await (await db.execute("SELECT COUNT(*) as c FROM simulation_sessions")).fetchone()
-            rows = await (await db.execute(
-                "SELECT id, name, scenario_type, status, agent_count, round_count, current_round, created_at FROM simulation_sessions ORDER BY created_at DESC LIMIT ? OFFSET ?",
-                (min(limit, 100), max(offset, 0)),
-            )).fetchall()
+            rows = await (
+                await db.execute(
+                    "SELECT id, name, scenario_type, status, agent_count, round_count, current_round, created_at FROM simulation_sessions ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                    (min(limit, 100), max(offset, 0)),
+                )
+            ).fetchall()
         return APIResponse(
             success=True,
-            data={"sessions": [dict(r) for r in (rows or [])], "total": total_row["c"] if total_row else 0, "limit": limit, "offset": offset},
+            data={
+                "sessions": [dict(r) for r in (rows or [])],
+                "total": total_row["c"] if total_row else 0,
+                "limit": limit,
+                "offset": offset,
+            },
         )
     except Exception as exc:
         logger.exception("list_sessions failed")
@@ -83,30 +89,31 @@ async def create_simulation(
     """Create a new simulation session."""
     try:
         enriched_shocks = [
-            s.model_copy(update={"post_content": s.description})
-            if not s.post_content
-            else s
-            for s in req.shocks
+            s.model_copy(update={"post_content": s.description}) if not s.post_content else s for s in req.shocks
         ]
         req = req.model_copy(update={"shocks": enriched_shocks})
 
         # Resolve preset if provided
         if req.preset:
             from backend.app.models.simulation_config import resolve_preset  # noqa: PLC0415
+
             preset = resolve_preset(
                 req.preset,
                 agent_count=req.agent_count,
                 round_count=req.round_count,
             )
-            req = req.model_copy(update={
-                "agent_count": preset.agents,
-                "round_count": preset.rounds,
-            })
+            req = req.model_copy(
+                update={
+                    "agent_count": preset.agents,
+                    "round_count": preset.rounds,
+                }
+            )
 
         # Load domain pack demographics for agent generation
         demographics = None
         try:
             from backend.app.domain.base import DomainPackRegistry  # noqa: PLC0415
+
             pack = DomainPackRegistry.get(req.domain_pack_id)
             demographics = pack.demographics
         except (KeyError, Exception):
@@ -144,13 +151,17 @@ async def create_simulation(
         await asyncio.to_thread(Path(csv_path).write_text, csv_content, encoding="utf-8")
         logger.info("Wrote %d agents to %s", len(profiles), csv_path)
 
-        from backend.app.utils.db import get_db  # noqa: PLC0415
         import json as _json  # noqa: PLC0415
+
+        from backend.app.utils.db import get_db  # noqa: PLC0415
+
         async with get_db() as db:
-            row = await (await db.execute(
-                "SELECT config_json FROM simulation_sessions WHERE id = ?",
-                (session_id,),
-            )).fetchone()
+            row = await (
+                await db.execute(
+                    "SELECT config_json FROM simulation_sessions WHERE id = ?",
+                    (session_id,),
+                )
+            ).fetchone()
             if row and row["config_json"]:
                 cfg = _json.loads(row["config_json"])
                 cfg["agent_csv_path"] = csv_path
@@ -164,7 +175,8 @@ async def create_simulation(
             await store_agent_profiles(session_id, profiles, profile_gen, macro_state)
         except Exception:
             logger.warning(
-                "Could not store agent profiles for session %s", session_id,
+                "Could not store agent profiles for session %s",
+                session_id,
                 exc_info=True,
             )
 
@@ -174,16 +186,15 @@ async def create_simulation(
             await store_activity_profiles(session_id, profiles, session_dir, factory)
         except Exception:
             logger.warning(
-                "Could not store activity profiles for session %s", session_id,
+                "Could not store activity profiles for session %s",
+                session_id,
                 exc_info=True,
             )
 
         # ---- B2B enterprise auto-generation ----
         scenario_lower = (req.scenario_type or "").lower()
         is_b2b_scenario = any(kw in scenario_lower for kw in _B2B_SCENARIO_KEYWORDS)
-        effective_company_count = req.company_count or (
-            _DEFAULT_B2B_COMPANY_COUNT if is_b2b_scenario else 0
-        )
+        effective_company_count = req.company_count or (_DEFAULT_B2B_COMPANY_COUNT if is_b2b_scenario else 0)
 
         supply_chain_graph = None
         if effective_company_count > 0:
@@ -269,6 +280,7 @@ async def start_simulation(request: Request, req: SimulationStartRequest) -> API
 async def estimate_simulation_cost(req: dict) -> APIResponse:
     """Estimate LLM cost for a simulation before running it."""
     from backend.app.services.cost_estimator import estimate_cost  # noqa: PLC0415
+
     try:
         breakdown = estimate_cost(
             provider=req.get("llm_provider", "openrouter"),
@@ -277,6 +289,7 @@ async def estimate_simulation_cost(req: dict) -> APIResponse:
             round_count=req.get("round_count", 20),
         )
         from dataclasses import asdict  # noqa: PLC0415
+
         return APIResponse(success=True, data=asdict(breakdown))
     except Exception as exc:
         raise HTTPException(status_code=400, detail="Bad request") from exc
@@ -293,9 +306,9 @@ async def _run_quick_start(
     owner_id: str | None = None,
 ) -> APIResponse:
     """Shared business logic for both JSON and file-upload quick-start endpoints."""
-    from backend.app.utils.prompt_security import sanitize_seed_text as _sanitize_seed  # noqa: PLC0415
-    from backend.app.services.zero_config import ZeroConfigService  # noqa: PLC0415
     from backend.app.services.graph_builder import GraphBuilderService  # noqa: PLC0415
+    from backend.app.services.zero_config import ZeroConfigService  # noqa: PLC0415
+    from backend.app.utils.prompt_security import sanitize_seed_text as _sanitize_seed  # noqa: PLC0415
 
     seed_text = _sanitize_seed(seed_text)
 
@@ -303,6 +316,7 @@ async def _run_quick_start(
     config = await zc.prepare(seed_text)
 
     from backend.app.models.simulation_config import resolve_preset  # noqa: PLC0415
+
     resolved = resolve_preset(preset)
     agent_count_final = resolved.agents
     round_count_final = resolved.rounds
@@ -362,6 +376,7 @@ async def _run_quick_start(
         demographics = None
         try:
             from backend.app.domain.base import DomainPackRegistry as _DPR  # noqa: PLC0415
+
             pack = _DPR.get(config.domain_pack_id)
             demographics = pack.demographics
         except (KeyError, Exception):
@@ -461,11 +476,13 @@ async def quick_start_upload(
             seed_text = ""
             try:
                 import pypdf  # noqa: PLC0415
+
                 reader = pypdf.PdfReader(_io.BytesIO(content))
                 seed_text = "\n\n".join(p.extract_text() or "" for p in reader.pages).strip()
             except ImportError:
                 try:
                     import PyPDF2  # noqa: PLC0415, N813
+
                     reader = PyPDF2.PdfReader(_io.BytesIO(content))
                     seed_text = "\n\n".join(p.extract_text() or "" for p in reader.pages).strip()
                 except ImportError:
@@ -502,8 +519,8 @@ async def quick_start_upload(
 @router.get("/admin/benchmarks", response_model=APIResponse)
 async def list_benchmarks(limit: int = 50) -> APIResponse:
     """List all stored scale benchmark results, newest first."""
+
     from backend.app.utils.db import get_db  # noqa: PLC0415
-    import json as _json  # noqa: PLC0415
 
     try:
         async with get_db() as db:
@@ -567,9 +584,9 @@ async def get_benchmark(target: str) -> APIResponse:
 @router.post("/admin/benchmarks/run", response_model=APIResponse)
 async def run_benchmark_endpoint(target: str = "1k") -> APIResponse:
     """Trigger a scale benchmark run and persist results to the DB."""
-    from backend.app.models.scale import SCALE_1K, SCALE_3K, SCALE_10K  # noqa: PLC0415
-    from backend.app.scripts_compat import run_benchmark_bg  # noqa: PLC0415 — optional
     import json as _json  # noqa: PLC0415
+
+    from backend.app.models.scale import SCALE_1K, SCALE_3K, SCALE_10K  # noqa: PLC0415
 
     valid_targets = {"1k": SCALE_1K, "3k": SCALE_3K, "10k": SCALE_10K}
     if target not in valid_targets:
@@ -581,9 +598,9 @@ async def run_benchmark_endpoint(target: str = "1k") -> APIResponse:
     scale_target = valid_targets[target]
 
     async def _run_and_persist() -> None:
-        from backend.scripts.scale_benchmark import run_benchmark  # noqa: PLC0415
+
         from backend.app.utils.db import get_db  # noqa: PLC0415
-        import dataclasses as _dc  # noqa: PLC0415
+        from backend.scripts.scale_benchmark import run_benchmark  # noqa: PLC0415
 
         try:
             result = await run_benchmark(scale_target)
@@ -728,8 +745,9 @@ async def get_profile_results(limit: int = 50) -> APIResponse:
     Filters to ``profile_*`` preset names to distinguish profile runs from
     full benchmark runs.
     """
-    from backend.app.utils.db import get_db  # noqa: PLC0415
     import json as _json  # noqa: PLC0415
+
+    from backend.app.utils.db import get_db  # noqa: PLC0415
 
     try:
         async with get_db() as db:
@@ -794,7 +812,8 @@ async def list_shards() -> APIResponse:
     # (no live coordinator instance exists outside a running simulation)
     try:
         sample_configs = ShardCoordinator._compute_shard_configs(
-            total_agents=1000, agents_per_shard=2500,
+            total_agents=1000,
+            agents_per_shard=2500,
         )
         shard_info = [
             {
@@ -885,6 +904,7 @@ async def resume_session(
     """
     try:
         from backend.app.services import cost_tracker as _ct  # noqa: PLC0415
+
         if not _ct.is_paused(session_id):
             return APIResponse(
                 success=True,
@@ -919,12 +939,12 @@ async def get_session_status(session_id: str) -> APIResponse:
         ensemble_summary = None
         try:
             from backend.app.services.monte_carlo import MonteCarloEngine  # noqa: PLC0415
+
             mc = MonteCarloEngine()
             cached = await mc.get_cached_result(session_id)
             if cached and cached.distributions:
                 ensemble_summary = {
-                    b.metric_name: {"p25": b.p25, "p50": b.p50, "p75": b.p75}
-                    for b in cached.distributions
+                    b.metric_name: {"p25": b.p25, "p50": b.p50, "p75": b.p75} for b in cached.distributions
                 }
         except Exception:
             pass  # ensemble is optional
@@ -1082,9 +1102,7 @@ async def get_agent_memories(
             },
         )
     except Exception as exc:
-        logger.exception(
-            "get_agent_memories failed for session %s agent %d", session_id, agent_id
-        )
+        logger.exception("get_agent_memories failed for session %s agent %d", session_id, agent_id)
         logger.exception("Internal error in get_agent_memories")
         raise HTTPException(status_code=500, detail="Internal server error") from exc
 
@@ -1107,6 +1125,7 @@ async def search_agent_memories(
 
     try:
         from backend.app.services.vector_store import VectorStore  # noqa: PLC0415
+
         vs = VectorStore()
         memory_service = AgentMemoryService(vector_store=vs)
     except Exception:
@@ -1139,7 +1158,9 @@ async def search_agent_memories(
     except Exception as exc:
         logger.exception(
             "search_agent_memories failed session=%s agent=%d q=%s",
-            session_id, agent_id, q,
+            session_id,
+            agent_id,
+            q,
         )
         logger.exception("Internal error in search_agent_memories")
         raise HTTPException(status_code=500, detail="Internal server error") from exc
@@ -1148,6 +1169,7 @@ async def search_agent_memories(
 # ---------------------------------------------------------------------------
 # Decision endpoints (Phase 1)
 # ---------------------------------------------------------------------------
+
 
 @router.get("/{session_id}/decisions", response_model=APIResponse)
 async def get_decisions(
@@ -1220,6 +1242,7 @@ async def get_decisions_summary(session_id: str) -> APIResponse:
 # Company / B2B endpoints (Phase 5)
 # ---------------------------------------------------------------------------
 
+
 @router.get("/{session_id}/companies", response_model=APIResponse)
 async def list_companies(session_id: str) -> APIResponse:
     """List all company profiles for a simulation session."""
@@ -1244,9 +1267,7 @@ async def list_companies(session_id: str) -> APIResponse:
 
 
 @router.get("/{session_id}/companies/{company_id}/decisions", response_model=APIResponse)
-async def get_company_decisions(
-    session_id: str, company_id: int, limit: int = 100
-) -> APIResponse:
+async def get_company_decisions(session_id: str, company_id: int, limit: int = 100) -> APIResponse:
     """Get decision history for a specific company."""
     from backend.app.utils.db import get_db  # noqa: PLC0415
 
@@ -1363,9 +1384,7 @@ async def get_agent_consumption(
             },
         )
     except Exception as exc:
-        logger.exception(
-            "get_agent_consumption failed for session %s agent %d", session_id, agent_id
-        )
+        logger.exception("get_agent_consumption failed for session %s agent %d", session_id, agent_id)
         logger.exception("Internal error in get_agent_consumption")
         raise HTTPException(status_code=500, detail="Internal server error") from exc
 
@@ -1404,6 +1423,7 @@ async def get_company_summary(session_id: str) -> APIResponse:
 # God-Mode live shock injection
 # ---------------------------------------------------------------------------
 
+
 @router.get("/{session_id}/echo-chambers", response_model=APIResponse)
 async def get_echo_chambers(
     session_id: str,
@@ -1414,8 +1434,9 @@ async def get_echo_chambers(
     If round_number is provided, returns that specific snapshot.
     Otherwise returns the latest snapshot.
     """
-    from backend.app.utils.db import get_db  # noqa: PLC0415
     import json as _json  # noqa: PLC0415
+
+    from backend.app.utils.db import get_db  # noqa: PLC0415
 
     try:
         async with get_db() as db:
@@ -1474,10 +1495,19 @@ async def get_contagion_data(session_id: str) -> APIResponse:
     from backend.app.utils.db import get_db  # noqa: PLC0415
 
     _DISTRESS_PREDICATES = (
-        "worries_about", "emigrated", "lost_job", "decreases", "opposes", "causes",
+        "worries_about",
+        "emigrated",
+        "lost_job",
+        "decreases",
+        "opposes",
+        "causes",
     )
     _DISTRESS_ACTIONS = (
-        "wait", "sell", "emigrate", "cut_spending", "reduce_investment",
+        "wait",
+        "sell",
+        "emigrate",
+        "cut_spending",
+        "reduce_investment",
     )
     _TRUST_THRESHOLD = 0.3
     _SIGNAL_THRESHOLD = 3
@@ -1542,11 +1572,13 @@ async def get_contagion_data(session_id: str) -> APIResponse:
                 signal_count += row[0] if row else 0
 
                 if signal_count >= _SIGNAL_THRESHOLD:
-                    contagion_agents.append({
-                        "agent_id": agent_id,
-                        "distress_signal_count": signal_count,
-                        "contagion_active": True,
-                    })
+                    contagion_agents.append(
+                        {
+                            "agent_id": agent_id,
+                            "distress_signal_count": signal_count,
+                            "contagion_active": True,
+                        }
+                    )
 
         return APIResponse(
             success=True,
@@ -1588,16 +1620,19 @@ async def inject_live_shock(
             content = shock.post_content or shock.description
 
             # Broadcast via WebSocket
-            await push_progress(session_id, {
-                "type": "post",
-                "data": {
-                    "source": "shock",
-                    "shock_type": shock.shock_type,
-                    "content": content,
-                    "platform": "god_mode",
-                    "round": shock.round_number,
+            await push_progress(
+                session_id,
+                {
+                    "type": "post",
+                    "data": {
+                        "source": "shock",
+                        "shock_type": shock.shock_type,
+                        "content": content,
+                        "platform": "god_mode",
+                        "round": shock.round_number,
+                    },
                 },
-            })
+            )
 
             # Persist to simulation_actions
             await db.execute(
@@ -1630,6 +1665,7 @@ async def inject_live_shock(
 # Contagion Tree (Phase 17)
 # ---------------------------------------------------------------------------
 
+
 @router.get("/{session_id}/contagion-tree", response_model=APIResponse)
 async def get_contagion_tree(
     session_id: str,
@@ -1648,7 +1684,9 @@ async def get_contagion_tree(
     try:
         async with get_db() as db:
             # Recursive CTE to get cascade tree
-            rows = await (await db.execute("""
+            rows = await (
+                await db.execute(
+                    """
                 WITH RECURSIVE cascade AS (
                     SELECT id, agent_id, oasis_username, content, sentiment,
                            round_number, parent_action_id,
@@ -1666,7 +1704,10 @@ async def get_contagion_tree(
                     WHERE sa.session_id = ? AND c.depth < ?
                 )
                 SELECT * FROM cascade ORDER BY depth, round_number
-            """, (post_id, session_id, session_id, max_depth))).fetchall()
+            """,
+                    (post_id, session_id, session_id, max_depth),
+                )
+            ).fetchall()
 
         if not rows:
             return APIResponse(
@@ -1974,15 +2015,13 @@ async def _load_canonical_inputs(
         round_count = int(sess_row["current_round"] or 20) if sess_row else 20
 
         cur2 = await db.execute(
-            "SELECT DISTINCT decision_type FROM agent_decisions "
-            "WHERE session_id = ? LIMIT 10",
+            "SELECT DISTINCT decision_type FROM agent_decisions WHERE session_id = ? LIMIT 10",
             (simulation_id,),
         )
         decision_rows = await cur2.fetchall()
 
         cur3 = await db.execute(
-            "SELECT agent_id, topic, stance FROM belief_states "
-            "WHERE session_id = ? ORDER BY round_number DESC",
+            "SELECT agent_id, topic, stance FROM belief_states WHERE session_id = ? ORDER BY round_number DESC",
             (simulation_id,),
         )
         belief_rows = await cur3.fetchall()
@@ -2031,6 +2070,7 @@ async def trigger_multi_run(simulation_id: str) -> APIResponse:
 
     async def _run_phase_b() -> None:
         import json as _json  # noqa: PLC0415
+
         try:
             from backend.app.services.multi_run_orchestrator import (  # noqa: PLC0415
                 CanonicalResult,
@@ -2052,8 +2092,10 @@ async def trigger_multi_run(simulation_id: str) -> APIResponse:
             from backend.app.services.surrogate_integration import (  # noqa: PLC0415
                 auto_train_surrogate,
             )
+
             surrogate_result = await auto_train_surrogate(
-                simulation_id, metrics=list(metrics),
+                simulation_id,
+                metrics=list(metrics),
             )
 
             orchestrator = MultiRunOrchestrator()
@@ -2220,6 +2262,7 @@ async def get_relationship_validation(
         validator = RelationshipValidator()
         result = await validator.validate(session_id)
         import dataclasses as _dc  # noqa: PLC0415
+
         return APIResponse(
             success=True,
             data=_dc.asdict(result),
@@ -2277,14 +2320,17 @@ async def get_emergence_metrics(
 
     # Build per-round summaries
     from collections import defaultdict  # noqa: PLC0415
+
     rounds: dict[int, list[dict]] = defaultdict(list)
     for r in rows:
-        rounds[r["round_number"]].append({
-            "topic": r["topic"],
-            "lag": r["lag"],
-            "tdmi_score": r["tdmi_score"],
-            "n_samples": r["n_samples"],
-        })
+        rounds[r["round_number"]].append(
+            {
+                "topic": r["topic"],
+                "lag": r["lag"],
+                "tdmi_score": r["tdmi_score"],
+                "n_samples": r["n_samples"],
+            }
+        )
 
     summaries = []
     all_scores: list[float] = []
@@ -2292,14 +2338,16 @@ async def get_emergence_metrics(
         scores = [e["tdmi_score"] for e in entries]
         all_scores.extend(scores)
         mean_tdmi = sum(scores) / len(scores)
-        summaries.append({
-            "round_number": rnum,
-            "mean_tdmi": round(mean_tdmi, 6),
-            "max_tdmi": round(max(scores), 6),
-            "emergence_detected": mean_tdmi > 0.02,
-            "n_entries": len(entries),
-            "entries": entries,
-        })
+        summaries.append(
+            {
+                "round_number": rnum,
+                "mean_tdmi": round(mean_tdmi, 6),
+                "max_tdmi": round(max(scores), 6),
+                "emergence_detected": mean_tdmi > 0.02,
+                "n_entries": len(entries),
+                "entries": entries,
+            }
+        )
 
     overall_mean = round(sum(all_scores) / len(all_scores), 6) if all_scores else 0.0
     return APIResponse(
@@ -2315,8 +2363,8 @@ async def get_emergence_metrics(
                 "interpretation": (
                     "Emergent information flow detected: agent stances at time t "
                     "are informative about stances at future rounds."
-                    if overall_mean > 0.01 else
-                    "No significant temporal information dependency detected yet."
+                    if overall_mean > 0.01
+                    else "No significant temporal information dependency detected yet."
                 ),
             },
         },

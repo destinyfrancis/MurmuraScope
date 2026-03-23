@@ -10,6 +10,7 @@ Chronotypes:
   - evening_owl:  peaks 19 PM–midnight (students, young adults)
   - night_shift:  peaks 00–04 AM and 20–23 PM (manual/transport workers)
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -17,9 +18,7 @@ from typing import Literal
 
 Chronotype = Literal["morning_lark", "standard", "evening_owl", "night_shift"]
 
-VALID_CHRONOTYPES: frozenset[str] = frozenset(
-    {"morning_lark", "standard", "evening_owl", "night_shift"}
-)
+VALID_CHRONOTYPES: frozenset[str] = frozenset({"morning_lark", "standard", "evening_owl", "night_shift"})
 
 _ACTIVITY_VECTOR_LEN: int = 24
 
@@ -46,19 +45,12 @@ class ActivityProfile:
     def __post_init__(self) -> None:
         if len(self.activity_vector) != _ACTIVITY_VECTOR_LEN:
             raise ValueError(
-                f"activity_vector must have exactly {_ACTIVITY_VECTOR_LEN} elements, "
-                f"got {len(self.activity_vector)}"
+                f"activity_vector must have exactly {_ACTIVITY_VECTOR_LEN} elements, got {len(self.activity_vector)}"
             )
         if self.chronotype not in VALID_CHRONOTYPES:
-            raise ValueError(
-                f"Unknown chronotype: {self.chronotype!r}. "
-                f"Valid: {sorted(VALID_CHRONOTYPES)}"
-            )
+            raise ValueError(f"Unknown chronotype: {self.chronotype!r}. Valid: {sorted(VALID_CHRONOTYPES)}")
         if not (0.0 < self.base_activity_rate <= 1.0):
-            raise ValueError(
-                f"base_activity_rate must be in (0.0, 1.0], "
-                f"got {self.base_activity_rate}"
-            )
+            raise ValueError(f"base_activity_rate must be in (0.0, 1.0], got {self.base_activity_rate}")
 
     def probability_at_hour(self, hour: int) -> float:
         """Activation probability at a given clock hour (0–23).

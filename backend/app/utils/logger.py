@@ -1,4 +1,5 @@
 """Centralised logging configuration for Morai."""
+
 from __future__ import annotations
 
 import logging

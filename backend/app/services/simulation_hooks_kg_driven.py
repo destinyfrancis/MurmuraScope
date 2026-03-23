@@ -22,9 +22,7 @@ logger = get_logger("simulation_runner")
 class KGDrivenHooksMixin:
     """KG-driven mode hooks: init, deliberation, beliefs, factions, TDMI."""
 
-    async def _init_kg_driven_mode(
-        self, session_id: str, config: dict[str, Any]
-    ) -> None:
+    async def _init_kg_driven_mode(self, session_id: str, config: dict[str, Any]) -> None:
         """Detect kg_driven mode from config and initialise services.
 
         Only activates when ``sim_mode`` in the config is ``"kg_driven"``
@@ -35,6 +33,7 @@ class KGDrivenHooksMixin:
             # Fallback: check DB for the session's sim_mode
             try:
                 from backend.app.utils.db import get_db  # noqa: PLC0415
+
                 async with get_db() as db:
                     cursor = await db.execute(
                         "SELECT sim_mode FROM simulation_sessions WHERE id = ?",
@@ -54,37 +53,48 @@ class KGDrivenHooksMixin:
         # Lazily create shared service instances (singleton across sessions)
         if self._world_event_gen is None:
             from backend.app.services.world_event_generator import WorldEventGenerator  # noqa: PLC0415
+
             self._world_event_gen = WorldEventGenerator()
         if self._cognitive_engine is None:
             from backend.app.services.cognitive_agent_engine import CognitiveAgentEngine  # noqa: PLC0415
+
             self._cognitive_engine = CognitiveAgentEngine()
         if self._belief_propagation is None:
             from backend.app.services.belief_propagation import BeliefPropagationEngine  # noqa: PLC0415
+
             self._belief_propagation = BeliefPropagationEngine()
         if self._consensus_debate is None:
             from backend.app.services.consensus_debate_engine import ConsensusDebateEngine  # noqa: PLC0415
+
             self._consensus_debate = ConsensusDebateEngine()
         if self._faction_mapper is None:
             from backend.app.services.emergence_tracker import FactionMapper  # noqa: PLC0415
+
             self._faction_mapper = FactionMapper()
         if self._tipping_detector is None:
             from backend.app.services.emergence_tracker import TippingPointDetector  # noqa: PLC0415
+
             self._tipping_detector = TippingPointDetector()
         if self._relationship_lifecycle is None:
             from backend.app.services.relationship_lifecycle import RelationshipLifecycleService  # noqa: PLC0415
+
             self._relationship_lifecycle = RelationshipLifecycleService()
         if self._relationship_memory is None:
             from backend.app.services.relationship_memory import RelationshipMemoryService  # noqa: PLC0415
+
             self._relationship_memory = RelationshipMemoryService()
         if self._strategic_planner is None:
             from backend.app.services.strategic_planner import StrategicPlanner  # noqa: PLC0415
+
             self._strategic_planner = StrategicPlanner()
         if self._reflection_service is None:
             from backend.app.services.reflection_service import ReflectionService  # noqa: PLC0415
+
             self._reflection_service = ReflectionService()
 
         # Initialise per-session state via KGSessionState
         from backend.app.models.kg_session_state import KGSessionState  # noqa: PLC0415
+
         lite = config.get("lite_ensemble", False)
         self._kg_sessions[session_id] = KGSessionState(lite_ensemble=lite)
         if lite:
@@ -96,12 +106,11 @@ class KGDrivenHooksMixin:
         # Initialise relationship states and attachment styles from KG edges
         await self._init_relationship_and_attachment(session_id, config)
 
-    async def _load_kg_session_context(
-        self, session_id: str, config: dict[str, Any]
-    ) -> None:
+    async def _load_kg_session_context(self, session_id: str, config: dict[str, Any]) -> None:
         """Load seed text, scenario config, and stakeholder agents for kg_driven."""
         try:
             from backend.app.utils.db import get_db  # noqa: PLC0415
+
             async with get_db() as db:
                 # Seed text as scenario description
                 cursor = await db.execute(
@@ -144,9 +153,8 @@ class KGDrivenHooksMixin:
 
                 # Store activation seed from config or hook_config
                 hook_cfg = getattr(getattr(self, "_preset", None), "hook_config", None)
-                self._kg_sessions[session_id].activation_seed = (
-                    config.get("activation_seed")
-                    or getattr(hook_cfg, "activation_seed", None)
+                self._kg_sessions[session_id].activation_seed = config.get("activation_seed") or getattr(
+                    hook_cfg, "activation_seed", None
                 )
 
                 # Generate scenario config (decision types, metrics, shocks) via LLM
@@ -155,8 +163,10 @@ class KGDrivenHooksMixin:
                     seed_desc = self._kg_sessions[session_id].scenario_description
                     if seed_desc:
                         try:
+                            from backend.app.models.universal_agent_profile import (
+                                UniversalAgentProfile,  # noqa: PLC0415
+                            )
                             from backend.app.services.scenario_generator import ScenarioGenerator  # noqa: PLC0415
-                            from backend.app.models.universal_agent_profile import UniversalAgentProfile  # noqa: PLC0415
 
                             # Resolve graph_id for this session
                             gcursor = await db.execute(
@@ -170,8 +180,7 @@ class KGDrivenHooksMixin:
                             kg_edges: list[dict] = []
                             if graph_id:
                                 ncursor = await db.execute(
-                                    "SELECT id, entity_type, title, description"
-                                    " FROM kg_nodes WHERE session_id = ?",
+                                    "SELECT id, entity_type, title, description FROM kg_nodes WHERE session_id = ?",
                                     (graph_id,),
                                 )
                                 kg_nodes = [
@@ -179,8 +188,7 @@ class KGDrivenHooksMixin:
                                     for r in await ncursor.fetchall()
                                 ]
                                 ecursor = await db.execute(
-                                    "SELECT source_id, target_id, relation_type"
-                                    " FROM kg_edges WHERE session_id = ?",
+                                    "SELECT source_id, target_id, relation_type FROM kg_edges WHERE session_id = ?",
                                     (graph_id,),
                                 )
                                 kg_edges = [
@@ -206,13 +214,9 @@ class KGDrivenHooksMixin:
                             ]
 
                             gen = ScenarioGenerator()
-                            scenario_cfg = await gen.generate(
-                                seed_desc, kg_nodes, kg_edges, agent_profiles
-                            )
+                            scenario_cfg = await gen.generate(seed_desc, kg_nodes, kg_edges, agent_profiles)
                             if scenario_cfg and scenario_cfg.metrics:
-                                self._kg_sessions[session_id].active_metrics = {
-                                    m.id: 0.5 for m in scenario_cfg.metrics
-                                }
+                                self._kg_sessions[session_id].active_metrics = {m.id: 0.5 for m in scenario_cfg.metrics}
                                 metric_keys = list(self._kg_sessions[session_id].active_metrics.keys())
                                 logger.info(
                                     "ScenarioGenerator: %d metrics for session %s: %s",
@@ -239,14 +243,14 @@ class KGDrivenHooksMixin:
                                     if entity_type in sht_set:
                                         a["is_stakeholder"] = True
                                         a["activity_level"] = max(a.get("activity_level", 0.5), 0.8)
-                                updated_stakeholders = [
-                                    a for a in all_agents if a.get("is_stakeholder")
-                                ]
+                                updated_stakeholders = [a for a in all_agents if a.get("is_stakeholder")]
                                 self._kg_sessions[session_id].stakeholder_agents = updated_stakeholders
                                 logger.info(
                                     "mark_stakeholders via ScenarioGenerator: %d/%d agents for session %s (types=%s)",
-                                    len(updated_stakeholders), len(all_agents),
-                                    session_id, list(sht),
+                                    len(updated_stakeholders),
+                                    len(all_agents),
+                                    session_id,
+                                    list(sht),
                                 )
                         except Exception:
                             logger.warning(
@@ -262,9 +266,7 @@ class KGDrivenHooksMixin:
                 exc_info=True,
             )
 
-    async def _init_relationship_and_attachment(
-        self, session_id: str, config: dict[str, Any]
-    ) -> None:
+    async def _init_relationship_and_attachment(self, session_id: str, config: dict[str, Any]) -> None:
         """Initialise relationship states and attachment styles for kg_driven.
 
         Loads KG edges for the session's graph and creates a RelationshipState
@@ -279,8 +281,10 @@ class KGDrivenHooksMixin:
         if kg_state is None:
             return
         try:
-            from backend.app.services.relationship_engine import RelationshipEngine  # noqa: PLC0415
-            from backend.app.services.relationship_engine import infer_attachment_style  # noqa: PLC0415
+            from backend.app.services.relationship_engine import (
+                RelationshipEngine,  # noqa: PLC0415
+                infer_attachment_style,  # noqa: PLC0415
+            )
             from backend.app.utils.db import get_db  # noqa: PLC0415
 
             engine = RelationshipEngine()
@@ -359,9 +363,7 @@ class KGDrivenHooksMixin:
                 exc_info=True,
             )
 
-    async def _kg_generate_world_events(
-        self, session_id: str, round_num: int
-    ) -> None:
+    async def _kg_generate_world_events(self, session_id: str, round_num: int) -> None:
         """Pre-round: generate world events for kg_driven mode."""
         kg_state = self._kg_sessions.get(session_id)
         if kg_state is None:
@@ -370,6 +372,7 @@ class KGDrivenHooksMixin:
         # Lite ensemble: rule-based event generation (no LLM)
         if kg_state.lite_ensemble:
             from backend.app.services.lite_hooks import generate_lite_events  # noqa: PLC0415
+
             events = generate_lite_events(
                 round_number=round_num,
                 active_metrics=tuple(kg_state.active_metrics.keys()),
@@ -377,9 +380,7 @@ class KGDrivenHooksMixin:
                 event_history=kg_state.event_content_history,
             )
             kg_state.current_round_events = events
-            kg_state.event_content_history = kg_state.event_content_history + [
-                e.content for e in events
-            ]
+            kg_state.event_content_history = kg_state.event_content_history + [e.content for e in events]
             return
 
         if self._world_event_gen is None:
@@ -393,19 +394,16 @@ class KGDrivenHooksMixin:
                 event_history=kg_state.event_content_history,
             )
             kg_state.current_round_events = events
-            kg_state.event_content_history = kg_state.event_content_history + [
-                e.content for e in events
-            ]
+            kg_state.event_content_history = kg_state.event_content_history + [e.content for e in events]
         except Exception:
             logger.exception(
                 "kg_driven world event generation failed session=%s round=%d",
-                session_id, round_num,
+                session_id,
+                round_num,
             )
             kg_state.current_round_events = []
 
-    async def _kg_deliberation(
-        self, session_id: str, round_num: int
-    ) -> None:
+    async def _kg_deliberation(self, session_id: str, round_num: int) -> None:
         """Group 2: stochastic cognitive deliberation for kg_driven mode.
 
         Replaces the former Tier-1-only gate: every round a stochastic subset
@@ -425,7 +423,9 @@ class KGDrivenHooksMixin:
             return
 
         active = self.get_active_agents_for_round(
-            session_id, round_num, all_agents,
+            session_id,
+            round_num,
+            all_agents,
             seed=kg_state.activation_seed,
         )
         if not active:
@@ -434,6 +434,7 @@ class KGDrivenHooksMixin:
         # Lite ensemble: rule-based deliberation (no LLM)
         if kg_state.lite_ensemble:
             from backend.app.services.lite_hooks import deliberate_lite  # noqa: PLC0415
+
             events = kg_state.current_round_events
             round_decisions: dict[str, str] = {}
             for agent in active:
@@ -465,9 +466,7 @@ class KGDrivenHooksMixin:
         scenario = kg_state.scenario_description
 
         # Build id->profile lookup for relationship-depth disclosure
-        active_agents_by_id: dict[str, dict] = {
-            a.get("id", ""): a for a in active if a.get("id")
-        }
+        active_agents_by_id: dict[str, dict] = {a.get("id", ""): a for a in active if a.get("id")}
 
         # Snapshot metrics once -- all agents deliberate against the same baseline.
         # Belief updates are accumulated after all coroutines complete so that
@@ -476,22 +475,23 @@ class KGDrivenHooksMixin:
         active_metric_keys = tuple(baseline_metrics.keys())
         recent_event_contents = [e.content for e in current_events]
 
-        concurrency = getattr(
-            getattr(self, "_preset", None), "hook_config", None
-        )
+        concurrency = getattr(getattr(self, "_preset", None), "hook_config", None)
         concurrency = getattr(concurrency, "llm_concurrency", 50) if concurrency else 50
         semaphore = asyncio.Semaphore(concurrency)
 
-        async def _deliberate_one(agent: dict) -> "Any":
+        async def _deliberate_one(agent: dict) -> Any:
             """Run deliberation for one activated agent under semaphore guard."""
             async with semaphore:
                 import hashlib as _hashlib  # noqa: PLC0415
+
                 from backend.app.utils.db import get_db  # noqa: PLC0415
+
                 agent_id = agent.get("id", "")
                 emotional_state = kg_state.emotional_states.get(agent_id)
                 attachment = kg_state.attachment_styles.get(agent_id)
                 rel_states = kg_state.relationship_states
                 from backend.app.services.simulation_helpers import _build_key_relationships  # noqa: PLC0415
+
                 key_relationships = _build_key_relationships(
                     agent_id=agent_id,
                     rel_states=rel_states,
@@ -502,9 +502,7 @@ class KGDrivenHooksMixin:
                 recent_memories = ""
                 if self._memory_service is not None:
                     try:
-                        numeric_id = int(
-                            _hashlib.md5(agent_id.encode()).hexdigest(), 16
-                        ) % (2**31)
+                        numeric_id = int(_hashlib.md5(agent_id.encode()).hexdigest(), 16) % (2**31)
                         recent_memories = await self._memory_service.get_agent_context(
                             session_id=session_id,
                             agent_id=numeric_id,
@@ -532,16 +530,20 @@ class KGDrivenHooksMixin:
                 feed_context = ""
                 try:
                     from backend.app.services.feed_ranker import FeedRankingEngine  # noqa: PLC0415
+
                     feed_engine = FeedRankingEngine()
                     prev_round = max(0, round_num - 1)
                     async with get_db() as _feed_db:
                         feed_items = await feed_engine.get_agent_feed(
-                            session_id, numeric_id, prev_round, limit=5, db=_feed_db,
+                            session_id,
+                            numeric_id,
+                            prev_round,
+                            limit=5,
+                            db=_feed_db,
                         )
                     if feed_items:
                         feed_lines = [
-                            f"- {item.get('oasis_username', '?')}: "
-                            f"{(item.get('content', '') or '')[:100]}"
+                            f"- {item.get('oasis_username', '?')}: {(item.get('content', '') or '')[:100]}"
                             for item in feed_items
                         ]
                         feed_context = "\n".join(feed_lines)
@@ -597,7 +599,8 @@ class KGDrivenHooksMixin:
                             "valence": getattr(emotional_state, "valence", 0.0),
                             "arousal": getattr(emotional_state, "arousal", 0.3),
                         }
-                        if emotional_state is not None else {}
+                        if emotional_state is not None
+                        else {}
                     ),
                     "attachment_style": (
                         {
@@ -605,15 +608,15 @@ class KGDrivenHooksMixin:
                             "anxiety": attachment.anxiety,
                             "avoidance": attachment.avoidance,
                         }
-                        if attachment is not None else {}
+                        if attachment is not None
+                        else {}
                     ),
                     "key_relationships": key_relationships,
                 }
                 # Route LLM model based on stakeholder status
                 from backend.app.utils.llm_client import get_agent_model  # noqa: PLC0415
-                agent_provider, agent_model = get_agent_model(
-                    agent.get("is_stakeholder", False)
-                )
+
+                agent_provider, agent_model = get_agent_model(agent.get("is_stakeholder", False))
                 return await self._cognitive_engine.deliberate(
                     agent_context=agent_context,
                     scenario_description=scenario,
@@ -633,7 +636,9 @@ class KGDrivenHooksMixin:
             if isinstance(result, Exception):
                 logger.warning(
                     "Deliberation failed for agent %s session=%s: %s",
-                    agent.get("id", "?"), session_id, result,
+                    agent.get("id", "?"),
+                    session_id,
+                    result,
                 )
                 continue
             for metric_id, delta in result.belief_updates.items():
@@ -645,11 +650,7 @@ class KGDrivenHooksMixin:
         # Reflection loop: synthesise 'thought' memories for activated agents
         # every reflection_interval rounds (Generative Agents-inspired).
         hook_cfg = self._preset.hook_config
-        if (
-            self._reflection_service is not None
-            and round_num > 0
-            and round_num % hook_cfg.reflection_interval == 0
-        ):
+        if self._reflection_service is not None and round_num > 0 and round_num % hook_cfg.reflection_interval == 0:
             try:
                 n = await self._reflection_service.reflect_for_agents(
                     session_id=session_id,
@@ -659,16 +660,14 @@ class KGDrivenHooksMixin:
                 )
                 logger.debug(
                     "Reflection loop: %d thoughts generated session=%s round=%d",
-                    n, session_id, round_num,
+                    n,
+                    session_id,
+                    round_num,
                 )
             except Exception:
-                logger.debug(
-                    "Reflection loop failed session=%s round=%d", session_id, round_num
-                )
+                logger.debug("Reflection loop failed session=%s round=%d", session_id, round_num)
 
-    async def _kg_strategic_planning(
-        self, session_id: str, round_num: int
-    ) -> None:
+    async def _kg_strategic_planning(self, session_id: str, round_num: int) -> None:
         """Group 2: refresh strategic plans every _PLAN_HORIZON rounds.
 
         Phase 4 -- multi-round planning.  On plan rounds, each activated agent
@@ -692,7 +691,9 @@ class KGDrivenHooksMixin:
             return
 
         active = self.get_active_agents_for_round(
-            session_id, round_num, all_agents,
+            session_id,
+            round_num,
+            all_agents,
             seed=kg_state.activation_seed,
         )
         if not active:
@@ -708,9 +709,7 @@ class KGDrivenHooksMixin:
         except Exception:
             logger.debug("_kg_strategic_planning: planner failed session=%s round=%d", session_id, round_num)
 
-    async def _kg_consensus_debate(
-        self, session_id: str, round_num: int
-    ) -> None:
+    async def _kg_consensus_debate(self, session_id: str, round_num: int) -> None:
         """Group 2: structured multi-agent debate on divergent topics.
 
         Runs every N rounds (default 3). Pairs stochastically activated agents
@@ -726,7 +725,9 @@ class KGDrivenHooksMixin:
             return
 
         active = self.get_active_agents_for_round(
-            session_id, round_num, all_agents,
+            session_id,
+            round_num,
+            all_agents,
             seed=kg_state.activation_seed,
         )
         if not active:
@@ -735,6 +736,7 @@ class KGDrivenHooksMixin:
         # Lite ensemble: rule-based debate (no LLM)
         if kg_state.lite_ensemble:
             from backend.app.services.lite_hooks import run_debate_round_lite  # noqa: PLC0415
+
             kg_state.agent_beliefs = run_debate_round_lite(
                 stakeholder_agents=active,
                 agent_beliefs=kg_state.agent_beliefs,
@@ -771,22 +773,19 @@ class KGDrivenHooksMixin:
             # Apply debate belief deltas to agent_beliefs
             if result.exchanges:
                 deltas = self._consensus_debate.get_belief_deltas(result)
-                updated = {
-                    aid: dict(b) for aid, b in kg_state.agent_beliefs.items()
-                }
+                updated = {aid: dict(b) for aid, b in kg_state.agent_beliefs.items()}
                 for agent_id, topic_deltas in deltas.items():
                     if agent_id not in updated:
                         continue
                     for topic, delta in topic_deltas.items():
                         if topic in updated[agent_id]:
-                            updated[agent_id][topic] = max(
-                                0.0, min(1.0, updated[agent_id][topic] + delta)
-                            )
+                            updated[agent_id][topic] = max(0.0, min(1.0, updated[agent_id][topic] + delta))
                 kg_state.agent_beliefs = updated
 
                 # Persist debate-updated beliefs to DB
                 try:
                     import hashlib  # noqa: PLC0415
+
                     from backend.app.utils.db import get_db  # noqa: PLC0415
 
                     debate_belief_rows = []
@@ -795,10 +794,17 @@ class KGDrivenHooksMixin:
                         for topic in topic_deltas:
                             new_val = kg_state.agent_beliefs.get(agent_id, {}).get(topic)
                             if new_val is not None:
-                                debate_belief_rows.append((
-                                    session_id, agent_int, topic, new_val,
-                                    0.5, 0, round_num,
-                                ))
+                                debate_belief_rows.append(
+                                    (
+                                        session_id,
+                                        agent_int,
+                                        topic,
+                                        new_val,
+                                        0.5,
+                                        0,
+                                        round_num,
+                                    )
+                                )
                     if debate_belief_rows:
                         if self._batch_writer is not None:
                             for row in debate_belief_rows:
@@ -818,7 +824,8 @@ class KGDrivenHooksMixin:
                 except Exception:
                     logger.debug(
                         "_kg_consensus_debate: persist to belief_states failed session=%s",
-                        session_id, exc_info=True,
+                        session_id,
+                        exc_info=True,
                     )
 
                 logger.info(
@@ -840,9 +847,7 @@ class KGDrivenHooksMixin:
                 round_num,
             )
 
-    async def _kg_belief_propagation(
-        self, session_id: str, round_num: int
-    ) -> None:
+    async def _kg_belief_propagation(self, session_id: str, round_num: int) -> None:
         """Group 2: propagate world events into agent beliefs, then 1-hop cascade.
 
         Tasks 2.1 + 2.2: wires BeliefPropagationEngine (previously never called)
@@ -897,11 +902,10 @@ class KGDrivenHooksMixin:
 
         # Apply propagation deltas via Bayesian core (immutable update)
         from backend.app.services.belief_system import BeliefSystem  # noqa: PLC0415
+
         _bs = BeliefSystem()
 
-        updated: dict[str, dict[str, float]] = {
-            aid: dict(b) for aid, b in kg_state.agent_beliefs.items()
-        }
+        updated: dict[str, dict[str, float]] = {aid: dict(b) for aid, b in kg_state.agent_beliefs.items()}
         for agent_id, deltas in all_deltas.items():
             for m, d in deltas.items():
                 if m in updated.get(agent_id, {}):
@@ -938,6 +942,7 @@ class KGDrivenHooksMixin:
         # --- Persist beliefs to belief_states table for multi-run ensemble ---
         try:
             import hashlib  # noqa: PLC0415
+
             from backend.app.utils.db import get_db  # noqa: PLC0415
 
             belief_rows = []
@@ -945,10 +950,17 @@ class KGDrivenHooksMixin:
                 # Convert string agent_id (slug) to deterministic int for DB
                 agent_int = int(hashlib.md5(aid.encode()).hexdigest()[:12], 16)
                 for metric_name, stance_val in metric_dict.items():
-                    belief_rows.append((
-                        session_id, agent_int, metric_name,
-                        stance_val, 0.5, 0, round_num,
-                    ))
+                    belief_rows.append(
+                        (
+                            session_id,
+                            agent_int,
+                            metric_name,
+                            stance_val,
+                            0.5,
+                            0,
+                            round_num,
+                        )
+                    )
             if belief_rows:
                 # Route through BatchWriter if available for reduced DB round-trips
                 if self._batch_writer is not None:
@@ -969,17 +981,19 @@ class KGDrivenHooksMixin:
         except Exception:
             logger.debug(
                 "_kg_belief_propagation: persist to belief_states failed session=%s",
-                session_id, exc_info=True,
+                session_id,
+                exc_info=True,
             )
 
         logger.debug(
             "_kg_belief_propagation session=%s round=%d agents=%d cascades=%d",
-            session_id, round_num, len(all_deltas), len(cascade_deltas),
+            session_id,
+            round_num,
+            len(all_deltas),
+            len(cascade_deltas),
         )
 
-    async def _process_relationship_states(
-        self, session_id: str, round_num: int
-    ) -> None:
+    async def _process_relationship_states(self, session_id: str, round_num: int) -> None:
         """Group 1 parallel: update multi-dimensional relationship states.
 
         Reads interaction valences from simulation_actions for this round,
@@ -1002,6 +1016,7 @@ class KGDrivenHooksMixin:
             valences: dict[tuple[str, str], float] = {}
             try:
                 from backend.app.utils.db import get_db  # noqa: PLC0415
+
                 async with get_db() as db:
                     cursor = await db.execute(
                         """
@@ -1024,9 +1039,7 @@ class KGDrivenHooksMixin:
                     session_id,
                 )
 
-            _raw_profiles = [
-                dict(r) for r in self._round_profiles.get(session_id, [])
-            ]
+            _raw_profiles = [dict(r) for r in self._round_profiles.get(session_id, [])]
             profiles = {
                 rd["oasis_username"]: {
                     "agreeableness": float(rd.get("agreeableness", 0.5) or 0.5),
@@ -1053,31 +1066,44 @@ class KGDrivenHooksMixin:
             # Validate relationship coherence (best-effort, never blocks simulation)
             try:
                 from backend.app.services.relationship_validator import RelationshipValidator  # noqa: PLC0415
+
                 validator = RelationshipValidator()
                 validation = await validator.validate(session_id)
                 if validation.dunbar_violation:
                     logger.warning(
                         "Dunbar violation session=%s round=%d avg_degree=%.2f",
-                        session_id, round_num, validation.avg_meaningful_degree,
+                        session_id,
+                        round_num,
+                        validation.avg_meaningful_degree,
                     )
             except Exception:
                 logger.debug(
                     "Relationship validation skipped session=%s round=%d",
-                    session_id, round_num,
+                    session_id,
+                    round_num,
                 )
 
             # Persist updated states to DB via BatchWriter or direct executemany
             if updated:
                 from datetime import datetime as _rel_dt  # noqa: PLC0415
                 from datetime import timezone as _rel_tz  # noqa: PLC0415
+
                 _now_str = _rel_dt.now(_rel_tz.utc).strftime("%Y-%m-%d %H:%M:%S")
                 rel_rows = [
                     (
                         session_id,
-                        s.agent_a_id, s.agent_b_id, round_num,
-                        s.intimacy, s.passion, s.commitment,
-                        s.satisfaction, s.alternatives, s.investment,
-                        s.trust, s.interaction_count, s.rounds_since_change,
+                        s.agent_a_id,
+                        s.agent_b_id,
+                        round_num,
+                        s.intimacy,
+                        s.passion,
+                        s.commitment,
+                        s.satisfaction,
+                        s.alternatives,
+                        s.investment,
+                        s.trust,
+                        s.interaction_count,
+                        s.rounds_since_change,
                         _now_str,
                     )
                     for s in updated
@@ -1086,10 +1112,12 @@ class KGDrivenHooksMixin:
                     for row in rel_rows:
                         self._batch_writer.queue("relationship_states", row)
                     from backend.app.utils.db import get_db  # noqa: PLC0415
+
                     async with get_db() as db:
                         await self._batch_writer.flush("relationship_states", db)
                 else:
                     from backend.app.utils.db import get_db  # noqa: PLC0415
+
                     async with get_db() as db:
                         await db.executemany(
                             """
@@ -1108,12 +1136,11 @@ class KGDrivenHooksMixin:
         except Exception:
             logger.exception(
                 "_process_relationship_states failed session=%s round=%d",
-                session_id, round_num,
+                session_id,
+                round_num,
             )
 
-    async def _process_relationship_lifecycle(
-        self, session_id: str, round_num: int
-    ) -> None:
+    async def _process_relationship_lifecycle(self, session_id: str, round_num: int) -> None:
         """Group 3 periodic: detect and persist relationship lifecycle events.
 
         Active only in kg_driven mode + emergence_enabled.
@@ -1134,6 +1161,7 @@ class KGDrivenHooksMixin:
             )
             if events:
                 from backend.app.utils.db import get_db  # noqa: PLC0415
+
                 async with get_db() as db:
                     await self._relationship_lifecycle.persist_events(events, db)
                 # Store lifecycle events as dyadic relationship memories
@@ -1143,7 +1171,9 @@ class KGDrivenHooksMixin:
                         agent_b = getattr(evt, "related_agent_id", None) or getattr(evt, "target_id", "")
                         evt_type = getattr(evt, "event_type", "interaction")
                         if agent_a and agent_b:
-                            content = f"{evt_type}: relationship event between {agent_a} and {agent_b} at round {round_num}"
+                            content = (
+                                f"{evt_type}: relationship event between {agent_a} and {agent_b} at round {round_num}"
+                            )
                             salience = 0.7 if evt_type in ("CRISIS", "DISSOLVED") else 0.5
                             await self._relationship_memory.store_interaction_memory(
                                 session_id=session_id,
@@ -1174,17 +1204,18 @@ class KGDrivenHooksMixin:
 
                 logger.debug(
                     "_process_relationship_lifecycle: %d events session=%s round=%d",
-                    len(events), session_id, round_num,
+                    len(events),
+                    session_id,
+                    round_num,
                 )
         except Exception:
             logger.exception(
                 "_process_relationship_lifecycle failed session=%s round=%d",
-                session_id, round_num,
+                session_id,
+                round_num,
             )
 
-    async def _kg_faction_and_tipping(
-        self, session_id: str, round_num: int
-    ) -> None:
+    async def _kg_faction_and_tipping(self, session_id: str, round_num: int) -> None:
         """Group 3 periodic: faction mapping + tipping point detection."""
         kg_state = self._kg_sessions.get(session_id)
         if kg_state is None:
@@ -1214,7 +1245,8 @@ class KGDrivenHooksMixin:
             except Exception:
                 logger.exception(
                     "Faction mapping failed session=%s round=%d",
-                    session_id, round_num,
+                    session_id,
+                    round_num,
                 )
 
         # Tipping point detection
@@ -1226,30 +1258,27 @@ class KGDrivenHooksMixin:
                     round_number=round_num,
                     current_beliefs=agent_beliefs,
                     belief_history=kg_state.belief_history[-3:],
-                    last_event_id=(
-                        current_events[-1].event_id
-                        if current_events
-                        else None
-                    ),
+                    last_event_id=(current_events[-1].event_id if current_events else None),
                 )
                 if tipping is not None:
                     await self._persist_tipping_point(tipping)
                     # Auto-fork: create divergent branches at tipping point
-                    if (
-                        kg_state.auto_fork_count < 3
-                        and round_num not in kg_state.auto_fork_rounds
-                    ):
+                    if kg_state.auto_fork_count < 3 and round_num not in kg_state.auto_fork_rounds:
                         self._create_tracked_task(
                             session_id,
                             self._auto_fork_at_tipping(
-                                session_id, round_num, tipping, kg_state,
+                                session_id,
+                                round_num,
+                                tipping,
+                                kg_state,
                             ),
                             timeout_s=30.0,
                         )
             except Exception:
                 logger.exception(
                     "Tipping point detection failed session=%s round=%d",
-                    session_id, round_num,
+                    session_id,
+                    round_num,
                 )
 
         # Snapshot beliefs for history
@@ -1278,26 +1307,34 @@ class KGDrivenHooksMixin:
             kg_state.auto_fork_rounds = kg_state.auto_fork_rounds + [round_num]
             logger.info(
                 "Auto-fork #%d created session=%s round=%d: natural=%s nudged=%s",
-                kg_state.auto_fork_count, session_id, round_num,
-                result.natural_branch_id[:8], result.nudged_branch_id[:8],
+                kg_state.auto_fork_count,
+                session_id,
+                round_num,
+                result.natural_branch_id[:8],
+                result.nudged_branch_id[:8],
             )
             # Notify frontend via WebSocket
             try:
                 from backend.app.api.ws import push_progress  # noqa: PLC0415
-                await push_progress(session_id, {
-                    "type": "auto_fork",
-                    "round": round_num,
-                    "direction": result.tipping_direction,
-                    "natural_branch_id": result.natural_branch_id,
-                    "nudged_branch_id": result.nudged_branch_id,
-                    "description": result.nudge_description,
-                })
+
+                await push_progress(
+                    session_id,
+                    {
+                        "type": "auto_fork",
+                        "round": round_num,
+                        "direction": result.tipping_direction,
+                        "natural_branch_id": result.natural_branch_id,
+                        "nudged_branch_id": result.nudged_branch_id,
+                        "description": result.nudge_description,
+                    },
+                )
             except Exception:
                 pass  # WS notification is best-effort
 
     async def _persist_faction_snapshot(self, snapshot: Any) -> None:
         """Persist FactionSnapshot to faction_snapshots_v2 table."""
         import uuid as _uuid  # noqa: PLC0415
+
         from backend.app.utils.db import get_db  # noqa: PLC0415
 
         try:
@@ -1311,14 +1348,16 @@ class KGDrivenHooksMixin:
                         str(_uuid.uuid4()),
                         snapshot.simulation_id,
                         snapshot.round_number,
-                        json.dumps([
-                            {
-                                "faction_id": f.faction_id,
-                                "member_agent_ids": list(f.member_agent_ids),
-                                "belief_center": f.belief_center,
-                            }
-                            for f in snapshot.factions
-                        ]),
+                        json.dumps(
+                            [
+                                {
+                                    "faction_id": f.faction_id,
+                                    "member_agent_ids": list(f.member_agent_ids),
+                                    "belief_center": f.belief_center,
+                                }
+                                for f in snapshot.factions
+                            ]
+                        ),
                         json.dumps(list(snapshot.bridge_agents)),
                         snapshot.modularity_score,
                         snapshot.inter_faction_hostility,
@@ -1328,12 +1367,14 @@ class KGDrivenHooksMixin:
         except Exception:
             logger.exception(
                 "Failed to persist faction snapshot sim=%s round=%d",
-                snapshot.simulation_id, snapshot.round_number,
+                snapshot.simulation_id,
+                snapshot.round_number,
             )
 
     async def _persist_tipping_point(self, tipping: Any) -> None:
         """Persist TippingPoint to tipping_points table."""
         import uuid as _uuid  # noqa: PLC0415
+
         from backend.app.utils.db import get_db  # noqa: PLC0415
 
         try:
@@ -1357,7 +1398,8 @@ class KGDrivenHooksMixin:
         except Exception:
             logger.exception(
                 "Failed to persist tipping point sim=%s round=%d",
-                tipping.simulation_id, tipping.round_number,
+                tipping.simulation_id,
+                tipping.round_number,
             )
 
     async def _compute_tdmi(self, session_id: str, round_num: int) -> None:
@@ -1369,9 +1411,12 @@ class KGDrivenHooksMixin:
         """
         try:
             from backend.app.services.emergence_metrics import EmergenceMetricsCalculator  # noqa: PLC0415
+
             calculator = EmergenceMetricsCalculator()
             await calculator.compute_and_persist(session_id, round_num)
         except Exception:
             logger.exception(
-                "_compute_tdmi failed session=%s round=%d", session_id, round_num,
+                "_compute_tdmi failed session=%s round=%d",
+                session_id,
+                round_num,
             )

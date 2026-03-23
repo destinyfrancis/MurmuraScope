@@ -101,7 +101,7 @@ _PROVIDERS: dict[str, dict[str, Any]] = {
     "google": {
         "base_url": "https://generativelanguage.googleapis.com/v1beta",
         "default_model": "gemini-3-flash-preview",  # override with GOOGLE_AGENT_MODEL
-        "cost_per_1k_input": 0.0,   # preview pricing TBD
+        "cost_per_1k_input": 0.0,  # preview pricing TBD
         "cost_per_1k_output": 0.0,
         "env_key": "GOOGLE_API_KEY",
     },
@@ -245,6 +245,7 @@ class LLMClient:
     def _get_anthropic_client(self, api_key: str) -> Any:
         """Return a cached Anthropic client, recreating if the key changed."""
         import anthropic  # noqa: WPS433
+
         if self._anthropic_client is None or self._anthropic_api_key != api_key:
             self._anthropic_client = anthropic.AsyncAnthropic(api_key=api_key)
             self._anthropic_api_key = api_key
@@ -305,24 +306,17 @@ class LLMClient:
             cfg = {**cfg, "base_url": base_url}
 
         if provider == "local":
-            response = await self._chat_local(
-                messages, temperature, max_tokens
-            )
+            response = await self._chat_local(messages, temperature, max_tokens)
         elif provider == "anthropic":
-            response = await self._chat_anthropic(
-                messages, resolved_model, temperature, max_tokens, cfg
-            )
+            response = await self._chat_anthropic(messages, resolved_model, temperature, max_tokens, cfg)
         elif provider == "google":
-            response = await self._chat_google(
-                messages, resolved_model, temperature, max_tokens, cfg
-            )
+            response = await self._chat_google(messages, resolved_model, temperature, max_tokens, cfg)
         else:
-            response = await self._chat_openai_compat(
-                messages, resolved_model, temperature, max_tokens, cfg
-            )
+            response = await self._chat_openai_compat(messages, resolved_model, temperature, max_tokens, cfg)
 
         if session_id and response.cost_usd > 0:
             from backend.app.services.cost_tracker import record_cost  # noqa: PLC0415
+
             await record_cost(session_id, response.cost_usd)
 
         return response
@@ -346,10 +340,7 @@ class LLMClient:
             *messages,
             {
                 "role": "user",
-                "content": (
-                    "IMPORTANT: Respond ONLY with valid JSON. "
-                    "No markdown, no code fences, no extra text."
-                ),
+                "content": ("IMPORTANT: Respond ONLY with valid JSON. No markdown, no code fences, no extra text."),
             },
         ]
         response = await self.chat(augmented_messages, provider=provider, **kwargs)
@@ -360,7 +351,7 @@ class LLMClient:
             first_newline = cleaned.index("\n")
             cleaned = cleaned[first_newline + 1 :]
         if cleaned.endswith("```"):
-            cleaned = cleaned[: -3]
+            cleaned = cleaned[:-3]
 
         return json.loads(cleaned.strip())
 
@@ -372,6 +363,7 @@ class LLMClient:
         """Return the lazily-initialised LocalInferenceAdapter singleton."""
         if self._local_adapter is None:
             from backend.app.services.local_inference import LocalInferenceAdapter  # noqa: PLC0415
+
             self._local_adapter = LocalInferenceAdapter()
         return self._local_adapter
 
@@ -409,7 +401,8 @@ class LLMClient:
         model_name = adapter._backend.model
         logger.info(
             "LLM local/%s/%s | ~%d tokens | $0.00 | %dms",
-            backend_name, model_name,
+            backend_name,
+            model_name,
             est_prompt_tokens + est_completion_tokens,
             _latency_ms,
         )
@@ -433,18 +426,13 @@ class LLMClient:
 
     def _get_provider_config(self, provider: str) -> dict[str, Any]:
         if provider not in _PROVIDERS:
-            raise ValueError(
-                f"Unknown provider '{provider}'. "
-                f"Choose from: {', '.join(_PROVIDERS)}"
-            )
+            raise ValueError(f"Unknown provider '{provider}'. Choose from: {', '.join(_PROVIDERS)}")
         cfg = _PROVIDERS[provider]
         env_key = cfg.get("env_key", "")
         if env_key:
             api_key = os.environ.get(env_key, "")
             if not api_key:
-                raise ValueError(
-                    f"API key env var '{env_key}' is not set for provider '{provider}'"
-                )
+                raise ValueError(f"API key env var '{env_key}' is not set for provider '{provider}'")
         else:
             # Local providers (vllm, ollama) — allow custom base_url via env var
             api_key = ""
@@ -541,10 +529,14 @@ class LLMClient:
                 last_exc = exc
                 status = exc.response.status_code if exc.response is not None else 0
                 if status in _RETRY_STATUSES and attempt < _MAX_RETRIES - 1:
-                    delay = _RETRY_BASE_DELAY_S * (2 ** attempt)
+                    delay = _RETRY_BASE_DELAY_S * (2**attempt)
                     logger.warning(
                         "LLM %s HTTP %d — retrying in %.1fs (attempt %d/%d)",
-                        model, status, delay, attempt + 1, _MAX_RETRIES,
+                        model,
+                        status,
+                        delay,
+                        attempt + 1,
+                        _MAX_RETRIES,
                     )
                     await asyncio.sleep(delay)
                 else:
@@ -552,10 +544,14 @@ class LLMClient:
             except (httpx.ConnectError, httpx.TimeoutException) as exc:
                 last_exc = exc
                 if attempt < _MAX_RETRIES - 1:
-                    delay = _RETRY_BASE_DELAY_S * (2 ** attempt)
+                    delay = _RETRY_BASE_DELAY_S * (2**attempt)
                     logger.warning(
                         "LLM %s connection error — retrying in %.1fs (attempt %d/%d): %s",
-                        model, delay, attempt + 1, _MAX_RETRIES, exc,
+                        model,
+                        delay,
+                        attempt + 1,
+                        _MAX_RETRIES,
+                        exc,
                     )
                     await asyncio.sleep(delay)
                 else:
@@ -756,10 +752,10 @@ class LLMClient:
 
 
 # Module-level singleton for service code (not report_agent which has its own)
-_default_client: "LLMClient | None" = None
+_default_client: LLMClient | None = None
 
 
-def get_default_client() -> "LLMClient":
+def get_default_client() -> LLMClient:
     """Return the shared module-level LLMClient singleton.
     Use this in service code instead of LLMClient() per call."""
     global _default_client

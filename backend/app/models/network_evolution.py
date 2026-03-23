@@ -2,6 +2,7 @@
 
 All dataclasses are frozen (immutable) per project coding style.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field

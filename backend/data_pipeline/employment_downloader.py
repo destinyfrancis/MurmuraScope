@@ -23,9 +23,9 @@ _WB_BASE = "https://api.worldbank.org/v2/country/HKG/indicator"
 
 # World Bank indicators for HK employment
 _WB_INDICATORS: dict[str, str] = {
-    "unemployment": "SL.UEM.TOTL.ZS",       # Unemployment rate (%)
-    "wages_growth": "SL.EMP.VULN.ZS",        # Vulnerable employment (proxy; wages N/A on WB for HK)
-    "labour_force": "SL.TLF.TOTL.IN",        # Labour force total
+    "unemployment": "SL.UEM.TOTL.ZS",  # Unemployment rate (%)
+    "wages_growth": "SL.EMP.VULN.ZS",  # Vulnerable employment (proxy; wages N/A on WB for HK)
+    "labour_force": "SL.TLF.TOTL.IN",  # Labour force total
 }
 
 RAW_DIR = Path("data/raw/employment")
@@ -81,7 +81,9 @@ async def _download_wb_employment(
     url = f"{_WB_BASE}/{indicator_id}"
     try:
         resp = await client.get(
-            url, params={"format": "json", "per_page": 60, "mrv": 60}, timeout=30.0,
+            url,
+            params={"format": "json", "per_page": 60, "mrv": 60},
+            timeout=30.0,
         )
         resp.raise_for_status()
         data = resp.json()
@@ -103,15 +105,17 @@ async def _download_wb_employment(
         val = _try_parse_float(str(entry.get("value", "")))
         if not year or val is None:
             continue
-        records.append(EmploymentRecord(
-            category=category,
-            metric=metric,
-            value=round(val, 4),
-            unit=unit,
-            period=f"{year}-Q4",
-            source="World Bank",
-            source_url=url,
-        ))
+        records.append(
+            EmploymentRecord(
+                category=category,
+                metric=metric,
+                value=round(val, 4),
+                unit=unit,
+                period=f"{year}-Q4",
+                source="World Bank",
+                source_url=url,
+            )
+        )
 
     logger.info("World Bank %s: %d records", indicator_key, len(records))
     return EmploymentResult(
@@ -129,7 +133,11 @@ async def download_unemployment(client: httpx.AsyncClient | None = None) -> Empl
         client = httpx.AsyncClient()
     try:
         return await _download_wb_employment(
-            client, "unemployment", "employment", "unemployment_rate", "percent",
+            client,
+            "unemployment",
+            "employment",
+            "unemployment_rate",
+            "percent",
         )
     finally:
         if own_client:
@@ -143,7 +151,11 @@ async def download_wages(client: httpx.AsyncClient | None = None) -> EmploymentR
         client = httpx.AsyncClient()
     try:
         return await _download_wb_employment(
-            client, "labour_force", "wages", "labour_force_total", "persons",
+            client,
+            "labour_force",
+            "wages",
+            "labour_force_total",
+            "persons",
         )
     finally:
         if own_client:
@@ -157,7 +169,11 @@ async def download_employment_by_industry(client: httpx.AsyncClient | None = Non
         client = httpx.AsyncClient()
     try:
         return await _download_wb_employment(
-            client, "wages_growth", "employment", "employment_industry_vulnerable_pct", "percent",
+            client,
+            "wages_growth",
+            "employment",
+            "employment_industry_vulnerable_pct",
+            "percent",
         )
     finally:
         if own_client:
@@ -187,7 +203,8 @@ async def download_all_employment(client: httpx.AsyncClient | None = None) -> li
 
         logger.info(
             "Employment download complete: %d/%d datasets succeeded",
-            len(results), len(downloaders),
+            len(results),
+            len(downloaders),
         )
         return results
     finally:

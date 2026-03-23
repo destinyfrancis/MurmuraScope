@@ -10,7 +10,6 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Sequence
 
 import pandas as pd
 
@@ -38,21 +37,21 @@ _SECTOR_TICKERS: dict[str, str] = {
 class YFinanceRecord:
     """Immutable single Yahoo Finance OHLCV record."""
 
-    date: str          # YYYY-QN for quarterly, YYYY-MM-DD for daily
-    ticker: str        # e.g. "HSI", "HSI_Financial"
+    date: str  # YYYY-QN for quarterly, YYYY-MM-DD for daily
+    ticker: str  # e.g. "HSI", "HSI_Financial"
     open: float | None
     close: float | None
     high: float | None
     low: float | None
     volume: float | None
-    source: str        # always "yahoo_finance"
+    source: str  # always "yahoo_finance"
 
 
 @dataclass(frozen=True)
 class DownloadResult:
     """Immutable result of a yfinance download run."""
 
-    category: str      # always "finance"
+    category: str  # always "finance"
     row_count: int
     records: tuple[YFinanceRecord, ...]
     error: str | None
@@ -94,28 +93,36 @@ def _aggregate_quarterly(df: pd.DataFrame, ticker_label: str) -> list[YFinanceRe
 
     # Group by year-quarter, take last trading day for close/open,
     # quarter high/low, and sum volume.
-    quarterly = df.resample("QE").agg({
-        "Open": "first",
-        "High": "max",
-        "Low": "min",
-        "Close": "last",
-        "Volume": "sum",
-    }).dropna(subset=["Close"])
+    quarterly = (
+        df.resample("QE")
+        .agg(
+            {
+                "Open": "first",
+                "High": "max",
+                "Low": "min",
+                "Close": "last",
+                "Volume": "sum",
+            }
+        )
+        .dropna(subset=["Close"])
+    )
 
     for idx, row in quarterly.iterrows():
         period_end: datetime = idx.to_pydatetime()  # type: ignore[union-attr]
         label = _quarter_label(period_end)
 
-        records.append(YFinanceRecord(
-            date=label,
-            ticker=ticker_label,
-            open=round(float(row["Open"]), 2) if pd.notna(row["Open"]) else None,
-            close=round(float(row["Close"]), 2),
-            high=round(float(row["High"]), 2) if pd.notna(row["High"]) else None,
-            low=round(float(row["Low"]), 2) if pd.notna(row["Low"]) else None,
-            volume=round(float(row["Volume"]), 0) if pd.notna(row["Volume"]) else None,
-            source="yahoo_finance",
-        ))
+        records.append(
+            YFinanceRecord(
+                date=label,
+                ticker=ticker_label,
+                open=round(float(row["Open"]), 2) if pd.notna(row["Open"]) else None,
+                close=round(float(row["Close"]), 2),
+                high=round(float(row["High"]), 2) if pd.notna(row["High"]) else None,
+                low=round(float(row["Low"]), 2) if pd.notna(row["Low"]) else None,
+                volume=round(float(row["Volume"]), 0) if pd.notna(row["Volume"]) else None,
+                source="yahoo_finance",
+            )
+        )
 
     return records
 
@@ -167,7 +174,10 @@ def _download_ticker_sync(
 
         logger.info(
             "Downloaded %d daily records for %s (%s to %s)",
-            len(df), ticker, df.index.min().date(), df.index.max().date(),
+            len(df),
+            ticker,
+            df.index.min().date(),
+            df.index.max().date(),
         )
         return df[list(expected)]
 
@@ -213,22 +223,25 @@ async def download_tickers(
                 return []
             records: list[YFinanceRecord] = []
             for idx, row in df.iterrows():
-                records.append(YFinanceRecord(
-                    date=str(idx.date()),
-                    ticker=ticker,
-                    open=round(float(row["Open"]), 4) if "Open" in row and pd.notna(row["Open"]) else None,
-                    close=round(float(row["Close"]), 4) if "Close" in row and pd.notna(row["Close"]) else None,
-                    high=round(float(row["High"]), 4) if "High" in row and pd.notna(row["High"]) else None,
-                    low=round(float(row["Low"]), 4) if "Low" in row and pd.notna(row["Low"]) else None,
-                    volume=round(float(row["Volume"]), 0) if "Volume" in row and pd.notna(row["Volume"]) else None,
-                    source="yahoo_finance",
-                ))
+                records.append(
+                    YFinanceRecord(
+                        date=str(idx.date()),
+                        ticker=ticker,
+                        open=round(float(row["Open"]), 4) if "Open" in row and pd.notna(row["Open"]) else None,
+                        close=round(float(row["Close"]), 4) if "Close" in row and pd.notna(row["Close"]) else None,
+                        high=round(float(row["High"]), 4) if "High" in row and pd.notna(row["High"]) else None,
+                        low=round(float(row["Low"]), 4) if "Low" in row and pd.notna(row["Low"]) else None,
+                        volume=round(float(row["Volume"]), 0) if "Volume" in row and pd.notna(row["Volume"]) else None,
+                        source="yahoo_finance",
+                    )
+                )
             return records
         except Exception as exc:
             logger.warning("download_tickers: failed for %s: %s", ticker, exc)
             return []
 
     import asyncio
+
     tasks = [asyncio.to_thread(_fetch_one, t) for t in tickers]
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -350,18 +363,21 @@ async def download_all_yfinance(
         if isinstance(result, Exception):
             label = "HSI" if i == 0 else "sector_indices"
             logger.error("yfinance download task %s failed: %s", label, result)
-            output.append(DownloadResult(
-                category="finance",
-                row_count=0,
-                records=(),
-                error=str(result),
-            ))
+            output.append(
+                DownloadResult(
+                    category="finance",
+                    row_count=0,
+                    records=(),
+                    error=str(result),
+                )
+            )
         else:
             output.append(result)  # type: ignore[arg-type]
 
     total = sum(r.row_count for r in output)
     logger.info(
         "yfinance download complete: %d records across %d datasets",
-        total, len(output),
+        total,
+        len(output),
     )
     return output

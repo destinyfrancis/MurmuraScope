@@ -11,7 +11,6 @@ from backend.app.services.supply_chain_cascade import (
     propagate_supply_chain_shock,
 )
 
-
 # ---------------------------------------------------------------------------
 # CascadeEffect frozen dataclass
 # ---------------------------------------------------------------------------

@@ -1,4 +1,5 @@
 """Tests for TimeConfig model."""
+
 from backend.app.models.time_config import TimeConfig
 
 
@@ -49,8 +50,9 @@ def test_time_config_round_label_hour():
     assert tc.round_label(1) == "Hour 1"
 
 
-import pytest
 from unittest.mock import AsyncMock
+
+import pytest
 
 
 @pytest.mark.asyncio
@@ -59,7 +61,13 @@ async def test_infer_time_config_geopolitical():
     from backend.app.services.zero_config import ZeroConfigService
 
     mock_llm = AsyncMock()
-    mock_llm.chat.return_value = type("R", (), {"content": '{"total_simulated_hours": 720, "minutes_per_round": 1440, "round_label_unit": "day", "rationale": "30-day geopolitical conflict"}'})()
+    mock_llm.chat.return_value = type(
+        "R",
+        (),
+        {
+            "content": '{"total_simulated_hours": 720, "minutes_per_round": 1440, "round_label_unit": "day", "rationale": "30-day geopolitical conflict"}'
+        },
+    )()
 
     zc = ZeroConfigService()
     tc = await zc.infer_time_config("USA-Israel-Iran military conflict", round_count=30, llm=mock_llm)

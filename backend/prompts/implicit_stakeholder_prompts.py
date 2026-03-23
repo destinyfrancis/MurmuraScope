@@ -7,6 +7,7 @@ social movements, historical events, or any seed text domain.
 Single LLM call: given seed text + existing KG nodes, discover which
 important actors are critically affected but NOT yet in the graph.
 """
+
 from __future__ import annotations
 
 IMPLICIT_STAKEHOLDER_SYSTEM = """\

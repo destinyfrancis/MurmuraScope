@@ -1,6 +1,8 @@
 """Unit tests for the POST /report/{session_id}/xai-tool endpoint."""
-import pytest
+
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 
 @pytest.mark.asyncio
@@ -22,8 +24,10 @@ async def test_invoke_xai_tool_calls_handler(test_client):
     fake_tools = {"get_macro_context": "Get macro context"}
     fake_handlers = {"get_macro_context": mock_handler}
 
-    with patch("backend.app.services.report_agent.TOOLS", fake_tools), \
-         patch("backend.app.services.report_agent._TOOL_HANDLERS", fake_handlers):
+    with (
+        patch("backend.app.services.report_agent.TOOLS", fake_tools),
+        patch("backend.app.services.report_agent._TOOL_HANDLERS", fake_handlers),
+    ):
         resp = await test_client.post(
             "/api/report/test-session/xai-tool",
             json={"tool_name": "get_macro_context"},
@@ -43,8 +47,10 @@ async def test_invoke_xai_tool_no_handler_returns_501(test_client):
     fake_tools = {"orphan_tool": "A tool without a handler"}
     fake_handlers: dict = {}  # no handler registered
 
-    with patch("backend.app.services.report_agent.TOOLS", fake_tools), \
-         patch("backend.app.services.report_agent._TOOL_HANDLERS", fake_handlers):
+    with (
+        patch("backend.app.services.report_agent.TOOLS", fake_tools),
+        patch("backend.app.services.report_agent._TOOL_HANDLERS", fake_handlers),
+    ):
         resp = await test_client.post(
             "/api/report/test-session/xai-tool",
             json={"tool_name": "orphan_tool"},
@@ -60,8 +66,10 @@ async def test_invoke_xai_tool_handler_exception_returns_success_false(test_clie
     fake_tools = {"get_macro_context": "Get macro context"}
     fake_handlers = {"get_macro_context": failing_handler}
 
-    with patch("backend.app.services.report_agent.TOOLS", fake_tools), \
-         patch("backend.app.services.report_agent._TOOL_HANDLERS", fake_handlers):
+    with (
+        patch("backend.app.services.report_agent.TOOLS", fake_tools),
+        patch("backend.app.services.report_agent._TOOL_HANDLERS", fake_handlers),
+    ):
         resp = await test_client.post(
             "/api/report/test-session/xai-tool",
             json={"tool_name": "get_macro_context"},
@@ -82,8 +90,10 @@ async def test_invoke_xai_tool_passes_extra_params(test_client):
     fake_tools = {"query_graph": "Semantic KG query"}
     fake_handlers = {"query_graph": mock_handler}
 
-    with patch("backend.app.services.report_agent.TOOLS", fake_tools), \
-         patch("backend.app.services.report_agent._TOOL_HANDLERS", fake_handlers):
+    with (
+        patch("backend.app.services.report_agent.TOOLS", fake_tools),
+        patch("backend.app.services.report_agent._TOOL_HANDLERS", fake_handlers),
+    ):
         resp = await test_client.post(
             "/api/report/sess-abc/xai-tool",
             json={"tool_name": "query_graph", "params": {"topic": "housing"}},

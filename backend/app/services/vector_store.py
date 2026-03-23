@@ -11,8 +11,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import numpy as np
-
 from backend.app.services.embedding_provider import EmbeddingProvider
 from backend.app.utils.logger import get_logger
 
@@ -87,17 +85,19 @@ class VectorStore:
 
         records = []
         for mem, vec in zip(memories, vectors):
-            records.append({
-                "memory_id": int(mem["memory_id"]),
-                "session_id": session_id,
-                "agent_id": int(mem["agent_id"]),
-                "round_number": int(mem["round_number"]),
-                "memory_text": mem["memory_text"],
-                "memory_type": mem.get("memory_type", "observation"),
-                "salience_score": float(mem.get("salience_score", 0.5)),
-                "importance_score": float(mem.get("importance_score", 0.5)),
-                "vector": vec.tolist(),
-            })
+            records.append(
+                {
+                    "memory_id": int(mem["memory_id"]),
+                    "session_id": session_id,
+                    "agent_id": int(mem["agent_id"]),
+                    "round_number": int(mem["round_number"]),
+                    "memory_text": mem["memory_text"],
+                    "memory_type": mem.get("memory_type", "observation"),
+                    "salience_score": float(mem.get("salience_score", 0.5)),
+                    "importance_score": float(mem.get("importance_score", 0.5)),
+                    "vector": vec.tolist(),
+                }
+            )
 
         def _upsert() -> int:
             db = self._get_db()
@@ -112,7 +112,9 @@ class VectorStore:
 
         count = await asyncio.to_thread(_upsert)
         logger.debug(
-            "add_memories session=%s count=%d", session_id, count,
+            "add_memories session=%s count=%d",
+            session_id,
+            count,
         )
         return count
 
@@ -135,7 +137,8 @@ class VectorStore:
             List of VectorSearchResult ordered by descending similarity.
         """
         query_vec = await asyncio.to_thread(
-            self._embedder.embed_single, query_text,
+            self._embedder.embed_single,
+            query_text,
         )
 
         def _search() -> list[VectorSearchResult]:
@@ -175,15 +178,17 @@ class VectorStore:
 
             out: list[VectorSearchResult] = []
             for _, row in results_df.iterrows():
-                out.append(VectorSearchResult(
-                    memory_id=int(row["memory_id"]),
-                    similarity_score=float(row["similarity"]),
-                    memory_text=str(row["memory_text"]),
-                    round_number=int(row["round_number"]),
-                    salience_score=float(row["salience_score"]),
-                    memory_type=str(row["memory_type"]),
-                    importance_score=float(row.get("importance_score", 0.5)),
-                ))
+                out.append(
+                    VectorSearchResult(
+                        memory_id=int(row["memory_id"]),
+                        similarity_score=float(row["similarity"]),
+                        memory_text=str(row["memory_text"]),
+                        round_number=int(row["round_number"]),
+                        salience_score=float(row["salience_score"]),
+                        memory_type=str(row["memory_type"]),
+                        importance_score=float(row.get("importance_score", 0.5)),
+                    )
+                )
             return out
 
         return await asyncio.to_thread(_search)
@@ -255,6 +260,8 @@ class VectorStore:
         count = await asyncio.to_thread(_decay)
         logger.debug(
             "update_salience session=%s factor=%.2f updated=%d",
-            session_id, decay_factor, count,
+            session_id,
+            decay_factor,
+            count,
         )
         return count

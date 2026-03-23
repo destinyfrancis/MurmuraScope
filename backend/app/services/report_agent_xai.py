@@ -28,9 +28,7 @@ def _get_xai_llm() -> LLMClient:
     return _xai_llm_client
 
 
-async def handle_decision_summary(
-    session_id: str, params: dict[str, Any], _ipc: SimulationIPC
-) -> str:
+async def handle_decision_summary(session_id: str, params: dict[str, Any], _ipc: SimulationIPC) -> str:
     """Get aggregate decision statistics for the session.
 
     Args:
@@ -80,20 +78,20 @@ async def handle_decision_summary(
     results = []
     for r in rows:
         rate = round(r["count"] / total_agents * 100, 1) if total_agents > 0 else 0
-        results.append({
-            "decision_type": r["decision_type"],
-            "action": r["action"],
-            "count": r["count"],
-            "avg_confidence": r["avg_confidence"],
-            "rate_pct": rate,
-        })
+        results.append(
+            {
+                "decision_type": r["decision_type"],
+                "action": r["action"],
+                "count": r["count"],
+                "avg_confidence": r["avg_confidence"],
+                "rate_pct": rate,
+            }
+        )
 
     return json.dumps({"total_agents": total_agents, "decisions": results}, indent=2)
 
 
-async def handle_sentiment_timeline(
-    session_id: str, params: dict[str, Any], _ipc: SimulationIPC
-) -> str:
+async def handle_sentiment_timeline(session_id: str, params: dict[str, Any], _ipc: SimulationIPC) -> str:
     """Get per-round sentiment evolution from simulation actions.
 
     Args:
@@ -125,20 +123,20 @@ async def handle_sentiment_timeline(
     timeline = []
     for r in rows:
         total = r["total"] or 1
-        timeline.append({
-            "round": r["round_number"],
-            "positive_ratio": round(r["positive"] / total, 3),
-            "negative_ratio": round(r["negative"] / total, 3),
-            "neutral_ratio": round(r["neutral"] / total, 3),
-            "total_actions": total,
-        })
+        timeline.append(
+            {
+                "round": r["round_number"],
+                "positive_ratio": round(r["positive"] / total, 3),
+                "negative_ratio": round(r["negative"] / total, 3),
+                "neutral_ratio": round(r["neutral"] / total, 3),
+                "total_actions": total,
+            }
+        )
 
     return json.dumps(timeline, indent=2)
 
 
-async def handle_ensemble_forecast(
-    session_id: str, params: dict[str, Any], _ipc: SimulationIPC
-) -> str:
+async def handle_ensemble_forecast(session_id: str, params: dict[str, Any], _ipc: SimulationIPC) -> str:
     """Get Monte Carlo ensemble distribution bands.
 
     Args:
@@ -175,9 +173,7 @@ async def handle_ensemble_forecast(
     return json.dumps(results, indent=2)
 
 
-async def handle_macro_history(
-    session_id: str, params: dict[str, Any], _ipc: SimulationIPC
-) -> str:
+async def handle_macro_history(session_id: str, params: dict[str, Any], _ipc: SimulationIPC) -> str:
     """Get macro indicator snapshots across simulation rounds.
 
     Args:
@@ -204,15 +200,17 @@ async def handle_macro_history(
     history = []
     for r in rows:
         snapshot = json.loads(r["snapshot_json"]) if r["snapshot_json"] else {}
-        history.append({
-            "round": r["round_number"],
-            "consumer_confidence": snapshot.get("consumer_confidence"),
-            "hsi_level": snapshot.get("hsi_level"),
-            "unemployment_rate": snapshot.get("unemployment_rate"),
-            "gdp_growth": snapshot.get("gdp_growth"),
-            "ccl_index": snapshot.get("ccl_index"),
-            "net_migration": snapshot.get("net_migration"),
-        })
+        history.append(
+            {
+                "round": r["round_number"],
+                "consumer_confidence": snapshot.get("consumer_confidence"),
+                "hsi_level": snapshot.get("hsi_level"),
+                "unemployment_rate": snapshot.get("unemployment_rate"),
+                "gdp_growth": snapshot.get("gdp_growth"),
+                "ccl_index": snapshot.get("ccl_index"),
+                "net_migration": snapshot.get("net_migration"),
+            }
+        )
 
     return json.dumps(history, indent=2)
 
@@ -237,7 +235,7 @@ async def _generate_sub_queries(query: str) -> tuple[str, ...]:
     llm = _get_xai_llm()
     prompt = (
         "將以下查詢分解為3-5個具體的子查詢，每個子查詢針對模擬數據的不同面向。\n"
-        "只輸出JSON陣列格式：[\"子查詢1\", \"子查詢2\", ...]\n\n"
+        '只輸出JSON陣列格式：["子查詢1", "子查詢2", ...]\n\n'
         f"查詢：{query}"
     )
     _r_provider, _r_model = get_report_provider_model()
@@ -329,7 +327,7 @@ async def _search_simulation_actions(session_id: str, query: str) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-async def insight_forge(session_id: str, query: str) -> "InsightForgeResult":
+async def insight_forge(session_id: str, query: str) -> InsightForgeResult:
     """Deep query tool: LLM-decomposed parallel search across all data sources.
 
     Decomposes the query into sub-queries via Haiku, then fans out concurrent
@@ -389,9 +387,7 @@ async def insight_forge(session_id: str, query: str) -> "InsightForgeResult":
 # ---------------------------------------------------------------------------
 
 
-async def get_topic_evolution(
-    session_id: str, window_size: int = 5
-) -> "TopicEvolutionResult":
+async def get_topic_evolution(session_id: str, window_size: int = 5) -> TopicEvolutionResult:
     """Analyse how dominant topics in KG edges shift across simulation rounds.
 
     Divides the simulation into windows of ``window_size`` rounds and uses
@@ -423,14 +419,11 @@ async def get_topic_evolution(
 
     llm = _get_xai_llm()
 
-    async def _process_window(
-        session_id: str, start: int, end: int, llm: LLMClient
-    ) -> "TopicWindow | None":
+    async def _process_window(session_id: str, start: int, end: int, llm: LLMClient) -> TopicWindow | None:
         async with get_db() as db:
             rows = await (
                 await db.execute(
-                    "SELECT description FROM kg_edges "
-                    "WHERE session_id=? AND round_number BETWEEN ? AND ? LIMIT 30",
+                    "SELECT description FROM kg_edges WHERE session_id=? AND round_number BETWEEN ? AND ? LIMIT 30",
                     (session_id, start, end),
                 )
             ).fetchall()
@@ -440,7 +433,7 @@ async def get_topic_evolution(
         prompt = (
             "從以下描述中提取2-4個主要議題標籤（短詞）：\n"
             + "\n".join(descriptions[:10])
-            + "\n只輸出JSON陣列：[\"議題1\",...]"
+            + '\n只輸出JSON陣列：["議題1",...]'
         )
         _r_provider, _r_model = get_report_provider_model()
         llm_response = await llm.chat(
@@ -504,8 +497,7 @@ async def get_platform_breakdown(session_id: str) -> dict:
     async with get_db() as db:
         platform_rows = await (
             await db.execute(
-                "SELECT DISTINCT platform FROM simulation_actions "
-                "WHERE session_id=? AND platform IS NOT NULL",
+                "SELECT DISTINCT platform FROM simulation_actions WHERE session_id=? AND platform IS NOT NULL",
                 (session_id,),
             )
         ).fetchall()
@@ -516,8 +508,7 @@ async def get_platform_breakdown(session_id: str) -> dict:
         async with get_db() as db:
             rows = await (
                 await db.execute(
-                    "SELECT sentiment, action_type FROM simulation_actions "
-                    "WHERE session_id=? AND platform=? LIMIT 200",
+                    "SELECT sentiment, action_type FROM simulation_actions WHERE session_id=? AND platform=? LIMIT 200",
                     (session_id, platform),
                 )
             ).fetchall()
@@ -609,13 +600,9 @@ async def get_agent_story_arcs(
             return None
 
         timeline = "\n".join(
-            f"Round {r['round_number']}: {r['sentiment']} — {(r['content'] or '')[:80]}"
-            for r in action_rows
+            f"Round {r['round_number']}: {r['sentiment']} — {(r['content'] or '')[:80]}" for r in action_rows
         )
-        prompt = (
-            f"這個Agent的行為時間線：\n{timeline}\n\n"
-            "用2-3句話描述這個Agent的故事弧（立場如何隨時間演化）："
-        )
+        prompt = f"這個Agent的行為時間線：\n{timeline}\n\n用2-3句話描述這個Agent的故事弧（立場如何隨時間演化）："
         _r_provider, _r_model = get_report_provider_model()
         llm_response = await llm.chat(
             [{"role": "user", "content": prompt}],
@@ -626,20 +613,14 @@ async def get_agent_story_arcs(
         arc_summary = llm_response.content.strip()
 
         sentiments = [r["sentiment"] for r in action_rows if r["sentiment"]]
-        sentiment_vals = [
-            1.0 if s == "positive" else (-1.0 if s == "negative" else 0.0)
-            for s in sentiments
-        ]
+        sentiment_vals = [1.0 if s == "positive" else (-1.0 if s == "negative" else 0.0) for s in sentiments]
 
         return {
             "agent_id": agent_id,
             "agent_type": agent.get("agent_type", "unknown"),
             "arc_summary": arc_summary,
             "key_turning_round": action_rows[len(action_rows) // 2]["round_number"],
-            "stance_shift": (
-                f"{sentiments[0] if sentiments else '?'} → "
-                f"{sentiments[-1] if sentiments else '?'}"
-            ),
+            "stance_shift": (f"{sentiments[0] if sentiments else '?'} → {sentiments[-1] if sentiments else '?'}"),
             "sentiment_trajectory": sentiment_vals[:5],
         }
 

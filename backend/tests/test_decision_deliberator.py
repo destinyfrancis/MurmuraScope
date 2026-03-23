@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from backend.app.models.decision import AgentDecision, DecisionType, DECISION_ACTIONS
+from backend.app.models.decision import DECISION_ACTIONS, AgentDecision, DecisionType
 from backend.app.services.agent_factory import AgentProfile
 from backend.app.services.decision_deliberator import (
+    _DEFAULT_ACTION_FALLBACKS,
+    _STOCHASTIC_FALLBACK_DIST,
     DecisionDeliberator,
     PeerDistressSignal,
     SocialContagionContext,
@@ -17,11 +18,8 @@ from backend.app.services.decision_deliberator import (
     _extract_list,
     _safe_int,
     _validate_action,
-    _DEFAULT_ACTION_FALLBACKS,
-    _STOCHASTIC_FALLBACK_DIST,
 )
-from backend.app.services.macro_state import MacroState, BASELINE_AVG_SQFT_PRICE, BASELINE_STAMP_DUTY
-
+from backend.app.services.macro_state import BASELINE_AVG_SQFT_PRICE, BASELINE_STAMP_DUTY, MacroState
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -124,9 +122,14 @@ class TestValidateAction:
         assert result == "stay"
 
     def test_all_decision_types_have_fallback(self):
-        for dt in (DecisionType.BUY_PROPERTY, DecisionType.EMIGRATE,
-                   DecisionType.CHANGE_JOB, DecisionType.INVEST,
-                   DecisionType.HAVE_CHILD, DecisionType.ADJUST_SPENDING):
+        for dt in (
+            DecisionType.BUY_PROPERTY,
+            DecisionType.EMIGRATE,
+            DecisionType.CHANGE_JOB,
+            DecisionType.INVEST,
+            DecisionType.HAVE_CHILD,
+            DecisionType.ADJUST_SPENDING,
+        ):
             assert dt.value in _DEFAULT_ACTION_FALLBACKS
 
 
@@ -185,7 +188,10 @@ class TestSocialContagionContext:
 
     def test_frozen(self):
         ctx = SocialContagionContext(
-            agent_id=1, distress_signals=(), distress_ratio=0.0, contagion_active=False,
+            agent_id=1,
+            distress_signals=(),
+            distress_ratio=0.0,
+            contagion_active=False,
         )
         with pytest.raises(AttributeError):
             ctx.agent_id = 2  # type: ignore[misc]
@@ -200,7 +206,11 @@ class TestDeliberateBatch:
     @pytest.mark.asyncio
     async def test_empty_agents_returns_empty(self, deliberator):
         result = await deliberator.deliberate_batch(
-            [], _make_macro(), DecisionType.BUY_PROPERTY, "sess-1", 1,
+            [],
+            _make_macro(),
+            DecisionType.BUY_PROPERTY,
+            "sess-1",
+            1,
         )
         assert result == []
 
@@ -214,10 +224,17 @@ class TestDeliberateBatch:
 
         with patch.object(deliberator, "query_social_contagion", new_callable=AsyncMock) as mock_contagion:
             mock_contagion.return_value = SocialContagionContext(
-                agent_id=0, distress_signals=(), distress_ratio=0.0, contagion_active=False,
+                agent_id=0,
+                distress_signals=(),
+                distress_ratio=0.0,
+                contagion_active=False,
             )
             results = await deliberator.deliberate_batch(
-                agents, _make_macro(), DecisionType.BUY_PROPERTY, "sess-1", 1,
+                agents,
+                _make_macro(),
+                DecisionType.BUY_PROPERTY,
+                "sess-1",
+                1,
             )
 
         assert len(results) == 2
@@ -232,10 +249,17 @@ class TestDeliberateBatch:
 
         with patch.object(deliberator, "query_social_contagion", new_callable=AsyncMock) as mock_contagion:
             mock_contagion.return_value = SocialContagionContext(
-                agent_id=0, distress_signals=(), distress_ratio=0.0, contagion_active=False,
+                agent_id=0,
+                distress_signals=(),
+                distress_ratio=0.0,
+                contagion_active=False,
             )
             results = await deliberator.deliberate_batch(
-                agents, _make_macro(), DecisionType.BUY_PROPERTY, "sess-1", 1,
+                agents,
+                _make_macro(),
+                DecisionType.BUY_PROPERTY,
+                "sess-1",
+                1,
             )
 
         assert len(results) == 2
@@ -254,10 +278,17 @@ class TestDeliberateBatch:
 
         with patch.object(deliberator, "query_social_contagion", new_callable=AsyncMock) as mock_contagion:
             mock_contagion.return_value = SocialContagionContext(
-                agent_id=0, distress_signals=(), distress_ratio=0.0, contagion_active=False,
+                agent_id=0,
+                distress_signals=(),
+                distress_ratio=0.0,
+                contagion_active=False,
             )
             results = await deliberator.deliberate_batch(
-                agents, _make_macro(), DecisionType.EMIGRATE, "sess-1", 1,
+                agents,
+                _make_macro(),
+                DecisionType.EMIGRATE,
+                "sess-1",
+                1,
             )
 
         assert len(results) == 3
@@ -273,10 +304,17 @@ class TestDeliberateBatch:
 
         with patch.object(deliberator, "query_social_contagion", new_callable=AsyncMock) as mock_contagion:
             mock_contagion.return_value = SocialContagionContext(
-                agent_id=0, distress_signals=(), distress_ratio=0.0, contagion_active=False,
+                agent_id=0,
+                distress_signals=(),
+                distress_ratio=0.0,
+                contagion_active=False,
             )
             results = await deliberator.deliberate_batch(
-                agents, _make_macro(), DecisionType.BUY_PROPERTY, "sess-1", 1,
+                agents,
+                _make_macro(),
+                DecisionType.BUY_PROPERTY,
+                "sess-1",
+                1,
             )
 
         assert results[0].action == "wait"  # fallback for buy_property
@@ -291,10 +329,17 @@ class TestDeliberateBatch:
 
         with patch.object(deliberator, "query_social_contagion", new_callable=AsyncMock) as mock_contagion:
             mock_contagion.return_value = SocialContagionContext(
-                agent_id=0, distress_signals=(), distress_ratio=0.0, contagion_active=False,
+                agent_id=0,
+                distress_signals=(),
+                distress_ratio=0.0,
+                contagion_active=False,
             )
             results = await deliberator.deliberate_batch(
-                agents, _make_macro(), DecisionType.BUY_PROPERTY, "sess-1", 1,
+                agents,
+                _make_macro(),
+                DecisionType.BUY_PROPERTY,
+                "sess-1",
+                1,
             )
 
         # Should only have one decision per agent
@@ -310,10 +355,17 @@ class TestDeliberateBatch:
 
         with patch.object(deliberator, "query_social_contagion", new_callable=AsyncMock) as mock_contagion:
             mock_contagion.return_value = SocialContagionContext(
-                agent_id=0, distress_signals=(), distress_ratio=0.0, contagion_active=False,
+                agent_id=0,
+                distress_signals=(),
+                distress_ratio=0.0,
+                contagion_active=False,
             )
             results = await deliberator.deliberate_batch(
-                agents, _make_macro(), DecisionType.BUY_PROPERTY, "sess-1", 1,
+                agents,
+                _make_macro(),
+                DecisionType.BUY_PROPERTY,
+                "sess-1",
+                1,
             )
 
         assert results[0].confidence == 1.0
@@ -326,9 +378,14 @@ class TestDeliberateBatch:
 
 class TestStochasticFallback:
     def test_all_decision_types_have_distribution(self):
-        for dt in (DecisionType.BUY_PROPERTY, DecisionType.EMIGRATE,
-                   DecisionType.CHANGE_JOB, DecisionType.INVEST,
-                   DecisionType.HAVE_CHILD, DecisionType.ADJUST_SPENDING):
+        for dt in (
+            DecisionType.BUY_PROPERTY,
+            DecisionType.EMIGRATE,
+            DecisionType.CHANGE_JOB,
+            DecisionType.INVEST,
+            DecisionType.HAVE_CHILD,
+            DecisionType.ADJUST_SPENDING,
+        ):
             assert dt.value in _STOCHASTIC_FALLBACK_DIST
 
     def test_fallback_returns_valid_action(self, deliberator):

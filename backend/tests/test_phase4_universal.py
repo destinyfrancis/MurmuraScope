@@ -8,6 +8,7 @@ Covers:
 - CrossDomainValidator: domain listing, aggregation
 - KGSessionState.agent_strategies field
 """
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -18,20 +19,18 @@ from backend.app.models.kg_session_state import KGSessionState
 from backend.app.services.cross_domain_validator import (
     CrossDomainValidator,
     _aggregate,
-    _DOMAIN_CONFIGS,
 )
 from backend.app.services.strategic_planner import (
-    AgentStrategy,
     StrategicPlanner,
     _check_contested,
     _default_strategy,
     _validated_posture,
 )
 
-
 # ---------------------------------------------------------------------------
 # KGSessionState.agent_strategies
 # ---------------------------------------------------------------------------
+
 
 class TestKGSessionStateStrategies:
     def test_agent_strategies_defaults_empty(self) -> None:
@@ -48,10 +47,12 @@ class TestKGSessionStateStrategies:
 # ExternalDataFeed helpers
 # ---------------------------------------------------------------------------
 
+
 class TestExternalDataFeed:
     @pytest.mark.asyncio
     async def test_fetch_uses_cache(self) -> None:
         from backend.app.services.external_data_feed import ExternalDataFeed  # noqa: PLC0415
+
         feed = ExternalDataFeed()
         feed._cache = {"fed_rate": 0.045}
         feed._cache_ts = 1e18  # far future → not expired
@@ -62,6 +63,7 @@ class TestExternalDataFeed:
     @pytest.mark.asyncio
     async def test_fetch_returns_dict(self) -> None:
         from backend.app.services.external_data_feed import ExternalDataFeed  # noqa: PLC0415
+
         feed = ExternalDataFeed()
         # With no API key and no DB, should return empty dict gracefully
         result = await feed.fetch(force_refresh=True)
@@ -70,9 +72,10 @@ class TestExternalDataFeed:
     @pytest.mark.asyncio
     async def test_taiwan_risk_fallback(self) -> None:
         from backend.app.services.external_data_feed import (  # noqa: PLC0415
-            ExternalDataFeed,
             _TAIWAN_RISK_BASE,
+            ExternalDataFeed,
         )
+
         feed = ExternalDataFeed()
         # DB read will fail in test env → should return base risk
         risk = await feed._fetch_taiwan_risk_proxy()
@@ -81,6 +84,7 @@ class TestExternalDataFeed:
     @pytest.mark.asyncio
     async def test_db_fallback_returns_dict(self) -> None:
         from backend.app.services.external_data_feed import ExternalDataFeed  # noqa: PLC0415
+
         result = await ExternalDataFeed._load_db_fallback()
         assert isinstance(result, dict)
 
@@ -89,11 +93,15 @@ class TestExternalDataFeed:
 # MacroController.apply_agent_actions_feedback
 # ---------------------------------------------------------------------------
 
+
 def _make_macro_state(**kwargs):
     """Build a MacroState with default values, overriding with kwargs."""
     from backend.app.services.macro_state import (  # noqa: PLC0415
-        MacroState, BASELINE_AVG_SQFT_PRICE, BASELINE_STAMP_DUTY,
+        BASELINE_AVG_SQFT_PRICE,
+        BASELINE_STAMP_DUTY,
+        MacroState,
     )
+
     defaults = dict(
         hibor_1m=0.04,
         prime_rate=0.055,
@@ -168,6 +176,7 @@ class TestMicroMacroFeedback:
 # ---------------------------------------------------------------------------
 # StrategicPlanner helpers
 # ---------------------------------------------------------------------------
+
 
 class TestValidatedPosture:
     def test_valid_postures(self) -> None:
@@ -268,6 +277,7 @@ class TestStrategicPlannerGetContext:
 # CrossDomainValidator
 # ---------------------------------------------------------------------------
 
+
 class TestCrossDomainValidator:
     def test_list_domains_returns_three(self) -> None:
         domains = CrossDomainValidator.list_domains()
@@ -281,23 +291,24 @@ class TestCrossDomainValidator:
         v = CrossDomainValidator()
         with pytest.raises(ValueError, match="Unknown domain"):
             import asyncio  # noqa: PLC0415
-            asyncio.get_event_loop().run_until_complete(
-                v.validate_domain("unknown_domain", "2021-Q1", "2023-Q4")
-            )
+
+            asyncio.get_event_loop().run_until_complete(v.validate_domain("unknown_domain", "2021-Q1", "2023-Q4"))
 
     @pytest.mark.asyncio
     async def test_validate_all_returns_correct_keys(self) -> None:
         v = CrossDomainValidator()
         # Mock the reporter to return empty results (no DB in tests)
-        v._reporter.generate = AsyncMock(return_value={
-            "period_start": "2021-Q1",
-            "period_end": "2023-Q4",
-            "metrics_validated": 0,
-            "overall_grade": "N/A",
-            "overall_score": 0.0,
-            "summary": "No data",
-            "results": [],
-        })
+        v._reporter.generate = AsyncMock(
+            return_value={
+                "period_start": "2021-Q1",
+                "period_end": "2023-Q4",
+                "metrics_validated": 0,
+                "overall_grade": "N/A",
+                "overall_score": 0.0,
+                "summary": "No data",
+                "results": [],
+            }
+        )
         result = await v.validate_all("2021-Q1", "2023-Q4")
         assert "domains" in result
         assert "aggregate_grade" in result
@@ -331,9 +342,11 @@ class TestCrossDomainValidator:
 # CognitiveAgentEngine: strategy_block injected into prompt
 # ---------------------------------------------------------------------------
 
+
 class TestCognitiveEngineStrategyBlock:
     def test_strategy_block_in_prompt(self) -> None:
         from backend.app.services.cognitive_agent_engine import _build_deliberation_prompt  # noqa: PLC0415
+
         ctx = {
             "agent_id": "a1",
             "name": "Alice",
@@ -345,6 +358,7 @@ class TestCognitiveEngineStrategyBlock:
 
     def test_no_strategy_block_absent_from_prompt(self) -> None:
         from backend.app.services.cognitive_agent_engine import _build_deliberation_prompt  # noqa: PLC0415
+
         ctx = {
             "agent_id": "a1",
             "name": "Bob",

@@ -7,6 +7,7 @@ as pre-seeded agents in Step 2.
 Note: kg_nodes table uses 'session_id' for the graph identifier and 'title'
 for the node label — these column names must match schema.sql exactly.
 """
+
 from __future__ import annotations
 
 import csv

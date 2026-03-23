@@ -238,7 +238,7 @@ class GARCHForecaster:
             return None
 
         eps = np.array(clean, dtype=np.float64)
-        eps2 = eps ** 2
+        eps2 = eps**2
         sample_var = float(np.var(eps))
 
         if sample_var < _VARIANCE_FLOOR:
@@ -247,11 +247,13 @@ class GARCHForecaster:
 
         # Initial parameter guess: omega scaled to sample variance
         init_omega = sample_var * (1.0 - _INITIAL_ALPHA - _INITIAL_BETA)
-        x0 = np.array([
-            max(init_omega, 1e-8),
-            _INITIAL_ALPHA,
-            _INITIAL_BETA,
-        ])
+        x0 = np.array(
+            [
+                max(init_omega, 1e-8),
+                _INITIAL_ALPHA,
+                _INITIAL_BETA,
+            ]
+        )
 
         # Box bounds: omega > 0, alpha in [0, 0.999], beta in [0, 0.999]
         bounds = [
@@ -312,8 +314,7 @@ class GARCHForecaster:
         log_lik = -result.fun
 
         logger.info(
-            "GARCH(1,1) fitted for %s: omega=%.6g, alpha=%.4f, beta=%.4f, "
-            "persistence=%.4f, uncond_var=%.6g, LL=%.2f",
+            "GARCH(1,1) fitted for %s: omega=%.6g, alpha=%.4f, beta=%.4f, persistence=%.4f, uncond_var=%.6g, LL=%.2f",
             metric_name,
             omega_hat,
             alpha_hat,
@@ -362,16 +363,12 @@ class GARCHForecaster:
         persistence = result.persistence
 
         # Use the last fitted conditional variance as the starting point
-        sigma2_last = (
-            result.conditional_variances[-1]
-            if result.conditional_variances
-            else v_uncond
-        )
+        sigma2_last = result.conditional_variances[-1] if result.conditional_variances else v_uncond
 
         forecasts: list[float] = []
         for h in range(1, horizon + 1):
             # sigma2_{t+h} = V + (alpha+beta)^h * (sigma2_t - V)
-            sigma2_h = v_uncond + (persistence ** h) * (sigma2_last - v_uncond)
+            sigma2_h = v_uncond + (persistence**h) * (sigma2_last - v_uncond)
             forecasts.append(max(sigma2_h, _VARIANCE_FLOOR))
 
         return tuple(forecasts)
@@ -418,14 +415,16 @@ class GARCHForecaster:
             garch_std = math.sqrt(max(var_forecasts[h], _VARIANCE_FLOOR))
             forecast_val = point_forecasts[h]
 
-            adjusted.append(AdjustedCI(
-                horizon_step=h + 1,
-                point_forecast=forecast_val,
-                ci_lower=forecast_val - z_score * garch_std,
-                ci_upper=forecast_val + z_score * garch_std,
-                garch_std=garch_std,
-                static_std=static_std,
-            ))
+            adjusted.append(
+                AdjustedCI(
+                    horizon_step=h + 1,
+                    point_forecast=forecast_val,
+                    ci_lower=forecast_val - z_score * garch_std,
+                    ci_upper=forecast_val + z_score * garch_std,
+                    garch_std=garch_std,
+                    static_std=static_std,
+                )
+            )
 
         return tuple(adjusted)
 

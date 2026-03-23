@@ -1,4 +1,5 @@
 """Tests for SimulationRunner and its task tracking mechanisms."""
+
 from __future__ import annotations
 
 import asyncio
@@ -65,6 +66,5 @@ async def test_tracked_task_handles_cancellation(caplog):
 
     error_records = [r for r in caplog.records if r.levelno >= logging.ERROR]
     assert len(error_records) == 0, (
-        "CancelledError should not be logged at ERROR level. "
-        f"Got {len(error_records)} ERROR records"
+        f"CancelledError should not be logged at ERROR level. Got {len(error_records)} ERROR records"
     )

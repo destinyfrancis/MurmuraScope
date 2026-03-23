@@ -1,19 +1,31 @@
 # backend/tests/test_agent_behavior_validator.py
 """Tests for AgentBehaviorValidator service."""
+
 from __future__ import annotations
+
 import math
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from backend.app.services.agent_behavior_validator import (
-    AgentBehaviorValidator, BehaviorValidationResult
-)
+
+from backend.app.services.agent_behavior_validator import AgentBehaviorValidator, BehaviorValidationResult
 
 
 def _mock_db_rows():
     """Simulate rows from simulation_actions with reasoning fields."""
     rows = []
-    decisions = ["protest", "protest", "protest", "comply", "protest",
-                 "protest", "comply", "protest", "protest", "comply"]
+    decisions = [
+        "protest",
+        "protest",
+        "protest",
+        "comply",
+        "protest",
+        "protest",
+        "comply",
+        "protest",
+        "protest",
+        "comply",
+    ]
     for i, d in enumerate(decisions):
         row = {
             "agent_id": f"agent_{i}",

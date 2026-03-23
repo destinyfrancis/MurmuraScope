@@ -19,6 +19,7 @@ Usage::
     for domain, result in report["domains"].items():
         print(domain, result["overall_grade"])
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -33,6 +34,7 @@ logger = get_logger(__name__)
 # Domain configurations
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class DomainConfig:
     """Configuration for one cross-domain validation run."""
@@ -40,7 +42,7 @@ class DomainConfig:
     domain_id: str
     display_name: str
     metrics: list[str]
-    min_metrics_required: int   # minimum metrics that must have data
+    min_metrics_required: int  # minimum metrics that must have data
 
 
 _DOMAIN_CONFIGS: list[DomainConfig] = [
@@ -63,8 +65,8 @@ _DOMAIN_CONFIGS: list[DomainConfig] = [
         metrics=[
             # These map to hk_data_snapshots external category
             # fed_rate is stored as external/fed_rate in the DB
-            "hibor_1m",    # proxy for interest rate environment
-            "hsi_level",   # US-linked market sentiment
+            "hibor_1m",  # proxy for interest rate environment
+            "hsi_level",  # US-linked market sentiment
             "retail_sales_index",
             "tourist_arrivals",
             "cpi_yoy",
@@ -77,9 +79,9 @@ _DOMAIN_CONFIGS: list[DomainConfig] = [
         metrics=[
             # These indicators are influenced by geopolitical events
             "consumer_confidence",  # sentiment proxy
-            "hsi_level",           # market reaction to geo-risk
-            "net_migration",       # emigration as risk response
-            "hibor_1m",            # rate premium under tension
+            "hsi_level",  # market reaction to geo-risk
+            "net_migration",  # emigration as risk response
+            "hibor_1m",  # rate premium under tension
         ],
         min_metrics_required=2,
     ),
@@ -122,7 +124,9 @@ class CrossDomainValidator:
         for config in _DOMAIN_CONFIGS:
             logger.info(
                 "CrossDomainValidator: running domain=%s period=%s→%s",
-                config.domain_id, period_start, period_end,
+                config.domain_id,
+                period_start,
+                period_end,
             )
             try:
                 report = await self._reporter.generate(
@@ -131,9 +135,7 @@ class CrossDomainValidator:
                     metrics=config.metrics,
                 )
             except Exception as exc:
-                logger.warning(
-                    "CrossDomainValidator: domain=%s failed: %s", config.domain_id, exc
-                )
+                logger.warning("CrossDomainValidator: domain=%s failed: %s", config.domain_id, exc)
                 report = {
                     "period_start": period_start,
                     "period_end": period_end,
@@ -181,10 +183,7 @@ class CrossDomainValidator:
         """
         config = next((d for d in _DOMAIN_CONFIGS if d.domain_id == domain_id), None)
         if config is None:
-            raise ValueError(
-                f"Unknown domain '{domain_id}'. "
-                f"Available: {[d.domain_id for d in _DOMAIN_CONFIGS]}"
-            )
+            raise ValueError(f"Unknown domain '{domain_id}'. Available: {[d.domain_id for d in _DOMAIN_CONFIGS]}")
         return await self._reporter.generate(
             period_start=period_start,
             period_end=period_end,
@@ -218,16 +217,8 @@ def _aggregate(
     period_end: str,
 ) -> dict[str, Any]:
     """Compute aggregate stats across domain reports."""
-    scores = [
-        r["overall_score"]
-        for r in domain_reports.values()
-        if r["overall_grade"] != "N/A"
-    ]
-    grades = [
-        r["overall_grade"]
-        for r in domain_reports.values()
-        if r["overall_grade"] != "N/A"
-    ]
+    scores = [r["overall_score"] for r in domain_reports.values() if r["overall_grade"] != "N/A"]
+    grades = [r["overall_grade"] for r in domain_reports.values() if r["overall_grade"] != "N/A"]
 
     if not scores:
         aggregate_score = 0.0
@@ -239,13 +230,14 @@ def _aggregate(
         aggregate_grade = min(grades, key=lambda g: _GRADE_ORDER.get(g, 0))
         domains_passed = sum(1 for g in grades if _GRADE_ORDER.get(g, 0) >= 3)
 
-    summary = _build_summary(
-        domain_reports, aggregate_grade, aggregate_score, domains_passed, period_start, period_end
-    )
+    summary = _build_summary(domain_reports, aggregate_grade, aggregate_score, domains_passed, period_start, period_end)
 
     logger.info(
         "CrossDomainValidator: aggregate grade=%s score=%.2f domains_passed=%d/%d",
-        aggregate_grade, aggregate_score, domains_passed, len(_DOMAIN_CONFIGS),
+        aggregate_grade,
+        aggregate_score,
+        domains_passed,
+        len(_DOMAIN_CONFIGS),
     )
 
     return {
@@ -276,8 +268,7 @@ def _build_summary(
 
     if domains_passed == len(_DOMAIN_CONFIGS):
         parts.append(
-            "Engine demonstrates genuine cross-domain predictive capacity — "
-            "suitable for universal scenario analysis."
+            "Engine demonstrates genuine cross-domain predictive capacity — suitable for universal scenario analysis."
         )
     elif domains_passed >= 2:
         parts.append(

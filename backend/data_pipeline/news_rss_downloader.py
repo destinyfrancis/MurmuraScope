@@ -10,10 +10,10 @@ Dependency: feedparser>=6.0
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
-from typing import Sequence
 
 import feedparser
 import httpx
@@ -44,28 +44,88 @@ _DEFAULT_TIMEOUT = 15
 # Keyword sets for headline categorisation
 # ---------------------------------------------------------------------------
 
-_PROPERTY_KEYWORDS: frozenset[str] = frozenset({
-    "property", "housing", "flat", "rent", "mortgage", "ccl",
-    "樓", "樓市", "樓價", "按揭", "地產", "租金", "公屋", "居屋",
-})
+_PROPERTY_KEYWORDS: frozenset[str] = frozenset(
+    {
+        "property",
+        "housing",
+        "flat",
+        "rent",
+        "mortgage",
+        "ccl",
+        "樓",
+        "樓市",
+        "樓價",
+        "按揭",
+        "地產",
+        "租金",
+        "公屋",
+        "居屋",
+    }
+)
 
-_EMPLOYMENT_KEYWORDS: frozenset[str] = frozenset({
-    "employment", "unemployment", "job", "wage", "salary", "labour",
-    "layoff", "hiring", "redundancy",
-    "就業", "失業", "裁員", "招聘", "人工", "勞工",
-})
+_EMPLOYMENT_KEYWORDS: frozenset[str] = frozenset(
+    {
+        "employment",
+        "unemployment",
+        "job",
+        "wage",
+        "salary",
+        "labour",
+        "layoff",
+        "hiring",
+        "redundancy",
+        "就業",
+        "失業",
+        "裁員",
+        "招聘",
+        "人工",
+        "勞工",
+    }
+)
 
-_POLITICAL_KEYWORDS: frozenset[str] = frozenset({
-    "legco", "policy", "election", "government", "chief executive",
-    "national security", "protest", "legislature", "political",
-    "立法會", "施政", "選舉", "政府", "特首", "國安", "政治",
-})
+_POLITICAL_KEYWORDS: frozenset[str] = frozenset(
+    {
+        "legco",
+        "policy",
+        "election",
+        "government",
+        "chief executive",
+        "national security",
+        "protest",
+        "legislature",
+        "political",
+        "立法會",
+        "施政",
+        "選舉",
+        "政府",
+        "特首",
+        "國安",
+        "政治",
+    }
+)
 
-_FINANCIAL_KEYWORDS: frozenset[str] = frozenset({
-    "stock", "hsi", "hang seng", "market", "finance", "bank",
-    "interest rate", "hibor", "bond", "ipo", "exchange",
-    "股市", "恒指", "金融", "銀行", "利率", "債券", "匯率",
-})
+_FINANCIAL_KEYWORDS: frozenset[str] = frozenset(
+    {
+        "stock",
+        "hsi",
+        "hang seng",
+        "market",
+        "finance",
+        "bank",
+        "interest rate",
+        "hibor",
+        "bond",
+        "ipo",
+        "exchange",
+        "股市",
+        "恒指",
+        "金融",
+        "銀行",
+        "利率",
+        "債券",
+        "匯率",
+    }
+)
 
 # ---------------------------------------------------------------------------
 # DB DDL — news_headlines table (created if missing)
@@ -257,10 +317,7 @@ async def download_rthk_headlines(
     Returns:
         Combined list of :class:`NewsHeadline` from all RTHK feeds.
     """
-    tasks = [
-        _fetch_feed(url, name, timeout=timeout)
-        for url, name in _RTHK_FEEDS
-    ]
+    tasks = [_fetch_feed(url, name, timeout=timeout) for url, name in _RTHK_FEEDS]
     results = await asyncio.gather(*tasks)
 
     combined: list[NewsHeadline] = []
@@ -318,15 +375,11 @@ async def _store_headlines(headlines: Sequence[NewsHeadline]) -> int:
 
     await _ensure_table()
 
-    rows = [
-        (h.title, h.published, h.source, h.url, h.category)
-        for h in headlines
-    ]
+    rows = [(h.title, h.published, h.source, h.url, h.category) for h in headlines]
 
     async with get_db() as db:
         await db.executemany(
-            "INSERT INTO news_headlines (title, published, source, url, category) "
-            "VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO news_headlines (title, published, source, url, category) VALUES (?, ?, ?, ?, ?)",
             rows,
         )
         await db.commit()

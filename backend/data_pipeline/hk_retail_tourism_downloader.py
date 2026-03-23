@@ -12,7 +12,6 @@ Data strategy:
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 
 import httpx
@@ -26,7 +25,7 @@ _WB_BASE = "https://api.worldbank.org/v2/country/HKG/indicator"
 _WB_INDICATORS: dict[str, tuple[str, str, str]] = {
     # key: (indicator_id, metric_name, unit)
     "retail_sales": ("NE.CON.PRVT.KD.ZG", "retail_sales_growth_pct", "percent"),
-    "visitor_arrivals": ("ST.INT.ARVL",     "visitor_arrivals_thousands", "thousands"),
+    "visitor_arrivals": ("ST.INT.ARVL", "visitor_arrivals_thousands", "thousands"),
 }
 
 # ---------------------------------------------------------------------------
@@ -74,7 +73,9 @@ async def _fetch_wb_indicator(
     url = f"{_WB_BASE}/{indicator_id}"
     try:
         resp = await client.get(
-            url, params={"format": "json", "per_page": mrv, "mrv": mrv}, timeout=timeout,
+            url,
+            params={"format": "json", "per_page": mrv, "mrv": mrv},
+            timeout=timeout,
         )
         resp.raise_for_status()
         data = resp.json()
@@ -121,19 +122,23 @@ async def download_all_retail_tourism(
             # Visitor arrivals: convert to thousands
             if key == "visitor_arrivals" and val > 10_000:
                 val = round(val / 1000.0, 2)
-            all_records.append(RetailTourismRecord(
-                metric=metric,
-                value=val,
-                unit=unit,
-                period=f"{year}-Q4",
-                source="World Bank",
-            ))
+            all_records.append(
+                RetailTourismRecord(
+                    metric=metric,
+                    value=val,
+                    unit=unit,
+                    period=f"{year}-Q4",
+                    source="World Bank",
+                )
+            )
         logger.info("Retail/tourism WB %s: %d records", key, sum(1 for r in all_records if r.metric == metric))
 
     error_msg = None if all_records else "World Bank retail/tourism APIs returned no data"
-    return [DownloadResult(
-        category="retail_tourism",
-        row_count=len(all_records),
-        records=tuple(all_records),
-        error=error_msg,
-    )]
+    return [
+        DownloadResult(
+            category="retail_tourism",
+            row_count=len(all_records),
+            records=tuple(all_records),
+            error=error_msg,
+        )
+    ]

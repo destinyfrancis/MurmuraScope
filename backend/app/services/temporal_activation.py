@@ -9,6 +9,7 @@ Design:
   - Activation: p = activity_vector[hour] × base_rate, floored at 0.05.
   - Agents without a profile default to always active (backward compatible).
 """
+
 from __future__ import annotations
 
 import random
@@ -22,31 +23,111 @@ from backend.app.models.activity_profile import ActivityProfile, Chronotype
 _CHRONOTYPE_TEMPLATES: dict[str, tuple[float, ...]] = {
     # Peaks 06–10 AM (elderly, retirees, early risers)
     "morning_lark": (
-        0.08, 0.05, 0.03, 0.03, 0.06, 0.22,  # 00–05
-        0.65, 0.92, 1.00, 0.82, 0.70, 0.58,  # 06–11
-        0.48, 0.40, 0.32, 0.30, 0.38, 0.28,  # 12–17
-        0.20, 0.18, 0.14, 0.12, 0.10, 0.09,  # 18–23
+        0.08,
+        0.05,
+        0.03,
+        0.03,
+        0.06,
+        0.22,  # 00–05
+        0.65,
+        0.92,
+        1.00,
+        0.82,
+        0.70,
+        0.58,  # 06–11
+        0.48,
+        0.40,
+        0.32,
+        0.30,
+        0.38,
+        0.28,  # 12–17
+        0.20,
+        0.18,
+        0.14,
+        0.12,
+        0.10,
+        0.09,  # 18–23
     ),
     # Peaks 08–11 AM and 19–22 PM (nine-to-five workers)
     "standard": (
-        0.05, 0.03, 0.02, 0.02, 0.03, 0.10,  # 00–05
-        0.30, 0.62, 0.72, 0.72, 0.62, 0.50,  # 06–11
-        0.42, 0.50, 0.50, 0.52, 0.60, 0.70,  # 12–17
-        0.80, 0.90, 1.00, 0.82, 0.52, 0.20,  # 18–23
+        0.05,
+        0.03,
+        0.02,
+        0.02,
+        0.03,
+        0.10,  # 00–05
+        0.30,
+        0.62,
+        0.72,
+        0.72,
+        0.62,
+        0.50,  # 06–11
+        0.42,
+        0.50,
+        0.50,
+        0.52,
+        0.60,
+        0.70,  # 12–17
+        0.80,
+        0.90,
+        1.00,
+        0.82,
+        0.52,
+        0.20,  # 18–23
     ),
     # Peaks 19 PM–midnight (students, young adults, night owls)
     "evening_owl": (
-        0.32, 0.22, 0.12, 0.06, 0.03, 0.03,  # 00–05
-        0.05, 0.12, 0.22, 0.32, 0.42, 0.42,  # 06–11
-        0.32, 0.32, 0.32, 0.42, 0.52, 0.62,  # 12–17
-        0.80, 0.92, 1.00, 0.90, 0.72, 0.52,  # 18–23
+        0.32,
+        0.22,
+        0.12,
+        0.06,
+        0.03,
+        0.03,  # 00–05
+        0.05,
+        0.12,
+        0.22,
+        0.32,
+        0.42,
+        0.42,  # 06–11
+        0.32,
+        0.32,
+        0.32,
+        0.42,
+        0.52,
+        0.62,  # 12–17
+        0.80,
+        0.92,
+        1.00,
+        0.90,
+        0.72,
+        0.52,  # 18–23
     ),
     # Peaks 00–04 AM and 20–23 PM (security, transport, manual workers)
     "night_shift": (
-        0.92, 1.00, 0.90, 0.72, 0.42, 0.20,  # 00–05
-        0.10, 0.06, 0.05, 0.10, 0.20, 0.30,  # 06–11
-        0.30, 0.22, 0.12, 0.12, 0.20, 0.32,  # 12–17
-        0.52, 0.62, 0.72, 0.82, 0.90, 0.92,  # 18–23
+        0.92,
+        1.00,
+        0.90,
+        0.72,
+        0.42,
+        0.20,  # 00–05
+        0.10,
+        0.06,
+        0.05,
+        0.10,
+        0.20,
+        0.30,  # 06–11
+        0.30,
+        0.22,
+        0.12,
+        0.12,
+        0.20,
+        0.32,  # 12–17
+        0.52,
+        0.62,
+        0.72,
+        0.82,
+        0.90,
+        0.92,  # 18–23
     ),
 }
 
@@ -57,9 +138,7 @@ _START_HOUR: int = 8
 _MIN_ACTIVATION_P: float = 0.05
 
 # Occupations with elevated night-shift probability.
-_NIGHT_SHIFT_OCCUPATIONS: frozenset[str] = frozenset(
-    {"非技術工人", "機台及機器操作員", "服務及銷售人員"}
-)
+_NIGHT_SHIFT_OCCUPATIONS: frozenset[str] = frozenset({"非技術工人", "機台及機器操作員", "服務及銷售人員"})
 
 
 class TemporalActivationService:
@@ -117,10 +196,7 @@ class TemporalActivationService:
         template = _CHRONOTYPE_TEMPLATES[chronotype]
 
         # Add per-slot noise to personalise the activity curve.
-        vector: tuple[float, ...] = tuple(
-            max(0.0, min(1.0, round(v + rng.gauss(0.0, 0.08), 4)))
-            for v in template
-        )
+        vector: tuple[float, ...] = tuple(max(0.0, min(1.0, round(v + rng.gauss(0.0, 0.08), 4))) for v in template)
 
         base_rate = max(0.10, min(1.0, round(rng.gauss(0.65, 0.15), 3)))
 

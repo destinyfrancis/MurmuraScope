@@ -37,7 +37,6 @@ from backend.app.services.simulation_manager import (
     store_agent_profiles,
 )
 
-
 # ---------------------------------------------------------------------------
 # Singleton tests
 # ---------------------------------------------------------------------------
@@ -47,11 +46,13 @@ from backend.app.services.simulation_manager import (
 def test_get_simulation_manager_returns_singleton():
     """Two calls to get_simulation_manager() must return the same object."""
     import backend.app.services.simulation_manager as mgr_module
+
     # Reset singleton for test isolation
     original = mgr_module._MANAGER_SINGLETON
     mgr_module._MANAGER_SINGLETON = None
 
     from backend.app.services.simulation_manager import get_simulation_manager
+
     m1 = get_simulation_manager()
     m2 = get_simulation_manager()
     assert m1 is m2, "get_simulation_manager() must return the same singleton instance"
@@ -64,9 +65,7 @@ def test_get_simulation_manager_returns_singleton():
 # Fixtures
 # ---------------------------------------------------------------------------
 
-_SCHEMA_PATH = os.path.join(
-    os.path.dirname(__file__), "..", "database", "schema.sql"
-)
+_SCHEMA_PATH = os.path.join(os.path.dirname(__file__), "..", "database", "schema.sql")
 
 
 @pytest_asyncio.fixture()
@@ -80,9 +79,7 @@ async def sim_db(tmp_path):
         await init_conn.executescript(f.read())
     # Add domain_pack_id column that the code expects but schema.sql lacks.
     try:
-        await init_conn.execute(
-            "ALTER TABLE simulation_sessions ADD COLUMN domain_pack_id TEXT DEFAULT 'hk_city'"
-        )
+        await init_conn.execute("ALTER TABLE simulation_sessions ADD COLUMN domain_pack_id TEXT DEFAULT 'hk_city'")
     except Exception:
         pass  # already exists
     await init_conn.commit()
@@ -284,9 +281,7 @@ class TestCreateSession:
 
 class TestGetSession:
     @pytest.mark.asyncio
-    async def test_returns_dict_with_correct_fields(
-        self, sim_db, mock_runner, valid_request, tmp_path
-    ):
+    async def test_returns_dict_with_correct_fields(self, sim_db, mock_runner, valid_request, tmp_path):
         mgr = SimulationManager(runner=mock_runner)
         with patch("backend.app.services.simulation_manager._PROJECT_ROOT", tmp_path):
             created = await mgr.create_session(valid_request)
@@ -312,9 +307,7 @@ class TestGetSession:
 
 class TestStartSession:
     @pytest.mark.asyncio
-    async def test_idempotent_when_already_running(
-        self, sim_db, mock_runner, valid_request, tmp_path
-    ):
+    async def test_idempotent_when_already_running(self, sim_db, mock_runner, valid_request, tmp_path):
         """Starting an already-running session returns early, runner not called."""
         mgr = SimulationManager(runner=mock_runner)
         with patch("backend.app.services.simulation_manager._PROJECT_ROOT", tmp_path):
@@ -333,9 +326,7 @@ class TestStartSession:
         mock_runner.run.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_task_tracking_populated(
-        self, sim_db, mock_runner, valid_request, tmp_path
-    ):
+    async def test_task_tracking_populated(self, sim_db, mock_runner, valid_request, tmp_path):
         """After start_session, _session_tasks has an entry for the session."""
         # Make runner.run block so the task stays alive for inspection.
         block_event = asyncio.Event()
@@ -364,9 +355,7 @@ class TestStartSession:
             pass
 
     @pytest.mark.asyncio
-    async def test_start_completed_session_raises(
-        self, sim_db, mock_runner, valid_request, tmp_path
-    ):
+    async def test_start_completed_session_raises(self, sim_db, mock_runner, valid_request, tmp_path):
         mgr = SimulationManager(runner=mock_runner)
         with patch("backend.app.services.simulation_manager._PROJECT_ROOT", tmp_path):
             created = await mgr.create_session(valid_request)
@@ -389,9 +378,7 @@ class TestStartSession:
 
 class TestBuildRunnerConfig:
     @pytest.mark.asyncio
-    async def test_openrouter_provider(
-        self, sim_db, mock_runner, valid_request, tmp_path
-    ):
+    async def test_openrouter_provider(self, sim_db, mock_runner, valid_request, tmp_path):
         mgr = SimulationManager(runner=mock_runner)
         with patch("backend.app.services.simulation_manager._PROJECT_ROOT", tmp_path):
             created = await mgr.create_session(valid_request)
@@ -429,9 +416,7 @@ class TestBuildRunnerConfig:
         assert config["llm_base_url"] == "https://api.fireworks.ai/inference/v1"
 
     @pytest.mark.asyncio
-    async def test_config_includes_session_fields(
-        self, sim_db, mock_runner, valid_request, tmp_path
-    ):
+    async def test_config_includes_session_fields(self, sim_db, mock_runner, valid_request, tmp_path):
         mgr = SimulationManager(runner=mock_runner)
         with patch("backend.app.services.simulation_manager._PROJECT_ROOT", tmp_path):
             created = await mgr.create_session(valid_request)
@@ -453,9 +438,7 @@ class TestBuildRunnerConfig:
 
 class TestStopSession:
     @pytest.mark.asyncio
-    async def test_stop_running_session(
-        self, sim_db, mock_runner, valid_request, tmp_path
-    ):
+    async def test_stop_running_session(self, sim_db, mock_runner, valid_request, tmp_path):
         mgr = SimulationManager(runner=mock_runner)
         with patch("backend.app.services.simulation_manager._PROJECT_ROOT", tmp_path):
             created = await mgr.create_session(valid_request)
@@ -471,9 +454,7 @@ class TestStopSession:
         mock_runner.stop.assert_awaited_once_with(sid)
 
     @pytest.mark.asyncio
-    async def test_stop_non_running_raises(
-        self, sim_db, mock_runner, valid_request, tmp_path
-    ):
+    async def test_stop_non_running_raises(self, sim_db, mock_runner, valid_request, tmp_path):
         mgr = SimulationManager(runner=mock_runner)
         with patch("backend.app.services.simulation_manager._PROJECT_ROOT", tmp_path):
             created = await mgr.create_session(valid_request)
@@ -489,9 +470,7 @@ class TestStopSession:
 
 class TestStoreAgentProfiles:
     @pytest.mark.asyncio
-    async def test_batch_insert(
-        self, sim_db, mock_runner, valid_request, tmp_path
-    ):
+    async def test_batch_insert(self, sim_db, mock_runner, valid_request, tmp_path):
         mgr = SimulationManager(runner=mock_runner)
         with patch("backend.app.services.simulation_manager._PROJECT_ROOT", tmp_path):
             created = await mgr.create_session(valid_request)
@@ -519,9 +498,7 @@ class TestStoreAgentProfiles:
             profiles.append(p)
 
         mock_gen = MagicMock()
-        mock_gen._factory.generate_username = MagicMock(
-            side_effect=[f"agent_{i}" for i in range(3)]
-        )
+        mock_gen._factory.generate_username = MagicMock(side_effect=[f"agent_{i}" for i in range(3)])
         mock_gen.to_persona_string = MagicMock(return_value="Persona text")
 
         await store_agent_profiles(sid, profiles, mock_gen)
@@ -534,9 +511,7 @@ class TestStoreAgentProfiles:
         assert row["cnt"] == 3
 
     @pytest.mark.asyncio
-    async def test_batch_insert_fields_correct(
-        self, sim_db, mock_runner, valid_request, tmp_path
-    ):
+    async def test_batch_insert_fields_correct(self, sim_db, mock_runner, valid_request, tmp_path):
         mgr = SimulationManager(runner=mock_runner)
         with patch("backend.app.services.simulation_manager._PROJECT_ROOT", tmp_path):
             created = await mgr.create_session(valid_request)
@@ -566,9 +541,7 @@ class TestStoreAgentProfiles:
 
         await store_agent_profiles(sid, [p], mock_gen)
 
-        cursor = await sim_db.execute(
-            "SELECT * FROM agent_profiles WHERE session_id = ?", (sid,)
-        )
+        cursor = await sim_db.execute("SELECT * FROM agent_profiles WHERE session_id = ?", (sid,))
         row = await cursor.fetchone()
         assert row["agent_type"] == "investor"
         assert row["age"] == 45

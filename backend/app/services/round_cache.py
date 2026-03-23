@@ -1,4 +1,5 @@
 """In-memory cache for a single simulation round. Flushed to DB at round end."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field

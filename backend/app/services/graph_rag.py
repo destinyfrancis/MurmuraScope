@@ -88,18 +88,20 @@ class GlobalNarrative:
 # Opposing predicate pairs for conflict detection
 # ---------------------------------------------------------------------------
 
-_OPPOSING_PAIRS: frozenset[tuple[str, str]] = frozenset({
-    ("supports", "opposes"),
-    ("opposes", "supports"),
-    ("increases", "decreases"),
-    ("decreases", "increases"),
-    ("worries_about", "supports"),
-    ("supports", "worries_about"),
-    ("trusts", "distrusts"),
-    ("distrusts", "trusts"),
-    ("promotes", "blocks"),
-    ("blocks", "promotes"),
-})
+_OPPOSING_PAIRS: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("supports", "opposes"),
+        ("opposes", "supports"),
+        ("increases", "decreases"),
+        ("decreases", "increases"),
+        ("worries_about", "supports"),
+        ("supports", "worries_about"),
+        ("trusts", "distrusts"),
+        ("distrusts", "trusts"),
+        ("promotes", "blocks"),
+        ("blocks", "promotes"),
+    }
+)
 
 
 # ---------------------------------------------------------------------------
@@ -124,6 +126,7 @@ class GraphRAGService:
             self._llm = llm_client
         else:
             from backend.app.utils.llm_client import get_default_client  # noqa: PLC0415
+
             self._llm = get_default_client()
 
     # ------------------------------------------------------------------
@@ -174,22 +177,17 @@ class GraphRAGService:
         await self._ensure_table()
 
         # Filter out tiny clusters
-        valid_chambers = [
-            c for c in echo_result.chambers
-            if c.member_count >= _MIN_CLUSTER_SIZE
-        ]
+        valid_chambers = [c for c in echo_result.chambers if c.member_count >= _MIN_CLUSTER_SIZE]
         if not valid_chambers:
             logger.info(
                 "No clusters >= %d members, skipping community summaries session=%s",
-                _MIN_CLUSTER_SIZE, session_id,
+                _MIN_CLUSTER_SIZE,
+                session_id,
             )
             return []
 
         # Summarise each cluster in parallel (bounded by semaphore)
-        tasks = [
-            self._summarize_cluster(session_id, round_number, chamber)
-            for chamber in valid_chambers
-        ]
+        tasks = [self._summarize_cluster(session_id, round_number, chamber) for chamber in valid_chambers]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         summaries: list[CommunitySummary] = []
@@ -204,7 +202,9 @@ class GraphRAGService:
 
         logger.info(
             "Generated %d community summaries session=%s round=%d",
-            len(summaries), session_id, round_number,
+            len(summaries),
+            session_id,
+            round_number,
         )
         return summaries
 
@@ -273,13 +273,9 @@ class GraphRAGService:
             return None
 
         # Format data for prompt
-        top_memories = "\n".join(
-            f"- [{r['salience_score']:.2f}] {r['memory_text'][:120]}"
-            for r in memory_rows
-        )
+        top_memories = "\n".join(f"- [{r['salience_score']:.2f}] {r['memory_text'][:120]}" for r in memory_rows)
         triples = "\n".join(
-            f"- ({r['subject']}, {r['predicate']}, {r['object']}) [conf={r['confidence']:.2f}]"
-            for r in triple_rows
+            f"- ({r['subject']}, {r['predicate']}, {r['object']}) [conf={r['confidence']:.2f}]" for r in triple_rows
         )
 
         from backend.prompts.report_prompts import (  # noqa: PLC0415
@@ -345,9 +341,14 @@ class GraphRAGService:
                        avg_trust = excluded.avg_trust""",
                 [
                     (
-                        s.session_id, s.round_number, s.cluster_id,
-                        s.core_narrative, s.shared_anxieties, s.main_opposition,
-                        s.member_count, s.avg_trust,
+                        s.session_id,
+                        s.round_number,
+                        s.cluster_id,
+                        s.core_narrative,
+                        s.shared_anxieties,
+                        s.main_opposition,
+                        s.member_count,
+                        s.avg_trust,
                     )
                     for s in summaries
                 ],
@@ -360,10 +361,7 @@ class GraphRAGService:
                 from backend.app.services.embedding_provider import EmbeddingProvider  # noqa: PLC0415
 
                 embedder = EmbeddingProvider()
-                texts = [
-                    f"社群{s.cluster_id}: {s.core_narrative} {s.shared_anxieties}"
-                    for s in summaries
-                ]
+                texts = [f"社群{s.cluster_id}: {s.core_narrative} {s.shared_anxieties}" for s in summaries]
 
                 import asyncio as _asyncio  # noqa: PLC0415
 
@@ -386,8 +384,9 @@ class GraphRAGService:
                 table_name = f"cs_{session_id.replace('-', '')[:12]}"
 
                 def _upsert() -> None:
-                    import lancedb  # noqa: PLC0415
                     from pathlib import Path  # noqa: PLC0415
+
+                    import lancedb  # noqa: PLC0415
 
                     db_path = Path("data/vector_store")
                     db_path.mkdir(parents=True, exist_ok=True)
@@ -401,7 +400,8 @@ class GraphRAGService:
                 await asyncio.to_thread(_upsert)
                 logger.debug(
                     "Persisted %d community summary embeddings to LanceDB table=%s",
-                    len(records), table_name,
+                    len(records),
+                    table_name,
                 )
             except Exception:
                 logger.exception("Failed to persist community summaries to LanceDB")
@@ -429,9 +429,7 @@ class GraphRAGService:
             SubgraphInsight with structured analysis.
         """
         # Step 1: Find relevant community summaries via LanceDB
-        relevant_summaries = await self._search_community_summaries(
-            session_id, query, top_k=3
-        )
+        relevant_summaries = await self._search_community_summaries(session_id, query, top_k=3)
 
         if not relevant_summaries:
             raise ValueError("No community summaries available for semantic query")
@@ -514,12 +512,10 @@ class GraphRAGService:
         )
 
         community_text = "\n".join(
-            f"- 社群 #{s['cluster_id']}（{s['member_count']} 人）：{s['core_narrative']}"
-            for s in relevant_summaries
+            f"- 社群 #{s['cluster_id']}（{s['member_count']} 人）：{s['core_narrative']}" for s in relevant_summaries
         )
         edge_text = "\n".join(
-            f"- {e['source']} --[{e['relation']}]--> {e['target']} (w={e['weight']:.2f})"
-            for e in subgraph_edges[:30]
+            f"- {e['source']} --[{e['relation']}]--> {e['target']} (w={e['weight']:.2f})" for e in subgraph_edges[:30]
         )
 
         user_prompt = SUBGRAPH_INSIGHT_USER.format(
@@ -568,8 +564,9 @@ class GraphRAGService:
             table_name = f"cs_{session_id.replace('-', '')[:12]}"
 
             def _search() -> list[dict[str, Any]]:
-                import lancedb  # noqa: PLC0415
                 from pathlib import Path  # noqa: PLC0415
+
+                import lancedb  # noqa: PLC0415
 
                 db = lancedb.connect(str(Path("data/vector_store")))
                 try:
@@ -583,7 +580,7 @@ class GraphRAGService:
             lance_results = await asyncio.to_thread(_search)
             if lance_results:
                 # Enrich with full summary data from SQLite
-                                # Decode: memory_id = cluster_id * 100000 + round_number
+                # Decode: memory_id = cluster_id * 100000 + round_number
                 cluster_ids = [int(r.get("memory_id", 0)) // 100000 for r in lance_results]
                 return await self._load_summaries_by_clusters(session_id, cluster_ids)
         except Exception:
@@ -696,7 +693,7 @@ class GraphRAGService:
         for entity, pred_map in subject_predicates.items():
             predicates = list(pred_map.keys())
             for i, pred_a in enumerate(predicates):
-                for pred_b in predicates[i + 1:]:
+                for pred_b in predicates[i + 1 :]:
                     if (pred_a, pred_b) not in _OPPOSING_PAIRS and (pred_b, pred_a) not in _OPPOSING_PAIRS:
                         continue
 
@@ -717,16 +714,18 @@ class GraphRAGService:
                     total = len(agents_a) + len(agents_b)
                     score = (len(agents_a) * len(agents_b)) ** 0.5 / max(total, 1)
 
-                    conflicts.append(TripleConflict(
-                        entity=entity,
-                        predicate_a=pred_a,
-                        object_a=best_obj_a[0],
-                        agent_ids_a=sorted(agents_a),
-                        predicate_b=pred_b,
-                        object_b=best_obj_b[0],
-                        agent_ids_b=sorted(agents_b),
-                        conflict_score=round(score, 4),
-                    ))
+                    conflicts.append(
+                        TripleConflict(
+                            entity=entity,
+                            predicate_a=pred_a,
+                            object_a=best_obj_a[0],
+                            agent_ids_a=sorted(agents_a),
+                            predicate_b=pred_b,
+                            object_b=best_obj_b[0],
+                            agent_ids_b=sorted(agents_b),
+                            conflict_score=round(score, 4),
+                        )
+                    )
 
         conflicts.sort(key=lambda c: c.conflict_score, reverse=True)
         return conflicts
@@ -796,11 +795,14 @@ class GraphRAGService:
             for s in summaries_data
         )
 
-        conflict_text = "\n".join(
-            f"- **{c.entity}**：{len(c.agent_ids_a)} 人認為 [{c.predicate_a}→{c.object_a}] "
-            f"vs {len(c.agent_ids_b)} 人認為 [{c.predicate_b}→{c.object_b}]（衝突分數 {c.conflict_score:.2f}）"
-            for c in conflicts[:10]
-        ) or "(無明顯觀點衝突)"
+        conflict_text = (
+            "\n".join(
+                f"- **{c.entity}**：{len(c.agent_ids_a)} 人認為 [{c.predicate_a}→{c.object_a}] "
+                f"vs {len(c.agent_ids_b)} 人認為 [{c.predicate_b}→{c.object_b}]（衝突分數 {c.conflict_score:.2f}）"
+                for c in conflicts[:10]
+            )
+            or "(無明顯觀點衝突)"
+        )
 
         user_prompt = GLOBAL_NARRATIVE_USER.format(
             session_id=session_id,

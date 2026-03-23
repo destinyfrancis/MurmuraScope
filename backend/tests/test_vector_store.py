@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import asyncio
 import shutil
 import tempfile
-from pathlib import Path
 
 import pytest
 
@@ -116,10 +114,16 @@ class TestVectorStore:
         await tmp_store.add_memories(session_id, sample_memories)
 
         results_10 = await tmp_store.search(
-            session_id, "經濟", agent_id=10, top_k=10,
+            session_id,
+            "經濟",
+            agent_id=10,
+            top_k=10,
         )
         results_20 = await tmp_store.search(
-            session_id, "經濟", agent_id=20, top_k=10,
+            session_id,
+            "經濟",
+            agent_id=20,
+            top_k=10,
         )
         # Agent 10 has 4 memories, agent 20 has 1
         for r in results_10:
@@ -137,10 +141,7 @@ class TestVectorStore:
         assert len(results) > 0
         # Top result should be about finance/economy
         top_texts = [r.memory_text for r in results[:2]]
-        finance_related = any(
-            any(kw in t for kw in ["股市", "金融", "經濟", "加息"])
-            for t in top_texts
-        )
+        finance_related = any(any(kw in t for kw in ["股市", "金融", "經濟", "加息"]) for t in top_texts)
         assert finance_related, f"Expected finance-related top results, got: {top_texts}"
 
     @pytest.mark.asyncio

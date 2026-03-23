@@ -34,30 +34,31 @@ def _clamp(val: float, lo: float, hi: float) -> float:
 # ---------------------------------------------------------------------------
 
 # HKMA prudential bounds
-_LTV_CAP_MIN: float = 0.40   # HKMA has historically tightened to 40%
-_LTV_CAP_MAX: float = 0.70   # post-relaxation (2024) max
-_LTD_MIN: float = 0.50       # structural floor
-_LTD_MAX: float = 0.95       # HKMA soft ceiling
+_LTV_CAP_MIN: float = 0.40  # HKMA has historically tightened to 40%
+_LTV_CAP_MAX: float = 0.70  # post-relaxation (2024) max
+_LTD_MIN: float = 0.50  # structural floor
+_LTD_MAX: float = 0.95  # HKMA soft ceiling
 
 # Credit cycle sensitivity parameters
-_HIBOR_SPREAD_SENSITIVITY: float = 0.8    # spread moves ~80% of HIBOR delta
-_NPL_UNEMPLOYMENT_COEFF: float = 0.4      # 1pp unemployment → 0.4pp NPL
-_NPL_PROPERTY_COEFF: float = 0.3          # 10% CCL drop → 0.3pp NPL increase
-_CREDIT_IMPULSE_GDP_POS: float = 0.001    # +1% credit impulse → +0.1% GDP
-_CREDIT_IMPULSE_GDP_NEG: float = 0.0015   # -1% credit impulse → -0.15% GDP (asymmetric)
-_NPL_HSI_DRAG_THRESHOLD: float = 0.03     # NPL > 3% → HSI drag
-_NPL_HSI_DRAG_PER_PCT: float = 100.0      # -100 HSI per 1% NPL above threshold
+_HIBOR_SPREAD_SENSITIVITY: float = 0.8  # spread moves ~80% of HIBOR delta
+_NPL_UNEMPLOYMENT_COEFF: float = 0.4  # 1pp unemployment → 0.4pp NPL
+_NPL_PROPERTY_COEFF: float = 0.3  # 10% CCL drop → 0.3pp NPL increase
+_CREDIT_IMPULSE_GDP_POS: float = 0.001  # +1% credit impulse → +0.1% GDP
+_CREDIT_IMPULSE_GDP_NEG: float = 0.0015  # -1% credit impulse → -0.15% GDP (asymmetric)
+_NPL_HSI_DRAG_THRESHOLD: float = 0.03  # NPL > 3% → HSI drag
+_NPL_HSI_DRAG_PER_PCT: float = 100.0  # -100 HSI per 1% NPL above threshold
 _SPREAD_UNEMPLOYMENT_COEFF: float = 0.002  # high spread → business cost → unemployment
 
 # Retail mortgage constants
-_HKMA_MAX_LTV: float = 0.70           # 70% for properties < HK$10M (2024 relaxation)
+_HKMA_MAX_LTV: float = 0.70  # 70% for properties < HK$10M (2024 relaxation)
 _HKMA_MIN_RESERVE_RATIO: float = 0.08  # Basel III Tier-1 minimum
-_CRISIS_LTV_FLOOR: float = 0.40        # matches _LTV_CAP_MIN above
+_CRISIS_LTV_FLOOR: float = 0.40  # matches _LTV_CAP_MIN above
 
 
 # ---------------------------------------------------------------------------
 # BankState frozen dataclass
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class BankState:
@@ -67,20 +68,20 @@ class BankState:
     """
 
     # System-level balance sheet
-    total_loans_bn: float = 11_000.0        # HK total loans ~HKD 11 trillion
-    total_deposits_bn: float = 15_000.0     # HK total deposits ~HKD 15 trillion
-    loan_to_deposit_ratio: float = 0.733    # LTD ratio
-    mortgage_book_bn: float = 1_800.0       # mortgage book ~HKD 1.8 trillion
-    reserve_ratio: float = 0.08             # 8%
-    npl_ratio: float = 0.015                # ~1.5%
-    credit_impulse: float = 0.0             # d(credit_growth)/dt
-    credit_growth_yoy: float = 0.02         # 2% YoY
-    interbank_spread: float = 0.005         # 50bps
-    ltv_cap: float = 0.60                   # HKMA LTV cap
+    total_loans_bn: float = 11_000.0  # HK total loans ~HKD 11 trillion
+    total_deposits_bn: float = 15_000.0  # HK total deposits ~HKD 15 trillion
+    loan_to_deposit_ratio: float = 0.733  # LTD ratio
+    mortgage_book_bn: float = 1_800.0  # mortgage book ~HKD 1.8 trillion
+    reserve_ratio: float = 0.08  # 8%
+    npl_ratio: float = 0.015  # ~1.5%
+    credit_impulse: float = 0.0  # d(credit_growth)/dt
+    credit_growth_yoy: float = 0.02  # 2% YoY
+    interbank_spread: float = 0.005  # 50bps
+    ltv_cap: float = 0.60  # HKMA LTV cap
 
     # Retail / agent-facing fields
     bank_id: str = "representative_hk_bank"
-    systemic_risk_score: float = 0.0        # 0.0 = safe, 1.0 = crisis
+    systemic_risk_score: float = 0.0  # 0.0 = safe, 1.0 = crisis
 
     def to_dict(self) -> dict[str, Any]:
         """Serialise to a plain dict for JSON / DB storage."""
@@ -104,14 +105,15 @@ class BankState:
 # Retail credit dataclasses
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class CreditDecision:
     """Result of a bank's credit assessment for a single mortgage application."""
 
     approved: bool
-    approved_ltv: float            # actual LTV offered (may be < requested)
+    approved_ltv: float  # actual LTV offered (may be < requested)
     monthly_payment: float
-    rejection_reason: str | None   # None if approved
+    rejection_reason: str | None  # None if approved
     systemic_risk_score: float
 
 
@@ -120,14 +122,15 @@ class CreditCrunchSignal:
     """Signal emitted when the bank significantly tightens lending policy."""
 
     bank_id: str
-    severity: str                          # 'mild' | 'moderate' | 'severe'
-    ltv_reduction: float                   # absolute reduction in LTV cap
-    estimated_demand_suppression: float    # fraction of buyers priced out (0-1)
+    severity: str  # 'mild' | 'moderate' | 'severe'
+    ltv_reduction: float  # absolute reduction in LTV cap
+    estimated_demand_suppression: float  # fraction of buyers priced out (0-1)
 
 
 # ---------------------------------------------------------------------------
 # BankAgent
 # ---------------------------------------------------------------------------
+
 
 class BankAgent:
     """Models the HK banking system credit cycle.
@@ -280,11 +283,7 @@ class BankAgent:
 
         ltv_reduction = old_ltv - new_ltv
         if ltv_reduction > 0.05:
-            severity = (
-                "severe" if ltv_reduction > 0.15
-                else "moderate" if ltv_reduction > 0.08
-                else "mild"
-            )
+            severity = "severe" if ltv_reduction > 0.15 else "moderate" if ltv_reduction > 0.08 else "mild"
             suppression = min(0.8, ltv_reduction * 3.0)
             return CreditCrunchSignal(
                 bank_id=self._state.bank_id,
@@ -324,11 +323,7 @@ class BankAgent:
         monthly_rate = interest_rate / 12
         n = loan_term_years * 12
         if monthly_rate > 0 and n > 0:
-            monthly_payment = (
-                loan_amount
-                * (monthly_rate * (1 + monthly_rate) ** n)
-                / ((1 + monthly_rate) ** n - 1)
-            )
+            monthly_payment = loan_amount * (monthly_rate * (1 + monthly_rate) ** n) / ((1 + monthly_rate) ** n - 1)
         else:
             monthly_payment = loan_amount / n if n > 0 else 0.0
 

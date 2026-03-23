@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import os
 import sys
+from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import AsyncIterator
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiosqlite
@@ -31,22 +31,25 @@ if not os.environ.get("AUTH_SECRET_KEY"):
 _DB_FIXTURES = frozenset({"test_db", "test_db_path", "test_client"})
 
 # Modules that do inline DB setup (not via shared fixtures)
-_INTEGRATION_MODULES = frozenset({
-    "test_simulation_integration",
-    "test_e2e_dry_run",
-    "test_domain_api",
-    "test_report",
-    "test_data_integrity",
-    "test_data_pipeline",
-    "test_universal_engine_integration",
-    "test_pipeline_verification",
-})
+_INTEGRATION_MODULES = frozenset(
+    {
+        "test_simulation_integration",
+        "test_e2e_dry_run",
+        "test_domain_api",
+        "test_report",
+        "test_data_integrity",
+        "test_data_pipeline",
+        "test_universal_engine_integration",
+        "test_pipeline_verification",
+    }
+)
 
 
 @pytest.fixture(autouse=True)
 def _disable_rate_limiter():
     """Globally disable slowapi rate limiter for all tests."""
     from backend.app.api.auth import _limiter as _auth_limiter
+
     prev = _auth_limiter.enabled
     _auth_limiter.enabled = False
     yield
@@ -80,9 +83,7 @@ async def test_db(test_db_path) -> AsyncIterator[aiosqlite.Connection]:
 
     The connection is closed automatically after the test completes.
     """
-    schema_path = os.path.join(
-        os.path.dirname(__file__), "..", "database", "schema.sql"
-    )
+    schema_path = os.path.join(os.path.dirname(__file__), "..", "database", "schema.sql")
 
     db = await aiosqlite.connect(test_db_path)
     db.row_factory = aiosqlite.Row
@@ -116,6 +117,7 @@ async def test_client(tmp_path):
     # Disable rate limiting for this test to prevent in-memory counter
     # accumulation across test invocations sharing the same _limiter instance.
     from backend.app.api.auth import _limiter as _auth_limiter
+
     _auth_limiter.enabled = False
     try:
         with patch.dict(os.environ, {"DATABASE_PATH": test_db_file, "DEBUG": "false"}):
@@ -125,9 +127,7 @@ async def test_client(tmp_path):
             fresh_settings = config_mod.Settings()
             with patch.object(config_mod, "_settings", fresh_settings):
                 # Pre-initialise schema so tables exist when the app starts
-                schema_path = os.path.join(
-                    os.path.dirname(__file__), "..", "database", "schema.sql"
-                )
+                schema_path = os.path.join(os.path.dirname(__file__), "..", "database", "schema.sql")
                 async with aiosqlite.connect(test_db_file) as db:
                     with open(schema_path, encoding="utf-8") as f:
                         await db.executescript(f.read())
@@ -211,12 +211,12 @@ def sample_census_csv():
     """Return sample census CSV content for testing parsers."""
     return (
         "Year,Age Group,Sex,Population\n"
-        "2021,0-4,Male,\"123,456\"\n"
-        "2021,0-4,Female,\"118,234\"\n"
-        "2021,5-9,Male,\"130,000\"\n"
-        "2021,5-9,Female,\"125,500\"\n"
-        "2021,10-14,Male,\"140,200\"\n"
-        "2021,10-14,Female,\"135,800\"\n"
+        '2021,0-4,Male,"123,456"\n'
+        '2021,0-4,Female,"118,234"\n'
+        '2021,5-9,Male,"130,000"\n'
+        '2021,5-9,Female,"125,500"\n'
+        '2021,10-14,Male,"140,200"\n'
+        '2021,10-14,Female,"135,800"\n'
     )
 
 

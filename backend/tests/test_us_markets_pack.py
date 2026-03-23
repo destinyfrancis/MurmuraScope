@@ -2,17 +2,13 @@
 
 from __future__ import annotations
 
-import pytest
+import backend.app.domain.global_macro  # noqa: F401
 
 # Trigger registration
 import backend.app.domain.us_markets  # noqa: F401
-import backend.app.domain.global_macro  # noqa: F401
-
 from backend.app.domain.base import DomainPackRegistry
-from backend.app.domain.us_markets import US_MARKETS_PACK, US_DEMOGRAPHICS
-from backend.app.domain.global_macro import GLOBAL_MACRO_PACK
+from backend.app.domain.us_markets import US_DEMOGRAPHICS
 from backend.app.services.generic_macro import GenericMacroState
-
 
 # ---------------------------------------------------------------------------
 # US Markets pack: registration

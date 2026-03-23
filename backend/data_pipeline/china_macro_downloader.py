@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
 
 import httpx
 
@@ -90,13 +89,15 @@ def _parse_wb_response(
             if raw_value is None:
                 continue
             period = str(obs.get("date", "unknown"))
-            records.append(ChinaMacroRecord(
-                metric=metric,
-                value=round(float(raw_value), 4),
-                unit=unit,
-                period=period,
-                source="world_bank",
-            ))
+            records.append(
+                ChinaMacroRecord(
+                    metric=metric,
+                    value=round(float(raw_value), 4),
+                    unit=unit,
+                    period=period,
+                    source="world_bank",
+                )
+            )
         except (KeyError, ValueError, TypeError):
             continue
     return records
@@ -125,8 +126,6 @@ async def _fetch_world_bank(
     except (httpx.RequestError, httpx.TimeoutException, json.JSONDecodeError, ValueError) as exc:
         logger.debug("World Bank fetch failed for %s: %s", indicator, exc)
         return []
-
-
 
 
 # ---------------------------------------------------------------------------

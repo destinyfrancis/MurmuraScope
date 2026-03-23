@@ -47,9 +47,11 @@ async def test_cascade_delete_on_fresh_db(tmp_path) -> None:
 
         # Verify child rows exist
         for table in ("belief_states", "simulation_actions", "emotional_states"):
-            row = await (await db.execute(
-                f"SELECT COUNT(*) FROM {table} WHERE session_id = 'sess-fk-test'"  # noqa: S608
-            )).fetchone()
+            row = await (
+                await db.execute(
+                    f"SELECT COUNT(*) FROM {table} WHERE session_id = 'sess-fk-test'"  # noqa: S608
+                )
+            ).fetchone()
             assert row[0] == 1, f"Expected 1 row in {table}, got {row[0]}"
 
         # Delete the session — CASCADE should remove child rows
@@ -58,9 +60,11 @@ async def test_cascade_delete_on_fresh_db(tmp_path) -> None:
 
         # Verify cascade: all child rows should be gone
         for table in ("belief_states", "simulation_actions", "emotional_states"):
-            row = await (await db.execute(
-                f"SELECT COUNT(*) FROM {table} WHERE session_id = 'sess-fk-test'"  # noqa: S608
-            )).fetchone()
+            row = await (
+                await db.execute(
+                    f"SELECT COUNT(*) FROM {table} WHERE session_id = 'sess-fk-test'"  # noqa: S608
+                )
+            ).fetchone()
             assert row[0] == 0, f"CASCADE failed for {table}: {row[0]} rows remain"
 
 

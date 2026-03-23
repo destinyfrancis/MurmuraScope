@@ -3,6 +3,7 @@
 Sources: HKMA, C&SD, RVD, various public records.
 All values are approximate observed impacts.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

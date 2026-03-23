@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import dataclasses
 import math
-from typing import Any
 
 from backend.app.models.stock_forecast import (
     SignalContribution,
@@ -70,7 +69,7 @@ SIGNAL_WEIGHTS: dict[str, dict[str, float]] = {
         "sentiment_net": 0.030,
         "sentiment_momentum": 0.020,
         "negative_virality": -0.025,
-        "property_sentiment": 0.060,    # boosted for property-sensitive stocks
+        "property_sentiment": 0.060,  # boosted for property-sensitive stocks
         "finance_sentiment": 0.045,
         "emotional_valence": 0.012,
         "arousal_concentration": -0.018,
@@ -96,8 +95,8 @@ SIGNAL_WEIGHTS: dict[str, dict[str, float]] = {
         "emotional_valence": 0.010,
         "negative_virality": -0.010,
         "polarization_index": -0.008,
-        "hsi_sim_change": 0.025,        # HK↔US correlation
-        "taiwan_strait_risk": -0.080,   # major geopolitical risk to US tech
+        "hsi_sim_change": 0.025,  # HK↔US correlation
+        "taiwan_strait_risk": -0.080,  # major geopolitical risk to US tech
         "credit_stress": -0.020,
         "invest_ratio": 0.015,
         "emigration_rate": -0.010,
@@ -125,6 +124,7 @@ MIN_WEEKS_REQUIRED = 20
 # ---------------------------------------------------------------------------
 # Helper: week label arithmetic
 # ---------------------------------------------------------------------------
+
 
 def _week_sort_key(week_label: str) -> int:
     """Convert 'YYYY-WNN' to a sortable integer YYYYNN."""
@@ -160,6 +160,7 @@ def _week_label_offset(base_label: str, offset: int) -> str:
 # StockForecaster
 # ---------------------------------------------------------------------------
 
+
 class StockForecaster:
     """Produces 12-week forecasts for stocks/indices, optionally signal-adjusted."""
 
@@ -184,7 +185,9 @@ class StockForecaster:
         if len(history) < MIN_WEEKS_REQUIRED:
             logger.warning(
                 "Insufficient history for %s: %d weeks (need %d)",
-                ticker, len(history), MIN_WEEKS_REQUIRED,
+                ticker,
+                len(history),
+                MIN_WEEKS_REQUIRED,
             )
             empty_points: tuple[StockForecastPoint, ...] = ()
             return StockForecastResult(
@@ -262,8 +265,8 @@ class StockForecaster:
     ) -> tuple[list[StockForecastPoint], str, str]:
         """Fit AutoARIMA on weekly close history, return forecast points."""
         try:
-            import pandas as pd
             import numpy as np
+            import pandas as pd
 
             closes = [c for _, c in history]
             n = len(closes)
@@ -274,11 +277,13 @@ class StockForecaster:
                 n_jobs=1,
             )
 
-            df = pd.DataFrame({
-                "unique_id": ["ticker"] * n,
-                "ds": pd.date_range(end=pd.Timestamp.now(), periods=n, freq="W-FRI"),
-                "y": closes,
-            })
+            df = pd.DataFrame(
+                {
+                    "unique_id": ["ticker"] * n,
+                    "ds": pd.date_range(end=pd.Timestamp.now(), periods=n, freq="W-FRI"),
+                    "y": closes,
+                }
+            )
             sf.fit(df)
 
             pred = sf.predict(h=horizon, level=[80, 95])
@@ -286,7 +291,7 @@ class StockForecaster:
             # Assess fit quality via in-sample residual std relative to mean
             fitted_vals = sf.fitted_values_
             if fitted_vals is not None and len(fitted_vals) > 0:
-                residuals = np.array(closes[-len(fitted_vals):]) - fitted_vals["mean"].values
+                residuals = np.array(closes[-len(fitted_vals) :]) - fitted_vals["mean"].values
                 cv = float(np.std(residuals) / abs(np.mean(closes))) if np.mean(closes) != 0 else 1.0
                 fit_quality = "good" if cv < 0.05 else ("fair" if cv < 0.15 else "poor")
             else:
@@ -301,15 +306,17 @@ class StockForecaster:
                 hi80 = float(getattr(row, "AutoARIMA-hi-80", close_val * 1.05))
                 lo95 = float(getattr(row, "AutoARIMA-lo-95", close_val * 0.90))
                 hi95 = float(getattr(row, "AutoARIMA-hi-95", close_val * 1.10))
-                points.append(StockForecastPoint(
-                    week=week,
-                    close=max(close_val, 0.01),
-                    lower_80=max(lo80, 0.01),
-                    upper_80=max(hi80, 0.01),
-                    lower_95=max(lo95, 0.01),
-                    upper_95=max(hi95, 0.01),
-                    sentiment_adjusted=False,
-                ))
+                points.append(
+                    StockForecastPoint(
+                        week=week,
+                        close=max(close_val, 0.01),
+                        lower_80=max(lo80, 0.01),
+                        upper_80=max(hi80, 0.01),
+                        lower_95=max(lo95, 0.01),
+                        upper_95=max(hi95, 0.01),
+                        sentiment_adjusted=False,
+                    )
+                )
 
             return points, "AutoARIMA", fit_quality
 
@@ -352,15 +359,17 @@ class StockForecaster:
             half_80 = projected * vol * 1.282 * math.sqrt(t)
             half_95 = projected * vol * 1.960 * math.sqrt(t)
             week = _week_label_offset(base_week, t)
-            points.append(StockForecastPoint(
-                week=week,
-                close=max(projected, 0.01),
-                lower_80=max(projected - half_80, 0.01),
-                upper_80=max(projected + half_80, 0.01),
-                lower_95=max(projected - half_95, 0.01),
-                upper_95=max(projected + half_95, 0.01),
-                sentiment_adjusted=False,
-            ))
+            points.append(
+                StockForecastPoint(
+                    week=week,
+                    close=max(projected, 0.01),
+                    lower_80=max(projected - half_80, 0.01),
+                    upper_80=max(projected + half_80, 0.01),
+                    lower_95=max(projected - half_95, 0.01),
+                    upper_95=max(projected + half_95, 0.01),
+                    sentiment_adjusted=False,
+                )
+            )
 
         return points, "NaiveDrift", "fair"
 
@@ -397,15 +406,17 @@ class StockForecaster:
             new_hi80 = pt.upper_80 * factor
             new_lo95 = pt.lower_95 * factor
             new_hi95 = pt.upper_95 * factor
-            adjusted.append(dataclasses.replace(
-                pt,
-                close=max(new_close, 0.01),
-                lower_80=max(new_lo80, 0.01),
-                upper_80=max(new_hi80, 0.01),
-                lower_95=max(new_lo95, 0.01),
-                upper_95=max(new_hi95, 0.01),
-                sentiment_adjusted=True,
-            ))
+            adjusted.append(
+                dataclasses.replace(
+                    pt,
+                    close=max(new_close, 0.01),
+                    lower_80=max(new_lo80, 0.01),
+                    upper_80=max(new_hi80, 0.01),
+                    lower_95=max(new_lo95, 0.01),
+                    upper_95=max(new_hi95, 0.01),
+                    sentiment_adjusted=True,
+                )
+            )
 
         return adjusted, round(clamped_shift, 4)
 
@@ -429,13 +440,15 @@ class StockForecaster:
                 continue
             contrib = float(val) * weight
             direction = "bullish" if contrib > 0.001 else ("bearish" if contrib < -0.001 else "neutral")
-            contributions.append(SignalContribution(
-                signal_name=sig_name,
-                signal_value=float(val),
-                weight=weight,
-                contribution=contrib,
-                direction=direction,
-            ))
+            contributions.append(
+                SignalContribution(
+                    signal_name=sig_name,
+                    signal_value=float(val),
+                    weight=weight,
+                    contribution=contrib,
+                    direction=direction,
+                )
+            )
 
         # Sort by absolute contribution descending, take top 10
         top = sorted(contributions, key=lambda c: abs(c.contribution), reverse=True)[:10]
@@ -445,6 +458,7 @@ class StockForecaster:
 # ---------------------------------------------------------------------------
 # Utility
 # ---------------------------------------------------------------------------
+
 
 def _std(values: list[float]) -> float:
     """Population standard deviation."""

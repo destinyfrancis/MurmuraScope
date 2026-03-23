@@ -1,11 +1,12 @@
 """Tests for CalibrationTracker — prediction accuracy tracking."""
+
 from __future__ import annotations
 
 import os
-import pytest
-import pytest_asyncio
 from unittest.mock import patch
 
+import pytest
+import pytest_asyncio
 
 # ---------------------------------------------------------------------------
 # Fixtures: patch DATABASE_PATH so CalibrationTracker writes to a temp file
@@ -18,9 +19,11 @@ async def tracker(tmp_path):
     db_file = str(tmp_path / "calibration_test.db")
     with patch.dict(os.environ, {"DATABASE_PATH": db_file}):
         import backend.app.config as config_mod
+
         fresh = config_mod.Settings()
         with patch.object(config_mod, "_settings", fresh):
             from backend.app.services.calibration_tracker import CalibrationTracker
+
             t = CalibrationTracker()
             await t._ensure_schema()
             yield t
@@ -142,7 +145,7 @@ async def test_accuracy_by_metric(tracker):
     await tracker.record("sess_bm", "ccl_index", "down", -2.0, "2026-06-01")
 
     await tracker.verify("sess_bm", "hsi", "up", 28000)
-    await tracker.verify("sess_bm", "hsi", "up", 29000)   # second record: "down" vs "up" = miss
+    await tracker.verify("sess_bm", "hsi", "up", 29000)  # second record: "down" vs "up" = miss
     await tracker.verify("sess_bm", "ccl_index", "down", 140.0)
 
     by_metric = await tracker.get_accuracy_by_metric()

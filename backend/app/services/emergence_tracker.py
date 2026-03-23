@@ -3,10 +3,10 @@
 
 Active in kg_driven mode only.
 """
+
 from __future__ import annotations
 
 import math
-import uuid
 from dataclasses import dataclass
 from typing import Any
 
@@ -18,6 +18,7 @@ logger = get_logger(__name__)
 # ---------------------------------------------------------------------------
 # Data classes
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class FactionRecord:
@@ -61,6 +62,7 @@ class NarrativeEntry:
 # ---------------------------------------------------------------------------
 # FactionMapper
 # ---------------------------------------------------------------------------
+
 
 class FactionMapper:
     """Run Leiden (with Louvain fallback) community detection on agent interaction graph."""
@@ -118,8 +120,7 @@ class FactionMapper:
         )
 
     def _single_faction(
-        self, simulation_id: str, round_number: int,
-        agent_beliefs: dict[str, dict[str, float]]
+        self, simulation_id: str, round_number: int, agent_beliefs: dict[str, dict[str, float]]
     ) -> FactionSnapshot:
         all_agents = list(agent_beliefs.keys())
         record = FactionRecord(
@@ -141,27 +142,25 @@ class FactionMapper:
         # Try igraph Leiden first
         try:
             import igraph as ig  # noqa: PLC0415
+
             ig_graph = ig.Graph.from_networkx(G)
             leiden = ig_graph.community_leiden(objective_function="modularity", n_iterations=10, seed=42)
-            return {
-                node: membership
-                for node, membership in zip(G.nodes(), leiden.membership)
-            }
+            return {node: membership for node, membership in zip(G.nodes(), leiden.membership)}
         except Exception:
             pass
         # Fall back to python-louvain
         try:
             from community import best_partition  # noqa: PLC0415
+
             return best_partition(G, random_state=42)
         except Exception:
-            logger.warning(
-                "FactionMapper: neither igraph nor community available — single faction"
-            )
+            logger.warning("FactionMapper: neither igraph nor community available — single faction")
             return {n: 0 for n in G.nodes()}
 
     def _compute_modularity(self, G: Any, partition: dict[str, int]) -> float:
         try:
             from community import modularity  # noqa: PLC0415
+
             return modularity(partition, G)
         except Exception:
             return 0.0
@@ -170,6 +169,7 @@ class FactionMapper:
 # ---------------------------------------------------------------------------
 # TippingPointDetector
 # ---------------------------------------------------------------------------
+
 
 class TippingPointDetector:
     """Detect sudden shifts in population-wide belief distribution.
@@ -227,9 +227,12 @@ class TippingPointDetector:
 
         direction = self._classify_direction(current_beliefs, prev)
         logger.info(
-            "TippingPoint detected: round=%d fast_jsd=%.3f slow_jsd=%.3f "
-            "combined=%.3f direction=%s",
-            round_number, jsd, slow_jsd, combined_score, direction,
+            "TippingPoint detected: round=%d fast_jsd=%.3f slow_jsd=%.3f combined=%.3f direction=%s",
+            round_number,
+            jsd,
+            slow_jsd,
+            combined_score,
+            direction,
         )
         return TippingPoint(
             simulation_id=simulation_id,
@@ -324,6 +327,7 @@ class TippingPointDetector:
 # Private helpers
 # ---------------------------------------------------------------------------
 
+
 def _avg_beliefs(
     agent_ids: list[str],
     all_beliefs: dict[str, dict[str, float]],
@@ -386,16 +390,8 @@ def _jensen_shannon_divergence(p: list[float], q: list[float]) -> float:
     Uses log base 2 so result ∈ [0, 1].
     """
     m = [(pi + qi) / 2.0 for pi, qi in zip(p, q)]
-    kl_pm = sum(
-        pi * math.log2(pi / mi)
-        for pi, mi in zip(p, m)
-        if pi > 1e-12 and mi > 1e-12
-    )
-    kl_qm = sum(
-        qi * math.log2(qi / mi)
-        for qi, mi in zip(q, m)
-        if qi > 1e-12 and mi > 1e-12
-    )
+    kl_pm = sum(pi * math.log2(pi / mi) for pi, mi in zip(p, m) if pi > 1e-12 and mi > 1e-12)
+    kl_qm = sum(qi * math.log2(qi / mi) for qi, mi in zip(q, m) if qi > 1e-12 and mi > 1e-12)
     return min(1.0, max(0.0, (kl_pm + kl_qm) / 2.0))
 
 

@@ -13,9 +13,8 @@ Usage::
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any
 
 from backend.app.utils.db import get_db
 from backend.app.utils.logger import get_logger
@@ -30,10 +29,18 @@ _EXPECTED_FREQUENCY: dict[str, int] = {
 }
 
 # Categories with expected monthly frequency
-_MONTHLY_CATEGORIES: frozenset[str] = frozenset({
-    "interest_rate", "price_index", "market", "social_sentiment",
-    "retail_tourism", "weather", "transport", "fred",
-})
+_MONTHLY_CATEGORIES: frozenset[str] = frozenset(
+    {
+        "interest_rate",
+        "price_index",
+        "market",
+        "social_sentiment",
+        "retail_tourism",
+        "weather",
+        "transport",
+        "fred",
+    }
+)
 
 # Categories with quarterly/annual frequency
 _QUARTERLY_CATEGORIES: frozenset[str] = frozenset({"gdp", "employment"})
@@ -96,9 +103,7 @@ class DataQualityMonitor:
             Tuple of (total_records, missing_count).
         """
         async with get_db() as db:
-            cursor = await db.execute(
-                "SELECT COUNT(*) FROM hk_data_snapshots"
-            )
+            cursor = await db.execute("SELECT COUNT(*) FROM hk_data_snapshots")
             row = await cursor.fetchone()
             total = int(row[0]) if row else 0
 
@@ -186,15 +191,17 @@ class DataQualityMonitor:
             for period, value in points:
                 z = abs((value - mean) / std_dev)
                 if z > self._OUTLIER_Z_THRESHOLD:
-                    outliers.append(OutlierRecord(
-                        category=category,
-                        metric=metric,
-                        period=period,
-                        value=value,
-                        mean=round(mean, 4),
-                        std_dev=round(std_dev, 4),
-                        z_score=round(z, 2),
-                    ))
+                    outliers.append(
+                        OutlierRecord(
+                            category=category,
+                            metric=metric,
+                            period=period,
+                            value=value,
+                            mean=round(mean, 4),
+                            std_dev=round(std_dev, 4),
+                            z_score=round(z, 2),
+                        )
+                    )
 
         logger.debug("Outliers detected: %d", len(outliers))
         return tuple(outliers)
@@ -216,10 +223,7 @@ class DataQualityMonitor:
             )
             rows = await cursor.fetchall()
 
-        freshness: dict[str, str] = {
-            f"{row[0]}/{row[1]}": str(row[2])
-            for row in rows
-        }
+        freshness: dict[str, str] = {f"{row[0]}/{row[1]}": str(row[2]) for row in rows}
         logger.debug("Freshness check: %d distinct metric series", len(freshness))
         return freshness
 
@@ -278,10 +282,7 @@ class DataQualityMonitor:
         freshness = await self.check_freshness()
 
         # Identify stale metrics
-        stale_metrics = tuple(
-            key for key, period in freshness.items()
-            if self._is_stale(period)
-        )
+        stale_metrics = tuple(key for key, period in freshness.items() if self._is_stale(period))
 
         # Score calculation
         completeness_score = 40.0 * (1.0 - (missing / max(total, 1)))
@@ -307,9 +308,13 @@ class DataQualityMonitor:
         )
 
         logger.info(
-            "Data quality report: score=%.1f, records=%d, missing=%d, "
-            "duplicates=%d, outliers=%d, stale=%d",
-            score, total, missing, duplicates, len(outliers), len(stale_metrics),
+            "Data quality report: score=%.1f, records=%d, missing=%d, duplicates=%d, outliers=%d, stale=%d",
+            score,
+            total,
+            missing,
+            duplicates,
+            len(outliers),
+            len(stale_metrics),
         )
         return report
 

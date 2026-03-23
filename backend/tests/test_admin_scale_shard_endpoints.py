@@ -10,13 +10,11 @@ Covers:
 
 from __future__ import annotations
 
-import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
+import aiosqlite
 import pytest
 import pytest_asyncio
-import aiosqlite
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -156,8 +154,9 @@ def test_is_sharding_enabled_case_insensitive():
 
 
 def test_get_shard_coordinator_returns_none_when_disabled():
-    from backend.app.services.simulation_runner import SimulationRunner
     from pathlib import Path
+
+    from backend.app.services.simulation_runner import SimulationRunner
 
     runner = SimulationRunner(dry_run=True)
     with patch.dict("os.environ", {}, clear=True):
@@ -166,8 +165,9 @@ def test_get_shard_coordinator_returns_none_when_disabled():
 
 
 def test_get_shard_coordinator_creates_when_enabled():
-    from backend.app.services.simulation_runner import SimulationRunner
     from pathlib import Path
+
+    from backend.app.services.simulation_runner import SimulationRunner
 
     runner = SimulationRunner(dry_run=True)
     with patch.dict("os.environ", {"DB_SHARDING_ENABLED": "true"}):
@@ -244,9 +244,7 @@ async def test_profile_results_filter(bench_db):
 
     # Query only profile_* rows
     rows = await (
-        await bench_db.execute(
-            "SELECT * FROM scale_benchmarks WHERE target_name LIKE 'profile_%'"
-        )
+        await bench_db.execute("SELECT * FROM scale_benchmarks WHERE target_name LIKE 'profile_%'")
     ).fetchall()
     assert len(rows) == 1
     assert rows[0]["target_name"] == "profile_100"
@@ -260,8 +258,8 @@ async def test_profile_results_filter(bench_db):
 @pytest.mark.asyncio
 async def test_profiler_persist_profile_preset(bench_db):
     """ScaleProfiler persists profile_* preset names that match endpoint filter."""
-    from backend.app.services.scale_profiler import ScaleProfiler
     from backend.app.models.scale import HookTiming
+    from backend.app.services.scale_profiler import ScaleProfiler
 
     profiler = ScaleProfiler()
     profiler._timings = [
@@ -272,9 +270,7 @@ async def test_profiler_persist_profile_preset(bench_db):
     await profiler.persist(result, bench_db)
 
     rows = await (
-        await bench_db.execute(
-            "SELECT * FROM scale_benchmarks WHERE target_name LIKE 'profile_%'"
-        )
+        await bench_db.execute("SELECT * FROM scale_benchmarks WHERE target_name LIKE 'profile_%'")
     ).fetchall()
     assert len(rows) == 1
     assert rows[0]["agent_count"] == 300

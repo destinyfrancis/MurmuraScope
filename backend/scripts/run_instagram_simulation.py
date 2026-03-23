@@ -48,8 +48,7 @@ try:
 except ImportError as exc:
     logger.error("OASIS not installed: %s", exc)
     print(
-        json.dumps({"type": "error", "data": {"platform": "instagram", "message": str(exc)}},
-                   ensure_ascii=False),
+        json.dumps({"type": "error", "data": {"platform": "instagram", "message": str(exc)}}, ensure_ascii=False),
         flush=True,
     )
     sys.exit(1)
@@ -60,8 +59,7 @@ try:
 except ImportError as exc:
     logger.error("CAMEL-AI not installed: %s", exc)
     print(
-        json.dumps({"type": "error", "data": {"platform": "instagram", "message": str(exc)}},
-                   ensure_ascii=False),
+        json.dumps({"type": "error", "data": {"platform": "instagram", "message": str(exc)}}, ensure_ascii=False),
         flush=True,
     )
     sys.exit(1)
@@ -77,21 +75,23 @@ _IG_CAPTION_LIMIT = 200
 # IPC helpers
 # ---------------------------------------------------------------------------
 
+
 def emit(msg_type: str, data: dict[str, Any]) -> None:
     """Write a JSONL message to stdout."""
-    sys.stdout.write(
-        json.dumps({"type": msg_type, "data": data}, ensure_ascii=False) + "\n"
-    )
+    sys.stdout.write(json.dumps({"type": msg_type, "data": data}, ensure_ascii=False) + "\n")
     sys.stdout.flush()
 
 
 def emit_progress(current: int, total: int, detail: str = "") -> None:
-    emit("progress", {
-        "platform": "instagram",
-        "round": current,
-        "total": total,
-        "detail": detail,
-    })
+    emit(
+        "progress",
+        {
+            "platform": "instagram",
+            "round": current,
+            "total": total,
+            "detail": detail,
+        },
+    )
 
 
 def emit_new_posts(db_path: str, round_num: int, last_post_id: int) -> int:
@@ -118,13 +118,16 @@ def emit_new_posts(db_path: str, round_num: int, last_post_id: int) -> int:
             content = (row["content"] or "").strip()
             if not content:
                 continue
-            emit("post", {
-                "platform": "instagram",
-                "source": "agent",
-                "username": row["name"] or "Agent",
-                "content": content[:_IG_CAPTION_LIMIT],
-                "round": round_num,
-            })
+            emit(
+                "post",
+                {
+                    "platform": "instagram",
+                    "source": "agent",
+                    "username": row["name"] or "Agent",
+                    "content": content[:_IG_CAPTION_LIMIT],
+                    "round": round_num,
+                },
+            )
         if rows:
             return max(row["post_id"] for row in rows)
     except Exception as exc:
@@ -133,16 +136,37 @@ def emit_new_posts(db_path: str, round_num: int, last_post_id: int) -> int:
 
 
 # Content actions whose info payload may contain post text
-_CONTENT_ACTIONS = frozenset({
-    "create_post", "repost", "quote_post", "create_comment",
-})
+_CONTENT_ACTIONS = frozenset(
+    {
+        "create_post",
+        "repost",
+        "quote_post",
+        "create_comment",
+    }
+)
 
-_TRACKED_ACTIONS = frozenset({
-    "create_post", "like_post", "unlike_post", "dislike_post",
-    "follow", "unfollow", "repost", "quote_post", "create_comment",
-    "like_comment", "dislike_comment", "do_nothing", "mute", "unmute",
-    "search_posts", "search_user", "trend", "refresh",
-})
+_TRACKED_ACTIONS = frozenset(
+    {
+        "create_post",
+        "like_post",
+        "unlike_post",
+        "dislike_post",
+        "follow",
+        "unfollow",
+        "repost",
+        "quote_post",
+        "create_comment",
+        "like_comment",
+        "dislike_comment",
+        "do_nothing",
+        "mute",
+        "unmute",
+        "search_posts",
+        "search_user",
+        "trend",
+        "refresh",
+    }
+)
 
 
 def emit_new_actions(db_path: str, round_num: int, last_trace_ts: str) -> str:
@@ -183,14 +207,17 @@ def emit_new_actions(db_path: str, round_num: int, last_trace_ts: str) -> str:
             except (json.JSONDecodeError, TypeError):
                 info = {}
 
-            emit("action", {
-                "platform": "instagram",
-                "source": "agent",
-                "action_type": action,
-                "username": username,
-                "round": round_num,
-                "info": info,
-            })
+            emit(
+                "action",
+                {
+                    "platform": "instagram",
+                    "source": "agent",
+                    "action_type": action,
+                    "username": username,
+                    "round": round_num,
+                    "info": info,
+                },
+            )
 
             ts = row["created_at"] or ""
             if ts > max_ts:
@@ -240,9 +267,8 @@ def build_model(config: dict[str, Any]) -> Any:
 # Shock injection
 # ---------------------------------------------------------------------------
 
-def get_shocks_for_round(
-    shocks: list[dict[str, Any]], round_num: int
-) -> list[dict[str, Any]]:
+
+def get_shocks_for_round(shocks: list[dict[str, Any]], round_num: int) -> list[dict[str, Any]]:
     """Return shocks scheduled for the given round number."""
     return [s for s in shocks if s.get("round_number") == round_num]
 
@@ -272,22 +298,25 @@ async def inject_shock(env: Any, agent_graph: Any, shock: dict[str, Any]) -> Non
             shock.get("shock_type", ""),
             shock.get("round_number", -1),
         )
-        emit("post", {
-            "platform": "instagram",
-            "source": "shock",
-            "shock_type": shock.get("shock_type", ""),
-            "round": shock.get("round_number", -1),
-            "content": post_content[:_IG_CAPTION_LIMIT],
-        })
+        emit(
+            "post",
+            {
+                "platform": "instagram",
+                "source": "shock",
+                "shock_type": shock.get("shock_type", ""),
+                "round": shock.get("round_number", -1),
+                "content": post_content[:_IG_CAPTION_LIMIT],
+            },
+        )
     except Exception as exc:
         logger.error("Shock injection failed: %s", exc)
-        emit("error", {
-            "platform": "instagram",
-            "message": (
-                f"Shock injection failed at round "
-                f"{shock.get('round_number')}: {exc}"
-            ),
-        })
+        emit(
+            "error",
+            {
+                "platform": "instagram",
+                "message": (f"Shock injection failed at round {shock.get('round_number')}: {exc}"),
+            },
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -329,7 +358,9 @@ async def run_instagram_simulation(config: dict[str, Any]) -> None:
 
     logger.info(
         "Starting Instagram simulation — session=%s rounds=%d csv=%s",
-        session_id, round_count, agent_csv,
+        session_id,
+        round_count,
+        agent_csv,
     )
     emit_progress(0, round_count, "Building LLM model")
 
@@ -406,24 +437,31 @@ async def run_instagram_simulation(config: dict[str, Any]) -> None:
             logger.info("Round %d/%d complete", round_num, round_count)
         except Exception as exc:
             logger.error("Round %d error: %s", round_num, exc)
-            emit("error", {
-                "platform": "instagram",
-                "round": round_num,
-                "message": str(exc),
-            })
+            emit(
+                "error",
+                {
+                    "platform": "instagram",
+                    "round": round_num,
+                    "message": str(exc),
+                },
+            )
 
-    emit("complete", {
-        "platform": "instagram",
-        "session_id": session_id,
-        "rounds_completed": last_round,
-        "total_rounds": round_count,
-        "agent_count": agent_count,
-        "total_actions": total_actions,
-        "db_path": db_path,
-    })
+    emit(
+        "complete",
+        {
+            "platform": "instagram",
+            "session_id": session_id,
+            "rounds_completed": last_round,
+            "total_rounds": round_count,
+            "agent_count": agent_count,
+            "total_actions": total_actions,
+            "db_path": db_path,
+        },
+    )
     logger.info(
         "Instagram simulation complete — %d rounds, %d total actions",
-        last_round, total_actions,
+        last_round,
+        total_actions,
     )
 
 
@@ -431,10 +469,9 @@ async def run_instagram_simulation(config: dict[str, Any]) -> None:
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="MurmuraScope Instagram Simulation (OASIS Twitter backend)"
-    )
+    parser = argparse.ArgumentParser(description="MurmuraScope Instagram Simulation (OASIS Twitter backend)")
     parser.add_argument("--config", required=True, help="Config JSON path")
     args = parser.parse_args()
 

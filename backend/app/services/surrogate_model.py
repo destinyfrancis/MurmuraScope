@@ -13,6 +13,7 @@ Usage::
     if result.is_fitted:
         prob_dist = result.predict_distribution({"x": 0.7, "y": 0.3})
 """
+
 from __future__ import annotations
 
 import json
@@ -34,6 +35,7 @@ class SurrogateModelResult:
     Note: Not frozen — sklearn model objects are mutable.
     Access via predict() / predict_distribution() only.
     """
+
     is_fitted: bool
     n_classes: int
     classes: list[str]
@@ -79,12 +81,13 @@ class SurrogateModel:
             SurrogateModelResult (fitted or unfitted).
         """
         if not rows or len(rows) < _MIN_TRAINING_ROWS:
-            logger.info(
-                "SurrogateModel: insufficient rows (%d < %d)", len(rows), _MIN_TRAINING_ROWS
-            )
+            logger.info("SurrogateModel: insufficient rows (%d < %d)", len(rows), _MIN_TRAINING_ROWS)
             return SurrogateModelResult(
-                is_fitted=False, n_classes=0, classes=[],
-                train_accuracy=0.0, metrics_used=metrics,
+                is_fitted=False,
+                n_classes=0,
+                classes=[],
+                train_accuracy=0.0,
+                metrics_used=metrics,
             )
 
         try:
@@ -92,8 +95,11 @@ class SurrogateModel:
         except ImportError:
             logger.error("scikit-learn not installed")
             return SurrogateModelResult(
-                is_fitted=False, n_classes=0, classes=[],
-                train_accuracy=0.0, metrics_used=metrics,
+                is_fitted=False,
+                n_classes=0,
+                classes=[],
+                train_accuracy=0.0,
+                metrics_used=metrics,
             )
 
         X, y = [], []
@@ -103,9 +109,7 @@ class SurrogateModel:
                 # tests pass dicts directly)
                 row_dict = row if isinstance(row, dict) else dict(row)
                 snapshot_raw = row_dict.get("belief_snapshot", "{}")
-                snapshot: dict[str, float] = (
-                    json.loads(snapshot_raw) if isinstance(snapshot_raw, str) else {}
-                )
+                snapshot: dict[str, float] = json.loads(snapshot_raw) if isinstance(snapshot_raw, str) else {}
                 label = row_dict.get(outcome_col)
                 if not label:
                     continue
@@ -116,8 +120,11 @@ class SurrogateModel:
 
         if len(X) < _MIN_TRAINING_ROWS or len(set(y)) < 2:
             return SurrogateModelResult(
-                is_fitted=False, n_classes=0, classes=[],
-                train_accuracy=0.0, metrics_used=metrics,
+                is_fitted=False,
+                n_classes=0,
+                classes=[],
+                train_accuracy=0.0,
+                metrics_used=metrics,
             )
 
         clf = LogisticRegression(max_iter=300, C=1.0, solver="lbfgs")
@@ -127,7 +134,9 @@ class SurrogateModel:
 
         logger.info(
             "SurrogateModel trained: %d rows, %d classes, train_acc=%.3f",
-            len(X), len(classes), accuracy,
+            len(X),
+            len(classes),
+            accuracy,
         )
         return SurrogateModelResult(
             is_fitted=True,
@@ -174,8 +183,11 @@ class SurrogateModel:
 
         if not rows:
             return SurrogateModelResult(
-                is_fitted=False, n_classes=0, classes=[],
-                train_accuracy=0.0, metrics_used=metrics or [],
+                is_fitted=False,
+                n_classes=0,
+                classes=[],
+                train_accuracy=0.0,
+                metrics_used=metrics or [],
             )
 
         # Infer metrics from first valid snapshot if not provided
@@ -191,10 +203,5 @@ class SurrogateModel:
                     pass
         inferred_metrics = inferred_metrics or []
 
-        dict_rows = [
-            {"decision_type": r[2], "belief_snapshot": r[3]}
-            for r in rows
-        ]
-        return self.train_from_rows(
-            dict_rows, outcome_col="decision_type", metrics=inferred_metrics
-        )
+        dict_rows = [{"decision_type": r[2], "belief_snapshot": r[3]} for r in rows]
+        return self.train_from_rows(dict_rows, outcome_col="decision_type", metrics=inferred_metrics)

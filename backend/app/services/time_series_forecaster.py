@@ -59,18 +59,25 @@ METRIC_DB_MAP: dict[str, tuple[str, str]] = {
 
 SUPPORTED_METRICS: frozenset[str] = frozenset(METRIC_DB_MAP)
 
-_MIN_ARIMA_POINTS = 16       # min points for AutoARIMA
-_MIN_VAR_POINTS: int = 32    # min points per series for VAR multivariate forecast
+_MIN_ARIMA_POINTS = 16  # min points for AutoARIMA
+_MIN_VAR_POINTS: int = 32  # min points per series for VAR multivariate forecast
 _MIN_AUTO_SELECT_POINTS = 24  # trigger auto-model selection
-_HOLDOUT_WINDOW = 4           # holdout MAPE evaluation window
-_DEFAULT_SEASON = 4           # default quarterly seasonal period
+_HOLDOUT_WINDOW = 4  # holdout MAPE evaluation window
+_DEFAULT_SEASON = 4  # default quarterly seasonal period
 
 # Task 2.5 — season_length per metric (4=quarterly, 12=monthly)
 _SEASONAL_METRICS: dict[str, int] = {
-    "ccl_index": 4, "unemployment_rate": 4, "gdp_growth": 4,
-    "consumer_confidence": 4, "hsi_level": 12, "cpi_yoy": 12,
-    "hibor_1m": 12, "prime_rate": 4, "net_migration": 4,
-    "retail_sales_index": 4, "tourist_arrivals": 4,
+    "ccl_index": 4,
+    "unemployment_rate": 4,
+    "gdp_growth": 4,
+    "consumer_confidence": 4,
+    "hsi_level": 12,
+    "cpi_yoy": 12,
+    "hibor_1m": 12,
+    "prime_rate": 4,
+    "net_migration": 4,
+    "retail_sales_index": 4,
+    "tourist_arrivals": 4,
 }
 
 # Q1 Lunar New Year + Q4 year-end seasonal adjustments (metric, quarter, delta)
@@ -159,11 +166,10 @@ class TimeSeriesForecaster:
         metric_db_map = METRIC_DB_MAP
         try:
             from backend.app.domain.base import DomainPackRegistry  # noqa: PLC0415
+
             pack = DomainPackRegistry.get(domain_pack_id)
             if pack.metrics:
-                metric_db_map = {
-                    m.name: (m.db_category, m.db_metric) for m in pack.metrics
-                }
+                metric_db_map = {m.name: (m.db_category, m.db_metric) for m in pack.metrics}
         except (KeyError, ImportError):
             pass
 
@@ -177,19 +183,25 @@ class TimeSeriesForecaster:
         n = len(history)
         logger.info(
             "Forecasting metric=%s horizon=%d n_historical=%d",
-            metric, horizon, n,
+            metric,
+            horizon,
+            n,
         )
 
         # Minimum data threshold — fall back to NaiveForecaster when insufficient data
         if n < _MIN_ARIMA_POINTS:
             dq = "no_data" if n == 0 else "insufficient"
             logger.warning(
-                "Insufficient data for ARIMA metric=%s — %d data points (minimum %d), "
-                "falling back to NaiveForecaster",
-                metric, n, _MIN_ARIMA_POINTS,
+                "Insufficient data for ARIMA metric=%s — %d data points (minimum %d), falling back to NaiveForecaster",
+                metric,
+                n,
+                _MIN_ARIMA_POINTS,
             )
             return self._fallback_naive_forecaster(
-                metric, history, horizon, data_quality=dq,
+                metric,
+                history,
+                horizon,
+                data_quality=dq,
             )
 
         # Classify data quality
@@ -201,6 +213,7 @@ class TimeSeriesForecaster:
             from backend.app.services.structural_break_detector import (  # noqa: PLC0415
                 detect_structural_breaks,
             )
+
             break_detection = detect_structural_breaks(
                 [v for _, v in history],
                 min_series_length=20,
@@ -214,7 +227,7 @@ class TimeSeriesForecaster:
                     len(history),
                     len(history) - break_detection.recommended_start_index,
                 )
-                history = history[break_detection.recommended_start_index:]
+                history = history[break_detection.recommended_start_index :]
                 n = len(history)
         except Exception as _bd_exc:
             logger.debug("Structural break detection skipped: %s", _bd_exc)
@@ -265,14 +278,13 @@ class TimeSeriesForecaster:
             Dict metric → ForecastResult, or None on failure.
         """
         from backend.app.services.var_forecaster import (  # noqa: PLC0415
-            VAR_GROUPS, VARForecaster,
+            VAR_GROUPS,
+            VARForecaster,
         )
 
         if group_name not in VAR_GROUPS:
             available = ", ".join(sorted(VAR_GROUPS))
-            raise ValueError(
-                f"Unknown VAR group '{group_name}'. Available: {available}"
-            )
+            raise ValueError(f"Unknown VAR group '{group_name}'. Available: {available}")
 
         horizon = max(1, min(horizon, 24))
         group_metrics = VAR_GROUPS[group_name]
@@ -292,7 +304,9 @@ class TimeSeriesForecaster:
         if qualified < 2:
             logger.info(
                 "VAR group=%s: only %d metrics have ≥%d obs (need ≥2), falling back",
-                group_name, qualified, _MIN_VAR_POINTS,
+                group_name,
+                qualified,
+                _MIN_VAR_POINTS,
             )
             return None
 
@@ -301,7 +315,10 @@ class TimeSeriesForecaster:
             series = {m: s for m, s in series.items() if len(s) >= _MIN_VAR_POINTS}
             logger.info(
                 "VAR group=%s: partial VAR with %d/%d metrics: %s",
-                group_name, len(series), len(group_metrics), list(series.keys()),
+                group_name,
+                len(series),
+                len(group_metrics),
+                list(series.keys()),
             )
 
         var = VARForecaster()
@@ -351,32 +368,37 @@ class TimeSeriesForecaster:
         if n < window_size + horizon:
             logger.info(
                 "Rolling forecast for metric=%s: only %d obs, returning empty list",
-                metric, n,
+                metric,
+                n,
             )
             return []
 
         rolling_points: list[ForecastPoint] = []
 
         for end in range(window_size, n - horizon + 1):
-            window = history[end - window_size: end]
+            window = history[end - window_size : end]
             target_period = history[end + horizon - 1][0]
 
             if HAS_STATSFORECAST and len(window) >= _MIN_ARIMA_POINTS:
                 try:
                     fc = self._forecast_arima(metric, window, horizon)
                     pt = fc.points[horizon - 1]
-                    rolling_points.append(ForecastPoint(
-                        period=target_period,
-                        value=pt.value,
-                        lower_80=pt.lower_80,
-                        upper_80=pt.upper_80,
-                        lower_95=pt.lower_95,
-                        upper_95=pt.upper_95,
-                    ))
+                    rolling_points.append(
+                        ForecastPoint(
+                            period=target_period,
+                            value=pt.value,
+                            lower_80=pt.lower_80,
+                            upper_80=pt.upper_80,
+                            lower_95=pt.lower_95,
+                            upper_95=pt.upper_95,
+                        )
+                    )
                 except Exception as exc:
                     logger.debug(
                         "Rolling ARIMA failed at end=%d for metric=%s: %s",
-                        end, metric, exc,
+                        end,
+                        metric,
+                        exc,
                     )
                     pt = self._naive_one_step(metric, window, horizon, target_period)
                     rolling_points.append(pt)
@@ -424,14 +446,16 @@ class TimeSeriesForecaster:
                 continue
 
             v = pt.value
-            adjusted.append(ForecastPoint(
-                period=pt.period,
-                value=round(v + adj_factor * abs(v), 6),
-                lower_80=round(pt.lower_80 + adj_factor * abs(pt.lower_80), 6),
-                upper_80=round(pt.upper_80 + adj_factor * abs(pt.upper_80), 6),
-                lower_95=round(pt.lower_95 + adj_factor * abs(pt.lower_95), 6),
-                upper_95=round(pt.upper_95 + adj_factor * abs(pt.upper_95), 6),
-            ))
+            adjusted.append(
+                ForecastPoint(
+                    period=pt.period,
+                    value=round(v + adj_factor * abs(v), 6),
+                    lower_80=round(pt.lower_80 + adj_factor * abs(pt.lower_80), 6),
+                    upper_80=round(pt.upper_80 + adj_factor * abs(pt.upper_80), 6),
+                    lower_95=round(pt.lower_95 + adj_factor * abs(pt.lower_95), 6),
+                    upper_95=round(pt.upper_95 + adj_factor * abs(pt.upper_95), 6),
+                )
+            )
 
         return adjusted
 
@@ -460,7 +484,7 @@ class TimeSeriesForecaster:
         holdout = max(holdout, 1)
 
         train_history = history[: n - holdout]
-        test_vals = np.array([v for _, v in history[n - holdout:]], dtype=np.float64)
+        test_vals = np.array([v for _, v in history[n - holdout :]], dtype=np.float64)
 
         import pandas as pd  # noqa: PLC0415
 
@@ -474,7 +498,7 @@ class TimeSeriesForecaster:
         pd_freq = "MS" if _is_monthly else "QS"
         sf_freq = "ME" if _is_monthly else "QE"
 
-        def _build_df(hist: list[tuple[str, float]]) -> "pd.DataFrame":
+        def _build_df(hist: list[tuple[str, float]]) -> pd.DataFrame:
             periods = [h[0] for h in hist]
             values = np.array([h[1] for h in hist], dtype=np.float64)
             first = periods[0] if periods else "2019-Q1"
@@ -489,11 +513,13 @@ class TimeSeriesForecaster:
                 start_date = f"{start_year}-{start_month:02d}-01"
             except (ValueError, IndexError):
                 start_date = "2019-01-01"
-            return pd.DataFrame({
-                "unique_id": ["hk"] * len(values),
-                "ds": pd.date_range(start_date, periods=len(values), freq=pd_freq),
-                "y": values,
-            })
+            return pd.DataFrame(
+                {
+                    "unique_id": ["hk"] * len(values),
+                    "ds": pd.date_range(start_date, periods=len(values), freq=pd_freq),
+                    "y": values,
+                }
+            )
 
         candidates: list[tuple[str, Any]] = [
             ("AutoARIMA", AutoARIMA(season_length=season_length)),
@@ -520,9 +546,7 @@ class TimeSeriesForecaster:
                         0.0,
                     )
                 mape = float(np.mean(ape))
-                logger.debug(
-                    "Model selection: model=%s holdout_mape=%.2f%%", model_name, mape * 100
-                )
+                logger.debug("Model selection: model=%s holdout_mape=%.2f%%", model_name, mape * 100)
                 if mape < best_mape:
                     best_mape = mape
                     best_name = model_name
@@ -570,9 +594,7 @@ class TimeSeriesForecaster:
             try:
                 parts = first_label.split("-")
                 start_year = int(parts[0])
-                start_q = (
-                    int(parts[1][1]) if len(parts) > 1 and parts[1].startswith("Q") else 1
-                )
+                start_q = int(parts[1][1]) if len(parts) > 1 and parts[1].startswith("Q") else 1
                 start_month = (start_q - 1) * 3 + 1
                 start_date = f"{start_year}-{start_month:02d}-01"
             except (ValueError, IndexError):
@@ -581,15 +603,15 @@ class TimeSeriesForecaster:
             # Use monthly frequency when season_length=12, else quarterly
             pd_freq = "MS" if season_length == 12 else "QS"
 
-            df = pd.DataFrame({
-                "unique_id": ["hk"] * len(values),
-                "ds": pd.date_range(start_date, periods=len(values), freq=pd_freq),
-                "y": values,
-            })
-            sf_freq = "ME" if season_length == 12 else "QE"
-            sf = StatsForecast(
-                models=[AutoETS(season_length=season_length)], freq=sf_freq, n_jobs=1
+            df = pd.DataFrame(
+                {
+                    "unique_id": ["hk"] * len(values),
+                    "ds": pd.date_range(start_date, periods=len(values), freq=pd_freq),
+                    "y": values,
+                }
             )
+            sf_freq = "ME" if season_length == 12 else "QE"
+            sf = StatsForecast(models=[AutoETS(season_length=season_length)], freq=sf_freq, n_jobs=1)
             sf.fit(df)
             forecast_df = sf.predict(h=horizon, level=[80, 95])
 
@@ -597,14 +619,16 @@ class TimeSeriesForecaster:
             for i in range(horizon):
                 row = forecast_df.iloc[i]
                 pt_val = float(row.get("AutoETS", row.iloc[-1]))
-                points.append(ForecastPoint(
-                    period=next_labels[i],
-                    value=pt_val,
-                    lower_80=float(row.get("AutoETS-lo-80", pt_val * 0.95)),
-                    upper_80=float(row.get("AutoETS-hi-80", pt_val * 1.05)),
-                    lower_95=float(row.get("AutoETS-lo-95", pt_val * 0.92)),
-                    upper_95=float(row.get("AutoETS-hi-95", pt_val * 1.08)),
-                ))
+                points.append(
+                    ForecastPoint(
+                        period=next_labels[i],
+                        value=pt_val,
+                        lower_80=float(row.get("AutoETS-lo-80", pt_val * 0.95)),
+                        upper_80=float(row.get("AutoETS-hi-80", pt_val * 1.05)),
+                        lower_95=float(row.get("AutoETS-lo-95", pt_val * 0.92)),
+                        upper_95=float(row.get("AutoETS-hi-95", pt_val * 1.08)),
+                    )
+                )
 
             # Task 2.5: apply seasonal adjustment after fitting
             points = self._apply_seasonal_adjustment(points, metric, last_label)
@@ -617,6 +641,7 @@ class TimeSeriesForecaster:
             }
             try:
                 from statsmodels.stats.diagnostic import acorr_ljungbox  # noqa: PLC0415
+
                 resid = values - np.concatenate([[values[0]], values[:-1]])
                 lb_lags = min(10, max(1, len(resid) // 5))
                 lb_result = acorr_ljungbox(resid, lags=lb_lags, return_df=True)
@@ -627,6 +652,7 @@ class TimeSeriesForecaster:
             # Phase 6C: structural break detection
             try:
                 from backend.app.services.validation_suite import validate_structural_breaks  # noqa: PLC0415
+
                 diagnostics["structural_breaks"] = validate_structural_breaks(
                     series=values.tolist(),
                     periods=periods,
@@ -658,9 +684,7 @@ class TimeSeriesForecaster:
         """Load (period, value) pairs from DB; falls back to hardcoded baseline."""
         resolved_map = metric_db_map if metric_db_map is not None else METRIC_DB_MAP
         if metric not in resolved_map:
-            logger.warning(
-                "_load_history: metric '%s' not in metric_db_map — returning empty", metric
-            )
+            logger.warning("_load_history: metric '%s' not in metric_db_map — returning empty", metric)
             return []
         category, metric_key = resolved_map[metric]
         records: list[tuple[str, float]] = []
@@ -715,14 +739,10 @@ class TimeSeriesForecaster:
                             continue
 
         except Exception:
-            logger.warning(
-                "Could not load history for metric=%s from DB, using fallback", metric
-            )
+            logger.warning("Could not load history for metric=%s from DB, using fallback", metric)
 
         if not records:
-            logger.warning(
-                "No real data available for metric=%s — forecast will be refused", metric
-            )
+            logger.warning("No real data available for metric=%s — forecast will be refused", metric)
 
         return records
 
@@ -746,6 +766,7 @@ class TimeSeriesForecaster:
             sf_freq = "ME" if season_length == 12 else "QE"
 
             import pandas as pd  # noqa: PLC0415
+
             first_label = periods[0] if periods else "2019-Q1"
             try:
                 parts = first_label.split("-")
@@ -756,11 +777,13 @@ class TimeSeriesForecaster:
             except (ValueError, IndexError):
                 start_date = "2019-01-01"
 
-            df = pd.DataFrame({
-                "unique_id": ["hk"] * len(values),
-                "ds": pd.date_range(start_date, periods=len(values), freq=pd_freq),
-                "y": values,
-            })
+            df = pd.DataFrame(
+                {
+                    "unique_id": ["hk"] * len(values),
+                    "ds": pd.date_range(start_date, periods=len(values), freq=pd_freq),
+                    "y": values,
+                }
+            )
 
             # Check model cache: reuse fitted model if data length changed by <=2
             cached = self._model_cache.get(metric)
@@ -806,6 +829,7 @@ class TimeSeriesForecaster:
             }
             try:
                 from statsmodels.stats.diagnostic import acorr_ljungbox  # noqa: PLC0415
+
                 resid = values - np.concatenate([[values[0]], values[:-1]])  # naive residuals
                 lb_lags = min(10, max(1, len(resid) // 5))
                 lb_result = acorr_ljungbox(resid, lags=lb_lags, return_df=True)
@@ -813,7 +837,8 @@ class TimeSeriesForecaster:
                 if diagnostics["ljung_box_p"] < 0.05:
                     logger.info(
                         "Ljung-Box p=%.4f < 0.05 for metric=%s — residual autocorrelation detected",
-                        diagnostics["ljung_box_p"], metric,
+                        diagnostics["ljung_box_p"],
+                        metric,
                     )
             except Exception:
                 diagnostics["ljung_box_p"] = None
@@ -827,6 +852,7 @@ class TimeSeriesForecaster:
             # Phase 6C: structural break detection
             try:
                 from backend.app.services.validation_suite import validate_structural_breaks  # noqa: PLC0415
+
                 diagnostics["structural_breaks"] = validate_structural_breaks(
                     series=values.tolist(),
                     periods=periods,
@@ -843,9 +869,7 @@ class TimeSeriesForecaster:
                 diagnostics=diagnostics,
             )
         except Exception as exc:
-            logger.warning(
-                "AutoARIMA failed for metric=%s (%s), falling back to naive", metric, exc
-            )
+            logger.warning("AutoARIMA failed for metric=%s (%s), falling back to naive", metric, exc)
             return self._forecast_naive(metric, history, horizon)
 
     def _fallback_naive_forecaster(
@@ -867,8 +891,11 @@ class TimeSeriesForecaster:
         if len(values) < 8:
             dq = "no_data" if not values else "insufficient"
             return ForecastResult(
-                metric=metric, horizon=horizon, points=[],
-                model_used="naive_fallback", fit_quality=0.0,
+                metric=metric,
+                horizon=horizon,
+                points=[],
+                model_used="naive_fallback",
+                fit_quality=0.0,
                 data_quality=dq,
             )
 
@@ -895,18 +922,23 @@ class TimeSeriesForecaster:
             h = h_idx + 1
             spread_80 = sigma * math.sqrt(h) * 1.28
             spread_95 = sigma * math.sqrt(h) * 1.96
-            points.append(ForecastPoint(
-                period=label,
-                value=round(pt_val, 4),
-                lower_80=round(pt_val - spread_80, 4),
-                upper_80=round(pt_val + spread_80, 4),
-                lower_95=round(pt_val - spread_95, 4),
-                upper_95=round(pt_val + spread_95, 4),
-            ))
+            points.append(
+                ForecastPoint(
+                    period=label,
+                    value=round(pt_val, 4),
+                    lower_80=round(pt_val - spread_80, 4),
+                    upper_80=round(pt_val + spread_80, 4),
+                    lower_95=round(pt_val - spread_95, 4),
+                    upper_95=round(pt_val + spread_95, 4),
+                )
+            )
 
         return ForecastResult(
-            metric=metric, horizon=horizon, points=points,
-            model_used="naive_fallback_drift", fit_quality=0.0,
+            metric=metric,
+            horizon=horizon,
+            points=points,
+            model_used="naive_fallback_drift",
+            fit_quality=0.0,
             data_quality=data_quality,
         )
 
@@ -956,14 +988,16 @@ class TimeSeriesForecaster:
             pt_val = last_val + drift * h
             spread_80 = sigma * math.sqrt(h) * 1.28
             spread_95 = sigma * math.sqrt(h) * 1.96
-            points.append(ForecastPoint(
-                period=next_labels[h - 1],
-                value=round(pt_val, 4),
-                lower_80=round(pt_val - spread_80, 4),
-                upper_80=round(pt_val + spread_80, 4),
-                lower_95=round(pt_val - spread_95, 4),
-                upper_95=round(pt_val + spread_95, 4),
-            ))
+            points.append(
+                ForecastPoint(
+                    period=next_labels[h - 1],
+                    value=round(pt_val, 4),
+                    lower_80=round(pt_val - spread_80, 4),
+                    upper_80=round(pt_val + spread_80, 4),
+                    lower_95=round(pt_val - spread_95, 4),
+                    upper_95=round(pt_val + spread_95, 4),
+                )
+            )
 
         # Task 2.5: apply seasonal adjustment to RW drift forecasts too
         points = self._apply_seasonal_adjustment(points, metric, last_label)
@@ -1004,13 +1038,13 @@ class TimeSeriesForecaster:
             return 0.0
         test_start = max(1, int(n * 0.8))
         actuals = values[test_start:]
-        preds = values[test_start - 1: n - 1]  # naive 1-step
+        preds = values[test_start - 1 : n - 1]  # naive 1-step
         with np.errstate(divide="ignore", invalid="ignore"):
             ape = np.where(actuals != 0, np.abs((actuals - preds) / actuals), 0.0)
         return float(np.mean(ape))
 
     @staticmethod
-    def _diagnose_residuals(residuals: "np.ndarray") -> "dict | None":
+    def _diagnose_residuals(residuals: np.ndarray) -> dict | None:
         """Run Jarque-Bera normality test and Engle's ARCH test on residuals.
 
         Args:

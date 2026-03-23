@@ -3,6 +3,7 @@
 Proves every major service in both hk_demographic and kg_driven paths is
 exercised with realistic data flowing through the full pipeline.
 """
+
 from __future__ import annotations
 
 import json
@@ -79,17 +80,52 @@ _SCENARIO_FIXTURE: dict = {
         },
     ],
     "metrics": [
-        {"id": "oil_price_stability", "label": "Oil Price Stability", "description": "Global oil price stability", "initial_value": 0.5},
-        {"id": "regional_tension", "label": "Regional Tension", "description": "Middle East tension index", "initial_value": 0.7},
-        {"id": "diplomatic_trust", "label": "Diplomatic Trust", "description": "Inter-state trust level", "initial_value": 0.3},
+        {
+            "id": "oil_price_stability",
+            "label": "Oil Price Stability",
+            "description": "Global oil price stability",
+            "initial_value": 0.5,
+        },
+        {
+            "id": "regional_tension",
+            "label": "Regional Tension",
+            "description": "Middle East tension index",
+            "initial_value": 0.7,
+        },
+        {
+            "id": "diplomatic_trust",
+            "label": "Diplomatic Trust",
+            "description": "Inter-state trust level",
+            "initial_value": 0.3,
+        },
     ],
     "shock_types": [
-        {"id": "surprise_attack", "label": "Surprise Strike", "description": "Unexpected military strike", "affected_metrics": ["regional_tension"]},
-        {"id": "ceasefire_proposal", "label": "Ceasefire", "description": "Formal ceasefire offer", "affected_metrics": ["diplomatic_trust"]},
+        {
+            "id": "surprise_attack",
+            "label": "Surprise Strike",
+            "description": "Unexpected military strike",
+            "affected_metrics": ["regional_tension"],
+        },
+        {
+            "id": "ceasefire_proposal",
+            "label": "Ceasefire",
+            "description": "Formal ceasefire offer",
+            "affected_metrics": ["diplomatic_trust"],
+        },
     ],
     "impact_rules": [
-        {"decision_type_id": "military_escalation", "action": "escalate", "metric_id": "regional_tension", "delta_per_10": 5.0},
-        {"decision_type_id": "diplomatic_response", "action": "negotiate", "metric_id": "diplomatic_trust", "delta_per_10": 3.0},
+        {
+            "decision_type_id": "military_escalation",
+            "action": "escalate",
+            "metric_id": "regional_tension",
+            "delta_per_10": 5.0,
+        },
+        {
+            "decision_type_id": "diplomatic_response",
+            "action": "negotiate",
+            "metric_id": "diplomatic_trust",
+            "delta_per_10": 3.0,
+        },
     ],
 }
 
@@ -103,15 +139,33 @@ _DELIBERATION_FIXTURE: dict = {
 
 _IMPLICIT_STAKEHOLDER_FIXTURE: dict = {
     "stakeholders": [
-        {"id": "saudi_arabia", "name": "Saudi Arabia", "entity_type": "Country", "role": "Regional power", "relevance_reason": "Oil producer and regional actor"},
-        {"id": "opec", "name": "OPEC", "entity_type": "Organization", "role": "Oil cartel", "relevance_reason": "Controls oil supply"},
+        {
+            "id": "saudi_arabia",
+            "name": "Saudi Arabia",
+            "entity_type": "Country",
+            "role": "Regional power",
+            "relevance_reason": "Oil producer and regional actor",
+        },
+        {
+            "id": "opec",
+            "name": "OPEC",
+            "entity_type": "Organization",
+            "role": "Oil cartel",
+            "relevance_reason": "Controls oil supply",
+        },
     ],
 }
 
 _AGENT_PROFILE_FIXTURE: dict = {
     "agent_name": "Representative Agent",
     "entity_type": "Country",
-    "personality": {"openness": 0.6, "conscientiousness": 0.5, "extraversion": 0.4, "agreeableness": 0.5, "neuroticism": 0.3},
+    "personality": {
+        "openness": 0.6,
+        "conscientiousness": 0.5,
+        "extraversion": 0.4,
+        "agreeableness": 0.5,
+        "neuroticism": 0.3,
+    },
     "background": "A nation state actor in the conflict zone",
 }
 
@@ -125,18 +179,26 @@ async def _chat_json_router(messages: list[dict], **kw) -> dict:
     prompt = str(messages).lower()
     # Scenario generation check MUST come before the generic entity check
     # because the scenario prompt also contains "entity" keywords.
-    if "decision_type" in prompt or (
-        "scenario" in prompt and "simulation scenario" in prompt
-    ):
+    if "decision_type" in prompt or ("scenario" in prompt and "simulation scenario" in prompt):
         return _SCENARIO_FIXTURE
     if "entity" in prompt or "extract" in prompt:
         # EntityExtractor expects {"nodes": [...], "edges": [...]} format
         if "年青" in prompt or "樓" in prompt or "買樓" in prompt:
             return {
                 "nodes": [
-                    {"id": "hk_n0", "entity_type": "Person", "title": "年青夫婦", "description": "Young married couple"},
+                    {
+                        "id": "hk_n0",
+                        "entity_type": "Person",
+                        "title": "年青夫婦",
+                        "description": "Young married couple",
+                    },
                     {"id": "hk_n1", "entity_type": "Market", "title": "樓市", "description": "HK property market"},
-                    {"id": "hk_n2", "entity_type": "Indicator", "title": "CCL指數", "description": "Centa-City Leading Index"},
+                    {
+                        "id": "hk_n2",
+                        "entity_type": "Indicator",
+                        "title": "CCL指數",
+                        "description": "Centa-City Leading Index",
+                    },
                 ],
                 "edges": [
                     {"source_id": "hk_n0", "target_id": "hk_n1", "relation_type": "考慮買入", "weight": 0.7},
@@ -146,8 +208,18 @@ async def _chat_json_router(messages: list[dict], **kw) -> dict:
             "nodes": [
                 {"id": "kg_n0", "entity_type": "Country", "title": "USA", "description": "United States of America"},
                 {"id": "kg_n1", "entity_type": "Country", "title": "Iran", "description": "Islamic Republic of Iran"},
-                {"id": "kg_n2", "entity_type": "Location", "title": "Strait of Hormuz", "description": "Strategic waterway"},
-                {"id": "kg_n3", "entity_type": "Organization", "title": "UN Security Council", "description": "International body"},
+                {
+                    "id": "kg_n2",
+                    "entity_type": "Location",
+                    "title": "Strait of Hormuz",
+                    "description": "Strategic waterway",
+                },
+                {
+                    "id": "kg_n3",
+                    "entity_type": "Organization",
+                    "title": "UN Security Council",
+                    "description": "International body",
+                },
             ],
             "edges": [
                 {"source_id": "kg_n0", "target_id": "kg_n1", "relation_type": "military_conflict", "weight": 0.9},
@@ -474,9 +546,7 @@ class TestHKDemographicPipeline:
         # _run_dry emits 2 post events per round; with 6 rounds we expect >= 6 posts
         post_events = [e for e in events if e.get("type") == "post"]
         progress_events = [e for e in events if e.get("type") == "progress"]
-        assert len(post_events) >= 6, (
-            f"Expected >= 6 post events (2/round × ≥3 rounds), got {len(post_events)}"
-        )
+        assert len(post_events) >= 6, f"Expected >= 6 post events (2/round × ≥3 rounds), got {len(post_events)}"
         assert len(progress_events) >= 3, (
             f"Expected >= 3 progress events (1/round × ≥3 rounds), got {len(progress_events)}"
         )

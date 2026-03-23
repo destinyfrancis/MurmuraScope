@@ -5,6 +5,7 @@ This test suite verifies that:
 - Full exception details are logged, not returned to clients
 - Error handlers follow security best practices
 """
+
 import pytest
 
 
@@ -12,6 +13,7 @@ import pytest
 def test_create_app_returns_app():
     """App factory must return a valid FastAPI app (structural test for 500 handler setup)."""
     from backend.app import create_app
+
     app = create_app()
     assert app is not None
     assert hasattr(app, "router")

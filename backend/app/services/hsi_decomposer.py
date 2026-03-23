@@ -11,9 +11,7 @@ Design notes:
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
-from pathlib import Path
 
 import aiosqlite
 import numpy as np
@@ -125,7 +123,7 @@ def _fit_ols(
     fitted = x_mat @ betas
     residuals = hsi_returns - fitted
 
-    ss_res = float(np.sum(residuals ** 2))
+    ss_res = float(np.sum(residuals**2))
     ss_tot = float(np.sum((hsi_returns - np.mean(hsi_returns)) ** 2))
     r_squared = 1.0 - ss_res / ss_tot if ss_tot > 1e-12 else 0.0
     r_squared = max(0.0, min(r_squared, 1.0))
@@ -150,7 +148,7 @@ def _partial_r2(
     betas_m, _, _, _ = np.linalg.lstsq(x_macro, hsi_returns, rcond=None)
     fitted_m = x_macro @ betas_m
     residuals_m = hsi_returns - fitted_m
-    ss_res_m = float(np.sum(residuals_m ** 2))
+    ss_res_m = float(np.sum(residuals_m**2))
     ss_tot = float(np.sum((hsi_returns - np.mean(hsi_returns)) ** 2))
     r2 = 1.0 - ss_res_m / ss_tot if ss_tot > 1e-12 else 0.0
     return float(max(0.0, min(r2, 1.0)))
@@ -250,7 +248,9 @@ class HSIDecomposer:
 
         # Extended OLS with macro risk factors
         betas, residuals, r_squared = _fit_ols(
-            hsi_ret_arr, gdp_arr, hibor_arr,
+            hsi_ret_arr,
+            gdp_arr,
+            hibor_arr,
             rate_spread=rate_spread_arr,
             cny_change=cny_change_arr,
         )
@@ -277,13 +277,15 @@ class HSIDecomposer:
             )
             sentiment_comp = total_ret - fundamental_comp
 
-            decomps.append(HSIDecomposition(
-                period=period,
-                total_return=round(total_ret, 6),
-                fundamental_component=round(fundamental_comp, 6),
-                sentiment_component=round(sentiment_comp, 6),
-                interest_rate_component=round(interest_rate_comp, 6),
-            ))
+            decomps.append(
+                HSIDecomposition(
+                    period=period,
+                    total_return=round(total_ret, 6),
+                    fundamental_component=round(fundamental_comp, 6),
+                    sentiment_component=round(sentiment_comp, 6),
+                    interest_rate_component=round(interest_rate_comp, 6),
+                )
+            )
 
         return DecompositionResult(
             decompositions=tuple(decomps),
@@ -357,7 +359,8 @@ class HSIDecomposer:
             return {"rate_spread": 0.0, "usd_cny": 7.8}
 
     async def _load_hsi_prices(
-        self, n_quarters: int,
+        self,
+        n_quarters: int,
     ) -> list[tuple[str, float]]:
         """Load HSI quarterly close prices from market_data.
 
@@ -365,10 +368,7 @@ class HSIDecomposer:
         """
         async with aiosqlite.connect(self._db_path) as db:
             cursor = await db.execute(
-                "SELECT date, close FROM market_data "
-                "WHERE ticker = 'HSI' "
-                "ORDER BY date ASC "
-                "LIMIT ?",
+                "SELECT date, close FROM market_data WHERE ticker = 'HSI' ORDER BY date ASC LIMIT ?",
                 (n_quarters + 10,),
             )
             rows = await cursor.fetchall()

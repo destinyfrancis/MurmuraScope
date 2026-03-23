@@ -14,7 +14,6 @@ import math
 import numpy as np
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # B1: Random Walk with Drift
 # ---------------------------------------------------------------------------
@@ -37,9 +36,7 @@ class TestRWDrift:
         last_val = history[-1][1]  # 28.0
         for h, pt in enumerate(result.points, start=1):
             expected = last_val + 2.0 * h
-            assert abs(pt.value - expected) < 0.1, (
-                f"h={h}: expected ~{expected}, got {pt.value}"
-            )
+            assert abs(pt.value - expected) < 0.1, f"h={h}: expected ~{expected}, got {pt.value}"
 
     def test_ci_widens_with_horizon(self) -> None:
         """CI spread should grow proportionally to sqrt(h)."""
@@ -160,9 +157,7 @@ class TestARCH:
             e[t] = rng.normal(0, math.sqrt(sigma2[t]))
 
         result = validate_arch_effects(e.tolist(), "garch_test", lags=4)
-        assert result.has_arch_effects, (
-            f"ARCH test should detect effects in GARCH series, p={result.p_value}"
-        )
+        assert result.has_arch_effects, f"ARCH test should detect effects in GARCH series, p={result.p_value}"
 
     def test_arch_no_effects_white_noise(self) -> None:
         """ARCH test should find no effects in white noise."""
@@ -172,9 +167,7 @@ class TestARCH:
         white_noise = rng.normal(0, 1, size=200).tolist()
         result = validate_arch_effects(white_noise, "white_noise", lags=4)
         # White noise should NOT have ARCH effects (p > 0.05 most of the time)
-        assert not result.has_arch_effects, (
-            f"White noise should not have ARCH effects, p={result.p_value}"
-        )
+        assert not result.has_arch_effects, f"White noise should not have ARCH effects, p={result.p_value}"
 
     def test_arch_result_is_frozen(self) -> None:
         """ARCHTestResult should be a frozen dataclass."""

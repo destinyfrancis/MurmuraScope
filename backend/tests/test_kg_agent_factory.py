@@ -12,7 +12,6 @@ Coverage targets:
 from __future__ import annotations
 
 import csv
-import json
 import os
 from dataclasses import replace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -24,7 +23,6 @@ from backend.app.models.universal_agent_profile import (
     _make_username,
 )
 from backend.app.services.kg_agent_factory import KGAgentFactory, _clamp
-
 
 # ---------------------------------------------------------------------------
 # Fixtures and helpers
@@ -419,9 +417,7 @@ class TestGenerateFromKg:
         generation_response = {"agents": [_SAMPLE_LLM_AGENT]}
 
         mock_llm = MagicMock()
-        mock_llm.chat_json = AsyncMock(
-            side_effect=[filter_response, generation_response]
-        )
+        mock_llm.chat_json = AsyncMock(side_effect=[filter_response, generation_response])
         factory = KGAgentFactory(llm_client=mock_llm)
 
         profiles = await factory.generate_from_kg(
@@ -457,9 +453,7 @@ class TestGenerateFromKg:
 
         mock_llm = MagicMock()
         # First call (filter) succeeds, second call (generation) fails
-        mock_llm.chat_json = AsyncMock(
-            side_effect=[filter_response, RuntimeError("LLM down")]
-        )
+        mock_llm.chat_json = AsyncMock(side_effect=[filter_response, RuntimeError("LLM down")])
         factory = KGAgentFactory(llm_client=mock_llm)
 
         with pytest.raises(RuntimeError, match="LLM profile generation failed"):
@@ -558,10 +552,7 @@ class TestGenerateAgentsCsv:
 
     def test_multiple_profiles_written(self, tmp_path):
         factory = KGAgentFactory(llm_client=MagicMock())
-        profiles = [
-            _make_profile(id=f"agent_{i}", name=f"Agent {i}")
-            for i in range(5)
-        ]
+        profiles = [_make_profile(id=f"agent_{i}", name=f"Agent {i}") for i in range(5)]
         output = str(tmp_path / "multi.csv")
         factory.generate_agents_csv(profiles, output)
 
@@ -677,6 +668,7 @@ class TestGenerateFingerprints:
     async def test_generate_fingerprints_returns_one_per_profile(self):
         """generate_fingerprints() returns one CognitiveFingerprint per profile."""
         from backend.app.models.cognitive_fingerprint import CognitiveFingerprint
+
         factory = KGAgentFactory()
         profiles = [_make_profile(id="agent_1"), _make_profile(id="agent_2")]
 

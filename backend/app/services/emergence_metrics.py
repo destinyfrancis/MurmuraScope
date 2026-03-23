@@ -65,7 +65,7 @@ class TDMIResult:
     topic: str
     lag: int
     tdmi_score: float  # mutual information in nats (≥ 0)
-    n_samples: int     # number of (x_t, y_{t+lag}) agent-round pairs
+    n_samples: int  # number of (x_t, y_{t+lag}) agent-round pairs
 
 
 @dataclass(frozen=True)
@@ -74,11 +74,11 @@ class EmergenceMetricsSummary:
 
     session_id: str
     round_number: int
-    mean_tdmi: float       # mean across all (topic, lag) pairs
-    max_tdmi: float        # peak MI observed
-    n_topics: int          # number of distinct belief topics measured
+    mean_tdmi: float  # mean across all (topic, lag) pairs
+    max_tdmi: float  # peak MI observed
+    n_topics: int  # number of distinct belief topics measured
     emergence_detected: bool  # True when mean_tdmi > _EMERGENCE_THRESHOLD (temporal persistence signal)
-    per_topic: tuple        # tuple[dict] — per-topic breakdown
+    per_topic: tuple  # tuple[dict] — per-topic breakdown
 
 
 class EmergenceMetricsCalculator:
@@ -110,14 +110,15 @@ class EmergenceMetricsCalculator:
         belief data is available (returns zero-valued summary on empty data).
         """
         results, perm_threshold = await self._compute_all_topics(
-            session_id, round_number, lags,
+            session_id,
+            round_number,
+            lags,
         )
         await self._persist_results(session_id, round_number, results)
         effective_threshold = perm_threshold if perm_threshold is not None else self._THRESHOLD
         summary = _build_summary(session_id, round_number, results, effective_threshold)
         logger.info(
-            "TDMI session=%s round=%d n_topics=%d mean_tdmi=%.4f "
-            "threshold=%.4f (perm=%s) detected=%s",
+            "TDMI session=%s round=%d n_topics=%d mean_tdmi=%.4f threshold=%.4f (perm=%s) detected=%s",
             session_id,
             round_number,
             summary.n_topics,
@@ -159,16 +160,12 @@ class EmergenceMetricsCalculator:
             return [], None
 
         # topic → agent_id → sorted [(round, stance)]
-        topic_agent_series: dict[str, dict[str, list[tuple[int, float]]]] = defaultdict(
-            lambda: defaultdict(list)
-        )
+        topic_agent_series: dict[str, dict[str, list[tuple[int, float]]]] = defaultdict(lambda: defaultdict(list))
         for r in rows:
-            topic_agent_series[r["topic"]][str(r["agent_id"])].append(
-                (int(r["round_number"]), float(r["stance"]))
-            )
+            topic_agent_series[r["topic"]][str(r["agent_id"])].append((int(r["round_number"]), float(r["stance"])))
 
         results: list[TDMIResult] = []
-        all_x_y_pairs: list[tuple["np.ndarray", "np.ndarray"]] = []
+        all_x_y_pairs: list[tuple[np.ndarray, np.ndarray]] = []
 
         for topic, agent_series in topic_agent_series.items():
             for lag in lags:
@@ -250,8 +247,8 @@ def _collect_pairs(
 
 
 def _permutation_threshold(
-    pairs: list[tuple["np.ndarray", "np.ndarray"]],  # type: ignore[name-defined]
-    np: "module",  # type: ignore[name-defined]
+    pairs: list[tuple[np.ndarray, np.ndarray]],  # type: ignore[name-defined]
+    np: module,  # type: ignore[name-defined]
 ) -> float | None:
     """Compute a data-adaptive TDMI significance threshold via permutation.
 
@@ -285,7 +282,7 @@ def _permutation_threshold(
     return max(threshold, _EMERGENCE_THRESHOLD * 0.5)
 
 
-def _histogram_mi(x: "np.ndarray", y: "np.ndarray") -> float:  # type: ignore[name-defined]
+def _histogram_mi(x: np.ndarray, y: np.ndarray) -> float:  # type: ignore[name-defined]
     """Estimate MI(X;Y) in nats using sklearn's k-nearest-neighbours estimator.
 
     Uses ``mutual_info_regression`` (Kraskov KNN method) which has much lower
@@ -296,13 +293,10 @@ def _histogram_mi(x: "np.ndarray", y: "np.ndarray") -> float:  # type: ignore[na
     """
     try:
         from sklearn.feature_selection import mutual_info_regression  # noqa: PLC0415
-        import numpy as np  # noqa: PLC0415
 
         # n_neighbors=5 per Kraskov (2004) recommendation; k=3 over-estimates
         # on small samples (fewer rounds early in a simulation).
-        mi_arr = mutual_info_regression(
-            x.reshape(-1, 1), y, random_state=42, n_neighbors=5
-        )
+        mi_arr = mutual_info_regression(x.reshape(-1, 1), y, random_state=42, n_neighbors=5)
         return float(max(0.0, mi_arr[0]))
     except Exception:
         return 0.0
@@ -335,8 +329,7 @@ def _build_summary(
         {
             "topic": topic,
             "mean_tdmi": round(
-                sum(r.tdmi_score for r in results if r.topic == topic)
-                / sum(1 for r in results if r.topic == topic),
+                sum(r.tdmi_score for r in results if r.topic == topic) / sum(1 for r in results if r.topic == topic),
                 6,
             ),
             "lags": [

@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import os
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import AsyncIterator, Optional
 
 import aiosqlite
 
@@ -92,8 +92,7 @@ async def apply_migrations() -> None:
     # Idempotent index creation — CREATE INDEX IF NOT EXISTS is always safe
     index_migrations = [
         # Composite index for recursive CTE in get_relational_context()
-        "CREATE INDEX IF NOT EXISTS idx_triple_search "
-        "ON memory_triples(session_id, agent_id, subject, object)",
+        "CREATE INDEX IF NOT EXISTS idx_triple_search ON memory_triples(session_id, agent_id, subject, object)",
     ]
     async with get_db() as db:
         for sql in migrations:
@@ -117,7 +116,7 @@ async def apply_migrations() -> None:
 
 
 @asynccontextmanager
-async def get_workspace_db(workspace_id: Optional[str]) -> AsyncIterator[aiosqlite.Connection]:
+async def get_workspace_db(workspace_id: str | None) -> AsyncIterator[aiosqlite.Connection]:
     """Get a database connection for a workspace-scoped database.
 
     Each workspace has its own SQLite file at:
@@ -182,7 +181,7 @@ async def get_workspace_db(workspace_id: Optional[str]) -> AsyncIterator[aiosqli
         await db.close()
 
 
-async def get_db_for_session(session_id: str) -> Optional[str]:
+async def get_db_for_session(session_id: str) -> str | None:
     """Look up the workspace_id for a session, if any.
 
     Returns the workspace_id string when the session belongs to a workspace,

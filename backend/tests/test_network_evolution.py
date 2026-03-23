@@ -3,19 +3,16 @@
 Covers NetworkEvent/NetworkEvolutionStats models and NetworkEvolutionEngine
 detection logic, persistence, and scorecard integration.
 """
+
 from __future__ import annotations
 
 import json
-import os
-import tempfile
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from backend.app.models.network_evolution import NetworkEvent, NetworkEvolutionStats
 from backend.app.services.network_evolution import NetworkEvolutionEngine
-
 
 # ---------------------------------------------------------------------------
 # Model tests
@@ -61,9 +58,7 @@ class TestNetworkEventModel:
     def test_all_event_types_valid(self):
         """Confirm all 5 event types can be stored in the model."""
         for et in ("TIE_FORMED", "TIE_DISSOLVED", "BRIDGE_DETECTED", "TRIADIC_CLOSURE", "CLUSTER_SHIFT"):
-            e = NetworkEvent(
-                session_id="s", round_number=1, event_type=et, agent_a_username="a"
-            )
+            e = NetworkEvent(session_id="s", round_number=1, event_type=et, agent_a_username="a")
             assert e.event_type == et
 
 
@@ -274,10 +269,7 @@ class TestTriadicClosure:
         triadic = [e for e in events if e.event_type == "TRIADIC_CLOSURE"]
         assert len(triadic) >= 1
         # Should suggest closing A→C
-        assert any(
-            e.agent_a_username == "1" and e.details.get("suggested_followee") == "3"
-            for e in triadic
-        )
+        assert any(e.agent_a_username == "1" and e.details.get("suggested_followee") == "3" for e in triadic)
 
     @pytest.mark.asyncio
     async def test_no_triadic_closure_dissimilar_stances(self):
@@ -314,8 +306,14 @@ class TestNetworkEvolutionPersistence:
         """Non-empty event list triggers executemany."""
         engine = NetworkEvolutionEngine()
         events = [
-            NetworkEvent(session_id="s", round_number=1, event_type="TIE_FORMED",
-                         agent_a_username="1", agent_b_username="2", trust_delta=0.2),
+            NetworkEvent(
+                session_id="s",
+                round_number=1,
+                event_type="TIE_FORMED",
+                agent_a_username="1",
+                agent_b_username="2",
+                trust_delta=0.2,
+            ),
         ]
         mock_db = AsyncMock()
         with patch("backend.app.services.network_evolution.get_db") as mock_get_db:
@@ -331,9 +329,7 @@ class TestNetworkEvolutionPersistence:
         """write_network_patch creates the JSON file in the session dir."""
         engine = NetworkEvolutionEngine()
         session_id = "test-sess-001"
-        monkeypatch.setattr(
-            "backend.app.services.network_evolution._PROJECT_ROOT", tmp_path
-        )
+        monkeypatch.setattr("backend.app.services.network_evolution._PROJECT_ROOT", tmp_path)
 
         events = [
             NetworkEvent(
@@ -359,9 +355,7 @@ class TestNetworkEvolutionPersistence:
     async def test_write_network_patch_empty_no_file(self, tmp_path, monkeypatch):
         """Empty triadic closures → no patch file created."""
         engine = NetworkEvolutionEngine()
-        monkeypatch.setattr(
-            "backend.app.services.network_evolution._PROJECT_ROOT", tmp_path
-        )
+        monkeypatch.setattr("backend.app.services.network_evolution._PROJECT_ROOT", tmp_path)
         await engine.write_network_patch("sess-none", [])
         patch_path = tmp_path / "data" / "sessions" / "sess-none" / "network_patch.json"
         assert not patch_path.is_file()

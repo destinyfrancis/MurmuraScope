@@ -1,16 +1,18 @@
 # backend/tests/test_universal_agent_profile.py
 """Tests for UniversalAgentProfile frozen dataclass."""
+
 from __future__ import annotations
 
 import dataclasses
+
 import pytest
 
 from backend.app.models.universal_agent_profile import UniversalAgentProfile
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_minimal_profile(**overrides) -> UniversalAgentProfile:
     """Construct a minimal valid UniversalAgentProfile."""
@@ -33,6 +35,7 @@ def _make_minimal_profile(**overrides) -> UniversalAgentProfile:
 # ---------------------------------------------------------------------------
 # Existing field tests (sanity)
 # ---------------------------------------------------------------------------
+
 
 def test_universal_agent_profile_minimal_construction():
     """A minimal profile constructs without error."""
@@ -63,6 +66,7 @@ def test_universal_agent_profile_to_oasis_row_keys():
 # ---------------------------------------------------------------------------
 # NEW FIELD TESTS (Task 2) — expected to FAIL before implementation
 # ---------------------------------------------------------------------------
+
 
 def test_universal_agent_profile_new_fields_have_defaults():
     """New fields default to empty — backward compat for existing code."""

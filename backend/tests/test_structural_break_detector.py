@@ -3,14 +3,16 @@
 Covers: no-break series, obvious level shift, recommended start index,
 short series guard, frozen result types, break direction validity.
 """
+
 from __future__ import annotations
 
 import pytest
 
 
 def test_no_breaks_in_smooth_series():
-    from backend.app.services.structural_break_detector import detect_structural_breaks
     import numpy as np
+
+    from backend.app.services.structural_break_detector import detect_structural_breaks
 
     series = np.linspace(1.0, 10.0, 50).tolist()
     result = detect_structural_breaks(series)

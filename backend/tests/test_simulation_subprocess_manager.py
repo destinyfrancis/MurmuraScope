@@ -16,10 +16,10 @@ from backend.app.services.simulation_subprocess_manager import (
     SimulationSubprocessManager,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_mock_process(returncode: int | None = None, pid: int = 12345):
     """Return a MagicMock that approximates asyncio.subprocess.Process."""
@@ -36,6 +36,7 @@ def _make_mock_process(returncode: int | None = None, pid: int = 12345):
 # ---------------------------------------------------------------------------
 # launch()
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_launch_stores_process_in_processes():
@@ -85,6 +86,7 @@ async def test_launch_raises_if_session_already_running():
 # ---------------------------------------------------------------------------
 # stop()
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_stop_sends_sigterm():
@@ -151,6 +153,7 @@ async def test_stop_raises_if_session_not_found():
 # is_running()
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_is_running_returns_true_for_live_process():
     """is_running() should return True when process.returncode is None."""
@@ -193,6 +196,7 @@ def test_is_running_returns_false_for_unknown_session():
 # cleanup()
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_cleanup_removes_session():
     """cleanup() should remove the session entry from internal dict."""
@@ -220,6 +224,7 @@ async def test_cleanup_is_safe_for_unknown_session():
 # ---------------------------------------------------------------------------
 # check_exit_code()
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_check_exit_code_raises_on_nonzero():
@@ -278,8 +283,7 @@ async def test_release_after_report_clears_flag():
     """release_after_report() should remove session from _report_pending."""
     mgr = SimulationSubprocessManager()
     mgr._report_pending["sess1"] = True
-    with patch.object(mgr, "stop", new_callable=AsyncMock), \
-         patch.object(mgr, "cleanup", new_callable=AsyncMock):
+    with patch.object(mgr, "stop", new_callable=AsyncMock), patch.object(mgr, "cleanup", new_callable=AsyncMock):
         await mgr.release_after_report("sess1")
     assert "sess1" not in mgr._report_pending
 

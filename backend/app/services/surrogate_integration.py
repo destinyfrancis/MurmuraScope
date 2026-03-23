@@ -5,6 +5,7 @@ simulation data with timeout protection and graceful fallback.  Used by
 the ``trigger_multi_run`` API to auto-wire data-driven outcome scoring
 into MultiRunOrchestrator before Phase B trials begin.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -37,8 +38,11 @@ async def auto_train_surrogate(
         SurrogateModelResult — check ``is_fitted`` before use.
     """
     unfitted = SurrogateModelResult(
-        is_fitted=False, n_classes=0, classes=[],
-        train_accuracy=0.0, metrics_used=metrics or [],
+        is_fitted=False,
+        n_classes=0,
+        classes=[],
+        train_accuracy=0.0,
+        metrics_used=metrics or [],
     )
     try:
         model = SurrogateModel()
@@ -49,7 +53,9 @@ async def auto_train_surrogate(
         if result.is_fitted:
             logger.info(
                 "Surrogate auto-trained session=%s classes=%d acc=%.3f",
-                session_id, result.n_classes, result.train_accuracy,
+                session_id,
+                result.n_classes,
+                result.train_accuracy,
             )
         else:
             logger.info(
@@ -58,9 +64,7 @@ async def auto_train_surrogate(
             )
         return result
     except asyncio.TimeoutError:
-        logger.warning(
-            "Surrogate training timed out (%.1fs) session=%s", timeout_s, session_id
-        )
+        logger.warning("Surrogate training timed out (%.1fs) session=%s", timeout_s, session_id)
         return unfitted
     except Exception:
         logger.exception("Surrogate training failed session=%s", session_id)

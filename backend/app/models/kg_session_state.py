@@ -7,6 +7,7 @@ created per session when kg_driven mode activates and destroyed on cleanup.
 Deliberately NOT frozen — fields are updated in-place during simulation rounds
 by SimulationRunner hook methods.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field

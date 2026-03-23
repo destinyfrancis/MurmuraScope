@@ -1,9 +1,15 @@
 # backend/tests/test_multi_run_orchestrator.py
 """Tests for MultiRunOrchestrator Phase B stochastic ensemble."""
+
 from __future__ import annotations
+
 import pytest
+
 from backend.app.services.multi_run_orchestrator import (
-    MultiRunOrchestrator, CanonicalResult, MultiRunResult, ReplicateResult
+    CanonicalResult,
+    MultiRunOrchestrator,
+    MultiRunResult,
+    ReplicateResult,
 )
 
 
@@ -52,6 +58,7 @@ async def test_run_trial_count_matches():
 
 def test_hard_cap_at_50000():
     from backend.app.services.multi_run_orchestrator import _clamp_trial_count
+
     assert _clamp_trial_count(999999) == 50000
     assert _clamp_trial_count(500) == 500
 

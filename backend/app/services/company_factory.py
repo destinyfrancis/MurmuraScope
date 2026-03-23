@@ -7,10 +7,8 @@ HK industry structure (based on 2022 Annual Survey of Companies data).
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass, replace
-from typing import Any, Sequence
 
-from backend.app.models.company import CompanyProfile, CompanyType, IndustrySector
+from backend.app.models.company import CompanyProfile, CompanyType
 from backend.app.utils.db import get_db
 from backend.app.utils.logger import get_logger
 
@@ -41,8 +39,26 @@ DEFAULT_SIZE_DIST: dict[str, float] = {
 # ---------------------------------------------------------------------------
 
 _SURNAME_PARTS: tuple[str, ...] = (
-    "利", "恒", "長", "新", "永", "和", "信", "達", "港", "華",
-    "鴻", "太", "中", "南", "東", "億", "盛", "金", "聯", "亞",
+    "利",
+    "恒",
+    "長",
+    "新",
+    "永",
+    "和",
+    "信",
+    "達",
+    "港",
+    "華",
+    "鴻",
+    "太",
+    "中",
+    "南",
+    "東",
+    "億",
+    "盛",
+    "金",
+    "聯",
+    "亞",
 )
 
 _TYPE_PARTS: dict[str, tuple[str, ...]] = {
@@ -56,7 +72,11 @@ _TYPE_PARTS: dict[str, tuple[str, ...]] = {
 }
 
 _SUFFIX_PARTS: tuple[str, ...] = (
-    "有限公司", "集團", "控股", "企業", "股份有限公司",
+    "有限公司",
+    "集團",
+    "控股",
+    "企業",
+    "股份有限公司",
 )
 
 # ---------------------------------------------------------------------------
@@ -124,9 +144,9 @@ _SUPPLY_CHAIN_POSITION: dict[str, str] = {
 # ---------------------------------------------------------------------------
 
 _REVENUE_BY_SIZE: dict[str, tuple[int, int]] = {
-    "sme": (2_000_000, 100_000_000),      # HKD 2M – 100M
+    "sme": (2_000_000, 100_000_000),  # HKD 2M – 100M
     "mnc": (500_000_000, 10_000_000_000),  # HKD 500M – 10B
-    "startup": (200_000, 5_000_000),       # HKD 200K – 5M
+    "startup": (200_000, 5_000_000),  # HKD 200K – 5M
 }
 
 _EMPLOYEES_BY_SIZE: dict[str, tuple[int, int]] = {
@@ -338,9 +358,7 @@ class CompanyFactory:
                 )
             )
 
-        logger.info(
-            "Generated %d company profiles for session=%s", len(profiles), session_id
-        )
+        logger.info("Generated %d company profiles for session=%s", len(profiles), session_id)
         return profiles
 
     async def store_companies(
@@ -415,9 +433,7 @@ class CompanyFactory:
                 )
             )
 
-        logger.info(
-            "Stored %d companies to DB for session=%s", len(stored), session_id
-        )
+        logger.info("Stored %d companies to DB for session=%s", len(stored), session_id)
         return stored
 
     async def load_companies(self, session_id: str) -> list[CompanyProfile]:

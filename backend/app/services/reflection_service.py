@@ -8,6 +8,7 @@ Inspired by Generative Agents (Park et al., 2023):
 
 Active in kg_driven mode only. Best-effort — never raises.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -20,9 +21,9 @@ from backend.prompts.reflection_prompts import REFLECTION_SYSTEM, REFLECTION_USE
 logger = get_logger("reflection_service")
 
 _N_INSIGHTS = 3
-_TOP_MEMORIES = 8         # memories to feed into reflection
+_TOP_MEMORIES = 8  # memories to feed into reflection
 _INSIGHT_SALIENCE = 0.85  # thoughts start high-salience
-_MIN_MEMORIES = 3         # skip reflection if fewer memories exist
+_MIN_MEMORIES = 3  # skip reflection if fewer memories exist
 
 
 class ReflectionService:
@@ -55,11 +56,15 @@ class ReflectionService:
             except Exception:
                 logger.debug(
                     "reflection skipped for agent=%s session=%s",
-                    agent.get("id", "?"), session_id,
+                    agent.get("id", "?"),
+                    session_id,
                 )
         logger.info(
             "reflect_for_agents session=%s round=%d agents=%d insights=%d",
-            session_id, round_number, len(stakeholder_agents), total,
+            session_id,
+            round_number,
+            len(stakeholder_agents),
+            total,
         )
         return total
 
@@ -79,23 +84,23 @@ class ReflectionService:
         if len(memories) < _MIN_MEMORIES:
             return 0
 
-        memories_text = "\n".join(
-            f"[重要度{m['importance_score']:.1f}] {m['memory_text']}"
-            for m in memories
-        )
+        memories_text = "\n".join(f"[重要度{m['importance_score']:.1f}] {m['memory_text']}" for m in memories)
 
         provider, model = get_agent_provider_model()
         try:
             raw = await self._llm.chat_json(
                 [
                     {"role": "system", "content": REFLECTION_SYSTEM},
-                    {"role": "user", "content": REFLECTION_USER.format(
-                        name=agent.get("name", agent_id_str),
-                        role=agent.get("role", "actor"),
-                        scenario_description=scenario_description[:200],
-                        memories_text=memories_text,
-                        n_insights=_N_INSIGHTS,
-                    )},
+                    {
+                        "role": "user",
+                        "content": REFLECTION_USER.format(
+                            name=agent.get("name", agent_id_str),
+                            role=agent.get("role", "actor"),
+                            scenario_description=scenario_description[:200],
+                            memories_text=memories_text,
+                            n_insights=_N_INSIGHTS,
+                        ),
+                    },
                 ],
                 provider=provider,
                 model=model,
@@ -119,15 +124,17 @@ class ReflectionService:
                 continue
             importance_raw = float(item.get("importance_score", 7))
             importance = max(0.0, min(1.0, importance_raw / 10.0))
-            rows.append((
-                session_id,
-                numeric_id,
-                round_number,
-                thought,
-                _INSIGHT_SALIENCE,
-                "thought",
-                importance,
-            ))
+            rows.append(
+                (
+                    session_id,
+                    numeric_id,
+                    round_number,
+                    thought,
+                    _INSIGHT_SALIENCE,
+                    "thought",
+                    importance,
+                )
+            )
 
         if not rows:
             return 0
@@ -143,9 +150,7 @@ class ReflectionService:
                 )
                 await db.commit()
         except Exception:
-            logger.exception(
-                "reflection insert failed session=%s agent=%s", session_id, agent_id_str
-            )
+            logger.exception("reflection insert failed session=%s agent=%s", session_id, agent_id_str)
             return 0
 
         return len(rows)
@@ -179,7 +184,5 @@ class ReflectionService:
                 for r in rows
             ]
         except Exception:
-            logger.exception(
-                "_fetch_top_memories failed session=%s agent=%d", session_id, agent_id
-            )
+            logger.exception("_fetch_top_memories failed session=%s agent=%d", session_id, agent_id)
             return []

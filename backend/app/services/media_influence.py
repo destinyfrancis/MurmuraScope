@@ -25,6 +25,7 @@ logger = get_logger("media_influence")
 # Frozen dataclass
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class MediaAgent:
     """Immutable record for a media outlet agent in a simulation session."""
@@ -32,9 +33,9 @@ class MediaAgent:
     id: int
     session_id: str
     media_name: str
-    political_lean: float    # 0.0–1.0
-    influence_radius: int    # max agents affected per round
-    credibility: float       # 0.0–1.0
+    political_lean: float  # 0.0–1.0
+    influence_radius: int  # max agents affected per round
+    credibility: float  # 0.0–1.0
 
 
 # ---------------------------------------------------------------------------
@@ -55,45 +56,45 @@ class MediaAgent:
 DEFAULT_MEDIA_OUTLETS: list[dict[str, Any]] = [
     {
         "media_name": "TVB新聞",
-        "political_lean": 0.2,       # HKPORI: perceived pro-establishment
-        "influence_radius": 80,       # largest audience share (free-to-air TV)
-        "credibility": 0.6,           # HKPORI 2023: ~5.5/10 → 0.55, rounded up
+        "political_lean": 0.2,  # HKPORI: perceived pro-establishment
+        "influence_radius": 80,  # largest audience share (free-to-air TV)
+        "credibility": 0.6,  # HKPORI 2023: ~5.5/10 → 0.55, rounded up
     },
     {
         "media_name": "香港電台RTHK",
-        "political_lean": 0.45,       # HKPORI: near-centre, slightly independent
+        "political_lean": 0.45,  # HKPORI: near-centre, slightly independent
         "influence_radius": 50,
-        "credibility": 0.55,          # post-2021 management change; HKPORI 2023: ~5.5/10
+        "credibility": 0.55,  # post-2021 management change; HKPORI 2023: ~5.5/10
     },
     {
         "media_name": "明報",
-        "political_lean": 0.55,       # HKPORI: centre-leaning independent
+        "political_lean": 0.55,  # HKPORI: centre-leaning independent
         "influence_radius": 40,
-        "credibility": 0.7,           # HKPORI 2023: ~6.8/10
+        "credibility": 0.7,  # HKPORI 2023: ~6.8/10
     },
     {
         "media_name": "南華早報",
-        "political_lean": 0.5,        # HKPORI: centrist (English-language)
+        "political_lean": 0.5,  # HKPORI: centrist (English-language)
         "influence_radius": 45,
-        "credibility": 0.8,           # HKPORI 2023: highest among print (~7.8/10)
+        "credibility": 0.8,  # HKPORI 2023: highest among print (~7.8/10)
     },
     {
         "media_name": "大公報",
-        "political_lean": 0.1,        # HKPORI: strongly pro-establishment
+        "political_lean": 0.1,  # HKPORI: strongly pro-establishment
         "influence_radius": 30,
-        "credibility": 0.4,           # HKPORI 2023: ~3.8/10
+        "credibility": 0.4,  # HKPORI 2023: ~3.8/10
     },
     {
         "media_name": "星島日報",
-        "political_lean": 0.25,       # HKPORI: pro-establishment
+        "political_lean": 0.25,  # HKPORI: pro-establishment
         "influence_radius": 35,
-        "credibility": 0.5,           # HKPORI 2023: ~5.0/10
+        "credibility": 0.5,  # HKPORI 2023: ~5.0/10
     },
     {
         "media_name": "獨立媒體",
-        "political_lean": 0.8,        # HKPORI: pro-democracy
-        "influence_radius": 20,       # niche online audience
-        "credibility": 0.55,          # HKPORI 2020: ~5.5/10
+        "political_lean": 0.8,  # HKPORI: pro-democracy
+        "influence_radius": 20,  # niche online audience
+        "credibility": 0.55,  # HKPORI 2020: ~5.5/10
     },
     # 眾新聞 removed: ceased operations Jan 2022
 ]
@@ -103,9 +104,7 @@ DEFAULT_MEDIA_OUTLETS: list[dict[str, Any]] = [
 # ---------------------------------------------------------------------------
 
 
-def compute_receptivity(
-    agent_stance: float, media_lean: float, credibility: float
-) -> float:
+def compute_receptivity(agent_stance: float, media_lean: float, credibility: float) -> float:
     """Compute receptivity with asymmetric aligned/cross-cutting modulation.
 
     Post-2020 HK dynamics: agents are more receptive to ideologically aligned
@@ -151,6 +150,7 @@ _MIN_STANCE_DELTA = 0.001
 # MediaInfluenceModel
 # ---------------------------------------------------------------------------
 
+
 class MediaInfluenceModel:
     """Models how HK media outlets shift agent political stances over rounds.
 
@@ -177,9 +177,7 @@ class MediaInfluenceModel:
             )
             """
         )
-        await db.execute(
-            "CREATE INDEX IF NOT EXISTS idx_media_session ON media_agents(session_id)"
-        )
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_media_session ON media_agents(session_id)")
 
     # ------------------------------------------------------------------
     # Initialisation
@@ -316,9 +314,7 @@ class MediaInfluenceModel:
         """
         media_agents = await self.get_media_agents(session_id)
         if not media_agents:
-            logger.debug(
-                "No media agents for session=%s, skipping propagation", session_id
-            )
+            logger.debug("No media agents for session=%s, skipping propagation", session_id)
             return {"influenced_count": 0, "media_count": 0, "round": round_number}
 
         total_influenced = 0
@@ -344,9 +340,7 @@ class MediaInfluenceModel:
                     current_stance = float(agent_row["political_stance"])
 
                     # Receptivity with asymmetric aligned/cross-cutting modulation
-                    receptivity = compute_receptivity(
-                        current_stance, media.political_lean, media.credibility
-                    )
+                    receptivity = compute_receptivity(current_stance, media.political_lean, media.credibility)
                     if receptivity < _MIN_RECEPTIVITY:
                         continue
 
@@ -390,20 +384,24 @@ class MediaInfluenceModel:
                         logger.warning(
                             "POLARIZATION %s session=%s round=%d pi=%.3f extremism=%.3f",
                             stance_report.alert_level.upper(),
-                            session_id, round_number,
+                            session_id,
+                            round_number,
                             stance_report.polarization_index,
                             stance_report.extremism_ratio,
                         )
                         adjusted = pol_model.apply_depolarization(stances, stance_report.alert_level)
                         # Persist adjusted stances
-                        agent_ids = [int(r["id"]) for r in await (
-                            await db.execute(
-                                """SELECT id FROM agent_profiles
+                        agent_ids = [
+                            int(r["id"])
+                            for r in await (
+                                await db.execute(
+                                    """SELECT id FROM agent_profiles
                                    WHERE session_id = ? AND political_stance IS NOT NULL
                                    ORDER BY id""",
-                                (session_id,),
-                            )
-                        ).fetchall()]
+                                    (session_id,),
+                                )
+                            ).fetchall()
+                        ]
                         await db.executemany(
                             "UPDATE agent_profiles SET political_stance = ? WHERE id = ?",
                             list(zip(adjusted, agent_ids)),

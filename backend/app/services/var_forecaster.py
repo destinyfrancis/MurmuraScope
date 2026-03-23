@@ -311,7 +311,9 @@ class VARForecaster:
         if n_obs < _MIN_VAR_POINTS:
             logger.debug(
                 "VAR skipped for group=%s: only %d obs (need %d)",
-                group_name, n_obs, _MIN_VAR_POINTS,
+                group_name,
+                n_obs,
+                _MIN_VAR_POINTS,
             )
             return None
 
@@ -322,14 +324,14 @@ class VARForecaster:
             stationarity_infos.append(info)
             logger.debug(
                 "Stationarity %s: stationary=%s d=%d adf_p=%.4f kpss_p=%s",
-                metric, info.is_stationary, info.diff_order,
-                info.adf_p, info.kpss_p,
+                metric,
+                info.is_stationary,
+                info.diff_order,
+                info.adf_p,
+                info.kpss_p,
             )
 
-        any_non_stationary = any(
-            info.diff_order > 0 or not info.is_stationary
-            for info in stationarity_infos
-        )
+        any_non_stationary = any(info.diff_order > 0 or not info.is_stationary for info in stationarity_infos)
 
         var_diagnostics: dict = {
             "stationarity": {
@@ -351,6 +353,7 @@ class VARForecaster:
         if any_non_stationary:
             try:
                 from statsmodels.tsa.vector_ar.vecm import coint_johansen  # noqa: PLC0415
+
                 johansen_result = coint_johansen(data_matrix, det_order=0, k_ar_diff=1)
                 trace_stats = johansen_result.lr1.tolist()
                 crit_5pct = johansen_result.cvt[:, 1].tolist()
@@ -359,25 +362,25 @@ class VARForecaster:
                 var_diagnostics["johansen_trace_stats"] = [round(t, 4) for t in trace_stats]
                 var_diagnostics["johansen_crit_5pct"] = [round(c, 4) for c in crit_5pct]
                 if is_cointegrated:
-                    coint_rank = sum(
-                        1 for t, c in zip(trace_stats, crit_5pct) if t > c
-                    )
+                    coint_rank = sum(1 for t, c in zip(trace_stats, crit_5pct) if t > c)
                     # Clamp rank to [1, K-1] — full rank means no cointegration
                     n_vars = len(metrics_order)
                     if coint_rank >= n_vars:
                         is_cointegrated = False
                         var_diagnostics["johansen_cointegrated"] = False
                         logger.info(
-                            "VAR group=%s: Johansen full rank (%d/%d) — "
-                            "treating as stationary, no cointegration",
-                            group_name, coint_rank, n_vars,
+                            "VAR group=%s: Johansen full rank (%d/%d) — treating as stationary, no cointegration",
+                            group_name,
+                            coint_rank,
+                            n_vars,
                         )
                     else:
                         var_diagnostics["coint_rank"] = coint_rank
                         logger.info(
                             "VAR group=%s: Johansen test indicates cointegration "
                             "(rank=%d), fitting VECM on original data",
-                            group_name, coint_rank,
+                            group_name,
+                            coint_rank,
                         )
             except Exception as exc:
                 logger.debug("Johansen test skipped for group=%s: %s", group_name, exc)
@@ -418,9 +421,10 @@ class VARForecaster:
                     var_diagnostics["model_type"] = "VECM"
                 except Exception as vecm_exc:
                     logger.warning(
-                        "VECM failed for group=%s (rank=%d): %s — "
-                        "falling back to differenced VAR",
-                        group_name, coint_rank, vecm_exc,
+                        "VECM failed for group=%s (rank=%d): %s — falling back to differenced VAR",
+                        group_name,
+                        coint_rank,
+                        vecm_exc,
                     )
                     var_diagnostics["vecm_fallback_reason"] = str(vecm_exc)
                     # Fall back to differenced VAR
@@ -438,9 +442,7 @@ class VARForecaster:
                     var_diagnostics["model_type"] = "VAR"
                     var_diagnostics["group_diff_order"] = 1
             except Exception as exc:
-                logger.warning(
-                    "VAR fitting failed for group=%s: %s", group_name, exc
-                )
+                logger.warning("VAR fitting failed for group=%s: %s", group_name, exc)
                 return None
         else:
             # Non-cointegrated: apply differencing if needed
@@ -453,9 +455,9 @@ class VARForecaster:
                 if all(not info.is_stationary for info in stationarity_infos):
                     group_diff_order = 1
                     logger.warning(
-                        "VAR group=%s: all series non-stationary after d=%d — "
-                        "applying d=1 as best-effort fallback",
-                        group_name, _MAX_DIFF_ORDER,
+                        "VAR group=%s: all series non-stationary after d=%d — applying d=1 as best-effort fallback",
+                        group_name,
+                        _MAX_DIFF_ORDER,
                     )
 
             var_diagnostics["group_diff_order"] = group_diff_order
@@ -465,13 +467,16 @@ class VARForecaster:
                 n_obs = data_matrix.shape[0]
                 logger.info(
                     "VAR group=%s: differenced d=%d, %d obs remaining",
-                    group_name, group_diff_order, n_obs,
+                    group_name,
+                    group_diff_order,
+                    n_obs,
                 )
                 if n_obs < _MIN_VAR_POINTS:
                     logger.debug(
-                        "VAR skipped for group=%s after differencing: "
-                        "only %d obs (need %d)",
-                        group_name, n_obs, _MIN_VAR_POINTS,
+                        "VAR skipped for group=%s after differencing: only %d obs (need %d)",
+                        group_name,
+                        n_obs,
+                        _MIN_VAR_POINTS,
                     )
                     return None
 
@@ -485,9 +490,7 @@ class VARForecaster:
                 )
                 var_diagnostics["model_type"] = "VAR"
             except Exception as exc:
-                logger.warning(
-                    "VAR fitting failed for group=%s: %s", group_name, exc
-                )
+                logger.warning("VAR fitting failed for group=%s: %s", group_name, exc)
                 return None
 
         # Invert differencing on forecasted values to get level forecasts
@@ -534,9 +537,7 @@ class VARForecaster:
             return None
 
         # Collect sets of periods per metric
-        period_sets: list[set[str]] = [
-            {p for p, _ in vals} for vals in series.values()
-        ]
+        period_sets: list[set[str]] = [{p for p, _ in vals} for vals in series.values()]
         # Intersect to find common periods
         common_periods: set[str] = period_sets[0].copy()
         for ps in period_sets[1:]:
@@ -592,7 +593,7 @@ class VARForecaster:
 
         try:
             lag_results = model.select_order(maxlags=max_lag)
-            lag_order = lag_results.selected_orders['aic']
+            lag_order = lag_results.selected_orders["aic"]
         except Exception:
             lag_order = 1
 
@@ -601,7 +602,9 @@ class VARForecaster:
         fitted = model.fit(lag_order)
         logger.info(
             "VAR group=%s lag=%d AIC=%.2f",
-            group_name, lag_order, fitted.aic,
+            group_name,
+            lag_order,
+            fitted.aic,
         )
 
         # Stability check — returned directly to caller (no instance state)
@@ -637,14 +640,16 @@ class VARForecaster:
                 spread_80 = max(spread_80, floor)
                 spread_95 = max(spread_95, floor * 1.5)
 
-                points.append(ForecastPoint(
-                    period=next_labels[h],
-                    value=round(pt_val, 6),
-                    lower_80=round(pt_val - spread_80, 6),
-                    upper_80=round(pt_val + spread_80, 6),
-                    lower_95=round(pt_val - spread_95, 6),
-                    upper_95=round(pt_val + spread_95, 6),
-                ))
+                points.append(
+                    ForecastPoint(
+                        period=next_labels[h],
+                        value=round(pt_val, 6),
+                        lower_80=round(pt_val - spread_80, 6),
+                        upper_80=round(pt_val + spread_80, 6),
+                        lower_95=round(pt_val - spread_95, 6),
+                        upper_95=round(pt_val + spread_95, 6),
+                    )
+                )
 
             forecasts[metric] = ForecastResult(
                 metric=metric,
@@ -701,7 +706,9 @@ class VARForecaster:
 
         logger.info(
             "VECM group=%s lag_diff=%d coint_rank=%d",
-            group_name, lag_diff, coint_rank,
+            group_name,
+            lag_diff,
+            coint_rank,
         )
 
         # Point forecasts: shape (horizon, K)
@@ -731,14 +738,16 @@ class VARForecaster:
                 spread_80 = max(spread_80, floor)
                 spread_95 = max(spread_95, floor * 1.5)
 
-                points.append(ForecastPoint(
-                    period=next_labels[h],
-                    value=round(pt_val, 6),
-                    lower_80=round(pt_val - spread_80, 6),
-                    upper_80=round(pt_val + spread_80, 6),
-                    lower_95=round(pt_val - spread_95, 6),
-                    upper_95=round(pt_val + spread_95, 6),
-                ))
+                points.append(
+                    ForecastPoint(
+                        period=next_labels[h],
+                        value=round(pt_val, 6),
+                        lower_80=round(pt_val - spread_80, 6),
+                        upper_80=round(pt_val + spread_80, 6),
+                        lower_95=round(pt_val - spread_95, 6),
+                        upper_95=round(pt_val + spread_95, 6),
+                    )
+                )
 
             forecasts[metric] = ForecastResult(
                 metric=metric,
@@ -798,14 +807,16 @@ def _invert_forecast_differencing(
         for h, old_pt in enumerate(old_result.points):
             # Shift intervals by the same offset as the point value
             offset = level_fc[h, k_idx] - old_pt.value
-            new_points.append(ForecastPoint(
-                period=old_pt.period,
-                value=round(level_fc[h, k_idx], 6),
-                lower_80=round(old_pt.lower_80 + offset, 6),
-                upper_80=round(old_pt.upper_80 + offset, 6),
-                lower_95=round(old_pt.lower_95 + offset, 6),
-                upper_95=round(old_pt.upper_95 + offset, 6),
-            ))
+            new_points.append(
+                ForecastPoint(
+                    period=old_pt.period,
+                    value=round(level_fc[h, k_idx], 6),
+                    lower_80=round(old_pt.lower_80 + offset, 6),
+                    upper_80=round(old_pt.upper_80 + offset, 6),
+                    lower_95=round(old_pt.lower_95 + offset, 6),
+                    upper_95=round(old_pt.upper_95 + offset, 6),
+                )
+            )
         new_forecasts[metric] = ForecastResult(
             metric=old_result.metric,
             horizon=old_result.horizon,

@@ -4,6 +4,7 @@ kg_edges rows have valid_from (round created) and valid_until (round dissolved,
 NULL = still active). These helpers let callers query the graph at any point in
 simulation history without relying on periodic full-graph snapshots.
 """
+
 from __future__ import annotations
 
 from backend.app.utils.db import get_db
@@ -36,9 +37,7 @@ async def get_kg_edges_at_round(session_id: str, round_number: int) -> list[dict
         return await cursor.fetchall()
 
 
-async def get_edge_history(
-    session_id: str, source_id: str, target_id: str
-) -> list[dict]:
+async def get_edge_history(session_id: str, source_id: str, target_id: str) -> list[dict]:
     """Return all versions of the edge between two nodes across simulation history."""
     async with get_db() as db:
         db.row_factory = lambda c, r: dict(zip([col[0] for col in c.description], r))
@@ -55,9 +54,7 @@ async def get_edge_history(
         return await cursor.fetchall()
 
 
-async def get_kg_diff(
-    session_id: str, round_a: int, round_b: int
-) -> dict[str, list[dict]]:
+async def get_kg_diff(session_id: str, round_a: int, round_b: int) -> dict[str, list[dict]]:
     """Return edges added and removed between round_a and round_b.
 
     Returns {"added": [...], "removed": [...]}

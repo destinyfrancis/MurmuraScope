@@ -73,9 +73,9 @@ class WriteQueue:
 
     def __init__(self, db_path: str, max_queue_size: int = 10_000) -> None:
         self._db_path = db_path
-        self._queue: asyncio.Queue[
-            tuple[WriteRequest, bool, asyncio.Future[WriteResult]]
-        ] = asyncio.Queue(maxsize=max_queue_size)
+        self._queue: asyncio.Queue[tuple[WriteRequest, bool, asyncio.Future[WriteResult]]] = asyncio.Queue(
+            maxsize=max_queue_size
+        )
         self._worker_task: asyncio.Task[None] | None = None
         self._running = False
         self._metrics: dict[str, float] = {
@@ -204,9 +204,7 @@ class WriteQueue:
 
             while self._running:
                 try:
-                    request, is_many, future = await asyncio.wait_for(
-                        self._queue.get(), timeout=1.0
-                    )
+                    request, is_many, future = await asyncio.wait_for(self._queue.get(), timeout=1.0)
                 except asyncio.TimeoutError:
                     continue
                 except asyncio.CancelledError:

@@ -10,8 +10,9 @@ import asyncio
 import json
 import os
 import sys
+from collections.abc import Callable, Coroutine
 from pathlib import Path
-from typing import Any, Callable, Coroutine
+from typing import Any
 
 from backend.app.utils.logger import get_logger
 
@@ -35,6 +36,7 @@ def _clear_ws_progress(session_id: str) -> None:
     """Clear WebSocket progress buffer for a completed/failed session."""
     try:
         from backend.app.api.ws import clear_progress  # noqa: PLC0415
+
         clear_progress(session_id)
     except Exception:
         pass  # WS module not loaded — no buffer to clear
@@ -69,7 +71,10 @@ class SimulationLifecycleMixin:
             RuntimeError: If prerequisites are missing or subprocess fails.
         """
         from backend.app.services.simulation_helpers import (  # noqa: PLC0415
-            _require_path, _build_full_config, _get_api_key, _try_parse_jsonl,
+            _build_full_config,
+            _get_api_key,
+            _require_path,
+            _try_parse_jsonl,
         )
 
         if self._subprocess_mgr.is_running(session_id):
@@ -166,6 +171,7 @@ class SimulationLifecycleMixin:
         log_file = None
         process = None
         import time as _time_mod  # noqa: PLC0415
+
         _sim_start_time = _time_mod.perf_counter()
         try:
             log_file = log_file_path.open("wb")
@@ -196,9 +202,7 @@ class SimulationLifecycleMixin:
                 try:
                     await push_progress(session_id, update)
                 except Exception:
-                    logger.exception(
-                        "push_progress failed for session %s", session_id
-                    )
+                    logger.exception("push_progress failed for session %s", session_id)
 
                 # Log posts and accumulate for memory service
                 if update.get("type") == "post":
@@ -213,9 +217,7 @@ class SimulationLifecycleMixin:
                     try:
                         await progress_callback(update)
                     except Exception:
-                        logger.exception(
-                            "Progress callback error for session %s", session_id
-                        )
+                        logger.exception("Progress callback error for session %s", session_id)
 
                 # Process memories when a round completes
                 if update.get("type") == "progress":
@@ -244,6 +246,7 @@ class SimulationLifecycleMixin:
             # Run mini-ensemble (10 trials, top 4 metrics) for quick IQR
             try:
                 from backend.app.services.monte_carlo import MonteCarloEngine  # noqa: PLC0415
+
                 mc = MonteCarloEngine()
                 _domain = config.get("domain_pack_id", "hk_city")
                 await mc.run_mini(session_id, domain_pack_id=_domain)
@@ -263,6 +266,7 @@ class SimulationLifecycleMixin:
                         peak_memory_mb=0.0,
                     )
                     from backend.app.utils.db import get_db as _get_db  # noqa: PLC0415
+
                     async with _get_db() as _bdb:
                         await self._profiler.persist(_result, _bdb)
                     self._profiler.clear()
@@ -277,9 +281,11 @@ class SimulationLifecycleMixin:
             # process is None only if subprocess creation itself failed.
             # Skip killing if report generation is pending — the subprocess must
             # stay alive so the report agent can interview agents.
-            if (process is not None
-                    and process.returncode is None
-                    and not self._subprocess_mgr._report_pending.get(session_id)):
+            if (
+                process is not None
+                and process.returncode is None
+                and not self._subprocess_mgr._report_pending.get(session_id)
+            ):
                 logger.warning(
                     "Cleaning up orphaned subprocess for session %s (PID %d)",
                     session_id,
@@ -301,6 +307,7 @@ class SimulationLifecycleMixin:
             if self._batch_writer is not None:
                 try:
                     from backend.app.utils.db import get_db as _get_db_cleanup  # noqa: PLC0415
+
                     async with _get_db_cleanup() as db:
                         await self._batch_writer.flush_all(db)
                 except Exception:
@@ -379,6 +386,7 @@ class SimulationLifecycleMixin:
         # Cost tracker
         try:
             from backend.app.services.cost_tracker import clear_session as _clear_cost  # noqa: PLC0415
+
             _clear_cost(session_id)
         except Exception:
             pass
@@ -386,6 +394,7 @@ class SimulationLifecycleMixin:
         # External feed per-session cache
         try:
             from backend.app.services.simulation_hooks_macro import _external_feed_cache  # noqa: PLC0415
+
             _external_feed_cache.pop(session_id, None)
         except Exception:
             pass
@@ -393,17 +402,13 @@ class SimulationLifecycleMixin:
         # WebSocket progress buffer
         _clear_ws_progress(session_id)
 
-    async def get_action_logs(
-        self, session_id: str
-    ) -> list[dict[str, Any]]:
+    async def get_action_logs(self, session_id: str) -> list[dict[str, Any]]:
         """Read action logs from the OASIS output database for *session_id*.
 
         Returns:
             List of action log dicts, or an empty list if the DB is absent.
         """
-        db_path = (
-            _PROJECT_ROOT / "data" / "sessions" / session_id / "oasis.db"
-        )
+        db_path = _PROJECT_ROOT / "data" / "sessions" / session_id / "oasis.db"
         if not db_path.exists():
             logger.warning("No OASIS DB found for session %s", session_id)
             return []
@@ -414,16 +419,12 @@ class SimulationLifecycleMixin:
         async with aiosqlite.connect(str(db_path)) as db:
             db.row_factory = aiosqlite.Row
             try:
-                cursor = await db.execute(
-                    "SELECT * FROM action_logs ORDER BY round_num, agent_id"
-                )
+                cursor = await db.execute("SELECT * FROM action_logs ORDER BY round_num, agent_id")
                 rows = await cursor.fetchall()
                 for row in rows:
                     actions.append(dict(row))
             except Exception:
-                logger.exception(
-                    "Failed to read action_logs for session %s", session_id
-                )
+                logger.exception("Failed to read action_logs for session %s", session_id)
         return actions
 
     async def _run_dry(
@@ -451,6 +452,7 @@ class SimulationLifecycleMixin:
         try:
             from backend.app.api.ws import push_progress  # noqa: PLC0415
         except Exception:
+
             async def push_progress(sid: str, data: dict[str, Any]) -> None:  # type: ignore[misc]
                 pass
 

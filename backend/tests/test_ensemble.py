@@ -16,20 +16,18 @@ from __future__ import annotations
 
 import json
 import uuid
-from dataclasses import replace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import numpy as np
 import pytest
-import pytest_asyncio
 
 from backend.app.models.ensemble import DistributionBand, EnsembleResult
 from backend.app.services.ensemble_analyzer import (
+    PERTURBABLE_FIELDS,
     EnsembleAnalyzer,
     ProbabilityStatement,
-    PERTURBABLE_FIELDS,
-    _interpolate_probability,
     _format_threshold,
+    _interpolate_probability,
 )
 from backend.app.services.ensemble_runner import (
     EnsembleRunner,
@@ -37,10 +35,10 @@ from backend.app.services.ensemble_runner import (
     _perturb_macro_fields,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_band(
     metric: str = "ccl_index",
@@ -52,17 +50,22 @@ def _make_band(
 ) -> DistributionBand:
     return DistributionBand(
         metric_name=metric,
-        p10=p10, p25=p25, p50=p50, p75=p75, p90=p90,
+        p10=p10,
+        p25=p25,
+        p50=p50,
+        p75=p75,
+        p90=p90,
     )
 
 
 def _make_macro_state():
     """Build a minimal MacroState using the MacroController defaults."""
     from backend.app.services.macro_state import (
-        MacroState,
         BASELINE_AVG_SQFT_PRICE,
         BASELINE_STAMP_DUTY,
+        MacroState,
     )
+
     return MacroState(
         hibor_1m=0.043,
         prime_rate=0.0575,
@@ -177,6 +180,7 @@ class TestPerturbMacroFields:
 
     def test_values_within_clamps(self):
         from backend.app.services.ensemble_runner import _FIELD_CLAMPS
+
         state = _make_macro_state()
         rng = np.random.default_rng(seed=0)
         # Run many perturbations to stress test clamping
@@ -208,13 +212,12 @@ class TestPerturbMacroFields:
         rng = np.random.default_rng(seed=99)
         result = _perturb_macro_fields(state, rng, sigma_fraction=0.0)
         import dataclasses
+
         state_dict = dataclasses.asdict(state)
         for field in PERTURBABLE_FIELDS:
             base = state_dict.get(field)
             if base is not None:
-                assert abs(result[field] - float(base)) < 1e-6, (
-                    f"{field}: expected {base}, got {result[field]}"
-                )
+                assert abs(result[field] - float(base)) < 1e-6, f"{field}: expected {base}, got {result[field]}"
 
 
 # ---------------------------------------------------------------------------
@@ -310,16 +313,34 @@ class TestEnsembleAnalyzerComputePercentiles:
                 UNIQUE(session_id, round_number)
             )
         """)
-        macro_a = json.dumps({"ccl_index": 155.0, "hsi_level": 17000.0,
-                               "unemployment_rate": 0.028, "gdp_growth": 0.033,
-                               "consumer_confidence": 89.0, "net_migration": -10000,
-                               "hibor_1m": 0.042, "fed_rate": 0.052,
-                               "china_gdp_growth": 0.055, "taiwan_strait_risk": 0.28})
-        macro_b = json.dumps({"ccl_index": 145.0, "hsi_level": 16200.0,
-                               "unemployment_rate": 0.031, "gdp_growth": 0.029,
-                               "consumer_confidence": 85.0, "net_migration": -15000,
-                               "hibor_1m": 0.045, "fed_rate": 0.055,
-                               "china_gdp_growth": 0.048, "taiwan_strait_risk": 0.35})
+        macro_a = json.dumps(
+            {
+                "ccl_index": 155.0,
+                "hsi_level": 17000.0,
+                "unemployment_rate": 0.028,
+                "gdp_growth": 0.033,
+                "consumer_confidence": 89.0,
+                "net_migration": -10000,
+                "hibor_1m": 0.042,
+                "fed_rate": 0.052,
+                "china_gdp_growth": 0.055,
+                "taiwan_strait_risk": 0.28,
+            }
+        )
+        macro_b = json.dumps(
+            {
+                "ccl_index": 145.0,
+                "hsi_level": 16200.0,
+                "unemployment_rate": 0.031,
+                "gdp_growth": 0.029,
+                "consumer_confidence": 85.0,
+                "net_migration": -15000,
+                "hibor_1m": 0.045,
+                "fed_rate": 0.055,
+                "china_gdp_growth": 0.048,
+                "taiwan_strait_risk": 0.35,
+            }
+        )
         await test_db.execute(
             "INSERT INTO macro_snapshots (session_id, round_number, macro_json) VALUES (?,?,?)",
             (session_a, 5, macro_a),
@@ -366,18 +387,20 @@ class TestEnsembleAnalyzerComputePercentiles:
             )
         """)
         for sid, val in zip(session_ids, values):
-            macro_json = json.dumps({
-                "ccl_index": val,
-                "hsi_level": val * 100,
-                "unemployment_rate": 0.03,
-                "gdp_growth": 0.03,
-                "consumer_confidence": 88.0,
-                "net_migration": -12000,
-                "hibor_1m": 0.043,
-                "fed_rate": 0.053,
-                "china_gdp_growth": 0.052,
-                "taiwan_strait_risk": 0.3,
-            })
+            macro_json = json.dumps(
+                {
+                    "ccl_index": val,
+                    "hsi_level": val * 100,
+                    "unemployment_rate": 0.03,
+                    "gdp_growth": 0.03,
+                    "consumer_confidence": 88.0,
+                    "net_migration": -12000,
+                    "hibor_1m": 0.043,
+                    "fed_rate": 0.053,
+                    "china_gdp_growth": 0.052,
+                    "taiwan_strait_risk": 0.3,
+                }
+            )
             await test_db.execute(
                 "INSERT INTO macro_snapshots (session_id, round_number, macro_json) VALUES (?,?,?)",
                 (sid, 10, macro_json),
@@ -391,8 +414,7 @@ class TestEnsembleAnalyzerComputePercentiles:
 
         for band in result.distributions:
             assert band.p10 <= band.p25 <= band.p50 <= band.p75 <= band.p90, (
-                f"{band.metric_name}: percentiles not ordered: "
-                f"{band.p10} {band.p25} {band.p50} {band.p75} {band.p90}"
+                f"{band.metric_name}: percentiles not ordered: {band.p10} {band.p25} {band.p50} {band.p75} {band.p90}"
             )
 
 
@@ -409,8 +431,8 @@ class TestEnsembleRunner:
         We monkeypatch EnsembleRunner._run_single_trial to avoid spawning real
         OASIS subprocesses while still exercising the orchestration logic.
         """
-        import backend.app.services.ensemble_runner as er_module
         import backend.app.services.ensemble_analyzer as ea_module
+        import backend.app.services.ensemble_runner as er_module
 
         parent_id = str(uuid.uuid4())
 
@@ -426,13 +448,15 @@ class TestEnsembleRunner:
             (
                 parent_id,
                 "Test Parent",
-                json.dumps({
-                    "agent_count": 50,
-                    "round_count": 10,
-                    "agent_csv_path": "/tmp/test.csv",
-                    "llm_provider": "openrouter",
-                    "llm_model": "deepseek/deepseek-v3.2",
-                }),
+                json.dumps(
+                    {
+                        "agent_count": 50,
+                        "round_count": 10,
+                        "agent_csv_path": "/tmp/test.csv",
+                        "llm_provider": "openrouter",
+                        "llm_model": "deepseek/deepseek-v3.2",
+                    }
+                ),
             ),
         )
         await test_db.commit()
@@ -454,28 +478,27 @@ class TestEnsembleRunner:
 
         fake_branch_ids: list[str] = []
 
-        async def _fake_run_single_trial(
-            parent_session_id, parent_config, trial_index, perturbation
-        ):
+        async def _fake_run_single_trial(parent_session_id, parent_config, trial_index, perturbation):
             """Stub that records a completed TrialRecord and seeds a macro snapshot."""
             branch_id = str(uuid.uuid4())
             fake_branch_ids.append(branch_id)
-            macro_json = json.dumps({
-                "ccl_index": 148.0 + trial_index * 3,
-                "hsi_level": 16500.0 + trial_index * 400,
-                "unemployment_rate": 0.029 + trial_index * 0.001,
-                "gdp_growth": 0.032,
-                "consumer_confidence": 88.0,
-                "net_migration": -12000,
-                "hibor_1m": 0.043,
-                "fed_rate": 0.053,
-                "china_gdp_growth": 0.052,
-                "taiwan_strait_risk": 0.3,
-            })
+            macro_json = json.dumps(
+                {
+                    "ccl_index": 148.0 + trial_index * 3,
+                    "hsi_level": 16500.0 + trial_index * 400,
+                    "unemployment_rate": 0.029 + trial_index * 0.001,
+                    "gdp_growth": 0.032,
+                    "consumer_confidence": 88.0,
+                    "net_migration": -12000,
+                    "hibor_1m": 0.043,
+                    "fed_rate": 0.053,
+                    "china_gdp_growth": 0.052,
+                    "taiwan_strait_risk": 0.3,
+                }
+            )
             async with er_module.get_db() as db:
                 await db.execute(
-                    "INSERT OR REPLACE INTO macro_snapshots "
-                    "(session_id, round_number, macro_json) VALUES (?,?,?)",
+                    "INSERT OR REPLACE INTO macro_snapshots (session_id, round_number, macro_json) VALUES (?,?,?)",
                     (branch_id, 10, macro_json),
                 )
                 await db.commit()
@@ -555,6 +578,7 @@ class TestEnsembleRunner:
 
         monkeypatch.setattr(er_module, "get_db", lambda: _mock_db_context(test_db))
         import backend.app.services.ensemble_analyzer as ea_module
+
         monkeypatch.setattr(ea_module, "get_db", lambda: _mock_db_context(test_db))
 
         mock_mc_instance = MagicMock()

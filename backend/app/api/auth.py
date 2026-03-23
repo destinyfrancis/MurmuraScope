@@ -2,29 +2,27 @@
 
 from __future__ import annotations
 
+# ---------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------
+import os
 import re
+import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordBearer
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel, ConfigDict, field_validator
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from backend.app.models.response import APIResponse
 from backend.app.utils.db import get_db
 from backend.app.utils.logger import get_logger
-
-# ---------------------------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------------------------
-
-import os
-import secrets
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = get_logger("api.auth")
@@ -148,9 +146,7 @@ def _decode_token(token: str) -> str:
         ) from exc
 
 
-_oauth2_scheme_optional = OAuth2PasswordBearer(
-    tokenUrl="/api/auth/login", auto_error=False
-)
+_oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
 # ---------------------------------------------------------------------------
 # Dependency: get_current_user
@@ -255,9 +251,7 @@ async def register(request: Request, req: RegisterRequest) -> APIResponse:
     try:
         async with get_db() as db:
             # Check for duplicate email
-            cursor = await db.execute(
-                "SELECT id FROM users WHERE email = ?", (req.email,)
-            )
+            cursor = await db.execute("SELECT id FROM users WHERE email = ?", (req.email,))
             existing = await cursor.fetchone()
             if existing is not None:
                 raise HTTPException(status_code=409, detail="Email already registered")

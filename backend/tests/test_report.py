@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import json
 import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
-
 
 # ======================================================================
 # Report generation
@@ -86,9 +85,7 @@ class TestReportGenerationProducesMarkdown:
         )
         await test_db.commit()
 
-        cursor = await test_db.execute(
-            "SELECT * FROM reports WHERE id = ?", (report_id,)
-        )
+        cursor = await test_db.execute("SELECT * FROM reports WHERE id = ?", (report_id,))
         row = await cursor.fetchone()
         assert row is not None
         assert "## Executive Summary" in row["content_markdown"]
@@ -109,22 +106,26 @@ class TestReActLoopCallsTools:
         mock_llm_client.chat.side_effect = [
             # First call: LLM wants to use a tool
             MagicMock(
-                content=json.dumps({
-                    "thought": "I need to query the simulation data for sentiment trends.",
-                    "action": "query_simulation_data",
-                    "action_input": {"session_id": "s-1", "metric": "sentiment"},
-                }),
+                content=json.dumps(
+                    {
+                        "thought": "I need to query the simulation data for sentiment trends.",
+                        "action": "query_simulation_data",
+                        "action_input": {"session_id": "s-1", "metric": "sentiment"},
+                    }
+                ),
                 model="test-model",
                 usage={"prompt_tokens": 100, "completion_tokens": 80, "total_tokens": 180},
                 cost_usd=0.001,
             ),
             # Second call: LLM produces final answer
             MagicMock(
-                content=json.dumps({
-                    "thought": "I have the data. Now I can generate the report.",
-                    "action": "final_answer",
-                    "action_input": "## Report\n\nSentiment turned negative in round 15.",
-                }),
+                content=json.dumps(
+                    {
+                        "thought": "I have the data. Now I can generate the report.",
+                        "action": "final_answer",
+                        "action_input": "## Report\n\nSentiment turned negative in round 15.",
+                    }
+                ),
                 model="test-model",
                 usage={"prompt_tokens": 200, "completion_tokens": 100, "total_tokens": 300},
                 cost_usd=0.002,
@@ -140,10 +141,12 @@ class TestReActLoopCallsTools:
 
         # Simulate tool result being appended
         messages.append({"role": "assistant", "content": first_response.content})
-        messages.append({
-            "role": "user",
-            "content": json.dumps({"tool_result": {"sentiment_data": [0.6, 0.5, 0.3, -0.1]}}),
-        })
+        messages.append(
+            {
+                "role": "user",
+                "content": json.dumps({"tool_result": {"sentiment_data": [0.6, 0.5, 0.3, -0.1]}}),
+            }
+        )
 
         second_response = await mock_llm_client.chat(messages=messages)
         second_parsed = json.loads(second_response.content)
@@ -154,11 +157,13 @@ class TestReActLoopCallsTools:
     async def test_react_loop_handles_tool_error(self, mock_llm_client):
         mock_llm_client.chat.side_effect = [
             MagicMock(
-                content=json.dumps({
-                    "thought": "Tool returned an error. I will try a different approach.",
-                    "action": "final_answer",
-                    "action_input": "## Report\n\nInsufficient data for detailed analysis.",
-                }),
+                content=json.dumps(
+                    {
+                        "thought": "Tool returned an error. I will try a different approach.",
+                        "action": "final_answer",
+                        "action_input": "## Report\n\nInsufficient data for detailed analysis.",
+                    }
+                ),
                 model="test-model",
                 usage={"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150},
                 cost_usd=0.001,
@@ -313,7 +318,7 @@ class TestAgentInterviewUsesHistory:
         assert "property" in response.content.lower()
 
 
-
 def test_report_agent_has_validation_tool():
     from backend.app.services.report_agent import TOOLS
+
     assert "get_validation_summary" in TOOLS

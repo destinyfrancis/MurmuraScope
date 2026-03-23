@@ -8,18 +8,18 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from backend.app.services.report_agent import (
+    TOOLS,
     ReportAgent,
     _build_initial_prompt,
     _extract_final_report,
     _extract_tool_call,
     _parse_report,
-    TOOLS,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture()
 def mock_ipc():
@@ -160,11 +160,16 @@ class TestBuildInitialPrompt:
 class TestToolsRegistry:
     def test_has_expected_tools(self):
         expected = {
-            "query_graph", "get_sentiment_distribution",
-            "get_demographic_breakdown", "interview_agents",
-            "get_macro_context", "calculate_cashflow",
-            "get_decision_summary", "get_sentiment_timeline",
-            "get_ensemble_forecast", "get_macro_history",
+            "query_graph",
+            "get_sentiment_distribution",
+            "get_demographic_breakdown",
+            "interview_agents",
+            "get_macro_context",
+            "calculate_cashflow",
+            "get_decision_summary",
+            "get_sentiment_timeline",
+            "get_ensemble_forecast",
+            "get_macro_history",
         }
         assert expected.issubset(set(TOOLS.keys()))
 
@@ -215,14 +220,11 @@ class TestGenerateReport:
     async def test_immediate_final_report(self, agent):
         """LLM returns FINAL_REPORT on first call."""
         mock_response = MagicMock()
-        mock_response.content = (
-            "## FINAL_REPORT\n"
-            "# Test Report\n\n"
-            "1. Finding one\n"
-            "2. Finding two\n"
-        )
+        mock_response.content = "## FINAL_REPORT\n# Test Report\n\n1. Finding one\n2. Finding two\n"
 
-        with patch("backend.app.services.report_agent._call_llm", new_callable=AsyncMock, return_value=mock_response.content):
+        with patch(
+            "backend.app.services.report_agent._call_llm", new_callable=AsyncMock, return_value=mock_response.content
+        ):
             with patch("backend.app.services.report_agent._persist_report", new_callable=AsyncMock):
                 report = await agent.generate_report("sess-1", "full")
 
@@ -240,11 +242,7 @@ class TestGenerateReport:
             call_count += 1
             if call_count == 1:
                 return '{"tool": "calculate_cashflow", "params": {"property_price": 5000000}}'
-            return (
-                "## FINAL_REPORT\n"
-                "# Analysis Complete\n\n"
-                "1. Cashflow is healthy\n"
-            )
+            return "## FINAL_REPORT\n# Analysis Complete\n\n1. Cashflow is healthy\n"
 
         with patch("backend.app.services.report_agent._call_llm", side_effect=mock_llm):
             with patch("backend.app.services.report_agent._persist_report", new_callable=AsyncMock):
@@ -295,7 +293,9 @@ class TestReportChat:
     @pytest.mark.asyncio
     async def test_chat_returns_response(self, agent):
         with patch("backend.app.services.report_agent._call_llm", new_callable=AsyncMock, return_value="回覆內容"):
-            with patch("backend.app.services.report_agent._load_report_context", new_callable=AsyncMock, return_value=None):
+            with patch(
+                "backend.app.services.report_agent._load_report_context", new_callable=AsyncMock, return_value=None
+            ):
                 result = await agent.chat("sess-1", "What about housing?")
 
         assert result == "回覆內容"

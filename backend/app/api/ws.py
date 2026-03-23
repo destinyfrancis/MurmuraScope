@@ -31,10 +31,7 @@ _MAX_IDLE_PINGS = 60
 def _cleanup_stale_progress() -> None:
     """Remove progress store entries older than 1 hour."""
     now = time.monotonic()
-    stale = [
-        sid for sid, ts in _store_timestamps.items()
-        if now - ts > 3600.0
-    ]
+    stale = [sid for sid, ts in _store_timestamps.items() if now - ts > 3600.0]
     for sid in stale:
         _progress_store.pop(sid, None)
         _progress_queues.pop(sid, None)
@@ -95,6 +92,7 @@ async def simulation_progress(
     if token:
         try:
             from backend.app.api.auth import _decode_token  # noqa: PLC0415
+
             _decode_token(token)
         except Exception:
             await websocket.close(code=4003, reason="Invalid or expired token")
@@ -136,7 +134,8 @@ async def simulation_progress(
                 if idle_ping_count >= _MAX_IDLE_PINGS:
                     logger.info(
                         "WebSocket idle limit reached for session %s (%d pings), closing",
-                        session_id, idle_ping_count,
+                        session_id,
+                        idle_ping_count,
                     )
                     break
                 # Send a ping to keep the connection alive.

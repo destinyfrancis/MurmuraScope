@@ -9,10 +9,7 @@ from __future__ import annotations
 
 import dataclasses
 import math
-import os
-import tempfile
 
-import aiosqlite
 import numpy as np
 import pytest
 
@@ -20,7 +17,6 @@ from backend.app.services.validation_suite import (
     StructuralBreak,
     detect_structural_breaks,
 )
-
 
 # ---------------------------------------------------------------------------
 # Bai-Perron structural break tests
@@ -80,7 +76,10 @@ class TestBaiPerronDetection:
         periods = [f"T{i}" for i in range(len(series))]
 
         breaks = detect_structural_breaks(
-            series, periods=periods, max_breaks=2, min_segment=8,
+            series,
+            periods=periods,
+            max_breaks=2,
+            min_segment=8,
         )
 
         assert len(breaks) <= 2
@@ -199,9 +198,9 @@ class TestHSIDecomposition:
         assert dataclasses.is_dataclass(DecompositionResult)
         assert dataclasses.is_dataclass(HSIDecomposition)
 
-        decomposer = __import__(
-            "backend.app.services.hsi_decomposer", fromlist=["HSIDecomposer"]
-        ).HSIDecomposer(db_path=populated_db_path)
+        decomposer = __import__("backend.app.services.hsi_decomposer", fromlist=["HSIDecomposer"]).HSIDecomposer(
+            db_path=populated_db_path
+        )
         result = await decomposer.decompose(n_quarters=20)
 
         with pytest.raises(dataclasses.FrozenInstanceError):
@@ -218,9 +217,7 @@ class TestHSIDecomposition:
 
         conn = sqlite3.connect(db_path)
         conn.execute(
-            "CREATE TABLE IF NOT EXISTS market_data ("
-            "  id INTEGER PRIMARY KEY, date TEXT, ticker TEXT, close REAL"
-            ")"
+            "CREATE TABLE IF NOT EXISTS market_data (  id INTEGER PRIMARY KEY, date TEXT, ticker TEXT, close REAL)"
         )
         conn.execute(
             "CREATE TABLE IF NOT EXISTS hk_data_snapshots ("
@@ -335,9 +332,7 @@ class TestHSIDecomposition:
 
         conn = sqlite3.connect(db_path)
         conn.execute(
-            "CREATE TABLE IF NOT EXISTS market_data ("
-            "  id INTEGER PRIMARY KEY, date TEXT, ticker TEXT, close REAL"
-            ")"
+            "CREATE TABLE IF NOT EXISTS market_data (  id INTEGER PRIMARY KEY, date TEXT, ticker TEXT, close REAL)"
         )
         conn.execute(
             "CREATE TABLE IF NOT EXISTS hk_data_snapshots ("
@@ -380,26 +375,24 @@ class TestLifecycleMPC:
 
         mpc_elderly = _lifecycle_mpc(65)
         mpc_middle = _lifecycle_mpc(50)
-        assert mpc_elderly > mpc_middle, (
-            f"Elderly MPC {mpc_elderly} should exceed middle-age MPC {mpc_middle}"
-        )
+        assert mpc_elderly > mpc_middle, f"Elderly MPC {mpc_elderly} should exceed middle-age MPC {mpc_middle}"
 
     def test_lifecycle_mpc_age_bands(self) -> None:
         """Verify all four age bands return expected values."""
         from backend.app.services.consumer_model import _lifecycle_mpc
 
-        assert _lifecycle_mpc(25) == pytest.approx(1.05)   # < 30
-        assert _lifecycle_mpc(35) == pytest.approx(0.88)   # 30-44
-        assert _lifecycle_mpc(50) == pytest.approx(0.78)   # 45-59
-        assert _lifecycle_mpc(70) == pytest.approx(0.92)   # 60+
+        assert _lifecycle_mpc(25) == pytest.approx(1.05)  # < 30
+        assert _lifecycle_mpc(35) == pytest.approx(0.88)  # 30-44
+        assert _lifecycle_mpc(50) == pytest.approx(0.78)  # 45-59
+        assert _lifecycle_mpc(70) == pytest.approx(0.92)  # 60+
 
     def test_lifecycle_mpc_boundary(self) -> None:
         """Boundary ages should map to the correct band."""
         from backend.app.services.consumer_model import _lifecycle_mpc
 
-        assert _lifecycle_mpc(30) == pytest.approx(0.88)   # age 30 → band [30, 45)
-        assert _lifecycle_mpc(45) == pytest.approx(0.78)   # age 45 → band [45, 60)
-        assert _lifecycle_mpc(60) == pytest.approx(0.92)   # age 60 → elderly band
+        assert _lifecycle_mpc(30) == pytest.approx(0.88)  # age 30 → band [30, 45)
+        assert _lifecycle_mpc(45) == pytest.approx(0.78)  # age 45 → band [45, 60)
+        assert _lifecycle_mpc(60) == pytest.approx(0.92)  # age 60 → elderly band
 
     def test_wealth_effect_positive_ccl(self) -> None:
         """Rising property prices (positive ccl_change) should boost total consumption."""

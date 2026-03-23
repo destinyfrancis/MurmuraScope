@@ -6,9 +6,9 @@ Implements the Valence-Arousal-Dominance model with:
 - Macro shock signal injection
 - Big Five personality modulation
 """
+
 from __future__ import annotations
 
-import math
 import random
 from dataclasses import replace
 from typing import Any
@@ -31,16 +31,16 @@ class EmotionalEngine:
     """VAD emotional state updater for simulation agents."""
 
     # Inertia / influence coefficients
-    VALENCE_INERTIA: float = 0.7            # α — how much previous valence persists
-    SOCIAL_INFLUENCE: float = 0.15          # β — feed sentiment effect
-    MACRO_INFLUENCE: float = 0.10           # γ — macro shock effect
-    PERSONAL_INFLUENCE: float = 0.05        # δ — personal event effect
+    VALENCE_INERTIA: float = 0.7  # α — how much previous valence persists
+    SOCIAL_INFLUENCE: float = 0.15  # β — feed sentiment effect
+    MACRO_INFLUENCE: float = 0.10  # γ — macro shock effect
+    PERSONAL_INFLUENCE: float = 0.05  # δ — personal event effect
 
-    AROUSAL_DECAY: float = 0.6              # α_a — decay toward baseline
-    AROUSAL_CHANGE_SENSITIVITY: float = 0.25    # β_a — arousal driven by valence change
-    CONTROVERSY_SENSITIVITY: float = 0.15   # γ_a — arousal from controversy
+    AROUSAL_DECAY: float = 0.6  # α_a — decay toward baseline
+    AROUSAL_CHANGE_SENSITIVITY: float = 0.25  # β_a — arousal driven by valence change
+    CONTROVERSY_SENSITIVITY: float = 0.15  # γ_a — arousal from controversy
 
-    DOMINANCE_SOCIAL_VALIDATION: float = 0.1    # social validation coefficient
+    DOMINANCE_SOCIAL_VALIDATION: float = 0.1  # social validation coefficient
 
     def initialize_state(
         self,
@@ -279,10 +279,7 @@ class EmotionalEngine:
         """
         if not states:
             return
-        rows = [
-            (s.session_id, s.agent_id, s.round_number, s.valence, s.arousal, s.dominance)
-            for s in states
-        ]
+        rows = [(s.session_id, s.agent_id, s.round_number, s.valence, s.arousal, s.dominance) for s in states]
         await db.executemany(
             """INSERT OR REPLACE INTO emotional_states
                (session_id, agent_id, round_number, valence, arousal, dominance)

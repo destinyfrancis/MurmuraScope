@@ -19,17 +19,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from backend.app.services.retrospective_validator import (
-    MIN_METRICS_REQUIRED,
     VALIDATABLE_METRICS,
     RetrospectiveValidator,
     ValidationResult,
-    _FoldScopedCoefficients,
     _enumerate_periods,
     _find_best_timing_offset,
+    _FoldScopedCoefficients,
     _parse_period,
     _period_to_sortable,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -651,7 +649,9 @@ class TestKfoldNoLookahead:
                 side_effect=lambda: mock_db(),
             ),
             patch.object(
-                RetrospectiveValidator, "validate", _tracking_validate,
+                RetrospectiveValidator,
+                "validate",
+                _tracking_validate,
             ),
         ):
             v = RetrospectiveValidator()
@@ -663,8 +663,7 @@ class TestKfoldNoLookahead:
         for call in captured_calls:
             coefs = call.get("coefficients")
             assert coefs is not None, (
-                "kfold passed coefficients=None — would load global coefficients "
-                "and cause look-ahead data leakage"
+                "kfold passed coefficients=None — would load global coefficients and cause look-ahead data leakage"
             )
             assert isinstance(coefs, _FoldScopedCoefficients), (
                 f"Expected _FoldScopedCoefficients, got {type(coefs).__name__}"
@@ -683,9 +682,11 @@ class TestKfoldNoLookahead:
         all_rows = [rows] * (len(VALIDATABLE_METRICS) + 10)
         mock_db = _make_mock_db(all_rows)
 
-        injected = _FoldScopedCoefficients({
-            "hsi_level": [("2019-Q1", 100.0), ("2019-Q2", 110.0)],
-        })
+        injected = _FoldScopedCoefficients(
+            {
+                "hsi_level": [("2019-Q1", 100.0), ("2019-Q2", 110.0)],
+            }
+        )
 
         with (
             patch(
@@ -694,13 +695,13 @@ class TestKfoldNoLookahead:
             ),
             patch(
                 "backend.app.services.calibrated_coefficients.CalibratedCoefficients.load",
-                side_effect=RuntimeError(
-                    "Global coefficients should NOT be loaded when injected"
-                ),
+                side_effect=RuntimeError("Global coefficients should NOT be loaded when injected"),
             ),
         ):
             v = RetrospectiveValidator()
             # Should NOT raise — injected coefficients skip global loading
             results = await v.validate(
-                "2020-Q1", "2020-Q4", coefficients=injected,
+                "2020-Q1",
+                "2020-Q4",
+                coefficients=injected,
             )

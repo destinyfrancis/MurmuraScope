@@ -3,6 +3,7 @@
 Provides endpoints for bias probing, phase transition alerts,
 and emergence scorecards for simulation sessions.
 """
+
 from __future__ import annotations
 
 import aiosqlite
@@ -114,11 +115,14 @@ async def run_bias_probe(session_id: str, sample_size: int = 30) -> APIResponse:
 
     probe = BiasProbe()
     result = await probe.probe(session_id, sample_size=sample_size)
-    return APIResponse(success=True, data={
-        "session_id": result.session_id,
-        "scenario": result.scenario,
-        "agreement_rate": result.agreement_rate,
-        "persona_compliance": result.persona_compliance,
-        "bias_detected": result.bias_detected,
-        "diversity_index": result.diversity_index,
-    })
+    return APIResponse(
+        success=True,
+        data={
+            "session_id": result.session_id,
+            "scenario": result.scenario,
+            "agreement_rate": result.agreement_rate,
+            "persona_compliance": result.persona_compliance,
+            "bias_detected": result.bias_detected,
+            "diversity_index": result.diversity_index,
+        },
+    )

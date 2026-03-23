@@ -7,27 +7,22 @@
 - run_benchmark returns correct structure
 - Output file creation
 """
+
 from __future__ import annotations
 
-import asyncio
 import json
-from pathlib import Path
 
 import pytest
 
 from backend.app.models.scale import (
     SCALE_1K,
-    SCALE_3K,
-    SCALE_10K,
     BenchmarkResult,
-    ScaleTarget,
 )
 from backend.scripts.scale_benchmark import (
     _TARGETS,
     _write_result,
     run_benchmark,
 )
-
 
 # ---------------------------------------------------------------------------
 # BenchmarkResult SLA checks
@@ -40,9 +35,9 @@ class TestBenchmarkResultSLA:
             preset_name="1k",
             agent_count=1000,
             rounds_completed=10,
-            total_duration_s=200.0,    # < 300 SLA
+            total_duration_s=200.0,  # < 300 SLA
             avg_round_duration_s=20.0,  # < 30 SLA
-            peak_memory_mb=2000.0,     # < 4096 SLA
+            peak_memory_mb=2000.0,  # < 4096 SLA
             passed=True,
         )
         assert result.passed is True
@@ -54,7 +49,7 @@ class TestBenchmarkResultSLA:
             rounds_completed=10,
             total_duration_s=200.0,
             avg_round_duration_s=20.0,
-            peak_memory_mb=9999.0,     # > 4096 SLA
+            peak_memory_mb=9999.0,  # > 4096 SLA
             passed=False,
         )
         assert result.passed is False

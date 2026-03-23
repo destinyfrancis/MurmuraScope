@@ -11,10 +11,8 @@ from __future__ import annotations
 
 import csv
 import io
-import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 import httpx
 
@@ -160,15 +158,17 @@ async def _download_ckan_dataset(
             numeric = _try_parse_float(val)
             if numeric is not None:
                 metric = f"{metric_prefix}_{key.lower().replace(' ', '_').replace('/', '_')}"
-                records.append(EducationRecord(
-                    category=category,
-                    metric=metric,
-                    value=numeric,
-                    unit=unit,
-                    period=period,
-                    source="Education Bureau",
-                    source_url=resource_url,
-                ))
+                records.append(
+                    EducationRecord(
+                        category=category,
+                        metric=metric,
+                        value=numeric,
+                        unit=unit,
+                        period=period,
+                        source="Education Bureau",
+                        source_url=resource_url,
+                    )
+                )
 
     logger.info("Parsed %d records from %s", len(records), dataset_id)
     return EducationResult(
@@ -252,13 +252,11 @@ async def download_ugc_statistics(client: httpx.AsyncClient | None = None) -> Ed
             dest = RAW_DIR / "ugc_statistics.html"
             dest.write_bytes(resp.content)
             logger.warning(
-                "UGC data fetched as HTML — manual parsing required. "
-                "Consider using data.gov.hk datasets instead."
+                "UGC data fetched as HTML — manual parsing required. Consider using data.gov.hk datasets instead."
             )
         except httpx.HTTPError:
             logger.warning(
-                "UGC CDCF portal not directly accessible. "
-                "UGC statistics need to be downloaded manually from %s",
+                "UGC CDCF portal not directly accessible. UGC statistics need to be downloaded manually from %s",
                 ugc_url,
             )
             dest = RAW_DIR / "ugc_statistics_placeholder.txt"
@@ -304,7 +302,8 @@ async def download_all_education(client: httpx.AsyncClient | None = None) -> lis
 
         logger.info(
             "Education download complete: %d/%d datasets succeeded",
-            len(results), len(downloaders),
+            len(results),
+            len(downloaders),
         )
         return results
     finally:

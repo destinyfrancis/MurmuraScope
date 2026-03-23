@@ -1,8 +1,8 @@
 """Unit tests for AutoForkService."""
+
 from __future__ import annotations
 
 import dataclasses
-import json
 from contextlib import asynccontextmanager
 from unittest.mock import patch
 
@@ -11,13 +11,13 @@ import pytest
 import pytest_asyncio
 
 from backend.app.services.auto_fork_service import (
+    _JSD_BASE_THRESHOLD,
+    _JSD_STRONG_SIGNAL_MULTIPLIER,
+    _MAX_AUTO_FORKS,
+    _MIN_AUTO_FORKS,
     AutoForkResult,
     _apply_counterfactual_nudge,
     _nudge_description,
-    _MIN_AUTO_FORKS,
-    _MAX_AUTO_FORKS,
-    _JSD_STRONG_SIGNAL_MULTIPLIER,
-    _JSD_BASE_THRESHOLD,
     compute_fork_budget,
     fork_at_tipping_point,
 )
@@ -132,6 +132,7 @@ async def test_fork_copies_kg_nodes_and_relationship_states(fork_db):
     Before fix: only 7 tables copied — kg_nodes and relationship_states are missing.
     After fix: 9 tables copied including both new tables.
     """
+
     @asynccontextmanager
     async def _mock_get_db():
         yield fork_db
@@ -150,22 +151,14 @@ async def test_fork_copies_kg_nodes_and_relationship_states(fork_db):
 
     for branch_id in (result.natural_branch_id, result.nudged_branch_id):
         # kg_nodes must be copied
-        cur = await fork_db.execute(
-            "SELECT COUNT(*) FROM kg_nodes WHERE session_id = ?", (branch_id,)
-        )
+        cur = await fork_db.execute("SELECT COUNT(*) FROM kg_nodes WHERE session_id = ?", (branch_id,))
         row = await cur.fetchone()
-        assert row[0] == 1, (
-            f"kg_nodes not copied to branch {branch_id[:8]}: got {row[0]} rows"
-        )
+        assert row[0] == 1, f"kg_nodes not copied to branch {branch_id[:8]}: got {row[0]} rows"
 
         # relationship_states must be copied (round 1 ≤ fork_round 5)
-        cur = await fork_db.execute(
-            "SELECT COUNT(*) FROM relationship_states WHERE session_id = ?", (branch_id,)
-        )
+        cur = await fork_db.execute("SELECT COUNT(*) FROM relationship_states WHERE session_id = ?", (branch_id,))
         row = await cur.fetchone()
-        assert row[0] == 1, (
-            f"relationship_states not copied to branch {branch_id[:8]}: got {row[0]} rows"
-        )
+        assert row[0] == 1, f"relationship_states not copied to branch {branch_id[:8]}: got {row[0]} rows"
 
 
 # ---------------------------------------------------------------------------
@@ -215,9 +208,7 @@ async def test_fork_failure_does_not_leave_orphaned_sessions(fork_db):
     assert result is None, "fork_at_tipping_point should return None on failure"
 
     # DB should have no branch sessions (only parent survives after rollback)
-    cur = await fork_db.execute(
-        "SELECT COUNT(*) FROM simulation_sessions WHERE id != ?", (_PARENT_ID,)
-    )
+    cur = await fork_db.execute("SELECT COUNT(*) FROM simulation_sessions WHERE id != ?", (_PARENT_ID,))
     row = await cur.fetchone()
     assert row[0] == 0, f"Orphaned session rows found: {row[0]}"
 
@@ -225,6 +216,7 @@ async def test_fork_failure_does_not_leave_orphaned_sessions(fork_db):
 # ---------------------------------------------------------------------------
 # _apply_counterfactual_nudge
 # ---------------------------------------------------------------------------
+
 
 class TestApplyCounterfactualNudge:
     """Tests for belief nudge computation — pure function, no DB."""
@@ -281,6 +273,7 @@ class TestApplyCounterfactualNudge:
 # _nudge_description
 # ---------------------------------------------------------------------------
 
+
 class TestNudgeDescription:
     def test_polarize_description(self):
         desc = _nudge_description("polarize", 5)
@@ -306,6 +299,7 @@ class TestNudgeDescription:
 # AutoForkResult immutability
 # ---------------------------------------------------------------------------
 
+
 class TestAutoForkResult:
     def test_is_frozen(self):
         result = AutoForkResult(
@@ -323,6 +317,7 @@ class TestAutoForkResult:
 # ---------------------------------------------------------------------------
 # Guard constant
 # ---------------------------------------------------------------------------
+
 
 class TestAdaptiveForkBudget:
     def test_short_simulation_gets_min_budget(self):

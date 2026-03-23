@@ -19,7 +19,6 @@ from typing import Any
 import numpy as np
 from statsmodels.tsa.stattools import adfuller, grangercausalitytests
 
-from backend.app.utils.db import get_db
 from backend.app.utils.logger import get_logger
 
 logger = get_logger("validation_suite")
@@ -381,9 +380,7 @@ def validate_granger_causality(
     try:
         results = grangercausalitytests(data, maxlag=effective_max_lag, verbose=False)
     except Exception as exc:
-        logger.warning(
-            "Granger test failed for %s -> %s: %s", cause_name, effect_name, exc
-        )
+        logger.warning("Granger test failed for %s -> %s: %s", cause_name, effect_name, exc)
         return GrangerResult(
             cause_metric=cause_name,
             effect_metric=effect_name,
@@ -507,7 +504,7 @@ def _ols_rss(y: np.ndarray) -> float:
     x_mat = np.column_stack([np.ones(n), np.arange(n, dtype=np.float64)])
     betas, _, _, _ = np.linalg.lstsq(x_mat, y, rcond=None)
     residuals = y - x_mat @ betas
-    return float(np.sum(residuals ** 2))
+    return float(np.sum(residuals**2))
 
 
 def _bic(rss: float, n: int, k: int) -> float:
@@ -598,9 +595,7 @@ def detect_structural_breaks(
             if f_stat > best_f and p_value < 0.05:
                 global_idx = offset + idx
                 period_label = (
-                    periods[global_idx]
-                    if periods is not None and global_idx < len(periods)
-                    else str(global_idx)
+                    periods[global_idx] if periods is not None and global_idx < len(periods) else str(global_idx)
                 )
                 best = StructuralBreak(
                     break_point=period_label,
@@ -715,7 +710,7 @@ def validate_arch_effects(
         )
 
     e = np.array(clean, dtype=np.float64)
-    e2 = e ** 2
+    e2 = e**2
     n = len(e2)
 
     # Build lagged regressor matrix [1, e2_{t-1}, ..., e2_{t-p}]
@@ -723,7 +718,7 @@ def validate_arch_effects(
     n_obs = len(y)
     x_cols = [np.ones(n_obs)]
     for lag in range(1, lags + 1):
-        x_cols.append(e2[lags - lag: n - lag])
+        x_cols.append(e2[lags - lag : n - lag])
     x_mat = np.column_stack(x_cols)
 
     # OLS: beta = (X'X)^{-1} X'y
@@ -769,9 +764,7 @@ async def _load_macro_series(db: Any) -> dict[str, list[float]]:
     for label, category, metric in _MACRO_INDICATORS:
         try:
             cursor = await db.execute(
-                "SELECT value FROM hk_data_snapshots "
-                "WHERE category = ? AND metric = ? "
-                "ORDER BY period ASC",
+                "SELECT value FROM hk_data_snapshots WHERE category = ? AND metric = ? ORDER BY period ASC",
                 (category, metric),
             )
             rows = await cursor.fetchall()
@@ -789,9 +782,7 @@ async def _load_sentiment_series(db: Any) -> dict[str, list[float]]:
     series: dict[str, list[float]] = {}
     try:
         cursor = await db.execute(
-            "SELECT positive_ratio, negative_ratio, neutral_ratio "
-            "FROM social_sentiment "
-            "ORDER BY period ASC"
+            "SELECT positive_ratio, negative_ratio, neutral_ratio FROM social_sentiment ORDER BY period ASC"
         )
         rows = await cursor.fetchall()
         for col_idx, col_name in enumerate(_SENTIMENT_COLUMNS):
@@ -850,11 +841,7 @@ async def run_full_validation(db: Any) -> ValidationReport:
                     f"only {min_len} aligned points (<{_MIN_SERIES_LENGTH})"
                 )
                 continue
-            granger.append(
-                validate_granger_causality(
-                    cause_series, effect_series, sent_col, macro_label
-                )
-            )
+            granger.append(validate_granger_causality(cause_series, effect_series, sent_col, macro_label))
 
     # --- 3. Forecast accuracy (in-sample split: last 25% as holdout) ---
     accuracy: list[ForecastAccuracy] = []
@@ -896,9 +883,7 @@ async def run_full_validation(db: Any) -> ValidationReport:
         if garch_fit is not None:
             garch.append(garch_fit)
         else:
-            warnings.append(
-                f"GARCH fit failed for {arch_result.metric} despite ARCH effects detected"
-            )
+            warnings.append(f"GARCH fit failed for {arch_result.metric} despite ARCH effects detected")
 
     # --- 4. Overall score ---
     score = _compute_overall_score(stationarity, granger, accuracy)

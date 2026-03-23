@@ -25,6 +25,7 @@ logger = get_logger("api.simulation_actions")
 # Agent Groups
 # ---------------------------------------------------------------------------
 
+
 @router.get("/{session_id}/groups")
 async def list_groups(
     session_id: str,
@@ -122,6 +123,7 @@ async def get_group_members(
 # Collective Actions
 # ---------------------------------------------------------------------------
 
+
 @router.get("/{session_id}/collective-actions")
 async def list_collective_actions(
     session_id: str,
@@ -172,6 +174,7 @@ async def list_collective_actions(
 # Attention Allocation
 # ---------------------------------------------------------------------------
 
+
 @router.get("/{session_id}/attention/{agent_id}")
 async def get_agent_attention(
     session_id: str,
@@ -214,9 +217,7 @@ async def get_agent_attention(
                 )
             rows = await cursor.fetchall()
     except Exception as exc:
-        logger.exception(
-            "get_agent_attention failed session=%s agent=%d", session_id, agent_id
-        )
+        logger.exception("get_agent_attention failed session=%s agent=%d", session_id, agent_id)
         logger.exception("Internal error in get_agent_attention")
         raise HTTPException(status_code=500, detail="Internal server error") from exc
 
@@ -226,6 +227,7 @@ async def get_agent_attention(
 # ---------------------------------------------------------------------------
 # Wealth Transfers
 # ---------------------------------------------------------------------------
+
 
 @router.get("/{session_id}/wealth-transfers")
 async def list_wealth_transfers(
@@ -280,6 +282,7 @@ async def list_wealth_transfers(
 # ---------------------------------------------------------------------------
 # Fact Checks
 # ---------------------------------------------------------------------------
+
 
 @router.get("/{session_id}/fact-checks")
 async def list_fact_checks(

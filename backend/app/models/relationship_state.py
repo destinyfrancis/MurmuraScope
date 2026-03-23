@@ -9,10 +9,10 @@ Implements:
 All dataclasses are frozen to enforce immutability.  Use dataclasses.replace()
 to create updated states.
 """
+
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-
+from dataclasses import dataclass
 
 # ---------------------------------------------------------------------------
 # RelationshipState
@@ -106,7 +106,4 @@ class AttachmentStyle:
 
     def __post_init__(self) -> None:
         if self.style not in _VALID_STYLES:
-            raise ValueError(
-                f"Invalid attachment style '{self.style}'. "
-                f"Must be one of {sorted(_VALID_STYLES)}"
-            )
+            raise ValueError(f"Invalid attachment style '{self.style}'. Must be one of {sorted(_VALID_STYLES)}")

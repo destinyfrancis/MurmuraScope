@@ -19,11 +19,10 @@ from backend.app.models.activity_profile import (
     ActivityProfile,
 )
 from backend.app.services.temporal_activation import (
-    TemporalActivationService,
     _CHRONOTYPE_TEMPLATES,
     _START_HOUR,
+    TemporalActivationService,
 )
-
 
 # ---------------------------------------------------------------------------
 # ActivityProfile model tests
@@ -212,10 +211,7 @@ class TestGenerateProfile:
     def test_elderly_gets_morning_lark(self) -> None:
         """Agents 65+ should predominantly be morning_lark."""
         morning_count = sum(
-            1
-            for _ in range(50)
-            if self.svc.generate_profile(1, 70, "退休", self.rng).chronotype
-            == "morning_lark"
+            1 for _ in range(50) if self.svc.generate_profile(1, 70, "退休", self.rng).chronotype == "morning_lark"
         )
         # Expect at least 40% morning_lark (true rate is 60%)
         assert morning_count >= 20, f"Only {morning_count}/50 were morning_lark for 退休"
@@ -223,30 +219,21 @@ class TestGenerateProfile:
     def test_student_gets_evening_owl(self) -> None:
         """Students under 25 should predominantly be evening_owl."""
         owl_count = sum(
-            1
-            for _ in range(50)
-            if self.svc.generate_profile(1, 20, "學生", self.rng).chronotype
-            == "evening_owl"
+            1 for _ in range(50) if self.svc.generate_profile(1, 20, "學生", self.rng).chronotype == "evening_owl"
         )
         assert owl_count >= 20, f"Only {owl_count}/50 were evening_owl for 學生"
 
     def test_night_shift_occupation(self) -> None:
         """Non技術工人 should have some night_shift chronotypes."""
         night_count = sum(
-            1
-            for _ in range(50)
-            if self.svc.generate_profile(1, 35, "非技術工人", self.rng).chronotype
-            == "night_shift"
+            1 for _ in range(50) if self.svc.generate_profile(1, 35, "非技術工人", self.rng).chronotype == "night_shift"
         )
         assert night_count >= 5, f"Expected some night_shift, got {night_count}/50"
 
     def test_standard_worker_mostly_standard(self) -> None:
         """Office workers (文員, 30) should mostly be standard chronotype."""
         std_count = sum(
-            1
-            for _ in range(50)
-            if self.svc.generate_profile(1, 30, "文員", self.rng).chronotype
-            == "standard"
+            1 for _ in range(50) if self.svc.generate_profile(1, 30, "文員", self.rng).chronotype == "standard"
         )
         assert std_count >= 20, f"Only {std_count}/50 standard for office worker"
 

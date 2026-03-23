@@ -1,5 +1,7 @@
 """Tests for ConfidenceResult model and synthesize_confidence function."""
+
 import pytest
+
 from backend.app.models.validation import ConfidenceResult
 from backend.app.services.validation_suite import synthesize_confidence
 

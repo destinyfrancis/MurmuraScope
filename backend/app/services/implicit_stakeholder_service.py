@@ -12,6 +12,7 @@ Pipeline:
   4. Inject new nodes into kg_nodes with source="implicit_discovery".
   5. Return DiscoveryResult.
 """
+
 from __future__ import annotations
 
 import json
@@ -97,16 +98,13 @@ class ImplicitStakeholderService:
         try:
             raw_actors = await self._call_llm(seed_text, existing_nodes)
         except Exception:
-            logger.exception(
-                "ImplicitStakeholderService: LLM call failed for graph %s", graph_id
-            )
+            logger.exception("ImplicitStakeholderService: LLM call failed for graph %s", graph_id)
             return DiscoveryResult(stakeholders=(), nodes_added=0)
 
         # Load all current node titles for dedup
         current_titles = await self._load_kg_nodes(graph_id)
         existing_titles_norm = {
-            _normalize(n.get("label") or n.get("title") or "")
-            for n in current_titles + existing_nodes
+            _normalize(n.get("label") or n.get("title") or "") for n in current_titles + existing_nodes
         }
 
         # Filter and build new nodes
@@ -116,19 +114,19 @@ class ImplicitStakeholderService:
             if not name:
                 continue
             if _normalize(name) in existing_titles_norm:
-                logger.debug(
-                    "ImplicitStakeholderService: skipping '%s' (already in KG)", name
-                )
+                logger.debug("ImplicitStakeholderService: skipping '%s' (already in KG)", name)
                 continue
 
             actor_id = _to_slug(actor.get("id") or name)
-            new_stakeholders.append(ImplicitStakeholder(
-                id=actor_id,
-                name=name,
-                entity_type=actor.get("entity_type", "Organization"),
-                role=(actor.get("role") or "").strip(),
-                relevance_reason=(actor.get("relevance_reason") or "").strip(),
-            ))
+            new_stakeholders.append(
+                ImplicitStakeholder(
+                    id=actor_id,
+                    name=name,
+                    entity_type=actor.get("entity_type", "Organization"),
+                    role=(actor.get("role") or "").strip(),
+                    relevance_reason=(actor.get("relevance_reason") or "").strip(),
+                )
+            )
             existing_titles_norm.add(_normalize(name))  # prevent self-dups
 
         if not new_stakeholders:
@@ -137,7 +135,9 @@ class ImplicitStakeholderService:
         nodes_added = await self._persist_nodes(graph_id, new_stakeholders)
         logger.info(
             "ImplicitStakeholderService: graph=%s discovered %d actors, injected %d nodes",
-            graph_id, len(new_stakeholders), nodes_added,
+            graph_id,
+            len(new_stakeholders),
+            nodes_added,
         )
         return DiscoveryResult(
             stakeholders=tuple(new_stakeholders),

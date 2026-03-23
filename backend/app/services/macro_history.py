@@ -91,13 +91,9 @@ class MacroHistoryService:
                 )
                 await db.commit()
 
-            logger.debug(
-                "Saved macro snapshot session=%s round=%d", session_id, round_number
-            )
+            logger.debug("Saved macro snapshot session=%s round=%d", session_id, round_number)
         except Exception:
-            logger.exception(
-                "save_snapshot failed session=%s round=%d", session_id, round_number
-            )
+            logger.exception("save_snapshot failed session=%s round=%d", session_id, round_number)
 
     async def get_history(
         self,
@@ -176,9 +172,7 @@ class MacroHistoryService:
                 )
                 row = await cursor.fetchone()
         except Exception:
-            logger.exception(
-                "get_snapshot failed session=%s round=%d", session_id, round_number
-            )
+            logger.exception("get_snapshot failed session=%s round=%d", session_id, round_number)
             return None
 
         if row is None:
@@ -187,9 +181,7 @@ class MacroHistoryService:
         try:
             return json.loads(row[0])
         except (json.JSONDecodeError, TypeError):
-            logger.warning(
-                "get_snapshot: invalid JSON for session=%s round=%d", session_id, round_number
-            )
+            logger.warning("get_snapshot: invalid JSON for session=%s round=%d", session_id, round_number)
             return None
 
 

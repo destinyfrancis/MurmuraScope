@@ -20,13 +20,13 @@ logger = get_logger("attention_economy")
 # Constants
 # ---------------------------------------------------------------------------
 
-_TOTAL_POINTS: int = 24          # attention points per agent per round
-_FATIGUE_THRESHOLD: int = 5      # stop engaging new topics when below this
-_SHORT_POST_COST: int = 1        # ≤ 100 chars
-_MEDIUM_POST_COST: int = 2       # 101-300 chars
-_LONG_POST_COST: int = 3         # > 300 chars
-_NOVELTY_BONUS: float = 1.0      # sensitivity for completely new topics
-_DIMINISHING_CAP: float = 0.3    # minimum sensitivity after heavy engagement
+_TOTAL_POINTS: int = 24  # attention points per agent per round
+_FATIGUE_THRESHOLD: int = 5  # stop engaging new topics when below this
+_SHORT_POST_COST: int = 1  # ≤ 100 chars
+_MEDIUM_POST_COST: int = 2  # 101-300 chars
+_LONG_POST_COST: int = 3  # > 300 chars
+_NOVELTY_BONUS: float = 1.0  # sensitivity for completely new topics
+_DIMINISHING_CAP: float = 0.3  # minimum sensitivity after heavy engagement
 
 # ---------------------------------------------------------------------------
 # Frozen dataclasses
@@ -41,7 +41,7 @@ class AttentionBudget:
     agent_id: int
     round_number: int
     total_points: int
-    allocations: tuple[tuple[str, int], ...]   # (topic, points_spent)
+    allocations: tuple[tuple[str, int], ...]  # (topic, points_spent)
     remaining: int
 
 
@@ -50,7 +50,7 @@ class TopicSensitivity:
     """Immutable sensitivity score for a single topic."""
 
     topic: str
-    sensitivity: float   # 0.0–1.0; higher = more receptive
+    sensitivity: float  # 0.0–1.0; higher = more receptive
 
 
 # ---------------------------------------------------------------------------
@@ -88,6 +88,7 @@ async def _ensure_attention_table(db: Any) -> None:
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+
 def _post_cost(content: str) -> int:
     """Return attention cost for a post based on content length."""
     length = len(content)
@@ -105,6 +106,7 @@ def _extract_topics(content: str) -> list[str]:
     normalised topic strings (up to 3 per post).
     """
     import re
+
     topics: list[str] = []
     # Hashtag extraction
     hashtags = re.findall(r"#([\u4e00-\u9fa5\w]+)", content)
@@ -112,13 +114,24 @@ def _extract_topics(content: str) -> list[str]:
 
     # Keyword heuristics for common HK topics
     _KEYWORD_TOPICS: dict[str, str] = {
-        "樓": "房地產", "租": "房地產", "按揭": "房地產",
-        "移民": "移民", "BNO": "移民",
-        "股": "金融", "恒指": "金融", "HSI": "金融",
-        "政府": "政治", "選舉": "政治", "政黨": "政治",
-        "失業": "就業", "工作": "就業", "招聘": "就業",
-        "通脹": "宏觀經濟", "GDP": "宏觀經濟",
-        "疫情": "健康", "醫院": "健康",
+        "樓": "房地產",
+        "租": "房地產",
+        "按揭": "房地產",
+        "移民": "移民",
+        "BNO": "移民",
+        "股": "金融",
+        "恒指": "金融",
+        "HSI": "金融",
+        "政府": "政治",
+        "選舉": "政治",
+        "政黨": "政治",
+        "失業": "就業",
+        "工作": "就業",
+        "招聘": "就業",
+        "通脹": "宏觀經濟",
+        "GDP": "宏觀經濟",
+        "疫情": "健康",
+        "醫院": "健康",
     }
     for keyword, topic in _KEYWORD_TOPICS.items():
         if keyword in content and topic not in topics:
@@ -148,6 +161,7 @@ def _compute_sensitivity(
 # ---------------------------------------------------------------------------
 # Core allocation function
 # ---------------------------------------------------------------------------
+
 
 async def allocate_attention(
     session_id: str,
@@ -234,6 +248,7 @@ def compute_topic_sensitivity(budget: AttentionBudget) -> dict[str, float]:
 # Batch allocation
 # ---------------------------------------------------------------------------
 
+
 async def batch_allocate_attention(
     session_id: str,
     round_num: int,
@@ -302,14 +317,16 @@ async def batch_allocate_attention(
             alloc_dict = dict(budget.allocations)
             sensitvities = compute_topic_sensitivity(budget)
             for topic, points in alloc_dict.items():
-                rows_to_insert.append((
-                    session_id,
-                    budget.agent_id,
-                    round_num,
-                    topic,
-                    points,
-                    sensitvities.get(topic, 1.0),
-                ))
+                rows_to_insert.append(
+                    (
+                        session_id,
+                        budget.agent_id,
+                        round_num,
+                        topic,
+                        points,
+                        sensitvities.get(topic, 1.0),
+                    )
+                )
 
         if rows_to_insert:
             async with get_db() as db:
@@ -325,13 +342,17 @@ async def batch_allocate_attention(
 
         logger.debug(
             "batch_allocate_attention session=%s round=%d agents=%d rows=%d",
-            session_id, round_num, len(agent_ids), len(rows_to_insert),
+            session_id,
+            round_num,
+            len(agent_ids),
+            len(rows_to_insert),
         )
 
     except Exception:
         logger.exception(
             "batch_allocate_attention failed session=%s round=%d",
-            session_id, round_num,
+            session_id,
+            round_num,
         )
 
     return budgets

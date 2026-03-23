@@ -16,14 +16,12 @@ import dataclasses
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-import pytest_asyncio
 
 from backend.app.services.consumption_model import (
+    _CATEGORIES,
     ConsumptionTracker,
     RoundConsumptionSummary,
-    _CATEGORIES,
 )
-
 
 # ===========================================================================
 # Fixtures
@@ -65,12 +63,21 @@ def sample_macro_state():
     from backend.app.services.macro_state import MacroState
 
     return MacroState(
-        hibor_1m=0.04, prime_rate=0.0575,
-        unemployment_rate=0.029, median_monthly_income=20_000,
-        ccl_index=152.3, avg_sqft_price={}, mortgage_cap=0.70,
-        stamp_duty_rates={}, gdp_growth=0.032, cpi_yoy=0.021,
-        hsi_level=16_800.0, consumer_confidence=88.5,
-        net_migration=-12_000, birth_rate=5.8, policy_flags={},
+        hibor_1m=0.04,
+        prime_rate=0.0575,
+        unemployment_rate=0.029,
+        median_monthly_income=20_000,
+        ccl_index=152.3,
+        avg_sqft_price={},
+        mortgage_cap=0.70,
+        stamp_duty_rates={},
+        gdp_growth=0.032,
+        cpi_yoy=0.021,
+        hsi_level=16_800.0,
+        consumer_confidence=88.5,
+        net_migration=-12_000,
+        birth_rate=5.8,
+        policy_flags={},
     )
 
 
@@ -131,9 +138,7 @@ class TestEnsureTable:
         tracker = ConsumptionTracker()
         await tracker.ensure_table(test_db)
 
-        cursor = await test_db.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='agent_consumption'"
-        )
+        cursor = await test_db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='agent_consumption'")
         row = await cursor.fetchone()
         assert row is not None, "agent_consumption table should exist"
 
@@ -154,9 +159,7 @@ class TestTrackRound:
     """Tests for the core track_round persistence method."""
 
     @pytest.mark.asyncio
-    async def test_inserts_correct_row_count(
-        self, test_db, test_db_path, sample_agent_profiles, sample_macro_state
-    ):
+    async def test_inserts_correct_row_count(self, test_db, test_db_path, sample_agent_profiles, sample_macro_state):
         """track_round should insert (agents × categories) rows."""
         tracker = ConsumptionTracker()
 
@@ -173,9 +176,7 @@ class TestTrackRound:
         assert inserted == expected
 
     @pytest.mark.asyncio
-    async def test_data_persisted_to_db(
-        self, test_db, sample_agent_profiles, sample_macro_state
-    ):
+    async def test_data_persisted_to_db(self, test_db, sample_agent_profiles, sample_macro_state):
         """Rows written by track_round should be retrievable from the DB."""
         tracker = ConsumptionTracker()
 
@@ -188,9 +189,7 @@ class TestTrackRound:
                 macro_state=sample_macro_state,
             )
 
-        cursor = await test_db.execute(
-            "SELECT COUNT(*) FROM agent_consumption WHERE session_id = 'sess-002'"
-        )
+        cursor = await test_db.execute("SELECT COUNT(*) FROM agent_consumption WHERE session_id = 'sess-002'")
         row = await cursor.fetchone()
         assert row[0] == len(sample_agent_profiles) * len(_CATEGORIES)
 
@@ -207,9 +206,7 @@ class TestTrackRound:
         assert inserted == 0
 
     @pytest.mark.asyncio
-    async def test_sentiment_map_applied(
-        self, test_db, sample_agent_profiles, sample_macro_state
-    ):
+    async def test_sentiment_map_applied(self, test_db, sample_agent_profiles, sample_macro_state):
         """Negative sentiment should reduce entertainment spending."""
         tracker = ConsumptionTracker()
         sentiment_map = {p.id: "negative" for p in sample_agent_profiles}
@@ -251,9 +248,7 @@ class TestTrackRound:
         assert avg_negative <= avg_neutral
 
     @pytest.mark.asyncio
-    async def test_amount_pct_in_unit_range(
-        self, test_db, sample_agent_profiles, sample_macro_state
-    ):
+    async def test_amount_pct_in_unit_range(self, test_db, sample_agent_profiles, sample_macro_state):
         """All amount_pct values should be in [0, 1]."""
         tracker = ConsumptionTracker()
 
@@ -267,8 +262,7 @@ class TestTrackRound:
             )
 
         cursor = await test_db.execute(
-            "SELECT MIN(amount_pct), MAX(amount_pct) FROM agent_consumption "
-            "WHERE session_id = 'sess-range'"
+            "SELECT MIN(amount_pct), MAX(amount_pct) FROM agent_consumption WHERE session_id = 'sess-range'"
         )
         row = await cursor.fetchone()
         assert row[0] >= 0.0
@@ -284,9 +278,7 @@ class TestGetConsumptionTrends:
     """Tests for aggregated consumption trend queries."""
 
     @pytest.mark.asyncio
-    async def test_returns_summaries_per_round(
-        self, test_db, sample_agent_profiles, sample_macro_state
-    ):
+    async def test_returns_summaries_per_round(self, test_db, sample_agent_profiles, sample_macro_state):
         """get_consumption_trends should return one summary per tracked round."""
         tracker = ConsumptionTracker()
 
@@ -309,9 +301,7 @@ class TestGetConsumptionTrends:
         assert rounds == sorted(rounds)  # chronological order
 
     @pytest.mark.asyncio
-    async def test_summaries_are_frozen_dataclasses(
-        self, test_db, sample_agent_profiles, sample_macro_state
-    ):
+    async def test_summaries_are_frozen_dataclasses(self, test_db, sample_agent_profiles, sample_macro_state):
         """All returned summaries must be RoundConsumptionSummary instances."""
         tracker = ConsumptionTracker()
 
@@ -334,9 +324,7 @@ class TestGetConsumptionTrends:
         assert s.agent_count == len(sample_agent_profiles)
 
     @pytest.mark.asyncio
-    async def test_dominant_category_is_valid(
-        self, test_db, sample_agent_profiles, sample_macro_state
-    ):
+    async def test_dominant_category_is_valid(self, test_db, sample_agent_profiles, sample_macro_state):
         """dominant_category should be one of the known spending categories."""
         tracker = ConsumptionTracker()
 
@@ -376,9 +364,7 @@ class TestGetAgentConsumption:
     """Tests for per-agent consumption queries."""
 
     @pytest.mark.asyncio
-    async def test_returns_rows_for_tracked_agent(
-        self, test_db, sample_agent_profiles, sample_macro_state
-    ):
+    async def test_returns_rows_for_tracked_agent(self, test_db, sample_agent_profiles, sample_macro_state):
         tracker = ConsumptionTracker()
         agent = sample_agent_profiles[0]
 
@@ -428,13 +414,16 @@ class TestConsumptionApiEndpoints:
     async def test_get_consumption_trends_success(self, test_client):
         """GET /{id}/consumption should return 200 with data list."""
         from backend.app.services import consumption_model
+
         original_class = consumption_model.ConsumptionTracker
 
         class _MockTracker:
             def __init__(self):
                 pass
+
             async def get_consumption_trends(self, **kwargs):
                 return []
+
             async def ensure_table(self, db):
                 pass
 
@@ -473,13 +462,16 @@ class TestConsumptionApiEndpoints:
         ):
             # Create tracker, call get_consumption_trends — patch the tracker class
             from backend.app.services import consumption_model
+
             original_class = consumption_model.ConsumptionTracker
 
             class _MockTracker:
                 def __init__(self):
                     pass
+
                 async def get_consumption_trends(self, **kwargs):
                     return [summary]
+
                 async def ensure_table(self, db):
                     pass
 
@@ -499,13 +491,16 @@ class TestConsumptionApiEndpoints:
     async def test_get_agent_consumption_success(self, test_client):
         """GET /{id}/agents/{agent_id}/consumption should return 200."""
         from backend.app.services import consumption_model
+
         original_class = consumption_model.ConsumptionTracker
 
         class _MockTracker:
             def __init__(self):
                 pass
+
             async def get_agent_consumption(self, **kwargs):
                 return [{"round_number": 1, "category": "food", "amount_pct": 0.22}]
+
             async def ensure_table(self, db):
                 pass
 
@@ -524,13 +519,16 @@ class TestConsumptionApiEndpoints:
     async def test_empty_session_returns_empty_list(self, test_client):
         """An unknown session should still return 200 with empty data."""
         from backend.app.services import consumption_model
+
         original_class = consumption_model.ConsumptionTracker
 
         class _MockTracker:
             def __init__(self):
                 pass
+
             async def get_consumption_trends(self, **kwargs):
                 return []
+
             async def ensure_table(self, db):
                 pass
 

@@ -156,9 +156,9 @@ class EmergenceScorecard:
     filter_bubble_delta: float = 0.0
     information_flow_efficiency: float = 0.0
     # Phase 3: Emotional State + Cognitive Consistency
-    emotional_convergence: float = 0.0      # valence variance reduction first→last round
-    belief_revision_rate: float = 0.0       # fraction of beliefs with stance change > 0.1 / total / rounds
-    dissonance_prevalence: float = 0.0      # avg dissonance_score at last round
+    emotional_convergence: float = 0.0  # valence variance reduction first→last round
+    belief_revision_rate: float = 0.0  # fraction of beliefs with stance change > 0.1 / total / rounds
+    dissonance_prevalence: float = 0.0  # avg dissonance_score at last round
     grade: str = "F"
 
 

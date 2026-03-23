@@ -40,12 +40,14 @@ except ImportError:
 
 try:
     from statsmodels.tsa.stattools import adfuller, grangercausalitytests
+
     HAS_STATSMODELS = True
 except ImportError:
     HAS_STATSMODELS = False
 
 try:
     from statsmodels.tsa.stattools import kpss as _kpss_test
+
     HAS_KPSS = True
 except ImportError:
     HAS_KPSS = False
@@ -204,9 +206,7 @@ class CalibrationPipeline:
         for sent_metric in _SENTIMENT_METRICS:
             if sent_metric in sentiment_series:
                 values = [v for _, v in sentiment_series[sent_metric]]
-                stationarity_results.append(
-                    self._adf_test(values, sent_metric)
-                )
+                stationarity_results.append(self._adf_test(values, sent_metric))
 
         # Run Granger causality tests (temporally aligned)
         granger_results: list[dict[str, Any]] = []
@@ -217,7 +217,9 @@ class CalibrationPipeline:
                 x_aligned, y_aligned = self._align_series_by_period(x_raw, y_raw)
                 if x_aligned and y_aligned:
                     granger_result = self._granger_test(
-                        x_aligned, y_aligned, f"{sent_metric} → {econ_metric}",
+                        x_aligned,
+                        y_aligned,
+                        f"{sent_metric} → {econ_metric}",
                     )
                     granger_results.append(granger_result)
 
@@ -240,9 +242,7 @@ class CalibrationPipeline:
 
         # Apply Benjamini-Hochberg FDR correction across all OLS pairs
         p_value_pairs: list[tuple[str, float]] = [
-            (f"{sm} → {em}", res.get("p_value", 1.0))
-            for sm, em, res in all_ols_results
-            if "p_value" in res
+            (f"{sm} → {em}", res.get("p_value", 1.0)) for sm, em, res in all_ols_results if "p_value" in res
         ]
         significant_pairs = _apply_fdr_correction(p_value_pairs, alpha=_P_THRESHOLD_RAW)
 
@@ -254,7 +254,8 @@ class CalibrationPipeline:
             if "p_value" in ols_result and pair_label not in significant_pairs:
                 logger.info(
                     "OLS %s: p=%.4f — not significant after BH-FDR, using fallback",
-                    pair_label, ols_result.get("p_value", 1.0),
+                    pair_label,
+                    ols_result.get("p_value", 1.0),
                 )
                 continue
             if econ_metric not in fitted:
@@ -306,9 +307,7 @@ class CalibrationPipeline:
         result: dict[str, Any] = {
             "_meta": {
                 "n_sentiment_periods": len(next(iter(sentiment_series.values()), [])),
-                "calibrated_pairs": [
-                    f"{sm} → {em}" for (sm, _, em) in _INDICATOR_PAIRS
-                ],
+                "calibrated_pairs": [f"{sm} → {em}" for (sm, _, em) in _INDICATOR_PAIRS],
                 "method": "OLS" if HAS_SCIPY else "numpy_lstsq",
                 "correction_method": "BH-FDR",
                 "fdr_alpha": _P_THRESHOLD_RAW,
@@ -327,8 +326,12 @@ class CalibrationPipeline:
         await self._persist_to_db(merged)
         logger.info(
             "Calibration complete — %d indicators fitted (BH-FDR alpha=%.2f, %d/%d significant, R²>%.2f), output: %s",
-            len(fitted), _P_THRESHOLD_RAW, len(significant_pairs), len(p_value_pairs),
-            _R_SQUARED_THRESHOLD, self._output_path,
+            len(fitted),
+            _P_THRESHOLD_RAW,
+            len(significant_pairs),
+            len(p_value_pairs),
+            _R_SQUARED_THRESHOLD,
+            self._output_path,
         )
         return merged
 
@@ -488,7 +491,9 @@ class CalibrationPipeline:
             if HAS_KPSS:
                 try:
                     kpss_stat, kpss_p_val, _, _ = _kpss_test(
-                        np.array(series), regression="c", nlags="auto",
+                        np.array(series),
+                        regression="c",
+                        nlags="auto",
                     )
                     kpss_p = float(kpss_p_val)
                     # KPSS: fail to reject (p > 0.05) means stationary
@@ -635,19 +640,25 @@ class CalibrationPipeline:
         try:
             if HAS_SCIPY:
                 slope, intercept, r_value, p_value, std_err = scipy_stats.linregress(dx, dy)
-                r_squared = r_value ** 2
+                r_squared = r_value**2
                 ci_lower = slope - 1.96 * std_err
                 ci_upper = slope + 1.96 * std_err
                 logger.debug(
                     "OLS %s: slope=%.4f r²=%.3f p=%.4f std_err=%.4f",
-                    label, slope, r_squared, p_value, std_err,
+                    label,
+                    slope,
+                    r_squared,
+                    p_value,
+                    std_err,
                 )
 
                 # p-value filtering deferred to FDR correction in run_calibration()
                 if r_squared < _R_SQUARED_THRESHOLD:
                     logger.info(
                         "OLS %s: R²=%.4f < %.2f — weak fit, using fallback",
-                        label, r_squared, _R_SQUARED_THRESHOLD,
+                        label,
+                        r_squared,
+                        _R_SQUARED_THRESHOLD,
                     )
                     return None
 
@@ -765,7 +776,6 @@ class CalibrationPipeline:
 
 async def _run_cli() -> None:
     """Standalone calibration runner."""
-    import asyncio  # noqa: PLC0415
 
     pipeline = CalibrationPipeline()
     coefficients = await pipeline.run_calibration()

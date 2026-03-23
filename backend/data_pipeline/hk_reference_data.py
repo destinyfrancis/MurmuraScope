@@ -6,6 +6,7 @@ All time-series data has been moved to real API downloaders.
 Usage::
     python -m backend.data_pipeline.hk_reference_data
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -32,30 +33,52 @@ _CENSUS = {
 
 # Age distribution (2021 Census, simplified 5 bands)
 _AGE_DIST_2021 = {
-    "0-14": 0.113, "15-24": 0.098, "25-44": 0.283,
-    "45-64": 0.295, "65+": 0.211,
+    "0-14": 0.113,
+    "15-24": 0.098,
+    "25-44": 0.283,
+    "45-64": 0.295,
+    "65+": 0.211,
 }
 
 # District population (2021 Census, 18 districts)
 _DISTRICT_POP = {
-    "中西區": 235953, "灣仔": 166695, "東區": 529603, "南區": 263278,
-    "油尖旺": 318522, "深水埗": 405869, "九龍城": 418732, "黃大仙": 425235,
-    "觀塘": 648541, "葵青": 495798, "荃灣": 318800, "屯門": 489299,
-    "元朗": 668080, "北區": 302657, "大埔": 310879, "沙田": 692015,
-    "西貢": 489037, "離島": 184077,
+    "中西區": 235953,
+    "灣仔": 166695,
+    "東區": 529603,
+    "南區": 263278,
+    "油尖旺": 318522,
+    "深水埗": 405869,
+    "九龍城": 418732,
+    "黃大仙": 425235,
+    "觀塘": 648541,
+    "葵青": 495798,
+    "荃灣": 318800,
+    "屯門": 489299,
+    "元朗": 668080,
+    "北區": 302657,
+    "大埔": 310879,
+    "沙田": 692015,
+    "西貢": 489037,
+    "離島": 184077,
 }
 
 # Housing type distribution (2021)
 _HOUSING_DIST = {
-    "公屋": 0.295, "資助出售房屋": 0.145,
-    "私人住宅": 0.525, "臨時／其他": 0.035,
+    "公屋": 0.295,
+    "資助出售房屋": 0.145,
+    "私人住宅": 0.525,
+    "臨時／其他": 0.035,
 }
 
 # Income bracket distribution (2021 Census)
 _INCOME_DIST = {
-    "無收入": 0.063, "<$8,000": 0.070, "$8,000-$14,999": 0.155,
-    "$15,000-$24,999": 0.235, "$25,000-$39,999": 0.208,
-    "$40,000-$59,999": 0.140, "$60,000+": 0.129,
+    "無收入": 0.063,
+    "<$8,000": 0.070,
+    "$8,000-$14,999": 0.155,
+    "$15,000-$24,999": 0.235,
+    "$25,000-$39,999": 0.208,
+    "$40,000-$59,999": 0.140,
+    "$60,000+": 0.129,
 }
 
 
@@ -79,8 +102,7 @@ async def seed_population_data() -> int:
                     "INSERT OR REPLACE INTO population_distributions "
                     "(category,dimension_1,dimension_2,count,probability,"
                     "source_year,source_dataset) VALUES (?,?,?,?,?,?,?)",
-                    ("population", dim, None, val,
-                     val / data["total"], year, "census"),
+                    ("population", dim, None, val, val / data["total"], year, "census"),
                 )
                 total += 1
 
@@ -91,8 +113,7 @@ async def seed_population_data() -> int:
                 "INSERT OR REPLACE INTO population_distributions "
                 "(category,dimension_1,dimension_2,count,probability,"
                 "source_year,source_dataset) VALUES (?,?,?,?,?,?,?)",
-                ("age_distribution", band, None,
-                 int(pop_2021 * pct), pct, 2021, "census"),
+                ("age_distribution", band, None, int(pop_2021 * pct), pct, 2021, "census"),
             )
             total += 1
 
@@ -102,8 +123,7 @@ async def seed_population_data() -> int:
                 "INSERT OR REPLACE INTO population_distributions "
                 "(category,dimension_1,dimension_2,count,probability,"
                 "source_year,source_dataset) VALUES (?,?,?,?,?,?,?)",
-                ("district_population", district, None,
-                 pop, pop / pop_2021, 2021, "census"),
+                ("district_population", district, None, pop, pop / pop_2021, 2021, "census"),
             )
             total += 1
 
@@ -113,8 +133,7 @@ async def seed_population_data() -> int:
                 "INSERT OR REPLACE INTO population_distributions "
                 "(category,dimension_1,dimension_2,count,probability,"
                 "source_year,source_dataset) VALUES (?,?,?,?,?,?,?)",
-                ("housing_type", htype, None,
-                 int(pop_2021 * pct), pct, 2021, "census"),
+                ("housing_type", htype, None, int(pop_2021 * pct), pct, 2021, "census"),
             )
             total += 1
 
@@ -124,8 +143,7 @@ async def seed_population_data() -> int:
                 "INSERT OR REPLACE INTO population_distributions "
                 "(category,dimension_1,dimension_2,count,probability,"
                 "source_year,source_dataset) VALUES (?,?,?,?,?,?,?)",
-                ("income_distribution", bracket, None,
-                 int(pop_2021 * pct), pct, 2021, "census"),
+                ("income_distribution", bracket, None, int(pop_2021 * pct), pct, 2021, "census"),
             )
             total += 1
 
@@ -138,6 +156,7 @@ def main() -> None:
     async def _run() -> None:
         pop = await seed_population_data()
         print(f"Seeded {pop} population/census rows")
+
     asyncio.run(_run())
 
 

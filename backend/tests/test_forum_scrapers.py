@@ -9,7 +9,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Sample HTML fixtures
 # ---------------------------------------------------------------------------
@@ -71,6 +70,7 @@ SAMPLE_HKGOLDEN_TOPIC_LIST = """
 # Mock response helper
 # ---------------------------------------------------------------------------
 
+
 def _make_response(text: str, status_code: int = 200):
     """Create a mock httpx.Response."""
     resp = MagicMock()
@@ -85,6 +85,7 @@ def _make_response(text: str, status_code: int = 200):
 # ---------------------------------------------------------------------------
 # Discuz scraper tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_discuz_scraper_imports():
@@ -102,7 +103,7 @@ async def test_discuz_scraper_imports():
 async def test_discuz_scraper_init():
     """Verify scraper can be instantiated with forum configs."""
     try:
-        from backend.data_pipeline.discuz_forum_scraper import DiscuzForumScraper, DISCUSS_FORUMS
+        from backend.data_pipeline.discuz_forum_scraper import DISCUSS_FORUMS, DiscuzForumScraper
     except ImportError:
         pytest.skip("discuz_forum_scraper not installed")
 
@@ -126,9 +127,9 @@ async def test_discuz_scraper_download_empty_on_error():
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_cls.return_value = mock_client
 
-        scraper = DiscuzForumScraper(forums=(
-            {"name": "test", "base_url": "http://example.com", "fid": 1, "platform": "discuss"},
-        ))
+        scraper = DiscuzForumScraper(
+            forums=({"name": "test", "base_url": "http://example.com", "fid": 1, "platform": "discuss"},)
+        )
         result = await scraper.download()
         assert result == () or len(result) == 0
 
@@ -137,11 +138,12 @@ async def test_discuz_scraper_download_empty_on_error():
 # HKGolden scraper tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_hkgolden_imports():
     """Verify HKGoldenDownloader and GoldenPost can be imported."""
     try:
-        from backend.data_pipeline.hkgolden_downloader import HKGoldenDownloader, GoldenPost
+        from backend.data_pipeline.hkgolden_downloader import GoldenPost, HKGoldenDownloader
     except ImportError:
         pytest.skip("hkgolden_downloader not installed")
 
@@ -178,9 +180,14 @@ async def test_forum_post_frozen():
         pytest.skip("discuz_forum_scraper not installed")
 
     post = ForumPost(
-        title="test", content="content", reply_count=0,
-        view_count=0, published="2025-01-01", forum_name="test",
-        source_url="http://example.com", platform="discuss",
+        title="test",
+        content="content",
+        reply_count=0,
+        view_count=0,
+        published="2025-01-01",
+        forum_name="test",
+        source_url="http://example.com",
+        platform="discuss",
     )
     with pytest.raises(AttributeError):
         post.title = "changed"
@@ -190,6 +197,7 @@ async def test_forum_post_frozen():
 # Sentiment weight normalization tests
 # ---------------------------------------------------------------------------
 
+
 def test_sentiment_reweight_normalize():
     """Test weight redistribution with various available source combinations."""
     from backend.data_pipeline.social_sentiment_processor import _SOURCE_WEIGHTS
@@ -198,10 +206,7 @@ def test_sentiment_reweight_normalize():
     available = {"lihkg", "news_rss"}
     total = sum(w for k, w in _SOURCE_WEIGHTS.items() if k in available)
 
-    normalized = {
-        k: _SOURCE_WEIGHTS[k] / total
-        for k in available
-    }
+    normalized = {k: _SOURCE_WEIGHTS[k] / total for k in available}
 
     # Weights should sum to ~1.0
     assert abs(sum(normalized.values()) - 1.0) < 1e-6
@@ -217,10 +222,7 @@ def test_sentiment_reweight_single_source():
     available = {"news_rss"}
     total = sum(w for k, w in _SOURCE_WEIGHTS.items() if k in available)
 
-    normalized = {
-        k: _SOURCE_WEIGHTS[k] / total
-        for k in available
-    }
+    normalized = {k: _SOURCE_WEIGHTS[k] / total for k in available}
 
     assert abs(normalized["news_rss"] - 1.0) < 1e-6
 
@@ -232,10 +234,7 @@ def test_sentiment_reweight_all_sources():
     available = set(_SOURCE_WEIGHTS.keys())
     total = sum(w for k, w in _SOURCE_WEIGHTS.items() if k in available)
 
-    normalized = {
-        k: _SOURCE_WEIGHTS[k] / total
-        for k in available
-    }
+    normalized = {k: _SOURCE_WEIGHTS[k] / total for k in available}
 
     for k in available:
         assert abs(normalized[k] - _SOURCE_WEIGHTS[k]) < 1e-6
@@ -254,8 +253,18 @@ def test_normalize_weights_function():
     result_empty = _normalize_weights(set())
     assert result_empty == {}
 
-    result_all = _normalize_weights(set(_normalize_weights.__module__ and [
-        "lihkg", "hkgolden", "discuss", "baby_kingdom",
-        "news_rss", "google_trends", "facebook",
-    ]))
+    result_all = _normalize_weights(
+        set(
+            _normalize_weights.__module__
+            and [
+                "lihkg",
+                "hkgolden",
+                "discuss",
+                "baby_kingdom",
+                "news_rss",
+                "google_trends",
+                "facebook",
+            ]
+        )
+    )
     assert abs(sum(result_all.values()) - 1.0) < 1e-6

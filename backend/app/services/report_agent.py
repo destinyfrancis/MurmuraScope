@@ -11,23 +11,37 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
-from backend.app.config import get_settings
 from backend.app.services.report_agent_xai import (
     get_agent_story_arcs as _get_agent_story_arcs,
+)
+from backend.app.services.report_agent_xai import (
     get_platform_breakdown as _get_platform_breakdown,
+)
+from backend.app.services.report_agent_xai import (
     get_topic_evolution as _get_topic_evolution,
+)
+from backend.app.services.report_agent_xai import (
     handle_decision_summary as _handle_decision_summary,
+)
+from backend.app.services.report_agent_xai import (
     handle_ensemble_forecast as _handle_ensemble_forecast,
+)
+from backend.app.services.report_agent_xai import (
     handle_macro_history as _handle_macro_history,
+)
+from backend.app.services.report_agent_xai import (
     handle_sentiment_timeline as _handle_sentiment_timeline,
+)
+from backend.app.services.report_agent_xai import (
     insight_forge as _insight_forge,
 )
 from backend.app.services.report_section_generator import _truncate_observation
 from backend.app.services.simulation_ipc import SimulationIPC
 from backend.app.utils.db import get_db
 from backend.app.utils.llm_client import (
-    LLMClient,
     get_default_client as _get_llm_client,
+)
+from backend.app.utils.llm_client import (
     get_report_provider_model,
 )
 from backend.app.utils.logger import get_logger
@@ -45,16 +59,12 @@ TOOLS: dict[str, str] = {
         "Get cross-community narrative analysis showing social fault lines "
         "and faction dynamics across all agent communities"
     ),
-    "get_sentiment_distribution": (
-        "Get sentiment distribution across agent demographics"
-    ),
+    "get_sentiment_distribution": ("Get sentiment distribution across agent demographics"),
     "get_demographic_breakdown": (
         "Get action breakdown by agent demographics (age, role, region, group). "
         "Returns empty result if demographic data is not available for this scenario"
     ),
-    "interview_agents": (
-        "Interview sample agents about their decisions"
-    ),
+    "interview_agents": ("Interview sample agents about their decisions"),
     "get_macro_context": (
         "Get current macro-economic or scenario-level context indicators. "
         "Returns empty result if macro data is not available for this scenario"
@@ -63,21 +73,11 @@ TOOLS: dict[str, str] = {
         "Calculate cashflow or resource projection for scenario-relevant decisions. "
         "Returns empty result if not applicable to this scenario domain"
     ),
-    "get_decision_summary": (
-        "Get aggregate agent decision statistics across all decision types"
-    ),
-    "get_sentiment_timeline": (
-        "Get per-round sentiment evolution from simulation actions"
-    ),
-    "get_ensemble_forecast": (
-        "Get Monte Carlo distribution bands from ensemble results"
-    ),
-    "get_macro_history": (
-        "Get macro indicator changes across simulation rounds"
-    ),
-    "get_validation_summary": (
-        "Get prediction confidence score, backtest results, and historical accuracy rate"
-    ),
+    "get_decision_summary": ("Get aggregate agent decision statistics across all decision types"),
+    "get_sentiment_timeline": ("Get per-round sentiment evolution from simulation actions"),
+    "get_ensemble_forecast": ("Get Monte Carlo distribution bands from ensemble results"),
+    "get_macro_history": ("Get macro indicator changes across simulation rounds"),
+    "get_validation_summary": ("Get prediction confidence score, backtest results, and historical accuracy rate"),
     "insight_forge": (
         "Deep insight query — LLM decomposes into sub-queries, parallel search "
         "across memories/KG/actions, with source citations"
@@ -86,12 +86,9 @@ TOOLS: dict[str, str] = {
         "Track topic migration across simulation rounds "
         "(e.g. individual case → procedural justice → institutional trust)"
     ),
-    "get_platform_breakdown": (
-        "Compare agent behaviour and sentiment across different social platforms"
-    ),
+    "get_platform_breakdown": ("Compare agent behaviour and sentiment across different social platforms"),
     "get_agent_story_arcs": (
-        "Track representative agents' stance evolution stories across rounds "
-        "(kg_driven mode only)"
+        "Track representative agents' stance evolution stories across rounds (kg_driven mode only)"
     ),
     "get_debate_summary": (
         "Get structured debate summary showing cross-faction argumentation, "
@@ -106,9 +103,7 @@ TOOLS: dict[str, str] = {
     ),
 }
 
-_TOOL_DESCRIPTIONS = "\n".join(
-    f"- {name}: {desc}" for name, desc in TOOLS.items()
-)
+_TOOL_DESCRIPTIONS = "\n".join(f"- {name}: {desc}" for name, desc in TOOLS.items())
 
 _SYSTEM_PROMPT = f"""You are an expert analyst generating reports from multi-agent social simulation data.
 The simulation may cover ANY domain: geopolitics, economics, fiction, social dynamics, \
@@ -196,9 +191,7 @@ class ReportAgent:
 
         # --- Legacy flat ReACT path (non-full report types without a question) ---
         focus = focus_areas or []
-        initial_prompt = _build_initial_prompt(
-            session_id, report_type, focus
-        )
+        initial_prompt = _build_initial_prompt(session_id, report_type, focus)
 
         messages: list[dict[str, str]] = [
             {"role": "user", "content": initial_prompt},
@@ -208,11 +201,13 @@ class ReportAgent:
         react_steps: list[dict[str, Any]] = []
 
         def _log_step(step_type: str, content: str) -> None:
-            react_steps.append({
-                "step_type": step_type,
-                "content": content,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            })
+            react_steps.append(
+                {
+                    "step_type": step_type,
+                    "content": content,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }
+            )
 
         _log_step("Thought", f"開始生成 {report_type} 報告，工作階段 {session_id}")
 
@@ -239,8 +234,10 @@ class ReportAgent:
                 await _persist_report(session_id, report, report_type, react_steps)
                 # Record predictions for calibration tracking
                 try:
-                    from backend.app.services.calibration_tracker import CalibrationTracker  # noqa: PLC0415
                     from datetime import timedelta  # noqa: PLC0415
+
+                    from backend.app.services.calibration_tracker import CalibrationTracker  # noqa: PLC0415
+
                     tracker = CalibrationTracker()
                     target_date = (datetime.now(timezone.utc) + timedelta(days=30)).date().isoformat()
                     for finding in report.get("key_findings", [])[:3]:
@@ -271,47 +268,53 @@ class ReportAgent:
                     f"調用工具 `{tool_name}`，參數：{json.dumps(params, ensure_ascii=False)}",
                 )
 
-                observation = await self._execute_tool(
-                    tool_name, params, session_id
+                observation = await self._execute_tool(tool_name, params, session_id)
+                observations.append(
+                    {
+                        "tool": tool_name,
+                        "params": params,
+                        "result": observation,
+                    }
                 )
-                observations.append({
-                    "tool": tool_name,
-                    "params": params,
-                    "result": observation,
-                })
 
                 # Truncate long observations for log readability
                 obs_preview = observation[:300] + "..." if len(observation) > 300 else observation
                 _log_step("Observation", f"工具 `{tool_name}` 返回：{obs_preview}")
 
-                messages.append({
-                    "role": "user",
-                    "content": f"OBSERVATION from {tool_name}:\n{_truncate_observation(observation)}",
-                })
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": f"OBSERVATION from {tool_name}:\n{_truncate_observation(observation)}",
+                    }
+                )
             else:
                 _log_step(
                     "Thought",
                     f"第 {iteration + 1} 次迭代：正在整合數據，繼續分析...",
                 )
                 # No tool call and no final report — prompt to continue
-                messages.append({
-                    "role": "user",
-                    "content": (
-                        "Please either call a tool for more data or "
-                        "produce your final report starting with "
-                        "'## FINAL_REPORT'."
-                    ),
-                })
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": (
+                            "Please either call a tool for more data or "
+                            "produce your final report starting with "
+                            "'## FINAL_REPORT'."
+                        ),
+                    }
+                )
 
         # Max iterations reached — ask for final report
         _log_step("Thought", "已達最大迭代次數，強制生成最終報告")
-        messages.append({
-            "role": "user",
-            "content": (
-                "Maximum analysis iterations reached. Please produce your "
-                "final report now, starting with '## FINAL_REPORT'."
-            ),
-        })
+        messages.append(
+            {
+                "role": "user",
+                "content": (
+                    "Maximum analysis iterations reached. Please produce your "
+                    "final report now, starting with '## FINAL_REPORT'."
+                ),
+            }
+        )
         response = await _call_llm(messages, _SYSTEM_PROMPT)
         report_content = _extract_final_report(response)
         report = _parse_report(session_id, report_content)
@@ -343,14 +346,18 @@ class ReportAgent:
         messages: list[dict[str, str]] = []
 
         if report_context:
-            messages.append({
-                "role": "user",
-                "content": f"Reference report:\n{report_context}",
-            })
-            messages.append({
-                "role": "assistant",
-                "content": "I have the report context. How can I help?",
-            })
+            messages.append(
+                {
+                    "role": "user",
+                    "content": f"Reference report:\n{report_context}",
+                }
+            )
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": "I have the report context. How can I help?",
+                }
+            )
 
         if history:
             messages.extend(history)
@@ -394,9 +401,7 @@ class ReportAgent:
 # ---------------------------------------------------------------------------
 
 
-async def _handle_query_graph(
-    session_id: str, params: dict[str, Any], _ipc: SimulationIPC
-) -> str:
+async def _handle_query_graph(session_id: str, params: dict[str, Any], _ipc: SimulationIPC) -> str:
     """Semantic knowledge graph query via GraphRAG (with legacy fallback)."""
     query = params.get("query", "")
     if not query:
@@ -422,9 +427,7 @@ async def _handle_query_graph(
     return await _handle_query_graph_legacy(session_id, params, _ipc)
 
 
-async def _handle_query_graph_legacy(
-    session_id: str, params: dict[str, Any], _ipc: SimulationIPC
-) -> str:
+async def _handle_query_graph_legacy(session_id: str, params: dict[str, Any], _ipc: SimulationIPC) -> str:
     """Legacy knowledge graph query using SQL LIKE search."""
     query = params.get("query", "")
     entity_type = params.get("entity_type", "")
@@ -456,9 +459,7 @@ async def _handle_query_graph_legacy(
     return json.dumps(results, indent=2)
 
 
-async def _handle_global_narrative(
-    session_id: str, params: dict[str, Any], _ipc: SimulationIPC
-) -> str:
+async def _handle_global_narrative(session_id: str, params: dict[str, Any], _ipc: SimulationIPC) -> str:
     """Get global narrative analysis across all communities."""
     try:
         from backend.app.services.graph_rag import GraphRAGService  # noqa: PLC0415
@@ -467,7 +468,9 @@ async def _handle_global_narrative(
         service = GraphRAGService()
         narrative = await service.get_global_narrative(session_id, round_number)
 
-        fault_lines_text = "\n".join(f"- {fl}" for fl in narrative.fault_lines) if narrative.fault_lines else "(未偵測到明顯斷層線)"
+        fault_lines_text = (
+            "\n".join(f"- {fl}" for fl in narrative.fault_lines) if narrative.fault_lines else "(未偵測到明顯斷層線)"
+        )
 
         return (
             f"## 全局社會敘事分析\n\n"
@@ -481,16 +484,22 @@ async def _handle_global_narrative(
         return f"Error generating global narrative: {exc}"
 
 
-_SAFE_DIMENSIONS = frozenset({
-    "district", "age", "sex", "income_bracket",
-    "occupation", "education_level", "agent_type",
-    "marital_status", "housing_type",
-})
+_SAFE_DIMENSIONS = frozenset(
+    {
+        "district",
+        "age",
+        "sex",
+        "income_bracket",
+        "occupation",
+        "education_level",
+        "agent_type",
+        "marital_status",
+        "housing_type",
+    }
+)
 
 
-async def _handle_sentiment_distribution(
-    session_id: str, params: dict[str, Any], _ipc: SimulationIPC
-) -> str:
+async def _handle_sentiment_distribution(session_id: str, params: dict[str, Any], _ipc: SimulationIPC) -> str:
     """Get sentiment distribution across demographics."""
     group_by = params.get("group_by", "district")
 
@@ -515,9 +524,7 @@ async def _handle_sentiment_distribution(
     return json.dumps(results, indent=2)
 
 
-async def _handle_demographic_breakdown(
-    session_id: str, params: dict[str, Any], _ipc: SimulationIPC
-) -> str:
+async def _handle_demographic_breakdown(session_id: str, params: dict[str, Any], _ipc: SimulationIPC) -> str:
     """Get agent count breakdown by demographics."""
     dimensions = params.get("dimensions", ["age", "sex", "district"])
 
@@ -542,9 +549,7 @@ async def _handle_demographic_breakdown(
     return json.dumps(results, indent=2)
 
 
-async def _handle_interview_agents(
-    session_id: str, params: dict[str, Any], ipc: SimulationIPC
-) -> str:
+async def _handle_interview_agents(session_id: str, params: dict[str, Any], ipc: SimulationIPC) -> str:
     """Interview sample agents about their decisions.
 
     Enriches each agent's interview context with the latest deliberation
@@ -591,9 +596,7 @@ async def _handle_interview_agents(
                     f"\n[議題標籤]：{latest['topic_tags'] or '[]'}"
                 )
         except Exception:
-            logger.warning(
-                "Could not fetch deliberation context for agent %s", agent_id, exc_info=True
-            )
+            logger.warning("Could not fetch deliberation context for agent %s", agent_id, exc_info=True)
 
         enriched_question = question + delib_context if delib_context else question
 
@@ -606,9 +609,7 @@ async def _handle_interview_agents(
     return json.dumps(responses, indent=2)
 
 
-async def _handle_macro_context(
-    session_id: str, params: dict[str, Any], _ipc: SimulationIPC
-) -> str:
+async def _handle_macro_context(session_id: str, params: dict[str, Any], _ipc: SimulationIPC) -> str:
     """Get macro-economic context for the simulation."""
     async with get_db() as db:
         cursor = await db.execute(
@@ -643,9 +644,7 @@ async def _handle_macro_context(
     return json.dumps(context, indent=2)
 
 
-async def _handle_calculate_cashflow(
-    session_id: str, params: dict[str, Any], _ipc: SimulationIPC
-) -> str:
+async def _handle_calculate_cashflow(session_id: str, params: dict[str, Any], _ipc: SimulationIPC) -> str:
     """Calculate cashflow projection for property/life decisions."""
     property_price = params.get("property_price", 5_000_000)
     monthly_income = params.get("monthly_income", 30_000)
@@ -662,10 +661,7 @@ async def _handle_calculate_cashflow(
     num_payments = mortgage_years * 12
     if monthly_rate > 0:
         monthly_payment = (
-            loan_amount
-            * monthly_rate
-            * (1 + monthly_rate) ** num_payments
-            / ((1 + monthly_rate) ** num_payments - 1)
+            loan_amount * monthly_rate * (1 + monthly_rate) ** num_payments / ((1 + monthly_rate) ** num_payments - 1)
         )
     else:
         monthly_payment = loan_amount / num_payments
@@ -687,23 +683,17 @@ async def _handle_calculate_cashflow(
     return json.dumps(projection, indent=2)
 
 
-async def _handle_get_validation_summary(
-    session_id: str, params: dict[str, Any], _ipc: SimulationIPC
-) -> str:
+async def _handle_get_validation_summary(session_id: str, params: dict[str, Any], _ipc: SimulationIPC) -> str:
     from backend.app.services.calibration_tracker import CalibrationTracker  # noqa: PLC0415
+
     tracker = CalibrationTracker()
     accuracy = await tracker.get_accuracy()
     hit_rate_pct = accuracy["hit_rate"] * 100
     total = accuracy["total"]
-    return (
-        f"Historical prediction accuracy: {hit_rate_pct:.1f}% "
-        f"over {total} verified predictions."
-    )
+    return f"Historical prediction accuracy: {hit_rate_pct:.1f}% over {total} verified predictions."
 
 
-async def _handle_insight_forge(
-    session_id: str, params: dict[str, Any], _ipc: SimulationIPC
-) -> str:
+async def _handle_insight_forge(session_id: str, params: dict[str, Any], _ipc: SimulationIPC) -> str:
     """Deep query tool: LLM sub-query decomposition + parallel DB search."""
     query = params.get("query", "")
     if not query:
@@ -715,29 +705,21 @@ async def _handle_insight_forge(
     return (
         "InsightForge結果:\n"
         f"子查詢：{', '.join(result.sub_queries)}\n\n"
-        "引用原文:\n" + excerpts_text +
-        "\n\n事實:\n" + facts_text
+        "引用原文:\n" + excerpts_text + "\n\n事實:\n" + facts_text
     )
 
 
-async def _handle_get_topic_evolution(
-    session_id: str, params: dict[str, Any], _ipc: SimulationIPC
-) -> str:
+async def _handle_get_topic_evolution(session_id: str, params: dict[str, Any], _ipc: SimulationIPC) -> str:
     """Trace topic migration across simulation rounds via KG edges."""
     window_size = int(params.get("window_size", 5))
     result = await _get_topic_evolution(session_id, window_size=window_size)
     if not result.windows:
         return "議題演化：（無 KG 邊緣數據）"
     windows_desc = ", ".join(w.rounds for w in result.windows)
-    return (
-        f"議題演化：{result.migration_path}\n"
-        f"時間窗口：{windows_desc}"
-    )
+    return f"議題演化：{result.migration_path}\n時間窗口：{windows_desc}"
 
 
-async def _handle_get_platform_breakdown(
-    session_id: str, params: dict[str, Any], _ipc: SimulationIPC
-) -> str:
+async def _handle_get_platform_breakdown(session_id: str, params: dict[str, Any], _ipc: SimulationIPC) -> str:
     """Compare agent behaviour and sentiment across social platforms."""
     result = await _get_platform_breakdown(session_id)
     if not result:
@@ -745,23 +727,16 @@ async def _handle_get_platform_breakdown(
     return json.dumps(result, indent=2, ensure_ascii=False)
 
 
-async def _handle_get_agent_story_arcs(
-    session_id: str, params: dict[str, Any], _ipc: SimulationIPC
-) -> str:
+async def _handle_get_agent_story_arcs(session_id: str, params: dict[str, Any], _ipc: SimulationIPC) -> str:
     """Generate narrative story arcs for representative kg_driven agents."""
     sim_mode = params.get("sim_mode", "kg_driven")
     arcs = await _get_agent_story_arcs(session_id, sim_mode=sim_mode)
     if not arcs:
         return "無Agent故事弧數據（僅適用於 kg_driven 模式）。"
-    return "\n".join(
-        f"[{a['agent_type']}] {a['arc_summary']}"
-        for a in arcs
-    )
+    return "\n".join(f"[{a['agent_type']}] {a['arc_summary']}" for a in arcs)
 
 
-async def _handle_get_debate_summary(
-    session_id: str, params: dict[str, Any], _ipc: SimulationIPC
-) -> str:
+async def _handle_get_debate_summary(session_id: str, params: dict[str, Any], _ipc: SimulationIPC) -> str:
     """Get structured debate summary with consensus scores and belief shifts."""
     try:
         async with get_db() as db:
@@ -796,8 +771,7 @@ async def _handle_get_debate_summary(
 
         result = {
             "consensus_evolution": [
-                {"round": r[0], "topic": r[1], "consensus_score": round(r[2], 3)}
-                for r in consensus_rows
+                {"round": r[0], "topic": r[1], "consensus_score": round(r[2], 3)} for r in consensus_rows
             ],
             "debate_statistics": [
                 {
@@ -817,9 +791,7 @@ async def _handle_get_debate_summary(
         return json.dumps({"note": "Debate summary unavailable."})
 
 
-async def _handle_get_emergence_score(
-    session_id: str, params: dict[str, Any], _ipc: SimulationIPC
-) -> str:
+async def _handle_get_emergence_score(session_id: str, params: dict[str, Any], _ipc: SimulationIPC) -> str:
     """Get TDMI emergence metrics: temporal information flow between agent beliefs."""
     try:
         round_number = params.get("round_number")
@@ -858,8 +830,8 @@ async def _handle_get_emergence_score(
                 "Sustained temporal belief persistence detected: "
                 "agent belief stances at time t are significantly informative about "
                 "future stances (necessary precondition for collective emergence)."
-                if mean_tdmi > 0.02 else
-                "No significant temporal belief persistence detected yet."
+                if mean_tdmi > 0.02
+                else "No significant temporal belief persistence detected yet."
             ),
             "top_topics": sorted(
                 [
@@ -914,9 +886,7 @@ def _build_initial_prompt(
     focus_areas: list[str],
 ) -> str:
     """Build the initial prompt for the ReACT loop."""
-    focus_text = (
-        f"Focus areas: {', '.join(focus_areas)}" if focus_areas else ""
-    )
+    focus_text = f"Focus areas: {', '.join(focus_areas)}" if focus_areas else ""
     return (
         f"Generate a {report_type} analysis report for simulation "
         f"session {session_id}.\n"
@@ -1080,8 +1050,4 @@ async def _call_llm(
         return response.content
     except Exception as exc:
         logger.error("LLM call failed for report: %s", exc)
-        return (
-            "## FINAL_REPORT\n"
-            "# Report Generation Error\n\n"
-            f"LLM call failed: {exc}"
-        )
+        return f"## FINAL_REPORT\n# Report Generation Error\n\nLLM call failed: {exc}"

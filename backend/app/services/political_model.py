@@ -25,14 +25,15 @@ logger = get_logger("political_model")
 # Frozen dataclasses
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class PoliticalProfile:
     """Immutable political profile snapshot for a single agent."""
 
     agent_id: int
-    political_stance: float          # 0.0–1.0
-    political_label: str             # 建制派 / 中間派 / 民主派
-    engagement_willingness: float    # 0.0–1.0, spiral of silence factor
+    political_stance: float  # 0.0–1.0
+    political_label: str  # 建制派 / 中間派 / 民主派
+    engagement_willingness: float  # 0.0–1.0, spiral of silence factor
 
 
 @dataclass(frozen=True)
@@ -42,9 +43,9 @@ class StanceReport:
     mean: float
     std: float
     skewness: float
-    polarization_index: float   # bimodality coefficient, 0–1
-    extremism_ratio: float      # fraction with stance < 0.1 or > 0.9
-    alert_level: str            # "normal" | "warning" | "critical"
+    polarization_index: float  # bimodality coefficient, 0–1
+    extremism_ratio: float  # fraction with stance < 0.1 or > 0.9
+    alert_level: str  # "normal" | "warning" | "critical"
 
 
 # ---------------------------------------------------------------------------
@@ -61,23 +62,23 @@ class StanceReport:
 #         2019 District Council election vote share by district.
 _DISTRICT_LEAN: dict[str, float] = {
     "中西區": -0.05,
-    "灣仔":   -0.03,
-    "東區":    0.02,
-    "南區":    0.00,
-    "油尖旺":  0.03,
-    "深水埗":  0.05,
-    "九龍城":  0.02,
+    "灣仔": -0.03,
+    "東區": 0.02,
+    "南區": 0.00,
+    "油尖旺": 0.03,
+    "深水埗": 0.05,
+    "九龍城": 0.02,
     "黃大仙": -0.02,
-    "觀塘":    0.04,
-    "葵青":    0.01,
-    "荃灣":   -0.01,
-    "屯門":    0.01,
-    "元朗":   -0.04,
-    "北區":   -0.03,
-    "大埔":    0.02,
-    "沙田":    0.03,
-    "西貢":    0.02,
-    "離島":   -0.02,
+    "觀塘": 0.04,
+    "葵青": 0.01,
+    "荃灣": -0.01,
+    "屯門": 0.01,
+    "元朗": -0.04,
+    "北區": -0.03,
+    "大埔": 0.02,
+    "沙田": 0.03,
+    "西貢": 0.02,
+    "離島": -0.02,
 }
 
 # Education lean values are derived from HKUPOP "Political Attitudes by
@@ -85,22 +86,23 @@ _DISTRICT_LEAN: dict[str, float] = {
 # consistently showed stronger pro-democracy leaning across all survey waves.
 # Source: HKUPOP half-yearly surveys, education cross-tabs (n≈1000 per wave).
 _EDUCATION_LEAN: dict[str, float] = {
-    "學位或以上":   0.08,
-    "專上非學位":   0.04,
-    "中學":        -0.02,
-    "小學或以下":  -0.06,
+    "學位或以上": 0.08,
+    "專上非學位": 0.04,
+    "中學": -0.02,
+    "小學或以下": -0.06,
 }
 
 # Label boundaries — roughly map to HKUPOP self-identification surveys
 # where ~30% identified as pro-establishment, ~30% as democrat, ~40% centrist
 # (2012-2019 average; post-2020 surveys show different patterns).
-_ESTABLISHMENT_MAX = 0.3   # stance < 0.3  → 建制派
-_DEMOCRACY_MIN = 0.7       # stance >= 0.7 → 民主派
+_ESTABLISHMENT_MAX = 0.3  # stance < 0.3  → 建制派
+_DEMOCRACY_MIN = 0.7  # stance >= 0.7 → 民主派
 
 
 # ---------------------------------------------------------------------------
 # PoliticalModel
 # ---------------------------------------------------------------------------
+
 
 class PoliticalModel:
     """Models political spectrum, echo chambers, and spiral of silence in HK.
@@ -121,9 +123,7 @@ class PoliticalModel:
         """
         async with get_db() as db:
             try:
-                await db.execute(
-                    "ALTER TABLE agent_profiles ADD COLUMN political_stance REAL DEFAULT 0.5"
-                )
+                await db.execute("ALTER TABLE agent_profiles ADD COLUMN political_stance REAL DEFAULT 0.5")
                 await db.commit()
                 logger.info("Added political_stance column to agent_profiles")
             except Exception:
@@ -235,10 +235,7 @@ class PoliticalModel:
         if not neighbor_stances:
             return 0.0
 
-        avg_diff = (
-            sum(abs(agent_stance - ns) for ns in neighbor_stances)
-            / len(neighbor_stances)
-        )
+        avg_diff = sum(abs(agent_stance - ns) for ns in neighbor_stances) / len(neighbor_stances)
         return round(1.0 - min(avg_diff * 2, 1.0), 3)
 
     # ------------------------------------------------------------------
@@ -369,9 +366,7 @@ class PoliticalModel:
             return round(neighbor_avg / random_avg, 4)
 
         except Exception:
-            logger.exception(
-                "compute_network_homophily failed session=%s", session_id
-            )
+            logger.exception("compute_network_homophily failed session=%s", session_id)
             return 1.0
 
     # ------------------------------------------------------------------
@@ -439,8 +434,10 @@ class PoliticalModel:
         if n < 3:
             return StanceReport(
                 mean=sum(stances) / max(n, 1),
-                std=0.0, skewness=0.0,
-                polarization_index=0.0, extremism_ratio=0.0,
+                std=0.0,
+                skewness=0.0,
+                polarization_index=0.0,
+                extremism_ratio=0.0,
                 alert_level="normal",
             )
 
@@ -451,9 +448,9 @@ class PoliticalModel:
         # Skewness (Fisher)
         if std > 1e-9:
             m3 = sum((s - mean) ** 3 for s in stances) / n
-            skewness = m3 / (std ** 3)
+            skewness = m3 / (std**3)
             m4 = sum((s - mean) ** 4 for s in stances) / n
-            kurtosis = m4 / (std ** 4)
+            kurtosis = m4 / (std**4)
         else:
             skewness = 0.0
             kurtosis = 3.0  # normal
@@ -466,9 +463,9 @@ class PoliticalModel:
         if n > 3:
             sample_correction = 3.0 * (n - 1) ** 2 / ((n - 2) * (n - 3))
             excess_kurtosis = kurtosis - sample_correction
-            bc = (skewness ** 2 + 1) / max(excess_kurtosis + sample_correction, 1e-9)
+            bc = (skewness**2 + 1) / max(excess_kurtosis + sample_correction, 1e-9)
         else:
-            bc = (skewness ** 2 + 1) / max(kurtosis, 1e-9)
+            bc = (skewness**2 + 1) / max(kurtosis, 1e-9)
         polarization_index = min(1.0, max(0.0, bc))
 
         # Extremism ratio
@@ -511,10 +508,7 @@ class PoliticalModel:
             return list(stances)
 
         strength = 0.05 if alert_level == "critical" else 0.02
-        return [
-            round(max(0.0, min(1.0, s + (0.5 - s) * strength)), 4)
-            for s in stances
-        ]
+        return [round(max(0.0, min(1.0, s + (0.5 - s) * strength)), 4) for s in stances]
 
     # ------------------------------------------------------------------
     # DB helpers
@@ -580,9 +574,7 @@ class PoliticalModel:
             agent_id=agent_id,
             political_stance=stance,
             political_label=self.get_political_label(stance),
-            engagement_willingness=self.spiral_of_silence(
-                stance, community_avg, neuroticism
-            ),
+            engagement_willingness=self.spiral_of_silence(stance, community_avg, neuroticism),
         )
 
     async def get_political_distribution(self, session_id: str) -> dict[str, Any]:
@@ -615,9 +607,7 @@ class PoliticalModel:
 
         stances = [float(r["political_stance"]) for r in rows]
         establishment = sum(1 for s in stances if s < _ESTABLISHMENT_MAX)
-        centrist = sum(
-            1 for s in stances if _ESTABLISHMENT_MAX <= s < _DEMOCRACY_MIN
-        )
+        centrist = sum(1 for s in stances if _ESTABLISHMENT_MAX <= s < _DEMOCRACY_MIN)
         democracy = sum(1 for s in stances if s >= _DEMOCRACY_MIN)
 
         return {

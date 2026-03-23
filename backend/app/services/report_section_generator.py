@@ -3,11 +3,13 @@
 Each section gets its own focused evidence-collection loop with
 enforced minimum tool calls (3) and maximum (5).
 """
+
 from __future__ import annotations
 
 import json
 import re
-from typing import Any, Callable, Awaitable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from backend.app.utils.logger import get_logger
 
@@ -38,7 +40,7 @@ def _extract_final_answer(text: str) -> str:
     idx = text.find("Final Answer:")
     if idx == -1:
         return text
-    return text[idx + len("Final Answer:"):].strip()
+    return text[idx + len("Final Answer:") :].strip()
 
 
 def _extract_tool_calls(text: str) -> list[dict[str, Any]]:
@@ -74,8 +76,8 @@ async def generate_section(
         Markdown content for this section.
     """
     from backend.prompts.report_prompts import (
-        SECTION_INSUFFICIENT_TOOLS_MSG,
         SECTION_FORCE_FINAL_MSG,
+        SECTION_INSUFFICIENT_TOOLS_MSG,
     )
 
     context_block = ""

@@ -1,5 +1,7 @@
 """Tests for the naive baseline forecaster."""
+
 import pytest
+
 from backend.app.services.naive_forecaster import NaiveForecaster
 
 

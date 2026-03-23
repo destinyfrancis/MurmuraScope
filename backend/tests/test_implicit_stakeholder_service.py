@@ -10,6 +10,7 @@ Coverage:
 - Empty seed text → returns empty DiscoveryResult immediately
 - Slug sanitisation: invalid slugs are fixed before DB insert
 """
+
 from __future__ import annotations
 
 import dataclasses
@@ -27,24 +28,26 @@ from backend.app.services.implicit_stakeholder_service import (
 @pytest.fixture()
 def mock_llm():
     llm = MagicMock()
-    llm.chat_json = AsyncMock(return_value={
-        "implied_actors": [
-            {
-                "id": "european_union",
-                "name": "歐盟",
-                "entity_type": "Organization",
-                "role": "協調歐洲能源政策及制裁回應",
-                "relevance_reason": "霍爾木茲封鎖直接衝擊歐洲天然氣供應",
-            },
-            {
-                "id": "russia_federation",
-                "name": "俄羅斯聯邦",
-                "entity_type": "Country",
-                "role": "地區大國，油價受益者",
-                "relevance_reason": "伊朗戰爭令油價上漲，俄羅斯是主要受益國",
-            },
-        ]
-    })
+    llm.chat_json = AsyncMock(
+        return_value={
+            "implied_actors": [
+                {
+                    "id": "european_union",
+                    "name": "歐盟",
+                    "entity_type": "Organization",
+                    "role": "協調歐洲能源政策及制裁回應",
+                    "relevance_reason": "霍爾木茲封鎖直接衝擊歐洲天然氣供應",
+                },
+                {
+                    "id": "russia_federation",
+                    "name": "俄羅斯聯邦",
+                    "entity_type": "Country",
+                    "role": "地區大國，油價受益者",
+                    "relevance_reason": "伊朗戰爭令油價上漲，俄羅斯是主要受益國",
+                },
+            ]
+        }
+    )
     return llm
 
 
@@ -69,20 +72,20 @@ async def test_discover_returns_discovery_result(mock_llm):
 
 @pytest.mark.asyncio
 async def test_discover_deduplicates_existing_actors(mock_llm):
-    existing = _EXISTING_NODES + [
-        {"id": "abc_eu", "entity_type": "Organization", "label": "歐盟", "description": ""}
-    ]
-    mock_llm.chat_json = AsyncMock(return_value={
-        "implied_actors": [
-            {
-                "id": "european_union",
-                "name": "歐盟",  # Same name as existing node
-                "entity_type": "Organization",
-                "role": "already exists",
-                "relevance_reason": "test dedup",
-            }
-        ]
-    })
+    existing = _EXISTING_NODES + [{"id": "abc_eu", "entity_type": "Organization", "label": "歐盟", "description": ""}]
+    mock_llm.chat_json = AsyncMock(
+        return_value={
+            "implied_actors": [
+                {
+                    "id": "european_union",
+                    "name": "歐盟",  # Same name as existing node
+                    "entity_type": "Organization",
+                    "role": "already exists",
+                    "relevance_reason": "test dedup",
+                }
+            ]
+        }
+    )
     svc = ImplicitStakeholderService(llm_client=mock_llm)
     with patch.object(svc, "_load_kg_nodes", new=AsyncMock(return_value=existing)):
         with patch.object(svc, "_persist_nodes", new=AsyncMock(return_value=0)):
@@ -111,8 +114,11 @@ async def test_discover_returns_empty_for_blank_seed():
 
 def test_implicit_stakeholder_is_frozen():
     s = ImplicitStakeholder(
-        id="eu", name="歐盟", entity_type="Organization",
-        role="x", relevance_reason="y",
+        id="eu",
+        name="歐盟",
+        entity_type="Organization",
+        role="x",
+        relevance_reason="y",
     )
     with pytest.raises((dataclasses.FrozenInstanceError, AttributeError)):
         s.id = "other"  # type: ignore[misc]

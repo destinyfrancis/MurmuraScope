@@ -174,8 +174,8 @@ async def get_hsi_decomposition(
         n_quarters: Number of quarterly periods to include (default 20).
     """
     try:
-        from backend.app.services.hsi_decomposer import HSIDecomposer  # noqa: PLC0415
         from backend.app.config import get_settings  # noqa: PLC0415
+        from backend.app.services.hsi_decomposer import HSIDecomposer  # noqa: PLC0415
 
         settings = get_settings()
         decomposer = HSIDecomposer(db_path=settings.DATABASE_PATH)
@@ -247,7 +247,9 @@ async def run_sensitivity_sobol(req: dict) -> APIResponse:
         period_end = req.get("period_end", "2023-Q4")
         n_samples = req.get("n_samples", 64)
         result = await analyzer.run_sobol(
-            period_start=period_start, period_end=period_end, n_samples=n_samples,
+            period_start=period_start,
+            period_end=period_end,
+            n_samples=n_samples,
         )
         import dataclasses  # noqa: PLC0415
 
@@ -451,6 +453,7 @@ async def get_retrospective_validation(
 # GraphRAG: Community Summaries + Global Narrative + Triple Conflicts (Phase 18)
 # ---------------------------------------------------------------------------
 
+
 @router.get("/{session_id}/community-summaries", response_model=APIResponse)
 async def get_community_summaries(
     session_id: str,
@@ -581,8 +584,9 @@ async def get_polarization(
     round_number: int | None = None,
 ) -> APIResponse:
     """Get polarization index for a specific round (or latest)."""
-    from backend.app.utils.db import get_db  # noqa: PLC0415
     import json as _json  # noqa: PLC0415
+
+    from backend.app.utils.db import get_db  # noqa: PLC0415
 
     try:
         async with get_db() as db:
@@ -745,9 +749,7 @@ async def get_agent_feed(
             },
         )
     except Exception as exc:
-        logger.exception(
-            "get_agent_feed failed for session %s agent %s", session_id, agent_id
-        )
+        logger.exception("get_agent_feed failed for session %s agent %s", session_id, agent_id)
         logger.exception("Internal error in get_agent_feed")
         raise HTTPException(status_code=500, detail="Internal server error") from exc
 
@@ -860,8 +862,12 @@ async def get_virality(
     from backend.app.utils.db import get_db  # noqa: PLC0415
 
     ALLOWED_SORT = {
-        "virality_index", "cascade_depth", "cascade_breadth",
-        "velocity", "reproduction_number", "cross_cluster_reach",
+        "virality_index",
+        "cascade_depth",
+        "cascade_breadth",
+        "velocity",
+        "reproduction_number",
+        "cross_cluster_reach",
     }
     if sort not in ALLOWED_SORT:
         sort = "virality_index"
@@ -910,8 +916,9 @@ async def get_virality(
 @router.get("/{session_id}/polarization-history", response_model=APIResponse)
 async def get_polarization_history(session_id: str) -> APIResponse:
     """Get polarization index time series across all rounds."""
-    from backend.app.utils.db import get_db  # noqa: PLC0415
     import json as _json  # noqa: PLC0415
+
+    from backend.app.utils.db import get_db  # noqa: PLC0415
 
     try:
         async with get_db() as db:
@@ -1011,8 +1018,9 @@ async def get_emotional_heatmap(
     round_number: int | None = None,
 ) -> APIResponse:
     """Get emotional state heatmap for all agents at a round (or latest)."""
-    from backend.app.utils.db import get_db  # noqa: PLC0415
     import aiosqlite as _aiosqlite  # noqa: PLC0415
+
+    from backend.app.utils.db import get_db  # noqa: PLC0415
 
     try:
         async with get_db() as db:
@@ -1119,8 +1127,9 @@ async def get_cognitive_dissonance(
     min_score: float = 0.5,
 ) -> APIResponse:
     """Get cognitive dissonance records above a threshold score."""
-    from backend.app.utils.db import get_db  # noqa: PLC0415
     import json as _json  # noqa: PLC0415
+
+    from backend.app.utils.db import get_db  # noqa: PLC0415
 
     try:
         async with get_db() as db:
@@ -1220,12 +1229,14 @@ async def get_emotional_contagion(
                     "dominance": r[3],
                 }
             if r[4] is not None and r[5] is not None and r[5] > 0:
-                connections.append({
-                    "source": agent_id,
-                    "target": r[4],
-                    "trust": r[5],
-                    "contagion_strength": r[2] * r[5],
-                })
+                connections.append(
+                    {
+                        "source": agent_id,
+                        "target": r[4],
+                        "trust": r[5],
+                        "contagion_strength": r[2] * r[5],
+                    }
+                )
 
         return APIResponse(
             success=True,
@@ -1249,8 +1260,8 @@ async def get_trend_narrative(
     then calls NarrativeEngine to produce an LLM-generated trend report.
     """
     from backend.app.services.narrative_engine import NarrativeEngine  # noqa: PLC0415
-    from backend.app.utils.llm_client import get_default_client  # noqa: PLC0415
     from backend.app.utils.db import get_db as _get_db  # noqa: PLC0415
+    from backend.app.utils.llm_client import get_default_client  # noqa: PLC0415
 
     try:
         # Gather report artifacts from DB

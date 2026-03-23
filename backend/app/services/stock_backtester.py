@@ -69,15 +69,11 @@ class StockBacktester:
         test = [(w, c) for w, c in history if _week_sort_key(w) > train_key]
 
         if len(train) < 8:
-            raise ValueError(
-                f"Train set too small for {ticker}: {len(train)} weeks before {train_end}"
-            )
+            raise ValueError(f"Train set too small for {ticker}: {len(train)} weeks before {train_end}")
 
         test = test[:horizon]  # limit to horizon
         if len(test) == 0:
-            raise ValueError(
-                f"No test data after {train_end} for {ticker}"
-            )
+            raise ValueError(f"No test data after {train_end} for {ticker}")
 
         # Produce forecasts
         predictions = self._predict(train, len(test))
@@ -94,7 +90,13 @@ class StockBacktester:
 
         logger.info(
             "Backtest %s (train_end=%s, horizon=%d): MAPE=%.3f RMSE=%.2f DirAcc=%.3f n=%d",
-            ticker, train_end, horizon, mape, rmse, dir_acc, n,
+            ticker,
+            train_end,
+            horizon,
+            mape,
+            rmse,
+            dir_acc,
+            n,
         )
 
         return StockBacktestResult(
@@ -151,11 +153,13 @@ class StockBacktester:
             freq="W",
             n_jobs=1,
         )
-        df = pd.DataFrame({
-            "unique_id": ["ticker"] * n,
-            "ds": pd.date_range(end=pd.Timestamp.now(), periods=n, freq="W-FRI"),
-            "y": closes,
-        })
+        df = pd.DataFrame(
+            {
+                "unique_id": ["ticker"] * n,
+                "ds": pd.date_range(end=pd.Timestamp.now(), periods=n, freq="W-FRI"),
+                "y": closes,
+            }
+        )
         sf.fit(df)
         pred = sf.predict(h=n_ahead)
         col = next(
@@ -186,11 +190,7 @@ class StockBacktester:
         """Mean Absolute Percentage Error."""
         if not actuals:
             return 0.0
-        errors = [
-            abs(a - p) / abs(a)
-            for a, p in zip(actuals, predictions)
-            if abs(a) > 1e-9
-        ]
+        errors = [abs(a - p) / abs(a) for a, p in zip(actuals, predictions) if abs(a) > 1e-9]
         return round(sum(errors) / len(errors), 4) if errors else 0.0
 
     @staticmethod

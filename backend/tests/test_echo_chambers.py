@@ -7,9 +7,10 @@ Covers:
 
 from __future__ import annotations
 
-import pytest
-import aiosqlite
 from pathlib import Path
+
+import aiosqlite
+import pytest
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -70,24 +71,132 @@ async def _seed_agents_and_relationships(db_path: Path, session_id: str = "test-
         # Create 6 agents: 3 in cluster A (Central), 3 in cluster B (Tsuen Wan)
         # Each tuple includes oasis_persona (NOT NULL) and oasis_username
         agents = [
-            (session_id, "citizen", 30, "M", "Central", "finance", "high", "university",
-             "single", "private", 0.7, 0.5, 0.8, 0.5, 0.3, 50000, 200000,
-             "金融從業員A1", "user_a1"),
-            (session_id, "citizen", 35, "F", "Central", "finance", "high", "university",
-             "married", "private", 0.6, 0.6, 0.7, 0.6, 0.4, 45000, 150000,
-             "金融從業員A2", "user_a2"),
-            (session_id, "citizen", 28, "M", "Central", "finance", "high", "university",
-             "single", "rental", 0.5, 0.5, 0.6, 0.5, 0.5, 35000, 80000,
-             "金融從業員A3", "user_a3"),
-            (session_id, "citizen", 45, "F", "Tsuen Wan", "education", "middle", "university",
-             "married", "public", 0.4, 0.7, 0.3, 0.7, 0.6, 25000, 100000,
-             "教育工作者B1", "user_b1"),
-            (session_id, "citizen", 50, "M", "Tsuen Wan", "education", "middle", "secondary",
-             "married", "public", 0.3, 0.6, 0.4, 0.8, 0.7, 22000, 60000,
-             "教育工作者B2", "user_b2"),
-            (session_id, "citizen", 40, "F", "Tsuen Wan", "education", "middle", "university",
-             "married", "public", 0.5, 0.5, 0.5, 0.6, 0.5, 28000, 90000,
-             "教育工作者B3", "user_b3"),
+            (
+                session_id,
+                "citizen",
+                30,
+                "M",
+                "Central",
+                "finance",
+                "high",
+                "university",
+                "single",
+                "private",
+                0.7,
+                0.5,
+                0.8,
+                0.5,
+                0.3,
+                50000,
+                200000,
+                "金融從業員A1",
+                "user_a1",
+            ),
+            (
+                session_id,
+                "citizen",
+                35,
+                "F",
+                "Central",
+                "finance",
+                "high",
+                "university",
+                "married",
+                "private",
+                0.6,
+                0.6,
+                0.7,
+                0.6,
+                0.4,
+                45000,
+                150000,
+                "金融從業員A2",
+                "user_a2",
+            ),
+            (
+                session_id,
+                "citizen",
+                28,
+                "M",
+                "Central",
+                "finance",
+                "high",
+                "university",
+                "single",
+                "rental",
+                0.5,
+                0.5,
+                0.6,
+                0.5,
+                0.5,
+                35000,
+                80000,
+                "金融從業員A3",
+                "user_a3",
+            ),
+            (
+                session_id,
+                "citizen",
+                45,
+                "F",
+                "Tsuen Wan",
+                "education",
+                "middle",
+                "university",
+                "married",
+                "public",
+                0.4,
+                0.7,
+                0.3,
+                0.7,
+                0.6,
+                25000,
+                100000,
+                "教育工作者B1",
+                "user_b1",
+            ),
+            (
+                session_id,
+                "citizen",
+                50,
+                "M",
+                "Tsuen Wan",
+                "education",
+                "middle",
+                "secondary",
+                "married",
+                "public",
+                0.3,
+                0.6,
+                0.4,
+                0.8,
+                0.7,
+                22000,
+                60000,
+                "教育工作者B2",
+                "user_b2",
+            ),
+            (
+                session_id,
+                "citizen",
+                40,
+                "F",
+                "Tsuen Wan",
+                "education",
+                "middle",
+                "university",
+                "married",
+                "public",
+                0.5,
+                0.5,
+                0.5,
+                0.6,
+                0.5,
+                28000,
+                90000,
+                "教育工作者B3",
+                "user_b3",
+            ),
         ]
         for a in agents:
             await db.execute(
@@ -236,7 +345,7 @@ class TestEchoChamberDetection:
     async def test_echo_chamber_frozen(self, mock_db):
         """EchoChamber and EchoChamberResult should be frozen."""
         from backend.app.services.social_network import (
-            EchoChamber, EchoChamberResult, SocialNetworkBuilder,
+            SocialNetworkBuilder,
         )
 
         ids = await _seed_agents_and_relationships(mock_db, "test-frozen")
@@ -323,9 +432,7 @@ class TestFilterBubbleDampening:
         result = await builder.detect_echo_chambers(session_id)
 
         # Apply dampening
-        dampened = await builder.apply_echo_chamber_dampening(
-            session_id, 3, result
-        )
+        dampened = await builder.apply_echo_chamber_dampening(session_id, 3, result)
 
         # Check that the memory salience was reduced
         async with aiosqlite.connect(str(mock_db)) as db:
@@ -366,9 +473,7 @@ class TestFilterBubbleDampening:
 
         builder = SocialNetworkBuilder()
         result = await builder.detect_echo_chambers(session_id)
-        dampened = await builder.apply_echo_chamber_dampening(
-            session_id, 3, result
-        )
+        dampened = await builder.apply_echo_chamber_dampening(session_id, 3, result)
 
         # Same cluster → no dampening
         async with aiosqlite.connect(str(mock_db)) as db:
@@ -391,8 +496,8 @@ class TestSocialContagion:
     @pytest.mark.asyncio
     async def test_contagion_from_trusted_peer_decisions(self, mock_db):
         """Should detect distress from trusted peers' emigration decisions."""
-        from backend.app.services.decision_deliberator import DecisionDeliberator
         from backend.app.models.decision import DecisionType
+        from backend.app.services.decision_deliberator import DecisionDeliberator
 
         session_id = "test-contagion"
         ids = await _seed_agents_and_relationships(mock_db, session_id)
@@ -424,9 +529,7 @@ class TestSocialContagion:
             await db.commit()
 
         deliberator = DecisionDeliberator()
-        ctx = await deliberator.query_social_contagion(
-            session_id, ids[0], DecisionType.EMIGRATE
-        )
+        ctx = await deliberator.query_social_contagion(session_id, ids[0], DecisionType.EMIGRATE)
 
         assert len(ctx.distress_signals) >= 2
         assert all(s.trust_score >= 0.3 for s in ctx.distress_signals)
@@ -434,8 +537,8 @@ class TestSocialContagion:
     @pytest.mark.asyncio
     async def test_contagion_from_memory_triples(self, mock_db):
         """Should detect distress from trusted peers' memory triples."""
-        from backend.app.services.decision_deliberator import DecisionDeliberator
         from backend.app.models.decision import DecisionType
+        from backend.app.services.decision_deliberator import DecisionDeliberator
 
         session_id = "test-triples"
         ids = await _seed_agents_and_relationships(mock_db, session_id)
@@ -460,17 +563,15 @@ class TestSocialContagion:
             await db.commit()
 
         deliberator = DecisionDeliberator()
-        ctx = await deliberator.query_social_contagion(
-            session_id, ids[0], DecisionType.EMIGRATE
-        )
+        ctx = await deliberator.query_social_contagion(session_id, ids[0], DecisionType.EMIGRATE)
 
         assert len(ctx.distress_signals) >= 2
 
     @pytest.mark.asyncio
     async def test_contagion_threshold_3_peers(self, mock_db):
         """Contagion should only activate when ≥3 trusted peers show distress."""
-        from backend.app.services.decision_deliberator import DecisionDeliberator
         from backend.app.models.decision import DecisionType
+        from backend.app.services.decision_deliberator import DecisionDeliberator
 
         session_id = "test-threshold"
         ids = await _seed_agents_and_relationships(mock_db, session_id)
@@ -487,9 +588,7 @@ class TestSocialContagion:
             await db.commit()
 
         deliberator = DecisionDeliberator()
-        ctx = await deliberator.query_social_contagion(
-            session_id, ids[0], DecisionType.BUY_PROPERTY
-        )
+        ctx = await deliberator.query_social_contagion(session_id, ids[0], DecisionType.BUY_PROPERTY)
 
         assert not ctx.contagion_active
         assert len(ctx.distress_signals) <= 2
@@ -527,7 +626,8 @@ class TestSocialContagion:
     async def test_contagion_prompt_section(self, mock_db):
         """Active contagion should produce a non-empty prompt section."""
         from backend.app.services.decision_deliberator import (
-            SocialContagionContext, PeerDistressSignal,
+            PeerDistressSignal,
+            SocialContagionContext,
         )
 
         signals = tuple(
@@ -535,7 +635,7 @@ class TestSocialContagion:
                 peer_agent_id=i,
                 peer_username=f"user_{i}",
                 signal_type="decision",
-                detail=f"決定 emigrate (走咗)",
+                detail="決定 emigrate (走咗)",
                 trust_score=0.7,
             )
             for i in range(3)
@@ -570,8 +670,8 @@ class TestSocialContagion:
     @pytest.mark.asyncio
     async def test_no_trusted_peers_no_contagion(self, mock_db):
         """Agent with no trusted peers should have no contagion."""
-        from backend.app.services.decision_deliberator import DecisionDeliberator
         from backend.app.models.decision import DecisionType
+        from backend.app.services.decision_deliberator import DecisionDeliberator
 
         session_id = "test-no-peers"
         # Seed agents but NO relationships
@@ -589,16 +689,12 @@ class TestSocialContagion:
                            '孤獨金融人', 'lonely_user')""",
             )
             await db.commit()
-            cursor = await db.execute(
-                "SELECT id FROM agent_profiles WHERE session_id = 'test-no-peers'"
-            )
+            cursor = await db.execute("SELECT id FROM agent_profiles WHERE session_id = 'test-no-peers'")
             row = await cursor.fetchone()
             agent_id = row[0]
 
         deliberator = DecisionDeliberator()
-        ctx = await deliberator.query_social_contagion(
-            session_id, agent_id, DecisionType.EMIGRATE
-        )
+        ctx = await deliberator.query_social_contagion(session_id, agent_id, DecisionType.EMIGRATE)
 
         assert not ctx.contagion_active
         assert len(ctx.distress_signals) == 0
@@ -608,8 +704,11 @@ class TestSocialContagion:
 def _make_test_macro():
     """Build a minimal MacroState for testing."""
     from backend.app.services.macro_state import (
-        MacroState, BASELINE_AVG_SQFT_PRICE, BASELINE_STAMP_DUTY,
+        BASELINE_AVG_SQFT_PRICE,
+        BASELINE_STAMP_DUTY,
+        MacroState,
     )
+
     return MacroState(
         hibor_1m=0.04,
         prime_rate=0.055,
@@ -634,21 +733,35 @@ class TestDeliberationPromptWithContagion:
 
     def test_prompt_without_contagion(self):
         """Without contagion, prompt should not contain contagion section."""
-        from backend.prompts.decision_prompts import build_deliberation_prompt
-        from backend.app.services.agent_factory import AgentProfile
         from backend.app.models.decision import DecisionType
+        from backend.app.services.agent_factory import AgentProfile
+        from backend.prompts.decision_prompts import build_deliberation_prompt
 
         profile = AgentProfile(
-            id=1, agent_type="citizen", age=30, sex="M", district="Central",
-            occupation="finance", income_bracket="high", education_level="university",
-            marital_status="single", housing_type="private",
-            openness=0.5, conscientiousness=0.5, extraversion=0.5,
-            agreeableness=0.5, neuroticism=0.5, monthly_income=30000, savings=100000,
+            id=1,
+            agent_type="citizen",
+            age=30,
+            sex="M",
+            district="Central",
+            occupation="finance",
+            income_bracket="high",
+            education_level="university",
+            marital_status="single",
+            housing_type="private",
+            openness=0.5,
+            conscientiousness=0.5,
+            extraversion=0.5,
+            agreeableness=0.5,
+            neuroticism=0.5,
+            monthly_income=30000,
+            savings=100000,
         )
         macro = _make_test_macro()
 
         messages = build_deliberation_prompt(
-            [profile], macro, DecisionType.EMIGRATE,
+            [profile],
+            macro,
+            DecisionType.EMIGRATE,
             contagion_context=None,
         )
 
@@ -657,27 +770,39 @@ class TestDeliberationPromptWithContagion:
 
     def test_prompt_with_contagion(self):
         """With contagion, prompt should contain the contagion section."""
-        from backend.prompts.decision_prompts import build_deliberation_prompt
-        from backend.app.services.agent_factory import AgentProfile
         from backend.app.models.decision import DecisionType
+        from backend.app.services.agent_factory import AgentProfile
+        from backend.prompts.decision_prompts import build_deliberation_prompt
 
         profile = AgentProfile(
-            id=1, agent_type="citizen", age=30, sex="M", district="Central",
-            occupation="finance", income_bracket="high", education_level="university",
-            marital_status="single", housing_type="private",
-            openness=0.5, conscientiousness=0.5, extraversion=0.5,
-            agreeableness=0.5, neuroticism=0.5, monthly_income=30000, savings=100000,
+            id=1,
+            agent_type="citizen",
+            age=30,
+            sex="M",
+            district="Central",
+            occupation="finance",
+            income_bracket="high",
+            education_level="university",
+            marital_status="single",
+            housing_type="private",
+            openness=0.5,
+            conscientiousness=0.5,
+            extraversion=0.5,
+            agreeableness=0.5,
+            neuroticism=0.5,
+            monthly_income=30000,
+            savings=100000,
         )
         macro = _make_test_macro()
 
         contagion = (
-            "--- agent_id=1 社交傳染 ---\n"
-            "【社交傳染警報 SOCIAL CONTAGION】\n"
-            "你信任嘅朋友/同事中，3 個人正經歷困擾"
+            "--- agent_id=1 社交傳染 ---\n【社交傳染警報 SOCIAL CONTAGION】\n你信任嘅朋友/同事中，3 個人正經歷困擾"
         )
 
         messages = build_deliberation_prompt(
-            [profile], macro, DecisionType.EMIGRATE,
+            [profile],
+            macro,
+            DecisionType.EMIGRATE,
             contagion_context=contagion,
         )
 

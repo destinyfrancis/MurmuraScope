@@ -103,9 +103,7 @@ class SimulationSubprocessManager:
         try:
             await asyncio.wait_for(process.wait(), timeout=5.0)
         except asyncio.TimeoutError:
-            logger.warning(
-                "Process %d did not terminate — sending SIGKILL", process.pid
-            )
+            logger.warning("Process %d did not terminate — sending SIGKILL", process.pid)
             process.kill()
             await process.wait()
 
@@ -218,9 +216,7 @@ class SimulationSubprocessManager:
 
                 # --- liveness check ---
                 if not self.is_running(session_id):
-                    logger.debug(
-                        "Health monitor: session %s process has exited", session_id
-                    )
+                    logger.debug("Health monitor: session %s process has exited", session_id)
                     break
 
                 # --- memory check ---
@@ -239,8 +235,7 @@ class SimulationSubprocessManager:
                     strikes = self._memory_warnings.get(session_id, 0) + 1
                     self._memory_warnings[session_id] = strikes
                     logger.warning(
-                        "Health monitor: session %s PID %d using %.1f MB "
-                        "(limit %d MB) — strike %d/%d",
+                        "Health monitor: session %s PID %d using %.1f MB (limit %d MB) — strike %d/%d",
                         session_id,
                         process.pid,
                         rss_mb,
@@ -279,9 +274,7 @@ class SimulationSubprocessManager:
             # Normal cancellation via _stop_health_monitor.
             pass
         except Exception:
-            logger.exception(
-                "Health monitor unexpected error for session %s", session_id
-            )
+            logger.exception("Health monitor unexpected error for session %s", session_id)
 
     # ------------------------------------------------------------------
     # Report keep-alive
@@ -310,9 +303,7 @@ class SimulationSubprocessManager:
         """
         await asyncio.sleep(timeout_s)
         if self._report_pending.get(session_id):
-            logger.warning(
-                "auto_release: timeout expired for %s, cleaning up", session_id
-            )
+            logger.warning("auto_release: timeout expired for %s, cleaning up", session_id)
             await self.release_after_report(session_id)
 
     async def release_after_report(self, session_id: str) -> None:
@@ -376,6 +367,4 @@ class SimulationSubprocessManager:
             return
         exit_code = process.returncode
         if exit_code is not None and exit_code != 0:
-            raise RuntimeError(
-                f"OASIS subprocess for session {session_id} exited with code {exit_code}"
-            )
+            raise RuntimeError(f"OASIS subprocess for session {session_id} exited with code {exit_code}")

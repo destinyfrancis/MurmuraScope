@@ -3,6 +3,7 @@
 Handles graceful degradation when the ``transformers`` library is not installed
 in the test environment — all tests still exercise the keyword-only fast path.
 """
+
 from __future__ import annotations
 
 import pytest

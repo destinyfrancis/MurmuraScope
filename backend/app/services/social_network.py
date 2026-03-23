@@ -15,7 +15,7 @@ receive dampened salience to simulate algorithmic filter bubbles.
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 import aiosqlite
 
@@ -150,13 +150,15 @@ class SocialNetworkBuilder:
                 for j in range(i + 1, min(i + 11, len(agent_ids))):
                     # Limit neighbors to 10 per agent for performance
                     a, b = agent_ids[i], agent_ids[j]
-                    relationships.append(AgentRelationship(
-                        session_id=session_id,
-                        agent_a_id=a,
-                        agent_b_id=b,
-                        relationship_type="neighbor",
-                        influence_weight=_NEIGHBOR_INFLUENCE_WEIGHT,
-                    ))
+                    relationships.append(
+                        AgentRelationship(
+                            session_id=session_id,
+                            agent_a_id=a,
+                            agent_b_id=b,
+                            relationship_type="neighbor",
+                            influence_weight=_NEIGHBOR_INFLUENCE_WEIGHT,
+                        )
+                    )
 
         # Build colleague relationships (same occupation, max 15 per agent)
         for occupation, agent_ids in by_occupation.items():
@@ -164,33 +166,38 @@ class SocialNetworkBuilder:
                 for j in range(i + 1, min(i + 16, len(agent_ids))):
                     a, b = agent_ids[i], agent_ids[j]
                     # Avoid duplicating neighbor relationships
-                    relationships.append(AgentRelationship(
-                        session_id=session_id,
-                        agent_a_id=a,
-                        agent_b_id=b,
-                        relationship_type="colleague",
-                        influence_weight=_COLLEAGUE_INFLUENCE_WEIGHT,
-                    ))
+                    relationships.append(
+                        AgentRelationship(
+                            session_id=session_id,
+                            agent_a_id=a,
+                            agent_b_id=b,
+                            relationship_type="colleague",
+                            influence_weight=_COLLEAGUE_INFLUENCE_WEIGHT,
+                        )
+                    )
 
         # Opinion leader follow relationships (others follow leaders)
-        non_leaders = [p.get("id") or p.get("agent_id") for p in profiles
-                       if (p.get("id") or p.get("agent_id")) not in set(opinion_leaders)]
+        non_leaders = [
+            p.get("id") or p.get("agent_id")
+            for p in profiles
+            if (p.get("id") or p.get("agent_id")) not in set(opinion_leaders)
+        ]
         for leader_id in opinion_leaders:
             # Each opinion leader is followed by up to 20 non-leaders
             for follower_id in non_leaders[:20]:
-                relationships.append(AgentRelationship(
-                    session_id=session_id,
-                    agent_a_id=leader_id,
-                    agent_b_id=follower_id,
-                    relationship_type="opinion_leader",
-                    influence_weight=_FOLLOWER_INFLUENCE_WEIGHT,
-                ))
+                relationships.append(
+                    AgentRelationship(
+                        session_id=session_id,
+                        agent_a_id=leader_id,
+                        agent_b_id=follower_id,
+                        relationship_type="opinion_leader",
+                        influence_weight=_FOLLOWER_INFLUENCE_WEIGHT,
+                    )
+                )
 
         # Persist to DB
         rows = [
-            (r.session_id, r.agent_a_id, r.agent_b_id,
-             r.relationship_type, r.influence_weight)
-            for r in relationships
+            (r.session_id, r.agent_a_id, r.agent_b_id, r.relationship_type, r.influence_weight) for r in relationships
         ]
         if rows:
             try:
@@ -208,7 +215,9 @@ class SocialNetworkBuilder:
                     await db.commit()
                 logger.info(
                     "Social network built: session=%s, %d relationships, %d leaders",
-                    session_id, len(rows), len(opinion_leaders),
+                    session_id,
+                    len(rows),
+                    len(opinion_leaders),
                 )
             except Exception:
                 logger.exception("build_network DB insert failed session=%s", session_id)
@@ -292,9 +301,7 @@ class SocialNetworkBuilder:
                     max_round = max_round_map.get(follower_id)
                     if max_round is None:
                         continue  # No memories for this follower yet — skip
-                    update_rows.append(
-                        (boost_factor, session_id, follower_id, max_round)
-                    )
+                    update_rows.append((boost_factor, session_id, follower_id, max_round))
 
                 if update_rows:
                     await db.executemany(
@@ -310,9 +317,7 @@ class SocialNetworkBuilder:
                 await db.commit()
                 return len(update_rows)
         except Exception:
-            logger.exception(
-                "propagate_influence failed session=%s round=%d", session_id, round_number
-            )
+            logger.exception("propagate_influence failed session=%s round=%d", session_id, round_number)
             return 0
 
     async def detect_echo_chambers(
@@ -400,8 +405,7 @@ class SocialNetworkBuilder:
             # No edges — each agent is its own cluster
             agent_to_cluster = {aid: i for i, aid in enumerate(agent_ids)}
             chambers = tuple(
-                EchoChamber(cluster_id=i, agent_ids=(aid,), avg_trust=0.0, size=1)
-                for i, aid in enumerate(agent_ids)
+                EchoChamber(cluster_id=i, agent_ids=(aid,), avg_trust=0.0, size=1) for i, aid in enumerate(agent_ids)
             )
             return EchoChamberResult(
                 session_id=session_id,
@@ -451,10 +455,9 @@ class SocialNetworkBuilder:
                     sigma_in_current = comm_totals.get(current_comm, 0.0) - k_i
                     w_to_current = comm_weights.get(current_comm, 0.0)
 
-                    delta_q = (
-                        (w_to_c - w_to_current) / m2
-                        - _MODULARITY_RESOLUTION * k_i * (sigma_tot - sigma_in_current) / (m2 * m2)
-                    )
+                    delta_q = (w_to_c - w_to_current) / m2 - _MODULARITY_RESOLUTION * k_i * (
+                        sigma_tot - sigma_in_current
+                    ) / (m2 * m2)
 
                     if delta_q > best_delta:
                         best_delta = delta_q
@@ -486,21 +489,24 @@ class SocialNetworkBuilder:
                     trust_sum += trust
                     trust_count += 1
             avg_trust = trust_sum / trust_count if trust_count > 0 else 0.0
-            chambers_list.append(EchoChamber(
-                cluster_id=cid,
-                agent_ids=tuple(sorted(members)),
-                avg_trust=round(avg_trust, 4),
-                size=len(members),
-            ))
+            chambers_list.append(
+                EchoChamber(
+                    cluster_id=cid,
+                    agent_ids=tuple(sorted(members)),
+                    avg_trust=round(avg_trust, 4),
+                    size=len(members),
+                )
+            )
 
         # Compute modularity Q
-        modularity = _compute_modularity(
-            agent_to_cluster, adjacency, node_strength, m2
-        )
+        modularity = _compute_modularity(agent_to_cluster, adjacency, node_strength, m2)
 
         logger.info(
             "Echo chambers detected session=%s: %d clusters, modularity=%.4f, iterations=%d",
-            session_id, len(chambers_list), modularity, iteration,
+            session_id,
+            len(chambers_list),
+            modularity,
+            iteration,
         )
 
         return EchoChamberResult(
@@ -602,9 +608,7 @@ class SocialNetworkBuilder:
                     (session_id,),
                 )
                 trust_rows = await trust_cursor.fetchall()
-                trust_cache: dict[tuple[int, int], float] = {
-                    (int(r[0]), int(r[1])): float(r[2]) for r in trust_rows
-                }
+                trust_cache: dict[tuple[int, int], float] = {(int(r[0]), int(r[1])): float(r[2]) for r in trust_rows}
 
                 # Get all memories for this round with their agent_ids
                 cursor = await db.execute(
@@ -675,19 +679,20 @@ class SocialNetworkBuilder:
 
             logger.info(
                 "Echo chamber dampening: %d memories dampened session=%s round=%d",
-                dampened, session_id, round_number,
+                dampened,
+                session_id,
+                round_number,
             )
         except Exception:
             logger.exception(
                 "apply_echo_chamber_dampening failed session=%s round=%d",
-                session_id, round_number,
+                session_id,
+                round_number,
             )
 
         return dampened
 
-    async def compute_polarization_index(
-        self, session_id: str, round_number: int
-    ) -> PolarizationResult:
+    async def compute_polarization_index(self, session_id: str, round_number: int) -> PolarizationResult:
         """Compute network polarization combining structural + opinion metrics.
 
         Formula:
@@ -815,7 +820,8 @@ class SocialNetworkBuilder:
         except Exception:
             logger.exception(
                 "persist_polarization_result failed session=%s round=%d",
-                session_id, result.round_number,
+                session_id,
+                result.round_number,
             )
 
     async def persist_echo_chamber_result(
@@ -890,12 +896,15 @@ class SocialNetworkBuilder:
 
             logger.info(
                 "Persisted echo chamber snapshot session=%s round=%d clusters=%d",
-                session_id, round_number, result.num_clusters,
+                session_id,
+                round_number,
+                result.num_clusters,
             )
         except Exception:
             logger.exception(
                 "persist_echo_chamber_result failed session=%s round=%d",
-                session_id, round_number,
+                session_id,
+                round_number,
             )
 
     async def get_network(

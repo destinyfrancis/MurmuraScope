@@ -10,49 +10,48 @@ import logging
 from dataclasses import replace
 from typing import Any
 
-from backend.data_pipeline.shock_calibration_data import SHOCK_MULTIPLIERS
 from backend.app.services.macro_state import (
-    MacroState,
-    SHOCK_INTEREST_RATE_HIKE,
-    SHOCK_PROPERTY_CRASH,
-    SHOCK_UNEMPLOYMENT_SPIKE,
-    SHOCK_POLICY_CHANGE,
-    SHOCK_MARKET_RALLY,
-    SHOCK_EMIGRATION_WAVE,
-    SHOCK_FED_RATE_HIKE,
-    SHOCK_FED_RATE_CUT,
+    SHOCK_CHINA_DEMAND_COLLAPSE,
     SHOCK_CHINA_SLOWDOWN,
     SHOCK_CHINA_STIMULUS,
-    SHOCK_TAIWAN_STRAIT_TENSION,
-    SHOCK_TAIWAN_STRAIT_EASE,
-    SHOCK_SHENZHEN_MAGNET,
+    SHOCK_EMIGRATION_WAVE,
+    SHOCK_FED_RATE_CUT,
+    SHOCK_FED_RATE_HIKE,
     SHOCK_GREATER_BAY_BOOST,
-    SHOCK_TARIFF_INCREASE,
-    SHOCK_SUPPLY_CHAIN_DISRUPTION,
-    SHOCK_CHINA_DEMAND_COLLAPSE,
+    SHOCK_INTEREST_RATE_HIKE,
+    SHOCK_MARKET_RALLY,
+    SHOCK_POLICY_CHANGE,
+    SHOCK_PROPERTY_CRASH,
     SHOCK_RCEP_BENEFIT,
+    SHOCK_SHENZHEN_MAGNET,
+    SHOCK_SUPPLY_CHAIN_DISRUPTION,
+    SHOCK_TAIWAN_STRAIT_EASE,
+    SHOCK_TAIWAN_STRAIT_TENSION,
+    SHOCK_TARIFF_INCREASE,
+    SHOCK_UNEMPLOYMENT_SPIKE,
+    MacroState,
 )
-
+from backend.data_pipeline.shock_calibration_data import SHOCK_MULTIPLIERS
 
 # Explicit allowlist of macro_scenarios columns that may be mutated via God Mode shocks.
 # Keys NOT in this set are silently ignored, preventing SQL injection via dynamic column names.
-_ALLOWED_MACRO_FIELDS: frozenset[str] = frozenset({
-    "hsi_level",
-    "unemployment_rate",
-    "gdp_growth",
-    "consumer_confidence",
-    "ccl_index",
-    "birth_rate",
-    "death_rate",
-    "immigration_rate",
-    "fed_rate",
-    "policy_flags",
-})
+_ALLOWED_MACRO_FIELDS: frozenset[str] = frozenset(
+    {
+        "hsi_level",
+        "unemployment_rate",
+        "gdp_growth",
+        "consumer_confidence",
+        "ccl_index",
+        "birth_rate",
+        "death_rate",
+        "immigration_rate",
+        "fed_rate",
+        "policy_flags",
+    }
+)
 
 
-def _shock_interest_rate_hike(
-    state: MacroState, params: dict[str, Any]
-) -> MacroState:
+def _shock_interest_rate_hike(state: MacroState, params: dict[str, Any]) -> MacroState:
     """Simulate HIBOR / prime-rate increase and cascading effects.
 
     Calibrated from 2022-23 Fed hike cycle (400bp -> CCL -15%, HSI -25%).
@@ -67,10 +66,7 @@ def _shock_interest_rate_hike(
     hsi_pct = mul.hsi_per_unit * units / 100
     conf_pct = mul.confidence_per_unit * units / 100
 
-    new_sqft = {
-        district: int(price * (1 + ccl_pct))
-        for district, price in state.avg_sqft_price.items()
-    }
+    new_sqft = {district: int(price * (1 + ccl_pct)) for district, price in state.avg_sqft_price.items()}
 
     return replace(
         state,
@@ -78,16 +74,12 @@ def _shock_interest_rate_hike(
         prime_rate=state.prime_rate + delta,
         ccl_index=round(state.ccl_index * (1 + ccl_pct), 1),
         avg_sqft_price=new_sqft,
-        consumer_confidence=round(
-            state.consumer_confidence * (1 + conf_pct), 1
-        ),
+        consumer_confidence=round(state.consumer_confidence * (1 + conf_pct), 1),
         hsi_level=round(state.hsi_level * (1 + hsi_pct), 0),
     )
 
 
-def _shock_property_crash(
-    state: MacroState, params: dict[str, Any]
-) -> MacroState:
+def _shock_property_crash(state: MacroState, params: dict[str, Any]) -> MacroState:
     """Simulate a property market crash.
 
     Calibrated from 1997 AFC: 100% severity -> CCL -65%, HSI -40%, GDP -4%.
@@ -105,27 +97,18 @@ def _shock_property_crash(
 
     return replace(
         state,
-        ccl_index=round(
-            state.ccl_index * (1 + mul.ccl_per_unit * severity / 100), 1
-        ),
+        ccl_index=round(state.ccl_index * (1 + mul.ccl_per_unit * severity / 100), 1),
         avg_sqft_price=new_sqft,
         consumer_confidence=round(
-            state.consumer_confidence
-            * (1 + mul.confidence_per_unit * severity / 100),
+            state.consumer_confidence * (1 + mul.confidence_per_unit * severity / 100),
             1,
         ),
-        hsi_level=round(
-            state.hsi_level * (1 + mul.hsi_per_unit * severity / 100), 0
-        ),
-        gdp_growth=round(
-            state.gdp_growth + mul.gdp_per_unit * severity / 100, 3
-        ),
+        hsi_level=round(state.hsi_level * (1 + mul.hsi_per_unit * severity / 100), 0),
+        gdp_growth=round(state.gdp_growth + mul.gdp_per_unit * severity / 100, 3),
     )
 
 
-def _shock_unemployment_spike(
-    state: MacroState, params: dict[str, Any]
-) -> MacroState:
+def _shock_unemployment_spike(state: MacroState, params: dict[str, Any]) -> MacroState:
     """Simulate a surge in unemployment."""
     new_rate = params.get("new_rate", 0.065)
 
@@ -138,9 +121,7 @@ def _shock_unemployment_spike(
     )
 
 
-def _shock_policy_change(
-    state: MacroState, params: dict[str, Any]
-) -> MacroState:
+def _shock_policy_change(state: MacroState, params: dict[str, Any]) -> MacroState:
     """Simulate a government policy change."""
     new_flags = {**state.policy_flags, **params.get("new_flags", {})}
     new_mortgage_cap = params.get("mortgage_cap", state.mortgage_cap)
@@ -158,26 +139,20 @@ def _shock_policy_change(
     )
 
 
-def _shock_market_rally(
-    state: MacroState, params: dict[str, Any]
-) -> MacroState:
+def _shock_market_rally(state: MacroState, params: dict[str, Any]) -> MacroState:
     """Simulate a broad market rally."""
     hsi_pct_up = params.get("hsi_pct_up", 0.15)
 
     return replace(
         state,
         hsi_level=round(state.hsi_level * (1 + hsi_pct_up), 0),
-        consumer_confidence=round(
-            min(state.consumer_confidence * (1 + hsi_pct_up * 0.3), 120.0), 1
-        ),
+        consumer_confidence=round(min(state.consumer_confidence * (1 + hsi_pct_up * 0.3), 120.0), 1),
         ccl_index=round(state.ccl_index * (1 + hsi_pct_up * 0.2), 1),
         gdp_growth=round(state.gdp_growth + hsi_pct_up * 0.08, 3),
     )
 
 
-def _shock_emigration_wave(
-    state: MacroState, params: dict[str, Any]
-) -> MacroState:
+def _shock_emigration_wave(state: MacroState, params: dict[str, Any]) -> MacroState:
     """Simulate an emigration wave affecting demographics and economy.
 
     Calibrated from 2020-22 observed: ~100K/yr net outflow.
@@ -191,12 +166,8 @@ def _shock_emigration_wave(
     return replace(
         state,
         net_migration=state.net_migration - extra_outflow,
-        unemployment_rate=round(
-            max(state.unemployment_rate + mul.unemployment_per_unit * scale / 100, 0.01), 3
-        ),
-        consumer_confidence=round(
-            state.consumer_confidence * (1 + mul.confidence_per_unit * scale / 100), 1
-        ),
+        unemployment_rate=round(max(state.unemployment_rate + mul.unemployment_per_unit * scale / 100, 0.01), 3),
+        consumer_confidence=round(state.consumer_confidence * (1 + mul.confidence_per_unit * scale / 100), 1),
         ccl_index=round(state.ccl_index * (1 + mul.ccl_per_unit * scale / 100), 1),
         gdp_growth=round(state.gdp_growth + mul.gdp_per_unit * scale / 100, 3),
     )
@@ -266,9 +237,7 @@ def _shock_china_slowdown(state: MacroState, params: dict[str, Any]) -> MacroSta
         hsi_level=round(state.hsi_level * (1 + mul.hsi_per_unit * scale / 100), 0),
         northbound_capital_bn=round(state.northbound_capital_bn * (1 - gdp_drop * 3), 1),
         gdp_growth=round(state.gdp_growth + mul.gdp_per_unit * scale / 100, 3),
-        consumer_confidence=round(
-            state.consumer_confidence * (1 + mul.confidence_per_unit * scale / 100), 1
-        ),
+        consumer_confidence=round(state.consumer_confidence * (1 + mul.confidence_per_unit * scale / 100), 1),
     )
 
 
@@ -288,9 +257,7 @@ def _shock_china_stimulus(state: MacroState, params: dict[str, Any]) -> MacroSta
     )
 
 
-def _shock_taiwan_strait_tension(
-    state: MacroState, params: dict[str, Any]
-) -> MacroState:
+def _shock_taiwan_strait_tension(state: MacroState, params: dict[str, Any]) -> MacroState:
     """Taiwan Strait tension spikes → risk-off, capital flight, emigration surge."""
     severity = params.get("severity", 0.2)
     extra_outflow = int(30_000 * severity)
@@ -306,9 +273,7 @@ def _shock_taiwan_strait_tension(
     )
 
 
-def _shock_taiwan_strait_ease(
-    state: MacroState, params: dict[str, Any]
-) -> MacroState:
+def _shock_taiwan_strait_ease(state: MacroState, params: dict[str, Any]) -> MacroState:
     """Taiwan Strait tensions ease → risk appetite returns, market recovers."""
     relief = params.get("relief", 0.15)
     return replace(
@@ -340,8 +305,7 @@ def _shock_greater_bay_boost(state: MacroState, params: dict[str, Any]) -> Macro
     boost = params.get("policy_score_gain", 0.1)
     yl_premium = params.get("yl_premium", 0.05)
     new_sqft = {
-        d: int(p * (1 + yl_premium if d in ("元朗", "北區", "大埔") else p))
-        for d, p in state.avg_sqft_price.items()
+        d: int(p * (1 + yl_premium if d in ("元朗", "北區", "大埔") else p)) for d, p in state.avg_sqft_price.items()
     }
     return replace(
         state,
@@ -374,9 +338,7 @@ def _shock_tariff_increase(state: MacroState, params: dict[str, Any]) -> MacroSt
         export_logistics_cost=round(state.export_logistics_cost * (1 + tariff_delta * 0.3), 3),
         gdp_growth=round(state.gdp_growth + mul.gdp_per_unit * scale / 100, 4),
         hsi_level=round(state.hsi_level * (1 + mul.hsi_per_unit * scale / 100), 0),
-        consumer_confidence=round(
-            state.consumer_confidence * (1 + mul.confidence_per_unit * scale / 100), 1
-        ),
+        consumer_confidence=round(state.consumer_confidence * (1 + mul.confidence_per_unit * scale / 100), 1),
     )
 
 
@@ -396,9 +358,7 @@ def _shock_supply_chain_disruption(state: MacroState, params: dict[str, Any]) ->
         cpi_yoy=round(state.cpi_yoy + severity * 0.01, 4),
         gdp_growth=round(state.gdp_growth + mul.gdp_per_unit * severity / 100, 4),
         hsi_level=round(state.hsi_level * (1 + mul.hsi_per_unit * severity / 100), 0),
-        consumer_confidence=round(
-            state.consumer_confidence * (1 + mul.confidence_per_unit * severity / 100), 1
-        ),
+        consumer_confidence=round(state.consumer_confidence * (1 + mul.confidence_per_unit * severity / 100), 1),
     )
 
 
@@ -426,9 +386,7 @@ def _shock_rcep_benefit(state: MacroState, params: dict[str, Any]) -> MacroState
     return replace(
         state,
         import_tariff_rate=round(max(state.import_tariff_rate - benefit_scale * 0.05, 0.0), 3),
-        export_logistics_cost=round(
-            max(state.export_logistics_cost * (1 - benefit_scale * 0.1), 0.5), 3
-        ),
+        export_logistics_cost=round(max(state.export_logistics_cost * (1 - benefit_scale * 0.1), 0.5), 3),
         gdp_growth=round(state.gdp_growth + mul.gdp_per_unit * benefit_scale / 100, 4),
         hsi_level=round(state.hsi_level * (1 + mul.hsi_per_unit * benefit_scale / 100), 0),
         consumer_confidence=round(
@@ -448,9 +406,7 @@ def _shock_rcep_benefit(state: MacroState, params: dict[str, Any]) -> MacroState
 _logger = logging.getLogger(__name__)
 
 
-def _apply_second_order(
-    before: MacroState, after: MacroState
-) -> MacroState:
+def _apply_second_order(before: MacroState, after: MacroState) -> MacroState:
     """Compute second-order cascading effects from primary shock deltas.
 
     Chain is limited to a single additional pass (no recursion):
@@ -533,8 +489,12 @@ def apply_shock(
 
     base_deltas: dict[str, float] = {}
     for field_name in (
-        "hsi_level", "consumer_confidence", "gdp_growth",
-        "ccl_index", "unemployment_rate", "net_migration",
+        "hsi_level",
+        "consumer_confidence",
+        "gdp_growth",
+        "ccl_index",
+        "unemployment_rate",
+        "net_migration",
     ):
         before_val = getattr(state, field_name, None)
         after_val = getattr(after_primary, field_name, None)
@@ -544,9 +504,7 @@ def apply_shock(
                 base_deltas[field_name] = delta
 
     if base_deltas and active_shocks:
-        nonlinear_extras = apply_nonlinear_shock(
-            state, shock_type, base_deltas, active_shocks
-        )
+        nonlinear_extras = apply_nonlinear_shock(state, shock_type, base_deltas, active_shocks)
         # The nonlinear function returns the *full* adjusted deltas;
         # compute the additional increment beyond what primary already applied.
         extra_updates: dict[str, Any] = {}
@@ -566,6 +524,7 @@ def apply_shock(
 # ---------------------------------------------------------------------------
 # Handler registry
 # ---------------------------------------------------------------------------
+
 
 async def apply_macro_effects(
     session_id: str,

@@ -1,4 +1,5 @@
 """File upload + API source ingestion for the Universal Prediction Engine."""
+
 from __future__ import annotations
 
 import io
@@ -66,10 +67,7 @@ class DataConnector:
         """Parse *content* into a DataFrame based on *filename* extension."""
         ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
         if ext not in _SUPPORTED_EXTENSIONS:
-            raise ValueError(
-                f"Unsupported file format: {ext!r}. "
-                f"Supported: {sorted(_SUPPORTED_EXTENSIONS)}"
-            )
+            raise ValueError(f"Unsupported file format: {ext!r}. Supported: {sorted(_SUPPORTED_EXTENSIONS)}")
         if ext == "csv":
             return pd.read_csv(io.BytesIO(content))
         if ext in ("xlsx", "xls"):

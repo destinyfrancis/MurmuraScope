@@ -25,12 +25,11 @@ import numpy as np
 import pytest
 
 from backend.data_pipeline.calibration import (
-    CalibrationPipeline,
     _FALLBACK_COEFFICIENTS,
     _INDICATOR_PAIRS,
+    CalibrationPipeline,
     _apply_fdr_correction,
 )
-
 
 # ---------------------------------------------------------------------------
 # Indicator pair structure
@@ -69,9 +68,7 @@ class TestFallbackCoefficients:
     def test_all_metrics_have_fallback(self) -> None:
         all_metrics = {metric for _, _, metric in _INDICATOR_PAIRS}
         for metric in all_metrics:
-            assert metric in _FALLBACK_COEFFICIENTS, (
-                f"Metric '{metric}' missing from _FALLBACK_COEFFICIENTS"
-            )
+            assert metric in _FALLBACK_COEFFICIENTS, f"Metric '{metric}' missing from _FALLBACK_COEFFICIENTS"
 
     def test_fallback_values_are_finite(self) -> None:
         for indicator, params in _FALLBACK_COEFFICIENTS.items():

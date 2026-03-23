@@ -80,19 +80,28 @@ ACTION_CATEGORY_MAP: dict[ExtendedActionType, ActionCategory] = {
 }
 
 # Actions that produce content worth logging to simulation_actions
-CONTENT_ACTIONS: frozenset[str] = frozenset({
-    "create_post", "repost", "quote_post", "create_comment", "post",
-})
+CONTENT_ACTIONS: frozenset[str] = frozenset(
+    {
+        "create_post",
+        "repost",
+        "quote_post",
+        "create_comment",
+        "post",
+    }
+)
 
 # Actions that affect the social graph
-GRAPH_ACTIONS: frozenset[str] = frozenset({
-    "follow", "unfollow", "mute", "unmute",
-})
+GRAPH_ACTIONS: frozenset[str] = frozenset(
+    {
+        "follow",
+        "unfollow",
+        "mute",
+        "unmute",
+    }
+)
 
 # All actions we want to capture from OASIS trace table
-TRACKED_ACTIONS: frozenset[str] = frozenset(
-    a.value for a in ExtendedActionType if a != ExtendedActionType.POST
-)
+TRACKED_ACTIONS: frozenset[str] = frozenset(a.value for a in ExtendedActionType if a != ExtendedActionType.POST)
 
 
 def get_category(action_type: str) -> ActionCategory:

@@ -50,25 +50,35 @@ async def download_for_domain(pack_id: str) -> list[DispatchResult]:
             fn = getattr(module, source.function)
             result = await fn(**source.params)
             row_count = len(result) if isinstance(result, list) else 0
-            results.append(DispatchResult(
-                source_id=source.id,
-                category=source.category,
-                row_count=row_count,
-            ))
+            results.append(
+                DispatchResult(
+                    source_id=source.id,
+                    category=source.category,
+                    row_count=row_count,
+                )
+            )
             logger.info(
                 "Data source %s (%s.%s) completed: %d rows",
-                source.id, source.downloader, source.function, row_count,
+                source.id,
+                source.downloader,
+                source.function,
+                row_count,
             )
         except Exception as exc:
             logger.error(
                 "Data source %s (%s.%s) failed: %s",
-                source.id, source.downloader, source.function, exc,
+                source.id,
+                source.downloader,
+                source.function,
+                exc,
             )
-            results.append(DispatchResult(
-                source_id=source.id,
-                category=source.category,
-                row_count=0,
-                error=str(exc),
-            ))
+            results.append(
+                DispatchResult(
+                    source_id=source.id,
+                    category=source.category,
+                    row_count=0,
+                    error=str(exc),
+                )
+            )
 
     return results
