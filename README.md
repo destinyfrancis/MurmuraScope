@@ -1,69 +1,63 @@
 # 👁️ MurmuraScope
-### Predict the Social Pulse | 預見社會脈動 | 預見社會脈動
+### Predict the Social Pulse | 預見社會脈動
 
 ![License](https://img.shields.io/badge/license-Proprietary-red)
 ![Platform](https://img.shields.io/badge/platform-Docker-blue)
-![Language](https://img.shields.io/badge/language-English%20%7C%20繁體中文%20%7C%20简体中文-green)
+![Language](https://img.shields.io/badge/language-English%20%7C%20繁體中文-green)
 
 ---
 
-## 🌟 Overview / 概覽 / 概览
+## 🌟 Overview / 概覽
 
-**[EN]** MurmuraScope is a universal prediction engine that transforms any text into a high-fidelity social simulation. By dropping in news, articles, or reports, it automatically creates digital "agents" that interact, debate, and evolve, providing you with data-driven forecasts on social outcomes.
+**[EN]** MurmuraScope is a high-fidelity social simulation engine that bridges the gap between raw text and probabilistic forecasting. Unlike static LLM analysis, MurmuraScope builds a dynamic environment where up to 50,000 digital agents interact, evolve, and react to real-world events in a multi-round, closed-loop simulation.
 
-**[繁中]** MurmuraScope 是一個通用的預測引擎，能將任何文本轉化為高真度的社會模擬。只需放入新聞、文章或報告，系統就會自動創建數位「智能代理」進行互動、辯論與演化，為您提供基於數據的社會發展預測。
-
-**[简中]** MurmuraScope 是一个通用的预测引擎，能将任何文本转化为高真度的社会模拟。只需放入新闻、文章或报告，系统就会自动创建数字“智能代理”进行互动、辩论与演化，为您提供基于数据的社会发展预测。
+**[繁中]** MurmuraScope 是一個高真度的社會模擬引擎，旨在彌合原始文本與概率預測之間的鴻溝。與一般的靜態 AI 分析不同，MurmuraScope 會建立一個動態環境，讓多達 50,000 個數位代理進行互動、演化，並在多輪閉環模擬中對現實事件作出反應。
 
 ---
 
-## 🎯 Use Cases: When to use MurmuraScope?
-### 應用場景：MurmuraScope 能為你解決什麼？ | 应用场景：MurmuraScope 能为你解决什么？
+## 🚀 Engine Capabilities / 引擎核心能力
 
-| Scenario / 場景 / 场景 | How it helps / 運作方式 / 运作方式 |
+### 1. Automated Knowledge Graph Construction (自動化知識圖譜構建)
+**[EN]** The engine parses seed text to extract entities, latent relationships, and hidden power structures. It populates the world with up to 50 implied actors not explicitly mentioned in the source, creating a complete social ecosystem.
+**[繁中]** 引擎會解析種子文本，提取實體、潛在關係及隱藏的權力結構。系統會自動生成最多 50 個文本中未明確提及但具影響力的隱含角色，建立完整的社會生態。
+
+### 2. Cognitive Agent Architecture (認知代理架構)
+**[EN]** Every agent is equipped with a **Big Five** personality profile, a 3D emotional state, and a **Bayesian belief system**. Agents don't just "talk"; they update their worldviews based on evidence, trust, and social influence across rounds.
+**[繁中]** 每個代理都配備了 **五大人格 (Big Five)** 特徵、三維情緒狀態及 **貝葉斯信念系統**。代理不只是「說話」，他們會根據每輪模擬中的證據、信任度和社會影響力來更新其世界觀。
+
+### 3. Econometric & Statistical Forecasting (計量經濟與統計預測)
+**[EN]** We go beyond qualitative guesses. MurmuraScope employs **VAR/VECM** models for trend forecasting, **GARCH(1,1)** for volatility clustering during crises, and **Monte Carlo Ensembles** (up to 500 trials) to generate reliable confidence intervals for social outcomes.
+**[繁中]** 我們超越了定性的猜測。MurmuraScope 採用 **VAR/VECM** 模型進行趨勢預測，使用 **GARCH(1,1)** 捕捉危機期間的波動聚集，並通過 **蒙特卡羅集成模擬 (Monte Carlo Ensembles)** 運行多達 500 次試驗，為社會結果生成可靠的置信區間。
+
+### 4. Emergence & Faction Metrics (湧現與派系指標)
+**[EN]** The engine detects the emergence of "Echo Chambers" and polarization using **TDMI (Transfer Dependency Mutual Information)** and **Louvain community detection**. It identifies tipping points before they occur in the simulation.
+**[繁中]** 引擎利用 **TDMI (轉移依賴互信息)** 和 **Louvain 社群檢測** 來識別「同溫層」的出現與兩極化趨勢。它能在模擬過程中預測即將發生的轉折點 (Tipping Points)。
+
+---
+
+## 🎯 Strategic Use Cases / 策略應用場景
+
+| Scenario / 場景 | Engine Utility / 引擎作用 |
 | :--- | :--- |
-| **Breaking News Reaction** <br> 突發新聞反應分析 | Predict how different social factions (e.g., conservatives vs. progressives) will react to a new policy or event. <br> 預測不同社會群體（如：保守派 vs 進取派）對新政策或事件的反應。 |
-| **Geopolitical Analysis** <br> 地緣政治分析 | Simulate potential escalations or diplomatic shifts based on recent strategic briefs. <br> 根據最新的戰略簡報，模擬潛在的局勢升級或外交轉向。 |
-| **Market Sentiment** <br> 市場情緒預測 | Understand how a new product launch or economic shift ripples through a community’s belief system. <br> 了解新產品發佈或經濟變動如何影響社群的信念體系。 |
-| **Crisis Management** <br> 危機管理模擬 | Test different "what-if" scenarios (Shocks) to see which intervention effectively calms social unrest. <br> 測試不同的「如果」場景（衝擊），觀察哪種干預措施能有效平息社會動盪。 |
+| **Information Operations** <br> 資訊戰與輿論引導 | Simulate how a specific narrative propagates through different social network topologies and identify key nodes of resistance. <br> 模擬特定論述在不同社交網絡拓撲中的傳播方式，並識別關鍵的抵抗節點。 |
+| **Policy Shock Testing** <br> 政策衝擊測試 | Inject sudden policy changes or "Shocks" to observe the cascading effects on public trust and social stability. <br> 注入突發的政策變動或「衝擊」，觀察其對公眾信任和社會穩定的連鎖反應。 |
+| **Geopolitical Strategy** <br> 地緣政治博弈 | Run multi-round diplomatic or conflict simulations where stakeholders delivate based on strategic fingerprints and historical memory. <br> 運行多輪外交或衝突模擬，決策者將根據戰略特徵和歷史記憶進行深度推演。 |
 
 ---
 
-## ✨ Key Features / 核心功能 / 核心功能
-
-*   **🧠 Instant Intelligence (無須設定，即時生成):** No manual agent creation. The engine extracts personalities (Big Five traits) and beliefs directly from your text.
-*   **📊 Probabilistic Forecasting (數據化預測):** Runs hundreds of "Monte Carlo" trials to give you clear confidence intervals and likelihoods.
-*   **🗣️ Interactive Interviews (互動式採訪):** Don't just watch—talk to the agents. "Interview" digital characters to understand their logic.
-*   **⚡ Branching Realities (多重現實分支):** At any point, inject a "Shock" (e.g., a sudden rumor or a disaster) to see how it alters the future.
-
----
-
-## 🚀 The 5-Step Workflow / 五步流程 / 五步流程
-
-1.  **Input (輸入):** Paste your source text.
-2.  **Extract (提取):** System builds a Knowledge Graph of people and organizations.
-3.  **Generate (生成):** Up to 500+ unique agents appear with distinct psychological profiles.
-4.  **Simulate (模擬):** Watch rounds of debates, faction forming, and belief updates.
-5.  **Report (報告):** Receive a comprehensive AI-generated report with statistical charts.
-
----
-
-## 🛠 Quickstart / 快速入門 / 快速入门
+## 🛠 Quickstart / 快速入門
 
 ```bash
-cp .env.example .env        # add OPENROUTER_API_KEY + GOOGLE_API_KEY
-docker compose up -d        # frontend :8080 · backend :5001
-```
+# 1. Setup Environment
+cp .env.example .env        # Add API keys
 
-Or locally:
-```bash
-cd backend && uvicorn run:app --reload --port 5001
-cd frontend && npm run dev   # :5173
+# 2. Launch with Docker
+docker compose up -d        # Frontend :8080 | Backend :5001
 ```
 
 ---
 
-## 🔬 Technical Deep Dive / 技術深挖 / 技术深挖
+## 🔬 Technical Deep Dive / 技術深挖
 
 <details>
 <summary><b>📊 System Architecture (系統架構圖)</b></summary>
@@ -71,167 +65,50 @@ cd frontend && npm run dev   # :5173
 ```mermaid
 graph TB
     subgraph Client["Browser Client"]
-        UI["Vue 3 + Vite<br/>5-step workflow UI<br/>35+ components"]
-        WS_Client["WebSocket client<br/>live round progress"]
+        UI["Vue 3 + Vite<br/>5-step workflow UI"]
+        WS_Client["WebSocket client"]
     end
 
-    subgraph Gateway["API Gateway (FastAPI :5001)"]
-        Auth["auth router<br/>JWT · rate limits"]
+    subgraph Gateway["API Gateway (FastAPI)"]
         GraphAPI["graph router<br/>KG build + query"]
         SimAPI["simulation router<br/>start · shock · branch"]
-        ReportAPI["report router<br/>ReACT · PDF · share"]
-        WS_Server["ws router<br/>live events"]
+        ReportAPI["report router<br/>ReACT · PDF"]
     end
 
-    subgraph Simulation["Simulation Engine"]
-        Runner["SimulationRunner<br/>OASIS subprocess orchestrator"]
-        KGHooks["KG-Driven Hooks<br/>deliberation · debate<br/>faction · belief propagation"]
-        MacroHooks["Macro Hooks<br/>VAR forecast · GARCH<br/>external feed"]
-        LiteHooks["Lite Hooks<br/>rule-based fallback<br/>zero LLM cost"]
-        Swarm["SwarmEnsemble<br/>Phase A→B fork<br/>N lite replicas"]
+    subgraph Simulation["OASIS Engine"]
+        Runner["SimulationRunner<br/>Orchestrator"]
+        KGHooks["KG-Driven Hooks<br/>faction · belief propagation"]
+        MacroHooks["Macro Hooks<br/>VAR forecast · GARCH"]
+        Swarm["SwarmEnsemble<br/>N-trial replicas"]
     end
 
-    subgraph Agents["Agent Layer"]
-        CAE["CognitiveAgentEngine<br/>Big Five · attachment · strategy<br/>Bayesian belief update"]
-        KGFactory["KGAgentFactory<br/>3-stage: filter → profile → fingerprint"]
-        Memory["AgentMemoryService<br/>salience decay · vector search"]
+    subgraph Agents["Cognitive Layer"]
+        CAE["CognitiveAgentEngine<br/>Big Five · Bayesian Update"]
+        KGFactory["KGAgentFactory<br/>Profile fingerprinting"]
+        Memory["AgentMemoryService<br/>Salience decay"]
     end
 
-    subgraph Analytics["Analytics & Validation"]
-        VAR["VARForecaster<br/>ADF+KPSS stationarity<br/>Johansen cointegration"]
-        GARCH["GARCHForecaster<br/>Bollerslev MLE<br/>ARCH-LM auto-fit"]
-        MC["MonteCarloEngine<br/>500-trial LHS + t-Copula"]
-        Validate["ValidationReporter<br/>Brier skill · CRPS · MAPE<br/>walk-forward backtest"]
-        Emergence["EmergenceMetrics<br/>TDMI permutation null-model<br/>Louvain factions · JSD tipping"]
-    end
-
-    subgraph Storage["Storage Layer"]
-        SQLite["SQLite WAL<br/>55+ tables<br/>aiosqlite"]
-        DuckDB["DuckDB overlay<br/>read-only analytical queries<br/>columnar aggregation"]
-        LanceDB["LanceDB<br/>384-dim embeddings<br/>vector search"]
-    end
-
-    subgraph LLMs["LLM Providers"]
-        OpenRouter["OpenRouter<br/>agent deliberation<br/>gemini-flash-lite"]
-        Google["Google AI<br/>report generation<br/>gemini-pro"]
-    end
-
-    UI -->|REST + WebSocket| Gateway
-    WS_Client -->|ws://| WS_Server
-    Auth --> SimAPI
-    GraphAPI --> KGFactory
+    UI -->|REST + WS| Gateway
     SimAPI --> Runner
-    ReportAPI --> Analytics
-
     Runner --> KGHooks
     Runner --> MacroHooks
-    Runner --> LiteHooks
-    Runner -->|Phase B| Swarm
-
     KGHooks --> CAE
-    KGHooks --> Emergence
-    MacroHooks --> VAR
-    MacroHooks --> GARCH
-    MacroHooks --> MC
-
     CAE --> Memory
-    CAE -->|LLM call| OpenRouter
-    ReportAPI -->|LLM call| Google
-
-    Runner --> SQLite
-    Analytics --> DuckDB
-    Memory --> LanceDB
-    DuckDB -.->|read-only scan| SQLite
 ```
 </details>
 
 <details>
-<summary><b>🎮 Simulation Modes & Presets (模擬模式與預設)</b></summary>
+<summary><b>📈 Detailed Tech Specs (詳細技術規格)</b></summary>
 
-| Mode | Trigger | Agent source | Decision space |
-|------|---------|-------------|---------------|
-| `kg_driven` | Any non-HK seed | KGAgentFactory (LLM-generated) | ScenarioGenerator (LLM) |
-| `hk_demographic` | HK keywords in seed | HK Census AgentFactory | Hardcoded DecisionType enum |
-
-| Preset | Agents | Rounds | Emergence |
-|--------|--------|--------|-----------|
-| FAST | 100 | 15 | Off |
-| STANDARD | 300 | 20 | On |
-| DEEP | 500 | 30 | On |
-| LARGE | 1,000 | 25 | On |
-| custom | up to 50,000 | up to 100 | On |
-</details>
-
-<details>
-<summary><b>🏗️ Backend Structure (後端結構)</b></summary>
-
-```
-backend/
-├── app/
-│   ├── api/                  FastAPI routers (18 modules)
-│   ├── services/             50+ business logic services
-│   │   ├── simulation_runner.py          OASIS subprocess orchestrator
-│   │   ├── cognitive_agent_engine.py     LLM deliberation + risk appetite
-│   │   ├── belief_system.py              Bayesian update
-│   │   ├── var_forecaster.py             VAR / VECM + stationarity
-│   │   ├── garch_model.py                GARCH(1,1) volatility
-│   │   └── validation_reporter.py        composite score A–F
-│   ├── models/               Pydantic (frozen) + frozen dataclasses
-│   └── utils/
-│       ├── db.py             aiosqlite connection (WAL + FK enforcement)
-│       └── llm_client.py     provider-agnostic LLM client + cost tracker
-├── database/schema.sql       55+ table schema (source of truth)
-└── tests/                    2700+ unit + 134 integration tests
-```
-</details>
-
-<details>
-<summary><b>📈 Statistical & Econometric Layer (統計與計量經濟層)</b></summary>
-
-| Feature | Implementation |
-|---------|---------------|
-| Stationarity | ADF + KPSS dual test before every VAR fit |
-| VAR / VECM | Johansen cointegration test; VECM when cointegrated |
-| GARCH(1,1) | Bollerslev (1986) MLE via scipy |
-| Monte Carlo | 500-trial LHS + t-Copula |
-| TDMI | Kraskov KNN estimator; permutation null-model |
-| Backtesting | Walk-forward k-fold |
-</details>
-
-<details>
-<summary><b>🔑 Key Commands (關鍵指令)</b></summary>
-
-```bash
-make test           # unit tests (~2700 tests, ~20s)
-make test-int       # integration tests
-make test-cov       # coverage report → htmlcov/
-make stop           # kill all simulation processes
-make docker-logs    # follow container logs
-```
-</details>
-
-<details>
-<summary><b>⚙️ Environment Variables (環境變數)</b></summary>
-
-```env
-# Required
-OPENROUTER_API_KEY=             # agent LLM calls
-GOOGLE_API_KEY=                 # report generation
-AUTH_SECRET_KEY=                # JWT signing key
-SESSION_ENCRYPTION_KEY=         # BYOK key encryption
-
-# LLM models
-AGENT_LLM_MODEL=google/gemini-3.1-flash-lite-preview
-GOOGLE_REPORT_MODEL=gemini-3.1-pro-preview
-
-# Cost controls
-SESSION_COST_BUDGET_USD=5       # warning threshold
-SESSION_COST_HARD_CAP_USD=10    # hard pause
-```
+- **Cognition:** Bayesian Belief Revision based on source credibility.
+- **Sim Dynamics:** Parallel memory processing + sequential deliberation.
+- **Forecasting:** Walk-forward backtesting with CRPS and Brier skill scores.
+- **Analytics:** DuckDB analytical overlay for sub-second query performance on simulation logs.
+- **Storage:** SQLite WAL for persistence + LanceDB for vector-based memory retrieval.
 </details>
 
 ---
 
-## 📜 License / 許可證 / 许可证
+## 📜 License / 許可證
 
-Proprietary. All rights reserved. / 私有軟體，保留所有權利。 / 私有软件，保留所有权利。
+Proprietary. All rights reserved. / 私有軟體，保留所有權利。
