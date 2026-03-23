@@ -73,6 +73,8 @@ class EmbeddingProvider:
             normalize_embeddings=True,
             convert_to_numpy=True,
         )
+        # Ensure no NaNs are returned to avoid downstream crashes (e.g. LanceDB)
+        embeddings = np.nan_to_num(embeddings, nan=0.0)
         return embeddings.astype(np.float32)
 
     def embed_single(self, text: str) -> np.ndarray:

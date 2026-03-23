@@ -6,13 +6,20 @@ import shutil
 import tempfile
 
 import pytest
+from unittest.mock import patch
 
 from backend.app.services.embedding_provider import EmbeddingProvider
 from backend.app.services.vector_store import VectorStore
 
-
 class TestEmbeddingProvider:
     """Test embedding model loading and output dimensions."""
+
+    @pytest.fixture(autouse=True)
+    def stop_all_patches(self):
+        """Ensure no global patches are active before running these tests."""
+        # Stop any background patches from other tests
+        patch.stopall()
+        yield
 
     def test_embed_returns_correct_shape(self):
         provider = EmbeddingProvider()
@@ -43,6 +50,12 @@ class TestEmbeddingProvider:
 
 class TestVectorStore:
     """Test LanceDB add/search/delete operations."""
+
+    @pytest.fixture(autouse=True)
+    def stop_all_patches(self):
+        """Ensure no global patches are active before running these tests."""
+        patch.stopall()
+        yield
 
     @pytest.fixture()
     def tmp_store(self):

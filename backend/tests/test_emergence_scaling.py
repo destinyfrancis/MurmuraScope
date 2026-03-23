@@ -144,7 +144,7 @@ async def test_process_wealth_transfers_no_db_call_when_cache_empty():
     runner = SimulationRunner()
     runner._round_profiles["sess-5"] = []
 
-    with patch("backend.app.services.simulation_hooks_social.get_db") as mock_gdb:
+    with patch("backend.app.utils.db.get_db") as mock_gdb:
         await runner._process_wealth_transfers("sess-5", 5)
         mock_gdb.assert_not_called()
 
