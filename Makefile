@@ -56,7 +56,7 @@ test-cov-full:
 
 # ── Server commands ────────────────────────────────────────────────
 stop:
-	@echo "=== Stopping all HKSimEngine Python processes ==="
+	@echo "=== Stopping all MurmuraScope Python processes ==="
 	pkill -f "run_(twitter|parallel|facebook|instagram)_simulation.py" || true
 	pkill -f "uvicorn.*run:app" || true
 	pkill -f "uvicorn.*5001" || true

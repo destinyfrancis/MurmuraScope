@@ -1,7 +1,5 @@
-"""Generate 300 census-calibrated HK agents CSV for property scenario."""
-import sys, os
-sys.path.insert(0, '/Volumes/4TB/francistam/Desktop/MurmuraScope')
-os.chdir('/Volumes/4TB/francistam/Desktop/MurmuraScope')
+import os
+import sys
 
 from backend.app.services.agent_factory import AgentFactory
 from backend.app.services.profile_generator import ProfileGenerator

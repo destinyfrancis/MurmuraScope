@@ -586,7 +586,7 @@ class TestBayesianUpdate:
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cd /Volumes/4TB/francistam/Desktop/MurmuraScope && python -m pytest backend/tests/test_bayesian_update.py -v`
+Run: `cd . && python -m pytest backend/tests/test_bayesian_update.py -v`
 Expected: FAIL (bayesian_update, _stance_to_prob, _bayesian_core not defined)
 
 - [ ] **Step 3: Implement Bayesian update in belief_system.py**
@@ -703,7 +703,7 @@ new_belief = _bs._bayesian_core(current, lr)
 
 - [ ] **Step 6: Run tests to verify they pass**
 
-Run: `cd /Volumes/4TB/francistam/Desktop/MurmuraScope && python -m pytest backend/tests/test_bayesian_update.py -v`
+Run: `cd . && python -m pytest backend/tests/test_bayesian_update.py -v`
 Expected: ALL PASS
 
 - [ ] **Step 7: Commit**
@@ -966,7 +966,7 @@ git commit -m "feat: expand branch deep copy to all dynamic state tables"
 
 - [ ] **Step 1: Run full test suite to identify breakage**
 
-Run: `cd /Volumes/4TB/francistam/Desktop/MurmuraScope && python -m pytest backend/tests/ -x --tb=short 2>&1 | head -100`
+Run: `cd . && python -m pytest backend/tests/ -x --tb=short 2>&1 | head -100`
 
 Record all failures.
 
@@ -996,7 +996,7 @@ Each test should follow the pattern: set up DB state → call the function → a
 
 - [ ] **Step 5: Run full test suite and confirm green**
 
-Run: `cd /Volumes/4TB/francistam/Desktop/MurmuraScope && python -m pytest backend/tests/ -v --tb=short`
+Run: `cd . && python -m pytest backend/tests/ -v --tb=short`
 Expected: ALL PASS
 
 - [ ] **Step 6: Commit**
