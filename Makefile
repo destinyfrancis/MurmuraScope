@@ -1,6 +1,15 @@
-.PHONY: stop test test-unit test-int test-all test-changed test-file test-cov test-cov-full dev frontend clean docker-up docker-down docker-dev docker-logs docker-clean
+.PHONY: quickstart start stop test test-unit test-int test-all test-changed test-file test-cov test-cov-full dev backend frontend clean docker-up docker-down docker-dev docker-logs docker-clean
 
-PYTEST = .venv311/bin/python -m pytest
+VENV   = .venv311
+PYTEST = $(VENV)/bin/python -m pytest
+
+# ── One-command first-time setup + launch ────────────────────────────────────
+quickstart:
+	@bash scripts/quickstart.sh
+
+# ── Launch both backend + frontend (assumes deps already installed) ───────────
+start:
+	@export VENV_DIR=$(CURDIR)/$(VENV) && npm run dev
 
 # ── Quick unit tests only (no DB, no HTTP client) ──────────────────
 test-unit:
@@ -62,8 +71,10 @@ stop:
 	pkill -f "uvicorn.*5001" || true
 	@echo "=== Done ==="
 
-dev:
-	cd backend && ../.venv311/bin/uvicorn run:app --reload --port 5001
+dev: start
+
+backend:
+	$(VENV)/bin/uvicorn backend.app:create_app --factory --reload --port 5001
 
 frontend:
 	cd frontend && npm run dev

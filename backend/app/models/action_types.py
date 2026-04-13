@@ -6,7 +6,30 @@ category-level analytics and action diversity scoring.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import Enum
+
+
+@dataclass(frozen=True)
+class GoalRevision:
+    """A proposed revision to one of an agent's core goals.
+
+    Emitted by ``CognitiveAgentEngine.deliberate()`` when accumulated belief
+    drift significantly contradicts the agent's original goal text.
+
+    Attributes:
+        goal_index: Zero-based index into the agent's goals tuple.
+        original_text: The goal text before revision.
+        revised_text: The agent's proposed replacement goal.
+        confidence: How confident the agent is in the revision (0–1).
+        round_number: Simulation round when the revision was proposed.
+    """
+
+    goal_index: int
+    original_text: str
+    revised_text: str
+    confidence: float
+    round_number: int
 
 
 class ActionCategory(str, Enum):

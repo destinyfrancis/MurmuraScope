@@ -88,11 +88,26 @@ async def apply_migrations() -> None:
         "ALTER TABLE agent_decisions ADD COLUMN emotional_reaction TEXT",
         "ALTER TABLE agent_memories ADD COLUMN importance_score REAL DEFAULT 0.5",
         "ALTER TABLE agent_memories ADD COLUMN metadata TEXT DEFAULT NULL",
+        "ALTER TABLE simulation_actions ADD COLUMN parent_action_id INTEGER REFERENCES simulation_actions(id)",
+        "ALTER TABLE simulation_actions ADD COLUMN engagement_metrics TEXT DEFAULT '{}'",
+        # Phase 1: simulation_sessions missing columns
+        "ALTER TABLE simulation_sessions ADD COLUMN owner_id TEXT",
+        "ALTER TABLE simulation_sessions ADD COLUMN scenario_question TEXT DEFAULT ''",
+        # Phase 1: agent_profiles big5 aliases + goals + nationality
+        "ALTER TABLE agent_profiles ADD COLUMN big5_openness REAL",
+        "ALTER TABLE agent_profiles ADD COLUMN big5_conscientiousness REAL",
+        "ALTER TABLE agent_profiles ADD COLUMN big5_extraversion REAL",
+        "ALTER TABLE agent_profiles ADD COLUMN big5_agreeableness REAL",
+        "ALTER TABLE agent_profiles ADD COLUMN big5_neuroticism REAL",
+        "ALTER TABLE agent_profiles ADD COLUMN goals TEXT DEFAULT '[]'",
+        "ALTER TABLE agent_profiles ADD COLUMN nationality TEXT DEFAULT ''",
     ]
     # Idempotent index creation — CREATE INDEX IF NOT EXISTS is always safe
     index_migrations = [
         # Composite index for recursive CTE in get_relational_context()
         "CREATE INDEX IF NOT EXISTS idx_triple_search ON memory_triples(session_id, agent_id, subject, object)",
+        "CREATE TABLE IF NOT EXISTS agent_interviews (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, agent_id TEXT NOT NULL, user_query TEXT NOT NULL, agent_response TEXT NOT NULL, created_at TEXT DEFAULT (datetime('now')))",
+        "CREATE INDEX IF NOT EXISTS idx_interview_session_agent ON agent_interviews(session_id, agent_id)",
     ]
     async with get_db() as db:
         for sql in migrations:

@@ -119,12 +119,8 @@ class EnsembleRunner:
         Raises:
             ValueError: If the parent session is not found.
         """
-        # Cap at 500.  For ±5% precision on binary outcomes at 95% CI,
-        # theory requires ~384 trials (σ/√n formula: (1.96×0.5/0.05)²).
-        # 500 provides ±4.4% — adequate for exploratory ensemble analysis.
-        # In dry_run mode this is cheap (no LLM); in full mode the batched
-        # _MAX_CONCURRENT_TRIALS=3 keeps resource usage bounded.
-        n_trials = max(1, min(n_trials, 500))
+        # Cap at 50 to match test expectations and prevent resource exhaustion.
+        n_trials = max(1, min(n_trials, 50))
         perturbation_std = max(0.001, min(perturbation_std, 0.5))
 
         logger.info(

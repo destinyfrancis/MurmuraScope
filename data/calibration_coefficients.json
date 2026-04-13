@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "n_sentiment_periods": 1,
+    "n_sentiment_periods": 2,
     "calibrated_pairs": [
       "negative_ratio → unemployment_rate",
       "negative_ratio → consumer_confidence",
@@ -42,41 +42,47 @@
         "skipped": true
       }
     ],
-    "granger_tests": [],
+    "granger_tests": [
+      {
+        "label": "negative_ratio → hibor_1m",
+        "p_value": null,
+        "insufficient_data": true
+      }
+    ],
     "synthetic_data_warning": false,
     "synthetic_pct": 0.0
   },
-  "unemployment_rate": {
-    "negative_ratio": 0.0008
-  },
-  "cpi_yoy": {
-    "negative_ratio": 0.001
+  "retail_sales_index": {
+    "negative_ratio": -0.5
   },
   "consumer_confidence": {
     "negative_ratio": -0.3,
     "positive_ratio": 0.2
   },
-  "tourist_arrivals": {
-    "negative_ratio": -5000
+  "hsi_level": {
+    "positive_ratio": 50.0,
+    "negative_ratio": -80.0
   },
   "hibor_1m": {
     "negative_ratio": 0.0001
+  },
+  "net_migration": {
+    "negative_ratio": -100
+  },
+  "tourist_arrivals": {
+    "negative_ratio": -5000
+  },
+  "price_index_all_classes": {
+    "negative_ratio": -0.001
+  },
+  "cpi_yoy": {
+    "negative_ratio": 0.001
   },
   "gdp_growth_rate": {
     "negative_ratio": -0.001,
     "positive_ratio": 0.0008
   },
-  "net_migration": {
-    "negative_ratio": -100
-  },
-  "retail_sales_index": {
-    "negative_ratio": -0.5
-  },
-  "hsi_level": {
-    "positive_ratio": 50.0,
-    "negative_ratio": -80.0
-  },
-  "price_index_all_classes": {
-    "negative_ratio": -0.001
+  "unemployment_rate": {
+    "negative_ratio": 0.0008
   }
 }

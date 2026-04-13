@@ -1,0 +1,15 @@
+{
+  "id": "us_election_misinformation",
+  "name": "US Election Misinformation",
+  "description": "A political simulation of misinformation spread during a US presidential election cycle. Models echo chambers, bot networks, fact-checkers, and partisan media. Tracks belief polarisation and information cascade dynamics.",
+  "scenario_type": "kg_driven",
+  "agent_count": 100,
+  "round_count": 30,
+  "seed_text": "A contentious US presidential election is underway. Misinformation about voting procedures spreads rapidly across social media platforms. Fact-checking organisations struggle to keep pace with viral false claims. Partisan media amplifies narratives aligned with their political base. International actors are suspected of coordinated influence operations targeting swing state voters.",
+  "config": {
+    "lite_ensemble": false,
+    "emergence_enabled": true,
+    "kg_mode": true
+  },
+  "tags": ["politics", "misinformation", "election", "polarisation"]
+}

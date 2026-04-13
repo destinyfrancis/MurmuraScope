@@ -159,7 +159,7 @@ class TestBuildFullConfig:
 
     def test_required_fields_present(self) -> None:
         """_build_full_config must include all fields required by OASIS scripts."""
-        from backend.app.services.simulation_runner import _build_full_config
+        from backend.app.services.simulation_helpers import _build_full_config
 
         config = {
             "session_id": "sess-abc",
@@ -177,7 +177,7 @@ class TestBuildFullConfig:
 
     def test_llm_api_key_stripped(self) -> None:
         """llm_api_key must NOT appear in the written config (security fix)."""
-        from backend.app.services.simulation_runner import _build_full_config
+        from backend.app.services.simulation_helpers import _build_full_config
 
         config = {
             "session_id": "sess-sec",
@@ -189,7 +189,7 @@ class TestBuildFullConfig:
 
     def test_oasis_db_path_uses_session_dir(self) -> None:
         """oasis_db_path must be under data/sessions/<session_id>/."""
-        from backend.app.services.simulation_runner import _build_full_config
+        from backend.app.services.simulation_helpers import _build_full_config
 
         result = _build_full_config({}, "my-session-99")
         assert "my-session-99" in result["oasis_db_path"]
@@ -197,7 +197,7 @@ class TestBuildFullConfig:
 
     def test_default_provider_is_openrouter(self) -> None:
         """Default LLM provider for OASIS simulation agents must be openrouter."""
-        from backend.app.services.simulation_runner import _build_full_config
+        from backend.app.services.simulation_helpers import _build_full_config
 
         result = _build_full_config({}, "any-session")
         assert result["llm_provider"] == "openrouter"
@@ -205,7 +205,7 @@ class TestBuildFullConfig:
 
     def test_custom_provider_preserved(self) -> None:
         """Caller-supplied llm_provider / llm_model must be forwarded."""
-        from backend.app.services.simulation_runner import _build_full_config
+        from backend.app.services.simulation_helpers import _build_full_config
 
         config = {"llm_provider": "fireworks", "llm_model": "deepseek/deepseek-v3.2"}
         result = _build_full_config(config, "s1")
@@ -247,14 +247,14 @@ class TestPlatformScriptSelection:
     async def test_facebook_only_uses_facebook_script(self, tmp_path: Path) -> None:
         """Single facebook platform → run_facebook_simulation.py is selected."""
         from backend.app.services import simulation_runner as sr
+        from backend.app.services import simulation_helpers as sh
+        from backend.app.services import simulation_lifecycle as sl
 
         agent_csv = tmp_path / "agents.csv"
         agent_csv.write_text("id,name\n1,Alice\n")
 
         # Patch _require_path to accept anything so we don't need real scripts.
         selected: list[Path] = []
-
-        original_require = sr._require_path
 
         def fake_require(path: Path, label: str) -> None:
             selected.append(path)
@@ -265,8 +265,8 @@ class TestPlatformScriptSelection:
             "round_count": 1,
         }
 
-        with patch.object(sr, "_require_path", side_effect=fake_require):
-            with patch.object(sr, "_build_full_config", return_value={**config, "session_id": "s1"}):
+        with patch("backend.app.services.simulation_helpers._require_path", side_effect=fake_require):
+            with patch("backend.app.services.simulation_helpers._build_full_config", return_value={**config, "session_id": "s1"}):
                 # Simulate the script-selection logic directly (not the full run)
                 platforms = config.get("platforms", {})
                 facebook_on = platforms.get("facebook", False)
@@ -274,22 +274,24 @@ class TestPlatformScriptSelection:
                 twitter_on = platforms.get("twitter", False)
                 enabled_count = sum(1 for v in platforms.values() if v)
 
-                if enabled_count > 1 and sr._PARALLEL_SCRIPT.exists():
-                    script = sr._PARALLEL_SCRIPT
+                if enabled_count > 1 and sl._PARALLEL_SCRIPT.exists():
+                    script = sl._PARALLEL_SCRIPT
                 elif facebook_on:
-                    script = sr._FACEBOOK_SCRIPT
+                    script = sl._FACEBOOK_SCRIPT
                 elif instagram_on:
-                    script = sr._INSTAGRAM_SCRIPT
+                    script = sl._INSTAGRAM_SCRIPT
                 elif twitter_on:
-                    script = sr._SCRIPT_PATH
+                    script = sl._SCRIPT_PATH
                 else:
-                    script = sr._SCRIPT_PATH
+                    script = sl._SCRIPT_PATH
 
         assert "facebook" in str(script), f"Expected facebook script, got: {script}"
 
     def test_instagram_only_uses_instagram_script(self) -> None:
         """Single instagram platform → run_instagram_simulation.py is selected."""
         from backend.app.services import simulation_runner as sr
+        from backend.app.services import simulation_helpers as sh
+        from backend.app.services import simulation_lifecycle as sl
 
         platforms = {"instagram": True}
         enabled_count = sum(1 for v in platforms.values() if v)
@@ -297,13 +299,13 @@ class TestPlatformScriptSelection:
         instagram_on = platforms.get("instagram", False)
 
         if enabled_count > 1:
-            script = sr._PARALLEL_SCRIPT
+            script = sl._PARALLEL_SCRIPT
         elif facebook_on:
-            script = sr._FACEBOOK_SCRIPT
+            script = sl._FACEBOOK_SCRIPT
         elif instagram_on:
-            script = sr._INSTAGRAM_SCRIPT
+            script = sl._INSTAGRAM_SCRIPT
         else:
-            script = sr._SCRIPT_PATH
+            script = sl._SCRIPT_PATH
 
         assert "instagram" in str(script)
 
@@ -1063,33 +1065,35 @@ class TestSimulationRunnerRelativePaths:
     def test_project_root_is_valid_directory(self) -> None:
         """_PROJECT_ROOT must point to an existing directory."""
         from backend.app.services import simulation_runner as sr
+        from backend.app.services import simulation_helpers as sh
+        from backend.app.services import simulation_lifecycle as sl
 
         assert sr._PROJECT_ROOT.is_dir(), f"_PROJECT_ROOT does not exist: {sr._PROJECT_ROOT}"
 
     def test_project_root_contains_backend(self) -> None:
         """_PROJECT_ROOT must contain the backend/ subdirectory."""
-        from backend.app.services import simulation_runner as sr
+        from backend.app.services import simulation_lifecycle as sl
 
-        assert (sr._PROJECT_ROOT / "backend").is_dir(), "_PROJECT_ROOT does not contain a backend/ directory"
+        assert (sl._PROJECT_ROOT / "backend").is_dir(), "_PROJECT_ROOT does not contain a backend/ directory"
 
     def test_python_bin_path_is_relative(self) -> None:
         """_PYTHON_BIN must be derived from _PROJECT_ROOT, not an absolute literal."""
-        from backend.app.services import simulation_runner as sr
+        from backend.app.services import simulation_lifecycle as sl
 
-        assert str(sr._PYTHON_BIN).startswith(str(sr._PROJECT_ROOT)), "_PYTHON_BIN must be relative to _PROJECT_ROOT"
+        assert str(sl._PYTHON_BIN).startswith(str(sl._PROJECT_ROOT)), "_PYTHON_BIN must be relative to _PROJECT_ROOT"
 
     def test_script_paths_are_under_project_root(self) -> None:
         """All simulation script paths must be under _PROJECT_ROOT."""
-        from backend.app.services import simulation_runner as sr
+        from backend.app.services import simulation_lifecycle as sl
 
         scripts = [
-            sr._SCRIPT_PATH,
-            sr._PARALLEL_SCRIPT,
-            sr._FACEBOOK_SCRIPT,
-            sr._INSTAGRAM_SCRIPT,
+            sl._SCRIPT_PATH,
+            sl._PARALLEL_SCRIPT,
+            sl._FACEBOOK_SCRIPT,
+            sl._INSTAGRAM_SCRIPT,
         ]
         for script in scripts:
-            assert str(script).startswith(str(sr._PROJECT_ROOT)), f"Script path not under _PROJECT_ROOT: {script}"
+            assert str(script).startswith(str(sl._PROJECT_ROOT)), f"Script path not under _PROJECT_ROOT: {script}"
 
     def test_no_hardcoded_absolute_paths(self) -> None:
         """simulation_runner.py must not contain hardcoded /Volumes/... paths."""

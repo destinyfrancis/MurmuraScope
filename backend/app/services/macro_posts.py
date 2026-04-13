@@ -220,6 +220,47 @@ def _post_rcep_benefit(state: MacroState) -> str:
 # Post generator registry
 # ---------------------------------------------------------------------------
 
+def simulate_viral_engagement(
+    shock_type: str,
+    state: MacroState,
+    rng: "random.Random | None" = None,
+) -> dict[str, int]:
+    """Simulate viral engagement metrics for a macro shock post based on its severity.
+
+    Args:
+        shock_type: The shock constant (e.g. SHOCK_PROPERTY_CRASH).
+        state: Current macro state used to modulate sentiment.
+        rng: Optional Random instance for deterministic testing.
+             Defaults to the module-level ``random`` if None.
+    """
+    import random as _random
+
+    _rng = rng if rng is not None else _random
+
+    # Base rates influenced by macro sentiment
+    sentiment_factor = 1.0 + (max(0, state.consumer_confidence - 50) / 100.0)
+    severity_map = {
+        SHOCK_PROPERTY_CRASH: 2.5,
+        SHOCK_UNEMPLOYMENT_SPIKE: 2.0,
+        SHOCK_TAIWAN_STRAIT_TENSION: 3.0,
+        SHOCK_POLICY_CHANGE: 1.5,
+        SHOCK_MARKET_RALLY: 1.8,
+    }
+    
+    intensity = severity_map.get(shock_type, 1.0)
+    
+    likes = int(_rng.randint(500, 2000) * intensity * sentiment_factor)
+    shares = int(likes * _rng.uniform(0.1, 0.4))
+    quotes = int(shares * _rng.uniform(0.05, 0.2))
+    
+    return {
+        "likes": likes,
+        "shares": shares,
+        "quotes": quotes,
+        "replies": int(likes * 0.15),
+    }
+
+
 SHOCK_POST_GENERATORS: dict[str, Any] = {
     SHOCK_INTEREST_RATE_HIKE: _post_interest_rate_hike,
     SHOCK_PROPERTY_CRASH: _post_property_crash,

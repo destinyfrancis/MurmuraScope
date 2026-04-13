@@ -16,6 +16,7 @@ import math
 from dataclasses import dataclass
 from typing import Any
 
+from backend.app.models.action_types import GoalRevision
 from backend.app.utils.llm_client import LLMClient
 from backend.app.utils.logger import get_logger
 from backend.app.utils.prompt_security import sanitize_agent_field, sanitize_scenario_description
@@ -44,7 +45,7 @@ Decide your action this round. Return JSON with:
 - belief_updates: (dict) metric_id → small delta (-0.3 to 0.3) reflecting how events changed your views
 - stance_statement: (1 sentence) public statement or action you take
 - topic_tags: (list of 2-4 strings) topics this decision touches, e.g. ["移民","就業","制度","個人自由","家庭","身份認同"]
-- emotional_reaction: (string, 5-15 chars) brief emotional state, e.g. "憤怒", "焦慮", "希望", "無奈", "決心"
+- emotional_reaction: (string, 5-15 chars) brief emotional state, e.g. "憤怒", "焦慮", "希望", "無奈", "決心"{goal_revision_block}
 
 Return JSON: {{"decision": ..., "reasoning": ..., "belief_updates": {{...}}, "stance_statement": ..., "topic_tags": [...], "emotional_reaction": ...}}"""
 
@@ -60,6 +61,8 @@ class DeliberationResult:
     """Topics this deliberation touches — used for topic evolution analysis."""
     emotional_reaction: str = ""
     """Brief emotional state during this deliberation — used for report interviews."""
+    goal_revision: GoalRevision | None = None
+    """Optional goal revision proposed when belief drift contradicts original goals."""
 
 
 class CognitiveAgentEngine:
@@ -75,6 +78,7 @@ class CognitiveAgentEngine:
         active_metrics: tuple[str, ...],
         provider: str | None = None,
         model: str | None = None,
+        round_number: int = 0,
     ) -> DeliberationResult:
         """Run full LLM deliberation for one stakeholder agent.
 
@@ -98,6 +102,7 @@ class CognitiveAgentEngine:
             agent_context=agent_context,
             scenario_description=scenario_description,
             active_metrics=active_metrics,
+            round_number=round_number,
         )
         messages = [
             {"role": "system", "content": _DELIBERATION_SYSTEM},
@@ -133,6 +138,21 @@ class CognitiveAgentEngine:
         # Extract emotional_reaction: cap at 50 chars
         emotional_reaction = str(raw.get("emotional_reaction", ""))[:50]
 
+        # Extract optional goal_revision — only present when belief drift is significant
+        goal_revision: GoalRevision | None = None
+        raw_gr = raw.get("goal_revision")
+        if isinstance(raw_gr, dict):
+            try:
+                goal_revision = GoalRevision(
+                    goal_index=int(raw_gr.get("goal_index", 0)),
+                    original_text=str(raw_gr.get("original_text", ""))[:500],
+                    revised_text=str(raw_gr.get("revised_text", ""))[:500],
+                    confidence=max(0.0, min(1.0, float(raw_gr.get("confidence", 0.5)))),
+                    round_number=round_number,
+                )
+            except (ValueError, TypeError):
+                goal_revision = None
+
         return DeliberationResult(
             agent_id=agent_id,
             decision=str(raw.get("decision", "observe")),
@@ -141,6 +161,7 @@ class CognitiveAgentEngine:
             stance_statement=str(raw.get("stance_statement", "")),
             topic_tags=topic_tags,
             emotional_reaction=emotional_reaction,
+            goal_revision=goal_revision,
         )
 
 
@@ -149,10 +170,23 @@ class CognitiveAgentEngine:
 # ---------------------------------------------------------------------------
 
 
+_GOAL_REVISION_DIRECTIVE = """\
+
+OPTIONAL: If your accumulated beliefs now fundamentally contradict one of your core goals, \
+include a "goal_revision" field in your JSON with:
+  {{"goal_index": <0-based index into your goals list>, "original_text": "<current goal>", \
+"revised_text": "<your proposed replacement>", "confidence": <0.0-1.0>}}
+Only include this field when you genuinely believe a goal revision is warranted. Omit it otherwise."""
+
+# Belief threshold beyond which the goal-revision directive is injected
+_BELIEF_EXTREMITY_THRESHOLD: float = 0.15  # < 0.15 or > 0.85 from neutral 0.5
+
+
 def _build_deliberation_prompt(
     agent_context: dict[str, Any],
     scenario_description: str,
     active_metrics: tuple[str, ...],
+    round_number: int = 0,
 ) -> str:
     """Build the enriched deliberation prompt string.
 
@@ -213,6 +247,14 @@ def _build_deliberation_prompt(
     safe_name = sanitize_agent_field(str(agent_context.get("name", agent_id)))
     safe_role = sanitize_agent_field(str(agent_context.get("role", "actor")))
 
+    # Inject goal-revision directive when beliefs are extreme (far from neutral 0.5)
+    current_beliefs: dict[str, Any] = agent_context.get("current_beliefs", {})
+    has_extreme_beliefs = any(
+        isinstance(v, (int, float)) and (v < _BELIEF_EXTREMITY_THRESHOLD or v > (1.0 - _BELIEF_EXTREMITY_THRESHOLD))
+        for v in current_beliefs.values()
+    )
+    goal_revision_block = _GOAL_REVISION_DIRECTIVE if (has_extreme_beliefs and goals and round_number >= 5) else ""
+
     return _DELIBERATION_USER.format(
         scenario_description=safe_scenario,
         active_metrics=list(active_metrics),
@@ -220,7 +262,7 @@ def _build_deliberation_prompt(
         role=safe_role,
         persona_block=persona_block,
         goals=goals_str,
-        current_beliefs=agent_context.get("current_beliefs", {}),
+        current_beliefs=current_beliefs,
         recent_events=agent_context.get("recent_events", [])[-3:],
         memory_block=memory_block,
         feed_block=feed_block,
@@ -230,6 +272,7 @@ def _build_deliberation_prompt(
         emotional_block=emotional_block,
         relationship_block=relationship_block,
         strategy_block=strategy_block,
+        goal_revision_block=goal_revision_block,
     )
 
 

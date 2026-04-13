@@ -122,7 +122,8 @@ CREATE TABLE IF NOT EXISTS simulation_sessions (
     completed_at TEXT,
     created_at TEXT DEFAULT (datetime('now')),
     -- Nullable for backward compatibility with sessions created before auth was enforced
-    owner_id TEXT REFERENCES users(id) ON DELETE SET NULL
+    owner_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    scenario_question TEXT DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_session_status ON simulation_sessions(status);
 
@@ -153,7 +154,14 @@ CREATE TABLE IF NOT EXISTS agent_profiles (
     created_at TEXT DEFAULT (datetime('now')),
     activity_level REAL DEFAULT 0.5,
     influence_weight REAL DEFAULT 1.0,
-    is_stakeholder INTEGER DEFAULT 0
+    is_stakeholder INTEGER DEFAULT 0,
+    big5_openness REAL,
+    big5_conscientiousness REAL,
+    big5_extraversion REAL,
+    big5_agreeableness REAL,
+    big5_neuroticism REAL,
+    goals TEXT DEFAULT '[]',
+    nationality TEXT DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_agent_session ON agent_profiles(session_id);
 CREATE INDEX IF NOT EXISTS idx_agent_type ON agent_profiles(agent_type);
@@ -191,6 +199,8 @@ CREATE TABLE IF NOT EXISTS simulation_actions (
     sentiment TEXT NOT NULL DEFAULT 'neutral',
     topics TEXT DEFAULT '[]',
     post_id TEXT,
+    parent_action_id INTEGER REFERENCES simulation_actions(id),
+    engagement_metrics TEXT DEFAULT '{}',
     created_at TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_action_session_round ON simulation_actions(session_id, round_number);
@@ -425,6 +435,20 @@ CREATE TABLE IF NOT EXISTS media_agents (
     created_at TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_media_session ON media_agents(session_id);
+
+-- ============================================================
+-- agent_interviews: 代理對話歷史（Phase 6）
+-- ============================================================
+CREATE TABLE IF NOT EXISTS agent_interviews (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    agent_id TEXT NOT NULL,
+    user_query TEXT NOT NULL,
+    agent_response TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_interview_session ON agent_interviews(session_id);
+CREATE INDEX IF NOT EXISTS idx_interview_agent ON agent_interviews(agent_id);
 
 -- ============================================================
 -- Phase 6: Political Modeling column migration note
@@ -964,3 +988,31 @@ CREATE TABLE IF NOT EXISTS emergence_metrics (
 );
 CREATE INDEX IF NOT EXISTS idx_em_session_round
     ON emergence_metrics(session_id, round_number);
+
+-- ---------------------------------------------------------------------------
+-- Agent goal revisions — autonomous goal evolution via belief drift
+-- Added in: Upgrade 1 — Agent Goal Revision (2026-04)
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS agent_goal_revisions (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id   TEXT    NOT NULL REFERENCES simulation_sessions(id) ON DELETE CASCADE,
+    agent_id     INTEGER NOT NULL,
+    goal_index   INTEGER NOT NULL,  -- zero-based index into agent's goals tuple
+    original     TEXT    NOT NULL,
+    revised      TEXT    NOT NULL,
+    confidence   REAL    NOT NULL CHECK(confidence >= 0.0 AND confidence <= 1.0),
+    round_number INTEGER NOT NULL,
+    created_at   TEXT    DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_agr_session_agent
+    ON agent_goal_revisions(session_id, agent_id);
+
+-- ============================================================
+-- app_settings: Runtime設定覆寫儲存（Settings Page）
+-- key/value store; runtime overrides take priority over .env
+-- ============================================================
+CREATE TABLE IF NOT EXISTS app_settings (
+    key        TEXT PRIMARY KEY,
+    value      TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);

@@ -20,6 +20,7 @@ function goHome() {
         <router-link to="/app" class="nav-link">工作區</router-link>
         <router-link to="/learn" class="nav-link">教學</router-link>
         <router-link to="/landing" class="nav-link">關於</router-link>
+        <router-link to="/settings" class="nav-link nav-icon" title="設定" aria-label="設定">⚙</router-link>
       </nav>
     </header>
     <main class="app-main">
@@ -307,5 +308,23 @@ a, button, input, select, textarea {
 
 .app-main {
   flex: 1;
+}
+
+.nav-icon {
+  font-size: 18px;
+  padding: 6px 8px;
+  line-height: 1;
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  transition: color 0.15s, background 0.15s;
+}
+
+.nav-icon:hover {
+  color: var(--text-primary);
+}
+
+.nav-icon.router-link-active {
+  color: var(--accent);
+  background: var(--accent-subtle);
 }
 </style>

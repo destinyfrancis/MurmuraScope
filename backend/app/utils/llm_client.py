@@ -151,20 +151,33 @@ def _calculate_cost(
 # ---------------------------------------------------------------------------
 
 
+def _rs_get(key: str) -> str | None:
+    """Safely read from RuntimeSettingsStore (no-op if not yet loaded)."""
+    try:
+        from backend.app.services.runtime_settings import get_override  # noqa: PLC0415
+        return get_override(key)
+    except Exception:
+        return None
+
+
 def get_default_provider() -> str:
-    """Return the active LLM provider from LLM_PROVIDER env var (default: openrouter)."""
-    return os.environ.get("LLM_PROVIDER", "openrouter")
+    """Return the active LLM provider.
+
+    Priority: RuntimeSettingsStore → LLM_PROVIDER env var → 'openrouter'.
+    """
+    return _rs_get("llm_provider") or os.environ.get("LLM_PROVIDER", "openrouter")
 
 
 def get_agent_provider_model() -> tuple[str, str]:
     """Return (provider, model) for agent decision tasks.
 
-    Reads AGENT_LLM_PROVIDER (falls back to LLM_PROVIDER) and AGENT_LLM_MODEL.
+    Priority: RuntimeSettingsStore → env vars → provider defaults.
     When provider is google, also checks GOOGLE_AGENT_MODEL for the model.
     """
-    provider = os.environ.get("AGENT_LLM_PROVIDER") or get_default_provider()
-    if os.environ.get("AGENT_LLM_MODEL"):
-        model = os.environ["AGENT_LLM_MODEL"]
+    provider = _rs_get("agent_llm_provider") or os.environ.get("AGENT_LLM_PROVIDER") or get_default_provider()
+    model_override = _rs_get("agent_llm_model") or os.environ.get("AGENT_LLM_MODEL")
+    if model_override:
+        model = model_override
     elif provider == "google":
         model = os.environ.get("GOOGLE_AGENT_MODEL", _PROVIDERS["google"]["default_model"])
     else:
@@ -181,8 +194,8 @@ def get_agent_model(is_stakeholder: bool = True) -> tuple[str, str]:
     """
     if is_stakeholder:
         return get_agent_provider_model()
-    provider = os.environ.get("AGENT_LLM_PROVIDER") or get_default_provider()
-    lite_model = os.environ.get("AGENT_LLM_MODEL_LITE")
+    provider = _rs_get("agent_llm_provider") or os.environ.get("AGENT_LLM_PROVIDER") or get_default_provider()
+    lite_model = _rs_get("agent_llm_model_lite") or os.environ.get("AGENT_LLM_MODEL_LITE")
     if lite_model:
         return provider, lite_model
     return get_agent_provider_model()
@@ -191,11 +204,14 @@ def get_agent_model(is_stakeholder: bool = True) -> tuple[str, str]:
 def get_report_provider_model() -> tuple[str, str]:
     """Return (provider, model) for report generation tasks.
 
-    When LLM_PROVIDER=google, uses GOOGLE_REPORT_MODEL env var.
-    Otherwise returns the provider's default model.
+    Priority: RuntimeSettingsStore → env vars → provider defaults.
+    When provider is google, uses GOOGLE_REPORT_MODEL env var.
     """
-    provider = get_default_provider()
-    if provider == "google":
+    provider = _rs_get("llm_provider") or get_default_provider()
+    model_override = _rs_get("report_llm_model")
+    if model_override:
+        model = model_override
+    elif provider == "google":
         model = os.environ.get("GOOGLE_REPORT_MODEL", "gemini-3.1-pro-preview")
     else:
         model = _PROVIDERS.get(provider, _PROVIDERS["openrouter"])["default_model"]
@@ -295,7 +311,14 @@ class LLMClient:
         Raises:
             ValueError: If the provider is unknown or its API key is missing.
             httpx.HTTPStatusError: On non-2xx responses from OpenAI-compat APIs.
+            CircuitBreakerOpenError: If the provider circuit breaker is OPEN.
         """
+        from backend.app.utils.circuit_breaker import CircuitBreakerOpenError, get_breaker  # noqa: PLC0415
+
+        breaker = get_breaker(provider)
+        if breaker.is_open():
+            raise CircuitBreakerOpenError(provider)
+
         cfg = self._get_provider_config(provider)
         resolved_model = model or cfg["default_model"]
 
@@ -305,14 +328,19 @@ class LLMClient:
         if base_url:
             cfg = {**cfg, "base_url": base_url}
 
-        if provider == "local":
-            response = await self._chat_local(messages, temperature, max_tokens)
-        elif provider == "anthropic":
-            response = await self._chat_anthropic(messages, resolved_model, temperature, max_tokens, cfg)
-        elif provider == "google":
-            response = await self._chat_google(messages, resolved_model, temperature, max_tokens, cfg)
-        else:
-            response = await self._chat_openai_compat(messages, resolved_model, temperature, max_tokens, cfg)
+        try:
+            if provider == "local":
+                response = await self._chat_local(messages, temperature, max_tokens)
+            elif provider == "anthropic":
+                response = await self._chat_anthropic(messages, resolved_model, temperature, max_tokens, cfg)
+            elif provider == "google":
+                response = await self._chat_google(messages, resolved_model, temperature, max_tokens, cfg)
+            else:
+                response = await self._chat_openai_compat(messages, resolved_model, temperature, max_tokens, cfg)
+            breaker.record_success()
+        except Exception:
+            breaker.record_failure()
+            raise
 
         if session_id and response.cost_usd > 0:
             from backend.app.services.cost_tracker import record_cost  # noqa: PLC0415
@@ -430,7 +458,9 @@ class LLMClient:
         cfg = _PROVIDERS[provider]
         env_key = cfg.get("env_key", "")
         if env_key:
-            api_key = os.environ.get(env_key, "")
+            # Priority: RuntimeSettingsStore → .env
+            rs_key = f"api_key_{provider}"
+            api_key = _rs_get(rs_key) or os.environ.get(env_key, "")
             if not api_key:
                 raise ValueError(f"API key env var '{env_key}' is not set for provider '{provider}'")
         else:

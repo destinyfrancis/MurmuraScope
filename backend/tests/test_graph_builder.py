@@ -19,6 +19,13 @@ class TestBuildGraphCreatesNodesAndEdges:
     async def test_insert_nodes_and_edges(self, test_db):
         session_id = str(uuid.uuid4())
 
+        # Satisfy foreign key constraint from kg_nodes to simulation_sessions
+        await test_db.execute(
+            """INSERT INTO simulation_sessions (id, name, sim_mode, agent_count, round_count, llm_provider)
+               VALUES (?, 'Test Session', 'parallel', 10, 5, 'openrouter')""",
+            (session_id,),
+        )
+
         nodes = [
             {
                 "id": f"n-{i}",
@@ -184,6 +191,11 @@ class TestGraphQueryReturnsResults:
     @pytest.mark.asyncio
     async def test_query_nodes_by_type(self, test_db):
         session_id = str(uuid.uuid4())
+        await test_db.execute(
+            """INSERT INTO simulation_sessions (id, name, sim_mode, agent_count, round_count, llm_provider)
+               VALUES (?, 'Q1', 'parallel', 5, 2, 'openrouter')""",
+            (session_id,),
+        )
 
         for i, (etype, title) in enumerate([("district", "Central"), ("district", "Wan Chai"), ("person", "Agent A")]):
             await test_db.execute(
@@ -203,6 +215,11 @@ class TestGraphQueryReturnsResults:
     @pytest.mark.asyncio
     async def test_query_edges_by_source(self, test_db):
         session_id = str(uuid.uuid4())
+        await test_db.execute(
+            """INSERT INTO simulation_sessions (id, name, sim_mode, agent_count, round_count, llm_provider)
+               VALUES (?, 'Q2', 'parallel', 5, 2, 'openrouter')""",
+            (session_id,),
+        )
 
         await test_db.execute(
             "INSERT INTO kg_nodes (id, session_id, entity_type, title, properties) VALUES (?, ?, ?, ?, '{}')",
@@ -235,6 +252,11 @@ class TestCommunityDetection:
     @pytest.mark.asyncio
     async def test_store_and_retrieve_communities(self, test_db):
         session_id = str(uuid.uuid4())
+        await test_db.execute(
+            """INSERT INTO simulation_sessions (id, name, sim_mode, agent_count, round_count, llm_provider)
+               VALUES (?, 'Comm1', 'parallel', 5, 2, 'openrouter')""",
+            (session_id,),
+        )
         community_id = str(uuid.uuid4())
 
         member_ids = json.dumps(["n-0", "n-1", "n-2"])
@@ -260,6 +282,11 @@ class TestCommunityDetection:
     @pytest.mark.asyncio
     async def test_multiple_communities_per_session(self, test_db):
         session_id = str(uuid.uuid4())
+        await test_db.execute(
+            """INSERT INTO simulation_sessions (id, name, sim_mode, agent_count, round_count, llm_provider)
+               VALUES (?, 'CommN', 'parallel', 5, 2, 'openrouter')""",
+            (session_id,),
+        )
 
         for i in range(3):
             await test_db.execute(

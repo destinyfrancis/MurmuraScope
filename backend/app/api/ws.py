@@ -75,11 +75,11 @@ def clear_progress(session_id: str) -> None:
 async def simulation_progress(
     websocket: WebSocket,
     session_id: str,
-    token: str = Query(default=""),
+    token: str = Query(...),  # 必填 — 空 token 會被 FastAPI 拒絕為 422
 ) -> None:
     """Stream real-time simulation progress updates via WebSocket.
 
-    1. Validate JWT token (optional but logged when missing).
+    1. Validate JWT token (required — reject unauthenticated connections).
     2. Accept connection.
     3. Replay any already-buffered progress updates (catch-up for late clients).
     4. Forward live updates from the asyncio.Queue until the simulation
@@ -87,18 +87,18 @@ async def simulation_progress(
     5. Send a periodic ping every 30 s of inactivity to keep the connection
        alive through proxies.
     """
-    # Authenticate: reject if token is provided but invalid; allow anonymous
-    # for backward compatibility but log a warning.
-    if token:
-        try:
-            from backend.app.api.auth import _decode_token  # noqa: PLC0415
+    # Authenticate: reject if token is missing or invalid.
+    if not token:
+        await websocket.close(code=4001, reason="Token required")
+        return
 
-            _decode_token(token)
-        except Exception:
-            await websocket.close(code=4003, reason="Invalid or expired token")
-            return
-    else:
-        logger.warning("WS connection without token for session=%s", session_id)
+    try:
+        from backend.app.api.auth import _decode_token  # noqa: PLC0415
+
+        _decode_token(token)
+    except Exception:
+        await websocket.close(code=4003, reason="Invalid or expired token")
+        return
 
     await websocket.accept()
 

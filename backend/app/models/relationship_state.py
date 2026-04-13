@@ -34,9 +34,11 @@ class RelationshipState:
         investment    — accumulated resources tied to relationship (0..1)
         rusbult_commitment (property) = clamp(satisfaction - alternatives + investment)
 
-    Trust:
-        trust — directional trust score (-1..+1), backward-compatible with
-                agent_relationships.trust_score
+    Trust (asymmetric — Phase 2.2):
+        trust              — A's trust toward B  (-1..+1)
+        trust_b_perspective — B's trust toward A (-1..+1)
+        deception_a_to_b   — A's active deception toward B (0..1)
+        deception_b_to_a   — B's active deception toward A (0..1)
 
     Counters:
         interaction_count — total logged interactions (used for staleness detection)
@@ -56,15 +58,20 @@ class RelationshipState:
     alternatives: float = 0.3
     investment: float = 0.05
 
-    # Trust (backward-compatible)
+    # Trust — A's perspective (backward-compatible with agent_relationships.trust_score)
     trust: float = 0.0
+
+    # Asymmetric trust and deception (Phase 2.2)
+    trust_b_perspective: float = 0.0   # B's trust toward A
+    deception_a_to_b: float = 0.0      # A's active deception of B (0 = honest, 1 = fully deceptive)
+    deception_b_to_a: float = 0.0      # B's active deception of A
 
     # Counters
     interaction_count: int = 0
     rounds_since_change: int = 0
 
     # ------------------------------------------------------------------
-    # Computed property (Rusbult commitment formula)
+    # Computed properties
     # ------------------------------------------------------------------
 
     @property
@@ -75,6 +82,22 @@ class RelationshipState:
         """
         raw = self.satisfaction - self.alternatives + self.investment
         return max(0.0, min(1.0, raw))
+
+    @property
+    def trust_asymmetry(self) -> float:
+        """Signed trust gap between perspectives: trust − trust_b_perspective.
+
+        Large positive values indicate A trusts B more than B trusts A.
+        """
+        return self.trust - self.trust_b_perspective
+
+    @property
+    def net_deception(self) -> float:
+        """Net deception imbalance: deception_a_to_b − deception_b_to_a.
+
+        Positive = A is more deceptive; negative = B is more deceptive.
+        """
+        return self.deception_a_to_b - self.deception_b_to_a
 
 
 # ---------------------------------------------------------------------------

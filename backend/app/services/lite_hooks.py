@@ -129,11 +129,20 @@ def generate_lite_events(
 # ---------------------------------------------------------------------------
 
 # Emotional reactions indexed by VAD quadrant
+# ZH (default) — Traditional Chinese
 _EMOTIONAL_REACTIONS = {
     "high_arousal_neg": ("憤怒", "焦慮", "恐懼", "不安"),
     "high_arousal_pos": ("興奮", "決心", "激昂", "希望"),
     "low_arousal_neg": ("無奈", "疲憊", "灰心", "冷漠"),
     "low_arousal_pos": ("平靜", "滿意", "穩定", "自信"),
+}
+
+# EN — English labels for non-Chinese fictional worlds
+_EMOTIONAL_REACTIONS_EN: dict[str, tuple[str, ...]] = {
+    "high_arousal_neg": ("anger", "anxiety", "fear", "unease"),
+    "high_arousal_pos": ("excitement", "determination", "passion", "hope"),
+    "low_arousal_neg": ("resignation", "exhaustion", "discouragement", "apathy"),
+    "low_arousal_pos": ("calm", "satisfaction", "stability", "confidence"),
 }
 
 
@@ -145,6 +154,7 @@ def deliberate_lite(
     cognitive_fingerprint: dict[str, float] | None = None,
     rng: random.Random | None = None,
     prev_decision: str | None = None,
+    locale: str = "zh",
 ) -> DeliberationResult:
     """Rule-based deliberation for one stakeholder agent.
 
@@ -160,6 +170,9 @@ def deliberate_lite(
         emotional_state: Optional EmotionalState (VAD).
         cognitive_fingerprint: Optional {value_name → float 0-1}.
         rng: Optional seeded Random.
+        prev_decision: Previous round decision string for momentum.
+        locale: ``"zh"`` (default) for Traditional Chinese output,
+                ``"en"`` for English output.
 
     Returns:
         DeliberationResult with belief_updates, decision, reasoning.
@@ -224,7 +237,9 @@ def deliberate_lite(
     else:
         decision = "observe"
 
-    # Emotional reaction from VAD
+    # Emotional reaction from VAD — locale-aware
+    _reactions = _EMOTIONAL_REACTIONS_EN if locale.startswith("en") else _EMOTIONAL_REACTIONS
+    _fallback_emotion = "observing" if locale.startswith("en") else "觀望"
     if emotional_state is not None:
         valence = getattr(emotional_state, "valence", 0.0)
         arousal = getattr(emotional_state, "arousal", 0.3)
@@ -236,23 +251,30 @@ def deliberate_lite(
             quad = "low_arousal_neg"
         else:
             quad = "low_arousal_pos"
-        emotional_reaction = _rng.choice(_EMOTIONAL_REACTIONS[quad])
+        emotional_reaction = _rng.choice(_reactions[quad])
     else:
-        emotional_reaction = "觀望"
+        emotional_reaction = _fallback_emotion
 
     # Topic tags from affected metrics
     topic_tags = tuple(belief_updates.keys())[:4] if belief_updates else ("general",)
 
-    # Reasoning: template based on decision
-    reasoning = (
-        (
-            f"基於 {len(events)} 個事件分析，{strongest_metric if belief_updates else '局勢'}"
-            f"趨勢{'上升' if belief_updates.get(strongest_metric if belief_updates else '', 0) > 0 else '下降'}，"
-            f"選擇 {decision}。"
+    # Reasoning: template based on decision and locale
+    _strongest = strongest_metric if belief_updates else ""
+    _trend_val = belief_updates.get(_strongest, 0) if _strongest else 0
+    if locale.startswith("en"):
+        _trend = "rising" if _trend_val > 0 else "falling"
+        reasoning = (
+            f"Based on {len(events)} event(s), {_strongest or 'situation'} is {_trend}. Decision: {decision}."
+            if belief_updates
+            else "Situation stable — monitoring."
         )
-        if belief_updates
-        else "當前局勢穩定，繼續觀察。"
-    )
+    else:
+        _trend_zh = "上升" if _trend_val > 0 else "下降"
+        reasoning = (
+            f"基於 {len(events)} 個事件分析，{_strongest or '局勢'}趨勢{_trend_zh}，選擇 {decision}。"
+            if belief_updates
+            else "當前局勢穩定，繼續觀察。"
+        )
 
     return DeliberationResult(
         agent_id=agent_id,

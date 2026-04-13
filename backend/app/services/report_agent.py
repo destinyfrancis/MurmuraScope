@@ -37,6 +37,7 @@ from backend.app.services.report_agent_xai import (
 )
 from backend.app.services.report_section_generator import _truncate_observation
 from backend.app.services.simulation_ipc import SimulationIPC
+from backend.app.services.cost_tracker import get_session_cost
 from backend.app.utils.db import get_db
 from backend.app.utils.llm_client import (
     get_default_client as _get_llm_client,
@@ -962,14 +963,20 @@ def _parse_report(session_id: str, content: str) -> dict[str, Any]:
             break
     summary = " ".join(summary_lines[:3])
 
+    # Append simulation cost to the report markdown footer
+    total_cost_usd = get_session_cost(session_id)
+    cost_footer = f"\n\n---\n\n> **模擬成本:** ${total_cost_usd:.4f} USD\n"
+    content_with_cost = content + cost_footer
+
     return {
         "report_id": str(uuid4()),
         "title": title,
-        "content_markdown": content,
+        "content_markdown": content_with_cost,
         "summary": summary[:500],
         "key_findings": key_findings[:10],
         "charts_data": None,
         "agent_log": [],
+        "total_cost_usd": total_cost_usd,
     }
 
 

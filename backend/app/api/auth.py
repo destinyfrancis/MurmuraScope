@@ -109,6 +109,7 @@ class UserProfile(BaseModel):
     email: str
     display_name: str | None = None
     created_at: str | None = None
+    is_admin: bool = False  # Admin role — read from users.is_admin column
 
 
 # ---------------------------------------------------------------------------
@@ -171,7 +172,7 @@ async def get_current_user(
     try:
         async with get_db() as db:
             cursor = await db.execute(
-                "SELECT id, email, display_name, created_at FROM users WHERE id = ?",
+                "SELECT id, email, display_name, created_at, is_admin FROM users WHERE id = ?",
                 (user_id,),
             )
             row = await cursor.fetchone()
@@ -190,6 +191,7 @@ async def get_current_user(
         email=row["email"],
         display_name=row["display_name"],
         created_at=row["created_at"],
+        is_admin=bool(row["is_admin"]) if row["is_admin"] is not None else False,
     )
 
 
@@ -215,7 +217,7 @@ async def get_optional_user(
     try:
         async with get_db() as db:
             cursor = await db.execute(
-                "SELECT id, email, display_name, created_at FROM users WHERE id = ?",
+                "SELECT id, email, display_name, created_at, is_admin FROM users WHERE id = ?",
                 (user_id,),
             )
             row = await cursor.fetchone()
@@ -229,7 +231,31 @@ async def get_optional_user(
         email=row["email"],
         display_name=row["display_name"],
         created_at=row["created_at"],
+        is_admin=bool(row["is_admin"]) if row["is_admin"] is not None else False,
     )
+
+
+# ---------------------------------------------------------------------------
+# Admin dependency
+# ---------------------------------------------------------------------------
+
+
+async def require_admin(
+    user: Annotated[UserProfile, Depends(get_current_user)],
+) -> UserProfile:
+    """Reject non-admin users with 403.
+
+    Usage in other routers::
+
+        from backend.app.api.auth import require_admin, UserProfile
+
+        @router.get("/admin/data")
+        async def admin_data(user: UserProfile = Depends(require_admin)):
+            ...
+    """
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user
 
 
 # ---------------------------------------------------------------------------

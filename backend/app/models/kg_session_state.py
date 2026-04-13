@@ -85,3 +85,9 @@ class KGSessionState:
 
     # Per-agent previous-round decision for strategic momentum in lite mode
     agent_prev_decisions: dict[str, str] = field(default_factory=dict)
+
+    # LLM failure tracking for auto-degradation to lite mode (Phase 1.1)
+    # Counts consecutive rounds where ≥80% of LLM calls failed
+    consecutive_llm_failures: int = 0
+    # True once auto-degradation has been triggered (reset only on LLM recovery)
+    auto_degraded_to_lite: bool = False

@@ -1,0 +1,15 @@
+{
+  "id": "supply_chain_shock",
+  "name": "Global Supply Chain Shock",
+  "description": "A B2B economic simulation of a global supply chain disruption triggered by geopolitical conflict and natural disaster. Models manufacturer decisions, logistics providers, retail buyers, and regulatory bodies adapting to cascading shortages.",
+  "scenario_type": "kg_driven",
+  "agent_count": 40,
+  "round_count": 15,
+  "seed_text": "A major earthquake disrupts semiconductor fabrication in Taiwan while simultaneous port strikes affect shipping routes from Southeast Asia. Electronics manufacturers face critical component shortages. Automotive companies halt production lines. Governments impose export controls on strategic materials. Companies race to qualify alternative suppliers and redesign products.",
+  "config": {
+    "lite_ensemble": true,
+    "emergence_enabled": false,
+    "kg_mode": true
+  },
+  "tags": ["economics", "supply_chain", "b2b", "crisis", "lite"]
+}

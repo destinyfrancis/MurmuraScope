@@ -382,15 +382,25 @@ class MacroController:
             raise NotImplementedError(f"Handler for '{shock_type}' not registered")
         return handler(state, params)
 
-    def generate_shock_post(self, shock_type: str, state: MacroState) -> str:
-        """Generate a news-style social media post for OASIS ManualAction injection."""
+    def generate_shock_post(self, shock_type: str, state: MacroState) -> dict[str, Any]:
+        """Generate a news-style social media post with engagement metrics."""
         if shock_type not in VALID_SHOCK_TYPES:
             raise ValueError(f"Unknown shock type '{shock_type}'")
 
         generator = SHOCK_POST_GENERATORS.get(shock_type)
         if generator is None:
             raise NotImplementedError(f"Post generator for '{shock_type}' not registered")
-        return generator(state)
+        
+        content = generator(state)
+        
+        from backend.app.services.macro_posts import simulate_viral_engagement  # noqa: PLC0415
+        metrics = simulate_viral_engagement(shock_type, state)
+        
+        return {
+            "content": content,
+            "metrics": metrics,
+            "shock_type": shock_type
+        }
 
     async def update_from_actions(
         self,

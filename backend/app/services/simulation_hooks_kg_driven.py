@@ -623,6 +623,7 @@ class KGDrivenHooksMixin:
                     active_metrics=active_metric_keys,
                     provider=agent_provider,
                     model=agent_model,
+                    round_number=round_num,
                 )
 
         # Fan out: deliberate all activated agents in parallel (bounded by semaphore)
@@ -632,8 +633,10 @@ class KGDrivenHooksMixin:
         )
 
         # Accumulate belief updates from all agents sequentially after gathering
+        failure_count = 0
         for agent, result in zip(active, results):
             if isinstance(result, Exception):
+                failure_count += 1
                 logger.warning(
                     "Deliberation failed for agent %s session=%s: %s",
                     agent.get("id", "?"),
@@ -645,7 +648,51 @@ class KGDrivenHooksMixin:
                 if metric_id in metrics:
                     metrics[metric_id] = max(0.0, min(1.0, metrics[metric_id] + delta))
 
+            # Apply goal revision if proposed by this agent's deliberation
+            if result.goal_revision is not None:
+                agent_id_str = agent.get("id", "")
+                if agent_id_str:
+                    await self._apply_goal_revision(session_id, agent_id_str, result.goal_revision, kg_state)
+
         kg_state.active_metrics = metrics
+
+        # Phase 1.1: Auto-degradation — track consecutive LLM failure rounds.
+        # If ≥80% of deliberation calls failed, count this as a failure round.
+        # After 3 consecutive failure rounds, automatically switch to lite mode.
+        _AUTO_DEGRADE_THRESHOLD = 3  # consecutive rounds before degradation
+        _FAILURE_RATE_LIMIT = 0.80  # proportion of failed calls to count as failure round
+        if active:
+            failure_rate = failure_count / len(active)
+            if failure_rate >= _FAILURE_RATE_LIMIT:
+                kg_state.consecutive_llm_failures += 1
+                logger.warning(
+                    "LLM failure round session=%s round=%d failure_rate=%.0f%% consecutive=%d",
+                    session_id,
+                    round_num,
+                    failure_rate * 100,
+                    kg_state.consecutive_llm_failures,
+                )
+                if (
+                    kg_state.consecutive_llm_failures >= _AUTO_DEGRADE_THRESHOLD
+                    and not kg_state.auto_degraded_to_lite
+                ):
+                    kg_state.lite_ensemble = True
+                    kg_state.auto_degraded_to_lite = True
+                    logger.warning(
+                        "AUTO-DEGRADATION: session=%s degraded to lite_ensemble after %d consecutive LLM failure rounds",
+                        session_id,
+                        kg_state.consecutive_llm_failures,
+                    )
+            else:
+                # LLM is recovering — reset counter but do not undo degradation
+                if kg_state.consecutive_llm_failures > 0:
+                    logger.info(
+                        "LLM recovering: session=%s round=%d failure_rate=%.0f%% — reset consecutive counter",
+                        session_id,
+                        round_num,
+                        failure_rate * 100,
+                    )
+                kg_state.consecutive_llm_failures = 0
 
         # Reflection loop: synthesise 'thought' memories for activated agents
         # every reflection_interval rounds (Generative Agents-inspired).
@@ -1417,6 +1464,190 @@ class KGDrivenHooksMixin:
         except Exception:
             logger.exception(
                 "_compute_tdmi failed session=%s round=%d",
+                session_id,
+                round_num,
+            )
+
+    # ------------------------------------------------------------------
+    # Agent goal revision
+    # ------------------------------------------------------------------
+
+    async def _apply_goal_revision(
+        self,
+        session_id: str,
+        agent_id: str,
+        revision: Any,  # GoalRevision — avoid import cycle; duck-typed
+        kg_state: Any,
+    ) -> None:
+        """Persist an LLM-proposed goal revision and update in-memory agent profile.
+
+        Updates ``kg_state.all_agent_dicts`` in-place (the entry's ``goals`` list)
+        and writes a row to ``agent_goal_revisions``.  Non-fatal on any error.
+        """
+        from backend.app.utils.db import get_db  # noqa: PLC0415
+
+        try:
+            # Locate the agent dict in-memory and revise the goal
+            for agent_dict in kg_state.all_agent_dicts:
+                if str(agent_dict.get("id", "")) == str(agent_id):
+                    goals: list[str] = list(agent_dict.get("goals", []))
+                    idx = revision.goal_index
+                    if 0 <= idx < len(goals):
+                        goals[idx] = revision.revised_text
+                        agent_dict["goals"] = goals
+                        logger.info(
+                            "Goal revised agent=%s session=%s round=%d idx=%d "
+                            "original=%.60s revised=%.60s confidence=%.2f",
+                            agent_id,
+                            session_id,
+                            revision.round_number,
+                            idx,
+                            revision.original_text,
+                            revision.revised_text,
+                            revision.confidence,
+                        )
+                    break
+
+            # Persist to DB
+            async with get_db() as db:
+                await db.execute(
+                    """INSERT INTO agent_goal_revisions
+                       (session_id, agent_id, goal_index, original, revised, confidence, round_number)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        session_id,
+                        agent_id,
+                        revision.goal_index,
+                        revision.original_text,
+                        revision.revised_text,
+                        revision.confidence,
+                        revision.round_number,
+                    ),
+                )
+                await db.commit()
+
+        except Exception:
+            logger.exception(
+                "_apply_goal_revision failed agent=%s session=%s",
+                agent_id,
+                session_id,
+            )
+
+    # ------------------------------------------------------------------
+    # Organic regulatory event injection
+    # ------------------------------------------------------------------
+
+    # Thresholds that trigger an automatic "official" regulatory world event.
+    _REGULATORY_POLARIZATION_THRESHOLD: float = 0.72
+    _REGULATORY_HOSTILITY_THRESHOLD: float = 0.65
+    # Minimum rounds between consecutive auto-regulatory events (debounce).
+    _REGULATORY_DEBOUNCE_ROUNDS: int = 5
+
+    async def _maybe_inject_regulatory_event(
+        self,
+        session_id: str,
+        round_num: int,
+    ) -> None:
+        """Auto-inject an official regulatory/platform intervention event.
+
+        Fires when social tension exceeds either threshold:
+          - polarization_index > 0.72 (population-wide split)
+          - cross_cluster_hostility > 0.65 (inter-faction aggression)
+
+        Skipped if an 'official' world event was already injected in the last
+        _REGULATORY_DEBOUNCE_ROUNDS rounds to prevent spam.
+
+        Non-fatal: any failure is logged and silently swallowed.
+        """
+        kg_state = self._kg_sessions.get(session_id)
+        if kg_state is None:
+            return
+
+        from backend.app.utils.db import get_db  # noqa: PLC0415
+
+        try:
+            async with get_db() as db:
+                # 1. Read latest polarization snapshot
+                cursor = await db.execute(
+                    """SELECT polarization_index, cross_cluster_hostility
+                       FROM polarization_snapshots
+                       WHERE session_id = ?
+                       ORDER BY round_number DESC LIMIT 1""",
+                    (session_id,),
+                )
+                row = await cursor.fetchone()
+
+            if row is None:
+                return  # No snapshot yet — nothing to threshold-check
+
+            polarization_index: float = float(row[0] or 0.0)
+            cross_cluster_hostility: float = float(row[1] or 0.0)
+
+            above_threshold = (
+                polarization_index > self._REGULATORY_POLARIZATION_THRESHOLD
+                or cross_cluster_hostility > self._REGULATORY_HOSTILITY_THRESHOLD
+            )
+            if not above_threshold:
+                return
+
+            # 2. Debounce: skip if an official event was injected recently
+            async with get_db() as db:
+                cursor = await db.execute(
+                    """SELECT COUNT(*) FROM world_events
+                       WHERE simulation_id = ?
+                         AND event_type = 'official'
+                         AND round_number > ?""",
+                    (session_id, round_num - self._REGULATORY_DEBOUNCE_ROUNDS),
+                )
+                count_row = await cursor.fetchone()
+
+            if count_row and int(count_row[0]) > 0:
+                return  # Recent official event already injected — debounce
+
+            # 3. Generate regulatory event via WorldEventGenerator
+            if self._world_event_gen is None:
+                return
+
+            scenario_desc = getattr(kg_state, "scenario_description", "")
+            active_metrics: tuple[str, ...] = tuple(kg_state.active_metrics.keys())
+            prev_stance: dict[str, float] = dict(kg_state.active_metrics)
+
+            events = await self._world_event_gen.generate(
+                scenario_description=scenario_desc,
+                round_number=round_num,
+                active_metrics=active_metrics,
+                prev_dominant_stance=prev_stance,
+                event_history=list(kg_state.event_content_history[-10:]),
+                force_event_type="official",
+                system_prompt_suffix=(
+                    "IMPORTANT: Generate exactly one regulatory or platform intervention "
+                    "event in response to rising social tension and polarization. "
+                    "The event must be an authoritative official action (government body, "
+                    "platform moderation, regulatory agency). credibility must be 0.85."
+                ),
+            )
+
+            if not events:
+                return
+
+            # 4. Inject into current round (append to existing events)
+            regulatory_event = events[0]  # Take only the first / most relevant
+            kg_state.current_round_events = list(kg_state.current_round_events) + [regulatory_event]
+            kg_state.event_content_history = kg_state.event_content_history + [regulatory_event.content]
+
+            logger.info(
+                "Organic regulatory event injected session=%s round=%d "
+                "polarization=%.3f hostility=%.3f content=%.80s",
+                session_id,
+                round_num,
+                polarization_index,
+                cross_cluster_hostility,
+                regulatory_event.content,
+            )
+
+        except Exception:
+            logger.exception(
+                "_maybe_inject_regulatory_event failed session=%s round=%d",
                 session_id,
                 round_num,
             )

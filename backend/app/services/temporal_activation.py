@@ -132,17 +132,45 @@ _CHRONOTYPE_TEMPLATES: dict[str, tuple[float, ...]] = {
 }
 
 # Simulation clock starts at 08:00 HKT (morning commute peak).
+# These are module-level defaults preserved for backward compatibility.
+# Override per-instance by passing arguments to TemporalActivationService().
 _START_HOUR: int = 8
 
 # Minimum per-round activation probability (guarantees some activity even at off-peak hours).
 _MIN_ACTIVATION_P: float = 0.05
+
+# Chinese internet primetime hours (18:00–23:00 HKT) with amplified posting density.
+_PRIMETIME_HOURS: frozenset[int] = frozenset(range(18, 24))
+_PRIMETIME_MULTIPLIER: float = 1.5
 
 # Occupations with elevated night-shift probability.
 _NIGHT_SHIFT_OCCUPATIONS: frozenset[str] = frozenset({"非技術工人", "機台及機器操作員", "服務及銷售人員"})
 
 
 class TemporalActivationService:
-    """Generate and evaluate 24-dim temporal activity profiles."""
+    """Generate and evaluate 24-dim temporal activity profiles.
+
+    Args:
+        start_hour: The simulated clock hour at round 0 (default 8 = 08:00).
+            Adjust for different fictional world time zones or day-start conventions
+            (e.g., start_hour=0 for a midnight-shift scenario).
+        primetime_hours: Set of hours that receive a posting-density multiplier.
+            Defaults to 18–23 HKT (Chinese internet primetime).
+        primetime_multiplier: Activation probability multiplier during primetime.
+            Set to 1.0 to disable primetime amplification.
+    """
+
+    def __init__(
+        self,
+        start_hour: int = _START_HOUR,
+        primetime_hours: frozenset[int] | None = None,
+        primetime_multiplier: float = _PRIMETIME_MULTIPLIER,
+    ) -> None:
+        self._start_hour: int = start_hour % 24
+        self._primetime_hours: frozenset[int] = (
+            primetime_hours if primetime_hours is not None else _PRIMETIME_HOURS
+        )
+        self._primetime_multiplier: float = max(1.0, primetime_multiplier)
 
     # ------------------------------------------------------------------
     # Public API
@@ -151,10 +179,10 @@ class TemporalActivationService:
     def round_to_hour(self, round_number: int) -> int:
         """Map a simulation round number to a 24-hour clock hour.
 
-        Round 0 begins at 08:00 HKT.  Each round advances by one
+        Round 0 begins at ``start_hour``.  Each round advances by one
         simulated hour; the clock wraps every 24 rounds.
         """
-        return (_START_HOUR + round_number) % 24
+        return (self._start_hour + round_number) % 24
 
     def should_activate(
         self,
@@ -164,12 +192,15 @@ class TemporalActivationService:
     ) -> bool:
         """Return True if the agent should act in this round.
 
-        Performs a Bernoulli draw with
-        p = max(_MIN_ACTIVATION_P, profile.probability_at_hour(hour)).
-        The floor prevents agents from being completely silent.
+        Performs a Bernoulli draw with p derived from the agent's 24-dim
+        activity vector.  During primetime hours a ``primetime_multiplier``
+        is applied to simulate peak posting density.  The result is
+        clamped to [_MIN_ACTIVATION_P, 1.0].
         """
         hour = self.round_to_hour(round_number)
-        p = max(_MIN_ACTIVATION_P, profile.probability_at_hour(hour))
+        base_p = profile.probability_at_hour(hour)
+        multiplier = self._primetime_multiplier if hour in self._primetime_hours else 1.0
+        p = min(1.0, max(_MIN_ACTIVATION_P, base_p * multiplier))
         return rng.random() < p
 
     def generate_profile(

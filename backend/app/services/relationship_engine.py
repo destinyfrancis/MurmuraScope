@@ -485,3 +485,55 @@ class RelationshipEngine:
             )
             updated.append(new_state)
         return updated
+
+    # ------------------------------------------------------------------
+    # update_asymmetric_trust (Phase 2.2)
+    # ------------------------------------------------------------------
+
+    def update_asymmetric_trust(
+        self,
+        state: RelationshipState,
+        *,
+        perspective: str = "a",
+        trust_delta: float = 0.0,
+        deception_delta: float = 0.0,
+    ) -> RelationshipState:
+        """Update trust or deception from a specific perspective.
+
+        Args:
+            state: Current relationship state.
+            perspective: ``"a"`` to update A's perspective (trust, deception_a_to_b),
+                         ``"b"`` to update B's perspective (trust_b_perspective,
+                         deception_b_to_a).
+            trust_delta: Signed change in trust (-1..+1 range, clamped).
+            deception_delta: Signed change in deception level (0..1, clamped).
+
+        Returns:
+            New RelationshipState with updated asymmetric fields.
+
+        Example::
+
+            # Agent A discovers Agent B is lying — B's deception rises:
+            state = engine.update_asymmetric_trust(
+                state,
+                perspective="b",
+                deception_delta=0.2,
+                trust_delta=-0.15,
+            )
+        """
+        if perspective == "a":
+            new_trust = _clamp(state.trust + trust_delta, -1.0, 1.0)
+            new_deception_a = _clamp(state.deception_a_to_b + deception_delta)
+            return replace(
+                state,
+                trust=round(new_trust, 4),
+                deception_a_to_b=round(new_deception_a, 4),
+            )
+        else:
+            new_trust_b = _clamp(state.trust_b_perspective + trust_delta, -1.0, 1.0)
+            new_deception_b = _clamp(state.deception_b_to_a + deception_delta)
+            return replace(
+                state,
+                trust_b_perspective=round(new_trust_b, 4),
+                deception_b_to_a=round(new_deception_b, 4),
+            )

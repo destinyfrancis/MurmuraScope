@@ -620,6 +620,8 @@ async def store_universal_agent_profiles(
     rows = []
     for p in profiles:
         oasis_row = p.to_oasis_row()
+        goals_json = json.dumps(list(getattr(p, "goals", ())), ensure_ascii=False)
+        nationality = getattr(p, "nationality", "") or ""
         rows.append(
             (
                 session_id,
@@ -645,6 +647,14 @@ async def store_universal_agent_profiles(
                 getattr(p, "activity_level", 0.5),
                 getattr(p, "influence_weight", 1.0),
                 int(getattr(p, "is_stakeholder", False)),
+                # big5_* aliases (mirror openness/conscientiousness/etc.)
+                p.openness,
+                p.conscientiousness,
+                p.extraversion,
+                p.agreeableness,
+                p.neuroticism,
+                goals_json,
+                nationality,
             )
         )
 
@@ -658,8 +668,11 @@ async def store_universal_agent_profiles(
                 agreeableness, neuroticism,
                 monthly_income, savings,
                 oasis_persona, oasis_username, created_at,
-                activity_level, influence_weight, is_stakeholder)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                activity_level, influence_weight, is_stakeholder,
+                big5_openness, big5_conscientiousness, big5_extraversion,
+                big5_agreeableness, big5_neuroticism,
+                goals, nationality)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             rows,
         )
         await db.commit()

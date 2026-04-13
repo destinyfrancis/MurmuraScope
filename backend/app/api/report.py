@@ -13,6 +13,7 @@ from backend.app.models.request import (
 )
 from backend.app.models.response import APIResponse
 from backend.app.services.report_agent import ReportAgent
+from backend.app.services.narrative_analyst import NarrativeAnalyst
 from backend.app.services.simulation_manager import get_simulation_manager
 from backend.app.utils.db import get_db
 from backend.app.utils.logger import get_logger
@@ -90,12 +91,27 @@ async def generate_report(request: Request, req: ReportGenerateRequest) -> APIRe
             meta={
                 "session_id": req.session_id,
                 "report_type": req.report_type,
+                "total_cost_usd": report.get("total_cost_usd", 0.0),
             },
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Bad request") from exc
     except Exception as exc:
         logger.exception("generate_report failed for session %s", req.session_id)
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
+
+
+@router.get("/{session_id}/narrative", response_model=APIResponse)
+async def get_narrative_report(session_id: str) -> APIResponse:
+    """Generate or retrieve a narrative-driven dossier for a simulation."""
+    try:
+        analyst = NarrativeAnalyst()
+        dossier = await analyst.generate_dossier(session_id)
+        return APIResponse(success=True, data=dossier)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        logger.exception("get_narrative_report failed for session %s", session_id)
         raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 

@@ -13,7 +13,7 @@ from typing import Any
 
 from backend.app.services.entity_extractor import EntityExtractor
 from backend.app.services.ontology_generator import OntologyGenerator
-from backend.app.utils.db import get_db
+import backend.app.utils.db as db
 from backend.app.utils.llm_client import LLMClient, get_agent_provider_model
 from backend.app.utils.logger import get_logger
 from backend.app.utils.prompt_security import sanitize_seed_text
@@ -125,16 +125,16 @@ class GraphBuilderService:
         # Extract session_id from graph_id (format: graph_{session_id}_{hex})
         session_id = _session_id_from_graph_id(graph_id)
 
-        async with get_db() as db:
-            node_rows = await db.execute_fetchall(
+        async with db.get_db() as conn:
+            node_rows = await conn.execute_fetchall(
                 "SELECT id, entity_type, title, description, properties FROM kg_nodes WHERE session_id = ?",
                 (session_id,),
             )
-            edge_rows = await db.execute_fetchall(
+            edge_rows = await conn.execute_fetchall(
                 "SELECT source_id, target_id, relation_type, description, weight FROM kg_edges WHERE session_id = ?",
                 (session_id,),
             )
-            community_rows = await db.execute_fetchall(
+            community_rows = await conn.execute_fetchall(
                 "SELECT id, title, summary, member_ids FROM kg_communities WHERE session_id = ?",
                 (session_id,),
             )
@@ -188,7 +188,7 @@ class GraphBuilderService:
         session_id = _session_id_from_graph_id(graph_id)
         keywords = query.lower().split()
 
-        async with get_db() as db:
+        async with db.get_db() as conn:
             # Fetch candidate nodes via LIKE on title/description
             conditions = " OR ".join(["LOWER(title) LIKE ? OR LOWER(description) LIKE ?"] * len(keywords))
             params: list[str] = []
@@ -200,7 +200,7 @@ class GraphBuilderService:
                 f"SELECT id, entity_type, title, description, properties "
                 f"FROM kg_nodes WHERE session_id = ? AND ({conditions})"
             )
-            node_rows = await db.execute_fetchall(sql, [session_id, *params])
+            node_rows = await conn.execute_fetchall(sql, [session_id, *params])
 
             if not node_rows:
                 return []
@@ -208,7 +208,7 @@ class GraphBuilderService:
             node_ids = [r[0] for r in node_rows]
             placeholders = ", ".join("?" * len(node_ids))
 
-            edge_rows = await db.execute_fetchall(
+            edge_rows = await conn.execute_fetchall(
                 f"SELECT source_id, target_id, relation_type, description, weight "
                 f"FROM kg_edges WHERE session_id = ? AND "
                 f"(source_id IN ({placeholders}) OR target_id IN ({placeholders}))",
@@ -263,8 +263,8 @@ class GraphBuilderService:
         session_id = _session_id_from_graph_id(graph_id)
 
         # Fetch current nodes
-        async with get_db() as db:
-            rows = await db.execute_fetchall(
+        async with db.get_db() as conn:
+            rows = await conn.execute_fetchall(
                 "SELECT id, entity_type, title, description, properties FROM kg_nodes WHERE session_id = ?",
                 (session_id,),
             )
@@ -322,8 +322,8 @@ class GraphBuilderService:
         session_id: str,
         nodes: list[dict[str, Any]],
     ) -> None:
-        async with get_db() as db:
-            await db.executemany(
+        async with db.get_db() as conn:
+            await conn.executemany(
                 "INSERT OR REPLACE INTO kg_nodes "
                 "(id, session_id, entity_type, title, description, properties) "
                 "VALUES (?, ?, ?, ?, ?, ?)",
@@ -339,15 +339,15 @@ class GraphBuilderService:
                     for n in nodes
                 ],
             )
-            await db.commit()
+            await conn.commit()
 
     async def _store_edges(
         self,
         session_id: str,
         edges: list[dict[str, Any]],
     ) -> None:
-        async with get_db() as db:
-            await db.executemany(
+        async with db.get_db() as conn:
+            await conn.executemany(
                 "INSERT INTO kg_edges "
                 "(session_id, source_id, target_id, relation_type, description, weight) "
                 "VALUES (?, ?, ?, ?, ?, ?)",
@@ -363,16 +363,16 @@ class GraphBuilderService:
                     for e in edges
                 ],
             )
-            await db.commit()
+            await conn.commit()
 
     async def _update_edge_weights(
         self,
         session_id: str,
         updated_edges: list[dict[str, Any]],
     ) -> None:
-        async with get_db() as db:
+        async with db.get_db() as conn:
             for edge in updated_edges:
-                await db.execute(
+                await conn.execute(
                     "UPDATE kg_edges SET weight = ? "
                     "WHERE session_id = ? AND source_id = ? "
                     "AND target_id = ? AND relation_type = ?",
@@ -384,7 +384,7 @@ class GraphBuilderService:
                         edge["relation_type"],
                     ),
                 )
-            await db.commit()
+            await conn.commit()
 
     async def _store_communities(
         self,
@@ -393,8 +393,8 @@ class GraphBuilderService:
     ) -> None:
         if not communities:
             return
-        async with get_db() as db:
-            await db.executemany(
+        async with db.get_db() as conn:
+            await conn.executemany(
                 "INSERT OR REPLACE INTO kg_communities "
                 "(id, session_id, title, summary, member_ids) "
                 "VALUES (?, ?, ?, ?, ?)",
@@ -409,7 +409,7 @@ class GraphBuilderService:
                     for c in communities
                 ],
             )
-            await db.commit()
+            await conn.commit()
 
     # ------------------------------------------------------------------
     # Private: community detection (simple connected-component approach)
@@ -562,9 +562,9 @@ class GraphBuilderService:
                     interaction_counts[username] = interaction_counts.get(username, 0) + 1
 
         try:
-            async with get_db() as db:
+            async with db.get_db() as conn:
                 # Decay all edges for this session
-                await db.execute(
+                await conn.execute(
                     "UPDATE kg_edges SET weight = weight * 0.98 WHERE session_id = ?",
                     (session_id,),
                 )
@@ -573,7 +573,7 @@ class GraphBuilderService:
                     for username, count in interaction_counts.items():
                         boost = 0.1 * count
                         # Look up the node for this username
-                        cursor = await db.execute(
+                        cursor = await conn.execute(
                             "SELECT id FROM kg_nodes WHERE session_id = ? AND (title = ? OR id LIKE ?)",
                             (session_id, username, f"%_{username}"),
                         )
@@ -581,14 +581,14 @@ class GraphBuilderService:
                         if not node_row:
                             continue
                         node_id = node_row[0]
-                        await db.execute(
+                        await conn.execute(
                             "UPDATE kg_edges SET weight = weight + ? WHERE session_id = ? AND (source_id = ? OR target_id = ?)",
                             (boost, session_id, node_id, node_id),
                         )
-                await db.commit()
+                await conn.commit()
 
                 # Count updated rows
-                cursor = await db.execute(
+                cursor = await conn.execute(
                     "SELECT COUNT(*) FROM kg_edges WHERE session_id = ?",
                     (session_id,),
                 )
@@ -615,16 +615,16 @@ class GraphBuilderService:
             True if snapshot was saved successfully.
         """
         try:
-            async with get_db() as db:
+            async with db.get_db() as conn:
                 # Fetch current nodes and edges
                 node_rows = await (
-                    await db.execute(
+                    await conn.execute(
                         "SELECT id, entity_type, title, description, properties FROM kg_nodes WHERE session_id = ?",
                         (session_id,),
                     )
                 ).fetchall()
                 edge_rows = await (
-                    await db.execute(
+                    await conn.execute(
                         "SELECT source_id, target_id, relation_type, weight FROM kg_edges WHERE session_id = ?",
                         (session_id,),
                     )
@@ -657,7 +657,7 @@ class GraphBuilderService:
                 # DEPRECATED: periodic full-graph snapshots are superseded by temporal kg_edges
                 # validity windows (valid_from / valid_until). This code is kept for backward
                 # compatibility with the GraphExplorer snapshot slider but will be removed in v0.3.
-                await db.execute(
+                await conn.execute(
                     """
                     INSERT INTO kg_snapshots
                         (session_id, round_number, snapshot_json, node_count, edge_count)
@@ -671,7 +671,7 @@ class GraphBuilderService:
                         edge_count,
                     ),
                 )
-                await db.commit()
+                await conn.commit()
 
             logger.info(
                 "KG snapshot saved: session=%s round=%d nodes=%d edges=%d",
@@ -700,9 +700,9 @@ class GraphBuilderService:
             Snapshot dict with 'nodes' and 'edges', or empty dict if not found.
         """
         try:
-            async with get_db() as db:
+            async with db.get_db() as conn:
                 row = await (
-                    await db.execute(
+                    await conn.execute(
                         "SELECT snapshot_json FROM kg_snapshots"
                         " WHERE session_id = ? AND round_number = ?"
                         " ORDER BY id DESC LIMIT 1",
@@ -716,6 +716,7 @@ class GraphBuilderService:
         except Exception:
             logger.exception("get_snapshot failed session=%s round=%d", session_id, round_number)
             return {}
+
 
 
 # ---------------------------------------------------------------------------

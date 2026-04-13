@@ -286,14 +286,18 @@ async def add_session_to_workspace(
         if not is_owner and caller_role not in ("editor", "admin"):
             raise HTTPException(status_code=403, detail="Editor or admin role required to add sessions")
 
-        # Verify session exists
+        # Verify session exists AND belongs to the current user
         cursor = await db.execute(
-            "SELECT id FROM simulation_sessions WHERE id = ?",
+            "SELECT id, owner_id FROM simulation_sessions WHERE id = ?",
             (session_id,),
         )
         sess_row = await cursor.fetchone()
         if sess_row is None:
             raise HTTPException(status_code=404, detail="Session not found")
+
+        # Ownership check: only the session owner can share it into a workspace
+        if sess_row["owner_id"] is not None and sess_row["owner_id"] != user.id:
+            raise HTTPException(status_code=403, detail="Session not owned by user")
 
         try:
             await db.execute(

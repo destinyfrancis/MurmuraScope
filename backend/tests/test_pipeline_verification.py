@@ -177,8 +177,10 @@ _AGENT_PROFILE_FIXTURE: dict = {
 async def _chat_json_router(messages: list[dict], **kw) -> dict:
     """Route chat_json calls to realistic fixtures based on prompt content."""
     prompt = str(messages).lower()
-    # Scenario generation check MUST come before the generic entity check
-    # because the scenario prompt also contains "entity" keywords.
+    # Ontology check MUST come before generic entity/extract checks
+    # because the ontology prompt also contains "entity" keywords.
+    if "ontology" in prompt:
+        return _ONTOLOGY_FIXTURE
     if "decision_type" in prompt or ("scenario" in prompt and "simulation scenario" in prompt):
         return _SCENARIO_FIXTURE
     if "entity" in prompt or "extract" in prompt:
@@ -226,8 +228,6 @@ async def _chat_json_router(messages: list[dict], **kw) -> dict:
                 {"source_id": "kg_n1", "target_id": "kg_n2", "relation_type": "controls", "weight": 0.8},
             ],
         }
-    if "ontology" in prompt:
-        return _ONTOLOGY_FIXTURE
     if "scenario" in prompt:
         return _SCENARIO_FIXTURE
     if "stakeholder" in prompt or "implicit" in prompt:
@@ -492,7 +492,17 @@ class TestHKDemographicPipeline:
     @pytest.mark.asyncio
     async def test_graph_build(self, pipeline_db):
         """GraphBuilderService produces KG nodes from HK seed."""
-        db_path, _ = pipeline_db
+        db_path, mock_get_db = pipeline_db
+
+        # Satisfy foreign key constraint from kg_nodes to simulation_sessions
+        async with mock_get_db() as db:
+            await db.execute(
+                """INSERT INTO simulation_sessions (id, name, sim_mode, agent_count, round_count, llm_provider)
+                   VALUES (?, 'HK Test', 'parallel', 10, 5, 'openrouter')""",
+                ("hk-pipe-test",),
+            )
+            await db.commit()
+
         from backend.app.services.graph_builder import GraphBuilderService
 
         gbs = GraphBuilderService()
@@ -762,6 +772,15 @@ class TestKGDrivenPipeline:
     @pytest.mark.asyncio
     async def test_graph_build(self, pipeline_db):
         """GraphBuilderService produces KG with geopolitical entities."""
+        _, mock_get_db = pipeline_db
+        async with mock_get_db() as db:
+            await db.execute(
+                """INSERT INTO simulation_sessions (id, name, sim_mode, agent_count, round_count, llm_provider)
+                   VALUES (?, 'KG Test', 'parallel', 10, 5, 'openrouter')""",
+                ("kg-pipe-test",),
+            )
+            await db.commit()
+
         from backend.app.services.graph_builder import GraphBuilderService
 
         gbs = GraphBuilderService()

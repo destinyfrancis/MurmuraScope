@@ -293,8 +293,13 @@ class KGAgentFactory:
         abs_path = os.path.abspath(output_path)
         os.makedirs(os.path.dirname(abs_path), exist_ok=True)
 
-        rows = [p.to_oasis_row() for p in profiles]
-        fieldnames = ["userid", "user_char", "username"]
+        rows = []
+        for p in profiles:
+            oasis_row = p.to_oasis_row()
+            # OASIS agents_generator expects a 'description' column alongside user_char
+            oasis_row["description"] = oasis_row["user_char"]
+            rows.append(oasis_row)
+        fieldnames = ["userid", "user_char", "username", "description"]
 
         with open(abs_path, "w", newline="", encoding="utf-8") as fh:
             writer = csv.DictWriter(fh, fieldnames=fieldnames)

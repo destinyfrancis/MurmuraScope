@@ -1,0 +1,15 @@
+{
+  "name": "murmuroscope",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MurmuraScope — Universal Prediction Engine (dev launcher)",
+  "scripts": {
+    "quickstart": "bash scripts/quickstart.sh",
+    "dev": "concurrently --kill-others-on-fail --names \"backend,frontend\" --prefix-colors \"cyan,magenta\" \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "sh -c '${VENV_DIR:-.venv311}/bin/uvicorn backend.app:create_app --factory --reload --port 5001'",
+    "dev:frontend": "cd frontend && npm run dev"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  }
+}

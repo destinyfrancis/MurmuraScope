@@ -34,6 +34,8 @@ _ROUTER_MODULES = (
     "emergence",
     "prediction_market",
     "stock_forecast",
+    "interview",
+    "settings",
 )
 
 # Patterns that identify OASIS simulation subprocesses.
@@ -133,6 +135,58 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     await get_write_queue()
     logger.info("SQLite WriteQueue started")
 
+    # Runtime migration: create session_costs table for cost persistence (Phase 0.4)
+    try:
+        from backend.app.utils.db import get_db
+
+        async with get_db() as db:
+            await db.execute(
+                """CREATE TABLE IF NOT EXISTS session_costs (
+                    session_id TEXT PRIMARY KEY,
+                    total_cost_usd REAL NOT NULL DEFAULT 0.0,
+                    is_paused BOOLEAN NOT NULL DEFAULT 0,
+                    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+                )"""
+            )
+            await db.commit()
+        logger.info("session_costs table ensured")
+    except Exception:
+        logger.warning("session_costs table creation failed", exc_info=True)
+
+    # Restore persisted cost state so hard-cap enforcement survives restarts
+    try:
+        from backend.app.services.cost_tracker import restore_costs_from_db
+
+        await restore_costs_from_db()
+    except Exception:
+        logger.warning("restore_costs_from_db failed at startup")
+
+    # Runtime migration: create personality_evolution_log table (Phase 2.1)
+    try:
+        from backend.app.utils.db import get_db
+
+        async with get_db() as db:
+            await db.execute(
+                """CREATE TABLE IF NOT EXISTS personality_evolution_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id TEXT NOT NULL,
+                    agent_id TEXT NOT NULL,
+                    round_number INTEGER NOT NULL,
+                    trait TEXT NOT NULL,
+                    old_value REAL NOT NULL,
+                    new_value REAL NOT NULL,
+                    delta REAL NOT NULL,
+                    recorded_at TEXT NOT NULL DEFAULT (datetime('now'))
+                )"""
+            )
+            await db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_pel_session_round ON personality_evolution_log(session_id, round_number)"
+            )
+            await db.commit()
+        logger.info("personality_evolution_log table ensured")
+    except Exception:
+        logger.warning("personality_evolution_log table creation failed", exc_info=True)
+
     # Runtime migration: add share_token to reports table
     try:
         from backend.app.utils.db import get_db
@@ -146,6 +200,20 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
             pass  # Column already exists
         else:
             logger.warning("share_token migration unexpected error: %s", exc)
+
+    # Runtime migration: add is_admin to users table (Phase 0.1 security)
+    try:
+        from backend.app.utils.db import get_db
+
+        async with get_db() as db:
+            await db.execute("ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT 0")
+            await db.commit()
+        logger.info("Added is_admin column to users")
+    except Exception as exc:
+        if "duplicate column" in str(exc).lower():
+            pass  # Column already exists
+        else:
+            logger.warning("is_admin migration unexpected error: %s", exc)
 
     # Runtime migration: add domain_pack_id to simulation_sessions table
     try:
@@ -289,68 +357,84 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         else:
             logger.info("ExternalDataFeed enabled with FRED + World Bank + Taiwan risk sources")
 
-    # 1. Seed static population/census data (legitimate reference data)
-    try:
-        from backend.data_pipeline.hk_reference_data import seed_population_data
+    import os as _os_startup
 
-        await seed_population_data()
-        logger.info("Population/census data seeded")
-    except Exception:
-        logger.warning("Population data seeding failed")
+    _skip_pipeline = _os_startup.environ.get("SKIP_STARTUP_PIPELINE", "false").lower() == "true"
 
-    # 2. Run real data pipeline (downloads from live APIs — no synthetic data)
-    real_count = 0
-    try:
-        from backend.data_pipeline.download_all import run_pipeline
+    async def _run_startup_pipeline() -> None:
+        """Background task: seed population data, run live data pipeline, calibrate."""
+        nonlocal scheduler
 
-        summaries = await run_pipeline(normalize=True)
-        real_count = sum(
-            getattr(s, "total_records", getattr(s, "row_count", 0))
-            for s in summaries
-            if getattr(s, "error", None) is None
-        )
-        logger.info("Data pipeline complete: %d real records from APIs", real_count)
-    except Exception:
-        logger.warning("Data pipeline failed — limited data available", exc_info=True)
+        # 1. Seed static population/census data (legitimate reference data)
+        try:
+            from backend.data_pipeline.hk_reference_data import seed_population_data
 
-    # 3. Log data gaps
-    try:
-        from backend.app.utils.db import get_db
-        from backend.data_pipeline.data_provenance import ensure_table, get_data_gaps
+            await seed_population_data()
+            logger.info("Population/census data seeded")
+        except Exception:
+            logger.warning("Population data seeding failed")
 
-        async with get_db() as db:
-            await ensure_table(db)
-            gaps = await get_data_gaps(db)
-        if gaps:
-            gap_names = [f"{g.category}/{g.metric}" for g in gaps]
-            logger.warning("DATA GAPS (no real data): %s", gap_names)
-    except Exception:
-        logger.debug("Data provenance check skipped")
+        # 2. Run real data pipeline (downloads from live APIs — no synthetic data)
+        real_count = 0
+        try:
+            from backend.data_pipeline.download_all import run_pipeline
 
-    # 4. Minimum data threshold check
-    if real_count < 50:
-        logger.error(
-            "Insufficient real data (%d records). "
-            "Simulation quality will be limited. "
-            "Check network connectivity to data.gov.hk / HKMA / Yahoo Finance.",
-            real_count,
-        )
+            summaries = await run_pipeline(normalize=True)
+            real_count = sum(
+                getattr(s, "total_records", getattr(s, "row_count", 0))
+                for s in summaries
+                if getattr(s, "error", None) is None
+            )
+            logger.info("Data pipeline complete: %d real records from APIs", real_count)
+        except Exception:
+            logger.warning("Data pipeline failed — limited data available", exc_info=True)
 
-    # 5. Calibration — only with sufficient real data
-    try:
-        from backend.data_pipeline.calibration import CalibrationPipeline
+        # 3. Log data gaps
+        try:
+            from backend.app.utils.db import get_db
+            from backend.data_pipeline.data_provenance import ensure_table, get_data_gaps
 
-        if real_count >= 100:
-            pipeline = CalibrationPipeline()
-            await pipeline.run_calibration()
-            logger.info("Calibration complete (based on %d real data points)", real_count)
-        else:
-            logger.warning(
-                "Real data insufficient (%d records) — calibration skipped, using conservative default coefficients",
+            async with get_db() as db:
+                await ensure_table(db)
+                gaps = await get_data_gaps(db)
+            if gaps:
+                gap_names = [f"{g.category}/{g.metric}" for g in gaps]
+                logger.warning("DATA GAPS (no real data): %s", gap_names)
+        except Exception:
+            logger.debug("Data provenance check skipped")
+
+        # 4. Minimum data threshold check
+        if real_count < 50:
+            logger.error(
+                "Insufficient real data (%d records). "
+                "Simulation quality will be limited. "
+                "Check network connectivity to data.gov.hk / HKMA / Yahoo Finance.",
                 real_count,
             )
-    except Exception:
-        logger.warning("Calibration failed — using default coefficients")
+
+        # 5. Calibration — only with sufficient real data
+        try:
+            from backend.data_pipeline.calibration import CalibrationPipeline
+
+            if real_count >= 100:
+                pipeline = CalibrationPipeline()
+                await pipeline.run_calibration()
+                logger.info("Calibration complete (based on %d real data points)", real_count)
+            else:
+                logger.warning(
+                    "Real data insufficient (%d records) — calibration skipped, using conservative default coefficients",
+                    real_count,
+                )
+        except Exception:
+            logger.warning("Calibration failed — using default coefficients")
+
+    if not _skip_pipeline:
+        import asyncio as _asyncio_startup
+
+        _asyncio_startup.create_task(_run_startup_pipeline(), name="startup-data-pipeline")
+        logger.info("Data pipeline launched in background (non-blocking)")
+    else:
+        logger.info("SKIP_STARTUP_PIPELINE=true — skipping live data pipeline")
 
     # Start data pipeline scheduler (graceful — skip if APScheduler not installed)
     scheduler = None
@@ -372,6 +456,36 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
             logger.info("Loaded %d custom domain pack(s) into registry", loaded)
     except Exception:
         logger.warning("Custom domain pack loading failed", exc_info=True)
+
+    # Runtime migration: create app_settings table (Settings Page)
+    try:
+        from backend.app.utils.db import get_db
+
+        async with get_db() as db:
+            await db.execute(
+                """CREATE TABLE IF NOT EXISTS app_settings (
+                    key        TEXT PRIMARY KEY,
+                    value      TEXT NOT NULL,
+                    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+                )"""
+            )
+            await db.commit()
+        logger.info("app_settings table ensured")
+    except Exception:
+        logger.warning("app_settings table creation failed", exc_info=True)
+
+    # Load runtime settings overrides from DB into in-memory store
+    try:
+        from backend.app.services.runtime_settings import load_from_rows
+        from backend.app.utils.db import get_db
+
+        async with get_db() as db:
+            cursor = await db.execute("SELECT key, value FROM app_settings")
+            rows = await cursor.fetchall()
+        load_from_rows(rows)
+        logger.info("RuntimeSettingsStore loaded %d override(s) from DB", len(rows))
+    except Exception:
+        logger.warning("RuntimeSettingsStore load failed", exc_info=True)
 
     yield
 
@@ -423,20 +537,17 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # Rate limiting (slowapi)
+    # Rate limiting (slowapi) — middleware disabled temporarily due to
+    # slowapi 0.1.9 / Starlette compatibility issue (AttributeError in sync_check_limits).
+    # Exception handler still registered so @limiter.limit decorators don't crash.
     from slowapi import _rate_limit_exceeded_handler
     from slowapi.errors import RateLimitExceeded
-    from slowapi.middleware import SlowAPIMiddleware
 
     from backend.app.api.auth import _limiter
 
-    # Apply default rate limit (120/minute per IP).
-    # Auth endpoints have tighter per-endpoint limits (3-5/min).
-    # Previous value of 10/min was too restrictive for dashboard GET polling.
-    _limiter._application_limits = ["120/minute"]
     app.state.limiter = _limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-    app.add_middleware(SlowAPIMiddleware)
+    # app.add_middleware(SlowAPIMiddleware)  # re-enable after upgrading slowapi
 
     # Health check
     @app.get("/api/health")

@@ -346,6 +346,31 @@ class SimulationRunner(
         Group 1 (parallel, awaited): memories + trust (+ emotional_state if emergence)
         Group 2 (sequential after G1): decisions → side effects (+ belief if emergence) → consumption
         Group 3 (periodic, fire-and-forget): all interval-driven hooks
+
+        The entire method is wrapped in a per-round timeout (ROUND_TIMEOUT_S env var,
+        default 600 s). If a round exceeds the timeout, it is cancelled and logged
+        as a warning so the simulation can continue with the next round.
+        """
+        round_timeout_s = float(os.environ.get("ROUND_TIMEOUT_S", "600"))
+        try:
+            await asyncio.wait_for(
+                self._execute_round_hooks_inner(session_id, round_num),
+                timeout=round_timeout_s,
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "ROUND TIMEOUT: session=%s round=%d exceeded %.0fs — skipping to next round",
+                session_id,
+                round_num,
+                round_timeout_s,
+            )
+
+    async def _execute_round_hooks_inner(self, session_id: str, round_num: int) -> None:
+        """Internal implementation of round hooks (called by _execute_round_hooks).
+
+        Group 1 (parallel, awaited): memories + trust (+ emotional_state if emergence)
+        Group 2 (sequential after G1): decisions → side effects (+ belief if emergence) → consumption
+        Group 3 (periodic, fire-and-forget): all interval-driven hooks
         """
         _round_t0 = _time.monotonic()
         # Populate per-round profile cache (shared by all hooks this round via self._round_profiles)
@@ -488,6 +513,12 @@ class SimulationRunner(
                 session_id,
                 self._process_community_summaries(session_id, round_num),
             )
+            # kg_driven: auto-inject regulatory event when polarization exceeds thresholds
+            if self._kg_mode.get(session_id):
+                self._create_tracked_task(
+                    session_id,
+                    self._maybe_inject_regulatory_event(session_id, round_num),
+                )
         # Bug 2 fix: group_formation uses collective_action_interval, not polarization_interval
         if hc.emergence_enabled and round_num > 0 and round_num % hc.collective_action_interval == 0:
             self._create_tracked_task(

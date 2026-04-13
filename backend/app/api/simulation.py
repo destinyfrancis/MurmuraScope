@@ -16,7 +16,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
 
-from backend.app.api.auth import UserProfile, _limiter, get_optional_user
+from backend.app.api.auth import UserProfile, _limiter, get_current_user, get_optional_user, require_admin
 from backend.app.models.request import (
     _B2B_SCENARIO_KEYWORDS,
     ConfigSuggestRequest,
@@ -81,8 +81,31 @@ async def list_sessions(limit: int = 20, offset: int = 0) -> APIResponse:
         raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
+@router.get("/presets", response_model=APIResponse)
+async def list_presets() -> APIResponse:
+    """Return all available demo scenario presets.
+
+    Presets are loaded from ``backend/app/domain/presets/*.json``.
+    Returns an empty list if the directory does not exist.
+    """
+    import json
+    from pathlib import Path
+
+    presets_dir = Path(__file__).parent.parent / "domain" / "presets"
+    presets: list[dict] = []
+    if presets_dir.exists():
+        for path in sorted(presets_dir.glob("*.json")):
+            try:
+                presets.append(json.loads(path.read_text(encoding="utf-8")))
+            except Exception:
+                logger.warning("Failed to load preset file: %s", path.name)
+    return APIResponse(success=True, data={"presets": presets, "total": len(presets)})
+
+
 @router.post("/create", response_model=APIResponse)
+@_limiter.limit("10/minute")
 async def create_simulation(
+    request: Request,
     req: SimulationCreateRequest,
     user: Annotated[UserProfile | None, Depends(get_optional_user)] = None,
 ) -> APIResponse:
@@ -255,7 +278,7 @@ async def create_simulation(
 
 
 @router.post("/start", response_model=APIResponse)
-@_limiter.limit("10/minute")
+@_limiter.limit("5/minute")
 async def start_simulation(request: Request, req: SimulationStartRequest) -> APIResponse:
     """Start a previously created simulation session."""
     try:
@@ -517,7 +540,12 @@ async def quick_start_upload(
 
 
 @router.get("/admin/benchmarks", response_model=APIResponse)
-async def list_benchmarks(limit: int = 50) -> APIResponse:
+@_limiter.limit("30/minute")
+async def list_benchmarks(
+    request: Request,
+    limit: int = 50,
+    user: UserProfile = Depends(require_admin),
+) -> APIResponse:
     """List all stored scale benchmark results, newest first."""
 
     from backend.app.utils.db import get_db  # noqa: PLC0415
@@ -546,7 +574,12 @@ async def list_benchmarks(limit: int = 50) -> APIResponse:
 
 
 @router.get("/admin/benchmarks/{target}", response_model=APIResponse)
-async def get_benchmark(target: str) -> APIResponse:
+@_limiter.limit("30/minute")
+async def get_benchmark(
+    request: Request,
+    target: str,
+    user: UserProfile = Depends(require_admin),
+) -> APIResponse:
     """Get the most recent benchmark result for a given scale target (1k/3k/10k)."""
     from backend.app.utils.db import get_db  # noqa: PLC0415
 
@@ -582,7 +615,12 @@ async def get_benchmark(target: str) -> APIResponse:
 
 
 @router.post("/admin/benchmarks/run", response_model=APIResponse)
-async def run_benchmark_endpoint(target: str = "1k") -> APIResponse:
+@_limiter.limit("2/minute")
+async def run_benchmark_endpoint(
+    request: Request,
+    target: str = "1k",
+    user: UserProfile = Depends(require_admin),
+) -> APIResponse:
     """Trigger a scale benchmark run and persist results to the DB."""
     import json as _json  # noqa: PLC0415
 
@@ -667,9 +705,12 @@ async def run_benchmark_endpoint(target: str = "1k") -> APIResponse:
 
 
 @router.post("/admin/profile", response_model=APIResponse)
+@_limiter.limit("2/minute")
 async def run_scale_profile(
+    request: Request,
     agent_counts: list[int] | None = None,
     rounds: int = 5,
+    user: UserProfile = Depends(require_admin),
 ) -> APIResponse:
     """Run a scale profile measuring latency/cost across different agent counts.
 
@@ -739,7 +780,12 @@ async def run_scale_profile(
 
 
 @router.get("/admin/profile-results", response_model=APIResponse)
-async def get_profile_results(limit: int = 50) -> APIResponse:
+@_limiter.limit("30/minute")
+async def get_profile_results(
+    request: Request,
+    limit: int = 50,
+    user: UserProfile = Depends(require_admin),
+) -> APIResponse:
     """Get past scale profiling results, newest first.
 
     Filters to ``profile_*`` preset names to distinguish profile runs from
@@ -792,7 +838,11 @@ async def get_profile_results(limit: int = 50) -> APIResponse:
 
 
 @router.get("/admin/shards", response_model=APIResponse)
-async def list_shards() -> APIResponse:
+@_limiter.limit("30/minute")
+async def list_shards(
+    request: Request,
+    user: UserProfile = Depends(require_admin),
+) -> APIResponse:
     """List current shard configurations and their status.
 
     Returns an empty list if sharding is not enabled.
@@ -834,9 +884,12 @@ async def list_shards() -> APIResponse:
 
 
 @router.post("/admin/shards/rebalance", response_model=APIResponse)
+@_limiter.limit("2/minute")
 async def rebalance_shards(
+    request: Request,
     total_agents: int = 1000,
     agents_per_shard: int = 2500,
+    user: UserProfile = Depends(require_admin),
 ) -> APIResponse:
     """Compute a new shard partition plan for the given agent count.
 
@@ -1595,7 +1648,9 @@ async def get_contagion_data(session_id: str) -> APIResponse:
 
 
 @router.post("/{session_id}/shock", response_model=APIResponse)
+@_limiter.limit("10/minute")
 async def inject_live_shock(
+    request: Request,
     session_id: str,
     shock: ScheduledShock,
     user: Annotated[UserProfile | None, Depends(get_optional_user)] = None,
@@ -1618,6 +1673,24 @@ async def inject_live_shock(
                 raise HTTPException(status_code=400, detail="Simulation is not running")
 
             content = shock.post_content or shock.description
+            engagement_metrics_json = "{}"
+            
+            # Phase 6: Simulate viral engagement if shock_type matches
+            if shock.shock_type:
+                try:
+                    from backend.app.services.macro_history import MacroHistoryService  # noqa: PLC0415
+                    from backend.app.services.macro_state import MacroState  # noqa: PLC0415
+                    from backend.app.services.macro_posts import simulate_viral_engagement  # noqa: PLC0415
+                    
+                    history_svc = MacroHistoryService()
+                    snapshot = await history_svc.get_snapshot(session_id, shock.round_number)
+                    if snapshot:
+                        # Convert dict to MacroState for the simulator
+                        state_obj = MacroState(**{k: v for k, v in snapshot.items() if k in MacroState.__dataclass_fields__})
+                        metrics = simulate_viral_engagement(shock.shock_type, state_obj)
+                        engagement_metrics_json = json.dumps(metrics, ensure_ascii=False)
+                except Exception as e:
+                    logger.warning("Failed to simulate engagement for shock: %s", e)
 
             # Broadcast via WebSocket
             await push_progress(
@@ -1630,17 +1703,18 @@ async def inject_live_shock(
                         "content": content,
                         "platform": "god_mode",
                         "round": shock.round_number,
+                        "engagement_metrics": json.loads(engagement_metrics_json) if engagement_metrics_json != "{}" else {}
                     },
                 },
             )
 
-            # Persist to simulation_actions
+            # Persist to simulation_actions with threading support
             await db.execute(
                 "INSERT INTO simulation_actions "
                 "(session_id, round_number, agent_id, oasis_username, action_type, "
-                "platform, content, sentiment, topics, created_at) "
-                "VALUES (?, ?, 0, '[God Mode]', 'CREATE_POST', 'god_mode', ?, 'neutral', ?, datetime('now'))",
-                (session_id, shock.round_number, content, shock.shock_type),
+                "platform, content, sentiment, topics, engagement_metrics, created_at) "
+                "VALUES (?, ?, 0, '[God Mode]', 'CREATE_POST', 'god_mode', ?, 'neutral', ?, ?, datetime('now'))",
+                (session_id, shock.round_number, content, shock.shock_type, engagement_metrics_json),
             )
             await db.commit()
 

@@ -1,0 +1,15 @@
+{
+  "id": "hong_kong_housing_crisis",
+  "name": "Hong Kong Housing Crisis",
+  "description": "A socioeconomic simulation of Hong Kong's housing affordability crisis. Stakeholders include property developers, government officials, NGOs, and young renters. Explores policy intervention, public sentiment, and market dynamics.",
+  "scenario_type": "kg_driven",
+  "agent_count": 50,
+  "round_count": 20,
+  "seed_text": "Hong Kong faces a severe housing affordability crisis. Property prices rank among the highest globally, with average households spending over 70% of income on rent. The government has proposed new public housing policies while property developers lobby against restrictions. NGOs advocate for tenants' rights while young professionals consider emigration.",
+  "config": {
+    "lite_ensemble": false,
+    "emergence_enabled": true,
+    "kg_mode": true
+  },
+  "tags": ["economics", "housing", "policy", "hong_kong"]
+}

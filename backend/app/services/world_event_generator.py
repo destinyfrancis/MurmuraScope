@@ -33,6 +33,9 @@ class WorldEventGenerator:
         active_metrics: tuple[str, ...],
         prev_dominant_stance: dict[str, float],
         event_history: list[str],  # list of previous event content strings
+        *,
+        force_event_type: str | None = None,
+        system_prompt_suffix: str = "",
     ) -> list[WorldEvent]:
         """Generate world events for the current round.
 
@@ -42,6 +45,10 @@ class WorldEventGenerator:
             active_metrics: Metric IDs from UniversalScenarioConfig.
             prev_dominant_stance: Average belief values from previous round.
             event_history: Content of previously generated events (deduplication).
+            force_event_type: When set, override the LLM-chosen event_type on
+                every returned event (e.g. ``"official"`` for regulatory triggers).
+            system_prompt_suffix: Optional text appended to the system prompt to
+                steer the LLM toward a specific event category.
 
         Returns:
             List of WorldEvent instances. Empty list on LLM failure (never raises).
@@ -55,8 +62,11 @@ class WorldEventGenerator:
             prev_dominant_stance=prev_dominant_stance,
             event_history_summary=history_summary,
         )
+        system_content = WORLD_EVENT_SYSTEM
+        if system_prompt_suffix:
+            system_content = f"{system_content}\n\n{system_prompt_suffix}"
         messages = [
-            {"role": "system", "content": WORLD_EVENT_SYSTEM},
+            {"role": "system", "content": system_content},
             {"role": "user", "content": user_content},
         ]
 
@@ -66,7 +76,21 @@ class WorldEventGenerator:
             logger.warning("WorldEventGenerator: LLM call failed: %s", exc)
             return []
 
-        return _parse_events(raw, round_number, active_metrics)
+        events = _parse_events(raw, round_number, active_metrics)
+        if force_event_type:
+            events = [
+                WorldEvent(
+                    event_id=e.event_id,
+                    round_number=e.round_number,
+                    content=e.content,
+                    event_type=force_event_type,
+                    reach=e.reach,
+                    impact_vector=e.impact_vector,
+                    credibility=e.credibility,
+                )
+                for e in events
+            ]
+        return events
 
 
 # ---------------------------------------------------------------------------

@@ -47,6 +47,7 @@ Scenario: {scenario_description}
 
 You are: {name} ({role})
 Your current faction: {faction}
+Your current goals: {goals}
 Your current beliefs: {current_beliefs}
 Your recent decision: {last_decision}
 Recent world events: {recent_events}
@@ -178,11 +179,20 @@ class StrategicPlanner:
         last_plan = kg_state.agent_strategies.get(agent_id, {})
         last_decision = last_plan.get("round_1_intent", "observe")
 
+        # Use current goals from all_agent_dicts (may include revised goals)
+        current_goals: list[str] = []
+        for ad in getattr(kg_state, "all_agent_dicts", []):
+            if str(ad.get("id", "")) == agent_id:
+                current_goals = list(ad.get("goals", []))
+                break
+        goals_str = "; ".join(sanitize_agent_field(g) for g in current_goals[:5]) or "none specified"
+
         user_content = _STRATEGY_USER.format(
             scenario_description=safe_scenario,
             name=name,
             role=role,
             faction=faction,
+            goals=goals_str,
             current_beliefs=current_beliefs,
             last_decision=last_decision,
             recent_events=[str(e) for e in recent_events],

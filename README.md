@@ -1,109 +1,163 @@
-# 👁️ MurmuraScope
-### Predict the Social Pulse | 預見社會脈動
+# MurmuraScope
 
-![License](https://img.shields.io/badge/license-Prosperity%20Public-orange)
-![Platform](https://img.shields.io/badge/platform-Docker-blue)
-![Language](https://img.shields.io/badge/language-English%20%7C%20繁體中文-green)
+**Universal Prediction Engine** — turn any text into a living simulation of collective behaviour.
 
----
-
-## 🌟 Overview / 概覽
-
-**[EN]** MurmuraScope is a powerful social simulation engine. It turns news, articles, or reports into a dynamic digital world where thousands of "AI agents" interact and react to events, giving you a data-driven forecast of how society might respond to real-world changes.
-
-**[繁中]** MurmuraScope 是一個強大的社會模擬引擎。它能將新聞、文章或報告轉化為一個動態的數位世界，讓數千個「AI 代理」進行互動並對事件作出反應，為您提供基於數據的社會發展預測。
+Drop in any seed text (news, fiction, geopolitics, corporate rivalry) and the engine auto-generates agents, relationships, decision spaces, and macro metrics — no manual configuration required.
 
 ---
 
-## 🚀 3-Minute Easy Start (For Non-Technical Users) 
-### ⚡ 零技術背景 3 分鐘快速啟動指南
+## Quick Start
 
-如果你唔識寫 Code (No IT Skills)，跟住呢 3 步就可以喺你電腦行到 MurmuraScope：
+### Option A — Local (Recommended for Development)
 
-1.  **Download Docker (下載安裝程式):** 
-    去 [Docker Desktop](https://www.docker.com/products/docker-desktop/) 下載並安裝佢。就好似裝 WhatsApp 咁簡單，裝完開咗佢就得。
-2.  **Get Your API Keys (獲取鑰匙):** 
-    去 [OpenRouter](https://openrouter.ai/) 註冊並拎一個 API Key (用嚟俾 AI 代理「諗嘢」)。
-3.  **One-Click Start (一鍵啟動):** 
-    下載呢個項目嘅資料夾，打開入面嘅 `.env.example` 檔案，將佢改名做 `.env`，並將你嘅 API Key 填入去。最後，喺終端機 (Terminal) 輸入以下指令：
-    ```bash
-    docker-compose up -d
-    ```
-    完成！打開瀏覽器輸入 `http://localhost:8080` 就可以見到介面。
+Requires Python 3.10/3.11 and Node.js 18+. Everything else is automated.
 
----
-
-## 🧠 Engine Capabilities / 引擎核心能力
-
-*   **🤖 Cognitive Agents:** Every agent has a "personality" (Big Five) and beliefs. They change their minds based on evidence and social pressure.
-*   **📈 Statistical Forecasting:** Uses advanced math (Monte Carlo & Econometrics) to give you reliable probabilities, not just guesses.
-*   **🌐 Knowledge Graph:** Automatically identifies key players and hidden relationships from any text you paste.
-*   **⚡ Policy Shocks:** Test "What if?" scenarios by injecting sudden events to see how the simulation evolves.
-
----
-
-## 🎯 Strategic Use Cases / 策略應用場景
-
-| Scenario / 場景 | Engine Utility / 引擎作用 |
-| :--- | :--- |
-| **Breaking News Reaction** <br> 突發新聞反應 | Predict how different social groups will react to a new policy or event. <br> 預測不同社會群體對新政策或事件的反應。 |
-| **Geopolitical Analysis** <br> 地緣政治分析 | Simulate potential escalations or diplomatic shifts based on strategic briefs. <br> 根據戰略簡報，模擬潛在的局勢升級或外交轉向。 |
-| **Crisis Management** <br> 危機管理 | Test which interventions effectively calm social unrest before implementing them. <br> 在實施干預措施前，測試哪種方案能有效平息社會動盪。 |
-
----
-
-## 🔬 Technical Deep Dive / 技術細節 (For Developers)
-
-<details>
-<summary><b>📊 System Architecture (系統架構圖)</b></summary>
-
-```mermaid
-graph TB
-    subgraph Client["Browser Client"]
-        UI["Vue 3 + Vite"]
-        WS_Client["WebSocket client"]
-    end
-
-    subgraph Gateway["API Gateway (FastAPI)"]
-        GraphAPI["KG build + query"]
-        SimAPI["start · shock · branch"]
-        ReportAPI["AI Reports"]
-    end
-
-    subgraph Simulation["OASIS Engine"]
-        Runner["Orchestrator"]
-        KGHooks["KG-Driven Hooks"]
-        MacroHooks["Macro Hooks"]
-        Swarm["Monte Carlo Swarm"]
-    end
-
-    subgraph Agents["Cognitive Layer"]
-        CAE["CognitiveAgentEngine"]
-        KGFactory["Agent Profile Fingerprinting"]
-        Memory["Agent Memory Service"]
-    end
-
-    UI --> Gateway
-    Gateway --> Simulation
-    Simulation --> Agents
+```bash
+git clone <repo-url> && cd MurmuraScope
+make quickstart
 ```
-</details>
 
-<details>
-<summary><b>🛠 Tech Specs (技術規格)</b></summary>
+The wizard will:
+- Create a Python virtual environment (`.venv311`) and install all dependencies
+- Copy `.env.example` → `.env` and prompt for your `OPENROUTER_API_KEY`
+- Start backend (`:5001`) + frontend (`:5173`) and open the browser automatically
 
-- **AI Logic:** Bayesian Belief Revision & Big Five personality mapping.
-- **Forecasting:** VAR/VECM, GARCH(1,1) for volatility, Monte Carlo ensembles.
-- **Stack:** Python 3.11, FastAPI, Vue 3, DuckDB, LanceDB, SQLite WAL.
-- **Testing:** 2700+ unit tests, 134 integration tests.
-</details>
+After first-time setup, use `make start` for daily development.
+
+### Option B — Docker
+
+```bash
+cp .env.example .env   # fill in API keys
+docker compose up -d   # frontend at :8080, backend at :5001
+```
+
+Add `--profile observability` to also run Jaeger tracing at `:16686`.
 
 ---
 
-## 📜 License / 許可證
+## What It Does
+
+MurmuraScope runs a **5-step pipeline**:
+
+1. **Graph Build** — extracts entities and relationships from seed text into a Knowledge Graph. Discovers hidden stakeholders (up to 80 implied actors) beyond what's explicitly mentioned.
+2. **Environment Setup** — generates agent personalities (Big Five + Cognitive Fingerprint), memories, and scenario configuration.
+3. **Simulation** — runs OASIS multi-agent engine with Bayesian belief updates, faction dynamics, social contagion, and macro-economic feedback.
+4. **Report** — produces an AI-synthesised report with 18 XAI tools, PDF export, and shareable token.
+5. **Interaction** — interview any agent post-simulation; inspect their beliefs, memories, and relationships.
+
+### Simulation Presets
+
+| Preset | Agents | Rounds | Use |
+|--------|--------|--------|-----|
+| Fast | 100 | 15 | Demo, quick test |
+| Standard | 300 | 20 | General analysis |
+| Deep | 500 | 30 | Research |
+| Large | 1,000 | 25 | Large-scale |
+| Massive | 3,000 | 20 | Stress test |
+
+---
+
+## Key Commands
+
+```bash
+make start              # Start backend + frontend
+make stop               # Kill all processes
+make test               # Run unit tests (~20s)
+make test-all           # Full test suite (~65s)
+make test-cov           # Unit tests + coverage report
+make docker-up          # Docker start
+make docker-logs        # Stream Docker logs
+```
+
+---
+
+## Configuration
+
+Copy `.env.example` to `.env` and fill in your keys. Runtime settings (LLM models, API keys, simulation defaults) can also be changed in-app via **Settings** (`/settings`) without restarting the server.
+
+### Minimum Required
+
+| Variable | Description |
+|----------|-------------|
+| `OPENROUTER_API_KEY` | For agent LLM calls (simulation) |
+| `GOOGLE_API_KEY` | For report generation |
+| `AUTH_SECRET_KEY` | JWT signing key (generate: `openssl rand -hex 32`) |
+
+### Optional
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AGENT_LLM_MODEL` | `deepseek/deepseek-v3.2` | Model for agent decisions |
+| `GOOGLE_REPORT_MODEL` | `gemini-3.1-pro-preview` | Model for report generation |
+| `SIMULATION_CONCURRENCY_LIMIT` | `50` | Max parallel LLM requests |
+| `SESSION_COST_HARD_CAP_USD` | `10` | Pause simulation above this cost |
+| `EXTERNAL_FEED_ENABLED` | `false` | Live macro data from FRED + World Bank |
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Backend | Python 3.11, FastAPI, aiosqlite, Pydantic V2 |
+| Frontend | Vue 3, Vite, D3.js, Recharts |
+| Simulation | OASIS (subprocess, JSONL IPC) |
+| Database | SQLite WAL (60+ tables) |
+| Analytics | DuckDB (read-only), LanceDB (384-dim embeddings) |
+| LLM Routing | OpenRouter, Google Gemini, OpenAI, Anthropic |
+
+---
+
+## Architecture
+
+```
+Browser (Vue 3)
+    │  REST + WebSocket
+    ▼
+FastAPI (port 5001)
+    ├── /graph      Knowledge Graph build + query
+    ├── /simulation  Create · Start · Shock · Branch
+    ├── /report     AI report generation
+    ├── /settings   Runtime LLM + API config
+    └── /ws         Real-time simulation progress
+         │
+         ▼
+OASIS Engine (subprocess)
+    ├── Cognitive Agent Engine (Big Five + Bayesian belief)
+    ├── Macro Controller (10 economic indicators)
+    ├── Swarm Ensemble (Monte Carlo forks)
+    └── Emergence Tracker (factions, tipping points)
+         │
+         ▼
+SQLite WAL + LanceDB (vector memory)
+```
+
+---
+
+## Project Structure
+
+```
+backend/
+  app/api/        FastAPI routers
+  app/services/   50+ business logic services
+  app/models/     Pydantic models (all frozen)
+  app/utils/      db.py, llm_client.py, runtime_settings.py
+  database/       schema.sql
+  tests/          ~2700 unit + ~134 integration tests
+frontend/
+  src/views/      Page components (Home, Process, Settings…)
+  src/components/ 35+ UI components
+  src/api/        API client layer
+  src/composables useSettings, useOnboarding…
+```
+
+---
+
+## License
 
 **Prosperity Public License 2.0.0**
-- **Non-commercial:** Free for personal or non-profit research use.
-- **Commercial:** Requires a separate license for business or profit-making use.
 
-Copyright (c) 2026 destinyfrancis. All rights reserved.
+- Free for personal and non-commercial research use
+- Commercial use requires a separate license
+
+Copyright © 2026 destinyfrancis. All rights reserved.

@@ -641,19 +641,44 @@ async def build_graph(request: Request, req: GraphBuildRequest) -> APIResponse:
 
 @router.get("/{graph_id}", response_model=APIResponse)
 async def get_graph(graph_id: str) -> APIResponse:
-    """Get full graph data (nodes + edges) in D3-compatible format."""
+    """Get full graph data (nodes + edges) in D3-compatible format.
+
+    Supports both direct graph_id and session_uuid lookups. When the
+    provided ID matches a simulation_sessions.id, we resolve the
+    associated graph_id and query that instead.
+    """
+    effective_graph_id = graph_id
+
     try:
         async with get_db() as db:
             node_rows = await (
                 await db.execute(
                     "SELECT id, entity_type, title, description, properties FROM kg_nodes WHERE session_id = ?",
-                    (graph_id,),
+                    (effective_graph_id,),
                 )
             ).fetchall()
+
+            # Fallback: try looking up as a session UUID → graph_id
+            if not node_rows:
+                session_row = await (
+                    await db.execute(
+                        "SELECT graph_id FROM simulation_sessions WHERE id = ?",
+                        (graph_id,),
+                    )
+                ).fetchone()
+                if session_row and session_row["graph_id"]:
+                    effective_graph_id = session_row["graph_id"]
+                    node_rows = await (
+                        await db.execute(
+                            "SELECT id, entity_type, title, description, properties FROM kg_nodes WHERE session_id = ?",
+                            (effective_graph_id,),
+                        )
+                    ).fetchall()
+
             edge_rows = await (
                 await db.execute(
                     "SELECT source_id, target_id, relation_type, weight FROM kg_edges WHERE session_id = ?",
-                    (graph_id,),
+                    (effective_graph_id,),
                 )
             ).fetchall()
     except Exception:
@@ -666,7 +691,7 @@ async def get_graph(graph_id: str) -> APIResponse:
     return APIResponse(
         success=True,
         data={
-            "graph_id": graph_id,
+            "graph_id": effective_graph_id,
             "nodes": [_row_to_node(r) for r in node_rows],
             "edges": [_row_to_edge(r) for r in edge_rows],
         },

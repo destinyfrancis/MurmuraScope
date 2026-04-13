@@ -84,6 +84,11 @@ const routes = [
     name: 'GodViewTerminal',
     component: () => import('../views/GodViewTerminal.vue'),
   },
+  {
+    path: '/settings',
+    name: 'Settings',
+    component: () => import('../views/Settings.vue'),
+  },
 ]
 
 export const router = createRouter({
