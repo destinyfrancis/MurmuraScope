@@ -40,6 +40,7 @@ Thumbs.db
 # Node
 node_modules/
 frontend/dist/
+frontend/tsconfig.tsbuildinfo
 
 # OASIS
 oasis_output/
