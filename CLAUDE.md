@@ -112,6 +112,8 @@ Step 1: Graph Build → Step 2: Env Setup → Step 3: Simulation → Step 4: Rep
 | `OASISCompatibility` | `oasis_compatibility.py`: Graceful UI degradation if Python 3.12+ or OASIS missing |
 | `ZeroConfigService` | `detect_mode_async()`: HK keyword fast-path + LLM fallback |
 | `KGAgentFactory` | filter → profile → fingerprint; `create(graph_id)`; `mark_stakeholders()` |
+| `CompanyFactory` | Bulk generates B2B company profiles based on sector/size distributions |
+| `SupplyChainBuilder` | Generates deterministic supply chain graphs (`REL_SUPPLIES_TO`, `REL_FINANCES`) between generated companies |
 | `CognitiveAgentEngine` | Stochastic LLM deliberation → `DeliberationResult`; Big Five + attachment |
 | `BeliefSystem` | True Bayesian update via `bayesian_update()` + `_bayesian_core()` |
 | `BeliefPropagationEngine` | Embedding cascade; dampens extremism (NOT convergence) |
@@ -237,10 +239,13 @@ Cost:    500 agents × 30 rounds ≈ $1.89
 - `SimulationSubprocessManager`: use `launch()`/`stop()`/`cleanup()` — never access subprocess dict directly
 - Stochastic activation: NO fixed tier budget; stakeholders get floor 0.8; all activated agents use LLM
 - `SwarmEnsemble` Phase B copies 8 tables from Phase A up to `fork_round`
+- `SimulationManager.start_session()` is strict regarding idempotency. Sending start requests for `RUNNING` or `COMPLETED` sessions will abort silently.
+- B2B Simulation triggers (`b2b`, `trade`, `supply_chain` in scenario type) inject dynamic companies and a `SupplyChainGraph` to the initial configuration payload.
 
-**Auth / Security:**
+**Auth / Security / Routing:**
 - `AUTH_SECRET_KEY` missing in production → `SystemExit` at startup; debug mode uses random fallback
 - Rate limits: global 120/min; login 5/min, register 3/min
+- SlowAPI expects `request` to be explicitly parsed on decorated routers. **When mocking Endpoints**, must explicitly pass a mocked Starlette `Request(scope={"type": "http", "path": "/your/path"})` to avoid deep `KeyError: 'path'`.
 - `/{id}/shock` and `/{id}/resume` require auth (`Depends(get_optional_user)`)
 - SSRF protection: `llm_base_url` rejects non-https, loopback, RFC-1918
 
