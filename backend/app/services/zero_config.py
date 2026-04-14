@@ -375,9 +375,9 @@ class ZeroConfigService:
         try:
             import json
 
-            from backend.app.utils.llm_client import get_agent_provider_model
+            from backend.app.utils.llm_client import get_step_provider_model
 
-            provider, model = get_agent_provider_model()
+            provider, model = get_step_provider_model(2)
             resp = await llm.chat(
                 [{"role": "user", "content": prompt}],
                 provider=provider,

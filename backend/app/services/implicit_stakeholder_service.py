@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from backend.app.utils.db import get_db
-from backend.app.utils.llm_client import LLMClient
+from backend.app.utils.llm_client import LLMClient, get_step_provider_model
 from backend.app.utils.logger import get_logger
 from backend.app.utils.prompt_security import sanitize_seed_text
 from backend.prompts.implicit_stakeholder_prompts import (
@@ -163,7 +163,9 @@ class ImplicitStakeholderService:
                 {"role": "user", "content": user_content},
             ]
             
-            raw = await self._llm.chat_json(messages, max_tokens=2048, temperature=0.3)
+            _s1_provider, _s1_model = get_step_provider_model(1)
+            raw = await self._llm.chat_json(messages, max_tokens=2048, temperature=0.3,
+                                            provider=_s1_provider, model=_s1_model)
             raw_actors = raw.get("implied_actors", [])
             
             return await self._process_and_persist(graph_id, raw_actors, nodes)
@@ -250,7 +252,9 @@ class ImplicitStakeholderService:
             {"role": "system", "content": IMPLICIT_STAKEHOLDER_SYSTEM},
             {"role": "user", "content": user_content},
         ]
-        raw = await self._llm.chat_json(messages, max_tokens=4096, temperature=0.3)
+        _s1_provider, _s1_model = get_step_provider_model(1)
+        raw = await self._llm.chat_json(messages, max_tokens=4096, temperature=0.3,
+                                        provider=_s1_provider, model=_s1_model)
         return raw.get("implied_actors", [])
 
     async def _load_kg_nodes(self, graph_id: str) -> list[dict[str, Any]]:

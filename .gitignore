@@ -45,8 +45,8 @@ frontend/tsconfig.tsbuildinfo
 # OASIS
 oasis_output/
 
-# Internal docs
-docs/
+# Internal docs — track UPGRADE_PLAN only
+docs/superpowers/
 
 # Audit / debug artifacts
 backend/scripts/audit_report_raw.json

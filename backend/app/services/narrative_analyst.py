@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from backend.app.utils.db import get_db
-from backend.app.utils.llm_client import LLMClient, get_report_provider_model
+from backend.app.utils.llm_client import LLMClient, get_step_provider_model
 from backend.app.utils.logger import get_logger
 
 logger = get_logger("narrative_analyst")
@@ -40,7 +40,7 @@ class NarrativeAnalyst:
         round_summaries = await self._harvest_round_data(session_id, session_info["current_round"])
 
         # 3. Reduce Phase: Narratize
-        provider, model = get_report_provider_model()
+        provider, model = get_step_provider_model(5)
         
         system_prompt = """你是一位專業的社會動態與敘事分析師。
 你的任務是將模擬數據轉化為一份具有說服力、富有洞見且引人入勝的「深度敘事檔案」(Narrative Dossier)。

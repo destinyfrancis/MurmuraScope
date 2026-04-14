@@ -40,12 +40,24 @@ _PROVIDER_ENV_KEYS: dict[str, str] = {
 }
 
 _SETTINGS_KEY_MAP: dict[str, str] = {
-    # llm
+    # llm — global fallbacks
     "agent_provider": "agent_llm_provider",
     "agent_model": "agent_llm_model",
     "agent_model_lite": "agent_llm_model_lite",
     "report_provider": "llm_provider",
     "report_model": "report_llm_model",
+    # llm — per-step overrides (Steps 1–5)
+    "step1_provider": "step1_llm_provider",
+    "step1_model": "step1_llm_model",
+    "step2_provider": "step2_llm_provider",
+    "step2_model": "step2_llm_model",
+    "step3_provider": "step3_llm_provider",
+    "step3_model": "step3_llm_model",
+    "step3_model_lite": "step3_llm_model_lite",
+    "step4_provider": "step4_llm_provider",
+    "step4_model": "step4_llm_model",
+    "step5_provider": "step5_llm_provider",
+    "step5_model": "step5_llm_model",
     # api keys
     "openrouter_key": "api_key_openrouter",
     "google_key": "api_key_google",
@@ -128,6 +140,15 @@ def _build_settings_response(mask_keys: bool = True) -> dict[str, Any]:
             "agent_model_lite": _read_setting("agent_llm_model_lite", "AGENT_LLM_MODEL_LITE", ""),
             "report_provider": _read_setting("llm_provider", "LLM_PROVIDER", "openrouter"),
             "report_model": _read_setting("report_llm_model", "GOOGLE_REPORT_MODEL", ""),
+            # Per-step model overrides
+            "steps": {
+                str(s): {
+                    "provider": _read_setting(f"step{s}_llm_provider", "", ""),
+                    "model": _read_setting(f"step{s}_llm_model", "", ""),
+                    **({"model_lite": _read_setting("step3_llm_model_lite", "", "")} if s == 3 else {}),
+                }
+                for s in range(1, 6)
+            },
         },
         "api_keys": {
             "openrouter": maybe_mask(openrouter_key),
@@ -162,12 +183,24 @@ class SettingsUpdateRequest(BaseModel):
     Any subset of keys may be provided; unspecified keys are untouched.
     """
 
-    # LLM config
+    # LLM config — global fallbacks
     agent_provider: str | None = None
     agent_model: str | None = None
     agent_model_lite: str | None = None
     report_provider: str | None = None
     report_model: str | None = None
+    # LLM config — per-step overrides
+    step1_provider: str | None = None
+    step1_model: str | None = None
+    step2_provider: str | None = None
+    step2_model: str | None = None
+    step3_provider: str | None = None
+    step3_model: str | None = None
+    step3_model_lite: str | None = None
+    step4_provider: str | None = None
+    step4_model: str | None = None
+    step5_provider: str | None = None
+    step5_model: str | None = None
 
     # API keys (plain text; we mask on read)
     openrouter_key: str | None = None
@@ -191,7 +224,8 @@ class SettingsUpdateRequest(BaseModel):
 
 class TestKeyRequest(BaseModel):
     provider: str
-    api_key: str
+    api_key: str | None = None  # None = use stored key
+    model: str | None = None    # When set, send a 1-token request to verify model availability
 
 
 # ---------------------------------------------------------------------------
@@ -252,19 +286,46 @@ async def update_settings(req: SettingsUpdateRequest) -> dict[str, Any]:
 
 @router.post("/test-key")
 async def test_api_key(req: TestKeyRequest) -> dict[str, Any]:
-    """Test whether an API key is valid by pinging the provider."""
+    """Test whether an API key (and optionally a specific model) is valid."""
     provider = req.provider.lower()
-    api_key = req.api_key.strip()
+    # Resolve key: use request value, fall back to stored key
+    api_key = (req.api_key or "").strip() or _get_env_key(provider)
 
     if not api_key:
-        raise HTTPException(status_code=400, detail="api_key is required")
+        raise HTTPException(status_code=400, detail="api_key is required and no stored key found")
 
     try:
+        # Step 1: validate the API key itself
         result = await _test_provider_key(provider, api_key)
-        return {"success": result["ok"], "provider": provider, "message": result["message"]}
+        if not result["ok"]:
+            return {"success": False, "provider": provider, "message": result["message"]}
+
+        # Step 2: if a model was specified, verify it responds
+        if req.model:
+            model_result = await _test_provider_model(provider, api_key, req.model)
+            return {"success": model_result["ok"], "provider": provider, "message": model_result["message"]}
+
+        return {"success": True, "provider": provider, "message": result["message"]}
     except Exception as exc:
         logger.warning("test-key failed for %s: %s", provider, exc)
         return {"success": False, "provider": provider, "message": str(exc)}
+
+
+async def _test_provider_model(provider: str, api_key: str, model: str) -> dict[str, Any]:
+    """Send a minimal 1-token LLM request to verify a specific model is accessible."""
+    try:
+        from backend.app.utils.llm_client import LLMClient  # noqa: PLC0415
+        client = LLMClient()
+        resp = await client.chat(
+            [{"role": "user", "content": "hi"}],
+            provider=provider,
+            model=model,
+            max_tokens=1,
+            api_key=api_key,
+        )
+        return {"ok": True, "message": f"Model {model} accessible ✓ (via {provider})"}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "message": f"Model {model} error: {str(exc)[:120]}"}
 
 
 async def _test_provider_key(provider: str, api_key: str) -> dict[str, Any]:

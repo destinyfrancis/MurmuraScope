@@ -39,7 +39,7 @@ _ALIAS_MAP: dict[str, frozenset[str]] = {
     "港交所": frozenset({"HKEX", "hkex", "香港交易所", "香港证券交易所", "香港證券交易所"}),
 }
 
-from backend.app.utils.llm_client import LLMClient, get_agent_provider_model
+from backend.app.utils.llm_client import LLMClient, get_step_provider_model
 from backend.app.utils.logger import get_logger
 from backend.app.utils.prompt_security import sanitize_seed_text
 from backend.prompts.ontology_prompts import (
@@ -183,7 +183,7 @@ class EntityExtractor:
         provider: str | None = None,
     ) -> None:
         self._llm = llm_client or LLMClient()
-        self._provider = provider or get_agent_provider_model()[0]
+        self._provider = provider or get_step_provider_model(1)[0]
 
     async def extract(
         self,

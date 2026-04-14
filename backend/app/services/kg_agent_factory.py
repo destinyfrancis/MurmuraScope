@@ -21,7 +21,7 @@ from typing import Any
 from backend.app.models.relationship_state import AttachmentStyle
 from backend.app.models.universal_agent_profile import UniversalAgentProfile
 from backend.app.services.relationship_engine import infer_attachment_style
-from backend.app.utils.llm_client import LLMClient
+from backend.app.utils.llm_client import LLMClient, get_step_provider_model
 from backend.app.utils.logger import get_logger
 from backend.prompts.agent_generation_prompts import (
     AGENT_ELIGIBLE_FILTER_SYSTEM,
@@ -249,6 +249,7 @@ class KGAgentFactory:
         """
         nodes_json = json.dumps(nodes, ensure_ascii=False, indent=2)
 
+        _s2_provider, _s2_model = get_step_provider_model(2)
         try:
             result = await self._llm.chat_json(
                 messages=[
@@ -258,6 +259,8 @@ class KGAgentFactory:
                         "content": AGENT_ELIGIBLE_FILTER_USER.format(nodes_json=nodes_json),
                     },
                 ],
+                provider=_s2_provider,
+                model=_s2_model,
                 temperature=0.2,
                 max_tokens=4096,
             )
@@ -377,6 +380,7 @@ class KGAgentFactory:
             )
             user_message = user_message + agent_type_instruction
 
+        _s2_provider, _s2_model = get_step_provider_model(2)
         try:
             result = await self._llm.chat_json(
                 messages=[
@@ -386,6 +390,8 @@ class KGAgentFactory:
                         "content": user_message,
                     },
                 ],
+                provider=_s2_provider,
+                model=_s2_model,
                 temperature=0.7,
                 max_tokens=8192,
             )
@@ -454,8 +460,10 @@ class KGAgentFactory:
             {"role": "user", "content": prompt_user},
         ]
 
+        _s2_provider, _s2_model = get_step_provider_model(2)
         try:
-            raw = await self._llm.chat_json(messages, max_tokens=4096, temperature=0.3)
+            raw = await self._llm.chat_json(messages, max_tokens=4096, temperature=0.3,
+                                            provider=_s2_provider, model=_s2_model)
             fp_list = raw.get("fingerprints", [])
         except Exception:  # noqa: BLE001
             logger.warning("KGAgentFactory: fingerprint LLM call failed — using defaults")
@@ -550,8 +558,10 @@ class KGAgentFactory:
         ]
 
         voice_by_id: dict[str, dict] = {}
+        _s2_provider, _s2_model = get_step_provider_model(2)
         try:
-            raw = await self._llm.chat_json(messages, max_tokens=2048, temperature=0.4)
+            raw = await self._llm.chat_json(messages, max_tokens=2048, temperature=0.4,
+                                            provider=_s2_provider, model=_s2_model)
             vp_list = raw.get("voice_profiles", [])
             for vp in vp_list:
                 if isinstance(vp, dict) and vp.get("agent_id"):

@@ -43,7 +43,7 @@ from backend.app.utils.llm_client import (
     get_default_client as _get_llm_client,
 )
 from backend.app.utils.llm_client import (
-    get_report_provider_model,
+    get_step_provider_model,
 )
 from backend.app.utils.logger import get_logger
 
@@ -1020,7 +1020,7 @@ async def _call_llm(
         *messages,
     ]
     try:
-        _r_provider, _r_model = get_report_provider_model()
+        _r_provider, _r_model = get_step_provider_model(4)
         response = await client.chat(
             full_messages,
             provider=_r_provider,

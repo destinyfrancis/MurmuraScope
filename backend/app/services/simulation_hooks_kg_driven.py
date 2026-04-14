@@ -614,9 +614,12 @@ class KGDrivenHooksMixin:
                     "key_relationships": key_relationships,
                 }
                 # Route LLM model based on stakeholder status
-                from backend.app.utils.llm_client import get_agent_model  # noqa: PLC0415
+                from backend.app.utils.llm_client import get_step_provider_model, get_step3_lite_model  # noqa: PLC0415
 
-                agent_provider, agent_model = get_agent_model(agent.get("is_stakeholder", False))
+                if agent.get("is_stakeholder", False):
+                    agent_provider, agent_model = get_step_provider_model(3)
+                else:
+                    agent_provider, agent_model = get_step3_lite_model()
                 return await self._cognitive_engine.deliberate(
                     agent_context=agent_context,
                     scenario_description=scenario,

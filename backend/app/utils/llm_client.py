@@ -219,6 +219,45 @@ def get_report_provider_model() -> tuple[str, str]:
     return provider, model
 
 
+# Step → RuntimeSettings key prefix mapping
+_STEP_KEYS: dict[int, str] = {
+    1: "step1",  # Graph Build   (EntityExtractor, ImplicitStakeholder)
+    2: "step2",  # Env Setup     (ZeroConfig, KGAgentFactory)
+    3: "step3",  # Simulation    (CognitiveAgentEngine, hooks)
+    4: "step4",  # Report        (ReportAgent, ReportOrchestrator)
+    5: "step5",  # Interaction   (InterviewEngine, NarrativeAnalyst)
+}
+
+
+def get_step_provider_model(step: int) -> tuple[str, str]:
+    """Return (provider, model) for the given workflow step.
+
+    Priority: step-specific RuntimeSettings key → global fallback:
+      Steps 1, 2, 3, 5 → falls back to get_agent_provider_model()
+      Step 4            → falls back to get_report_provider_model()
+    """
+    prefix = _STEP_KEYS.get(step)
+    if prefix is None:
+        return get_agent_provider_model()
+    provider = _rs_get(f"{prefix}_llm_provider")
+    model = _rs_get(f"{prefix}_llm_model")
+    if not provider or not model:
+        return get_report_provider_model() if step == 4 else get_agent_provider_model()
+    return provider, model
+
+
+def get_step3_lite_model() -> tuple[str, str]:
+    """Return (provider, lite_model) for Step 3 background agents.
+
+    Priority: step3-specific lite key → global agent lite → get_agent_model(False).
+    """
+    provider = _rs_get("step3_llm_provider") or get_agent_provider_model()[0]
+    lite_model = _rs_get("step3_llm_model_lite") or _rs_get("agent_llm_model_lite")
+    if not lite_model:
+        return get_agent_model(is_stakeholder=False)
+    return provider, lite_model
+
+
 # ---------------------------------------------------------------------------
 # LLMClient
 # ---------------------------------------------------------------------------

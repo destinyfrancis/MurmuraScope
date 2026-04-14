@@ -1,8 +1,8 @@
-# MurmuraScope — CLAUDE.md
+# Murmura — CLAUDE.md
 
 ## 引擎介紹
 
-**MurmuraScope** 係一個**通用預測引擎**，結合多智能體系統、知識圖譜、LLM 同宏觀經濟預測，模擬任何場景對各種衝擊的集體反應。
+**Murmura** 係一個**通用預測引擎**，結合多智能體系統、知識圖譜、LLM 同宏觀經濟預測，模擬任何場景對各種衝擊的集體反應。
 
 掉任何 seed text 入去（紅樓夢、伊朗戰爭、哈利波特、公司競爭等），引擎自動推斷 agents、decisions、metrics、shocks，無需手動配置。
 
@@ -11,8 +11,8 @@
 ## Tech Stack
 
 - **Backend:** FastAPI (Python 3.11), aiosqlite, Pydantic V2, tiktoken
-- **Frontend:** Vue 3 + Vite (port 5173 → proxies backend 5001); `src/api/*.js` API layer
-- **LLMs:** Agents: `AGENT_LLM_PROVIDER` (default openrouter) · Reports: `LLM_PROVIDER` (default google)
+- **Frontend:** Vue 3 + Vite (port 5173 → proxies backend 5001); `src/api/*.js` API layer · `vue-i18n@9` (繁中/EN)
+- **LLMs:** Agents: `AGENT_LLM_PROVIDER` (default openrouter) · Reports: `LLM_PROVIDER` (default google) · Per-step overrides via `step{1-5}_llm_provider/model`
 - **Simulation:** OASIS Agentic Engine (subprocess, JSONL IPC)
 - **DB:** SQLite WAL at `data/murmuroscope.db` (60+ tables) · `get_db()` from `backend.app.utils.db`
 - **Analytics:** DuckDB (read-only attach) + LanceDB (384-dim embeddings)
@@ -194,12 +194,23 @@ Settings page (`/settings`) or `.env` (fallback). Runtime overrides stored in `a
 
 ```
 Agents:  AGENT_LLM_PROVIDER=openrouter | AGENT_LLM_MODEL=deepseek/deepseek-v3.2
-         AGENT_LLM_MODEL_LITE=<cheaper>  # background agents
+         AGENT_LLM_MODEL_LITE=<cheaper>  # background agents (global fallback)
 Reports: LLM_PROVIDER=google | GOOGLE_REPORT_MODEL=gemini-3.1-pro-preview
 Cost:    500 agents × 30 rounds ≈ $1.89
 ```
 
-`get_agent_provider_model()` / `get_report_provider_model()` in `llm_client.py` — check `RuntimeSettingsStore` first, fallback to env.
+**Per-step model overrides** (Settings UI → 模型選擇 → each Step card):
+
+| Step | RuntimeSettings keys | Fallback |
+|------|---------------------|---------|
+| 1 Graph Build | `step1_llm_provider`, `step1_llm_model` | `get_agent_provider_model()` |
+| 2 Env Setup | `step2_llm_provider`, `step2_llm_model` | `get_agent_provider_model()` |
+| 3 Simulation | `step3_llm_provider`, `step3_llm_model`, `step3_llm_model_lite` | `get_agent_model()` |
+| 4 Report | `step4_llm_provider`, `step4_llm_model` | `get_report_provider_model()` |
+| 5 Interaction | `step5_llm_provider`, `step5_llm_model` | `get_agent_provider_model()` |
+
+`get_step_provider_model(step)` / `get_step3_lite_model()` in `llm_client.py` — check step-specific RuntimeSettings first, then global fallback.  
+`POST /api/settings/test-key` accepts optional `model` param — validates API key then sends 1-token request to verify model availability.
 
 ---
 
@@ -263,6 +274,9 @@ Cost:    500 agents × 30 rounds ≈ $1.89
 
 ## Frontend Patterns & Gotchas
 
+- **Brand name:** `Murmura` everywhere — no "MurmuraScope" or "Morai" in UI strings
+- **i18n:** `vue-i18n@9`; locale files at `frontend/src/i18n/zh-TW.js` + `en-US.js`; toggle in nav header saves to `localStorage('murmura_locale')`; ALL UI strings must use `$t()` / `t()` — never hardcode Chinese or English text
+- **Per-step model settings:** `PUT /api/settings` with keys `step{1-5}_provider` / `step{1-5}_model`; Settings page `模型選擇` tab has per-step cards + quick-apply presets; test via `POST /api/settings/test-key` with `{provider, model}` (no api_key needed if stored key exists)
 - **API envelope:** `{success, data, meta}` — access via `res.data?.data || res.data`
 - **Settings:** `useSettings()` composable; UI prefs → localStorage immediately; backend settings → 500ms debounce → `PUT /api/settings`
 - **Vue timers:** ALL `setInterval`/`setTimeout` MUST be cleared in `onUnmounted`

@@ -13,7 +13,7 @@ from typing import Any
 
 from backend.app.services.report_section_generator import generate_section
 from backend.app.utils.db import get_db
-from backend.app.utils.llm_client import LLMClient, get_report_provider_model
+from backend.app.utils.llm_client import LLMClient, get_step_provider_model
 from backend.app.utils.logger import get_logger
 from backend.prompts.report_prompts import (
     HK_DEMOGRAPHIC_SECTION_SYSTEM_PROMPT,
@@ -165,7 +165,7 @@ class ReportOrchestrator:
             time_config=meta.get("time_config"),
             seed_text=meta.get("seed_text", ""),
         )
-        provider, model = get_report_provider_model()
+        provider, model = get_step_provider_model(4)
         _outline_resp = await self._llm.chat(
             [
                 {"role": "system", "content": PLANNING_SYSTEM_PROMPT},

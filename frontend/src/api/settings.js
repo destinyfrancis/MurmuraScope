@@ -20,11 +20,16 @@ export function updateSettings(payload) {
 }
 
 /**
- * Test whether an API key is valid for a given provider.
+ * Test whether an API key (and optionally a specific model) is valid.
  * @param {string} provider - e.g. 'openrouter', 'google', 'openai', 'anthropic'
- * @param {string} apiKey   - Plain text key to test
+ * @param {string|null} apiKey - Plain text key to test; null = use stored key
+ * @param {string|null} model  - When set, also verifies this model is accessible
  * @returns {Promise<{success, provider, message}>}
  */
-export function testApiKey(provider, apiKey) {
-  return api.post('/settings/test-key', { provider, api_key: apiKey })
+export function testApiKey(provider, apiKey = null, model = null) {
+  return api.post('/settings/test-key', {
+    provider,
+    ...(apiKey ? { api_key: apiKey } : {}),
+    ...(model  ? { model }          : {}),
+  })
 }
