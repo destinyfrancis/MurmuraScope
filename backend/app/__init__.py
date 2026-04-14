@@ -122,6 +122,15 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger = logging.getLogger("murmuroscope")
     logger.info("Starting Morai backend")
 
+    # API Key Validation (L4)
+    settings = get_settings()
+    if not settings.DEMO_MODE and not settings.OPENROUTER_API_KEY.strip():
+        logger.warning("=" * 60)
+        logger.warning("WARNING: OPENROUTER_API_KEY is not set!")
+        logger.warning("The application is running in LIVE mode but has no LLM provider.")
+        logger.warning("Simulations will fail. Please set the key in .env or use DEMO_MODE=true.")
+        logger.warning("=" * 60)
+
     # Reap orphaned OASIS simulation subprocesses from a previous server instance.
     await _reap_orphaned_oasis_processes(logger)
 
