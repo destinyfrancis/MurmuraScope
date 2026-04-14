@@ -1,0 +1,90 @@
+[
+  {
+    "id": "prop_crash",
+    "title": "Property Market Crash",
+    "seed_text": "由於美國聯準會持續加息，香港 HIBOR 利率飆升至 5%。地產開發商恆基（LandCo）面臨巨大的債務違約風險。市民預期房價將下跌 20%，市場出現恐慌性拋售。",
+    "gold_nodes": [
+      ["HIBOR", "macro_indicator"],
+      ["加息", "event"],
+      ["恆基", "company"],
+      ["房價", "market_metric"],
+      ["地產開發商", "organization"]
+    ],
+    "gold_edges": [
+      ["加息", "導致", "HIBOR"],
+      ["HIBOR", "影響", "恆基"],
+      ["恆基", "面臨", "債務違約風險"],
+      ["房價", "下跌", "20%"]
+    ]
+  },
+  {
+    "id": "vaccine_controversy",
+    "title": "Vaccine Controversy",
+    "seed_text": "港府推行『安心苗』強制接種計劃。網上流傳一名 30 歲男子接種後出現嚴重副作用。醫管局駁斥傳聞，但市民對政府的信任度降至新低。",
+    "gold_nodes": [
+      ["港府", "organization"],
+      ["安心苗", "medical_product"],
+      ["醫管局", "organization"],
+      ["市民", "stakeholder"],
+      ["政府信任度", "social_metric"]
+    ],
+    "gold_edges": [
+      ["港府", "推行", "安心苗"],
+      ["安心苗", "出現", "副作用"],
+      ["醫管局", "駁斥", "傳聞"],
+      ["市民", "降低", "政府信任度"]
+    ]
+  },
+  {
+    "id": "labour_strike",
+    "title": "Labour Strike",
+    "seed_text": "葵青貨櫃碼頭工會發起罷工，要求加薪 15%。勞工處介入調停，但資方拒絕讓步。罷工導致物流供應鏈中斷，影響超市供應。",
+    "gold_nodes": [
+      ["工會", "organization"],
+      ["罷工", "event"],
+      ["勞工處", "organization"],
+      ["物流供應鏈", "infrastructure"],
+      ["超市", "industry"]
+    ],
+    "gold_edges": [
+      ["工會", "發起", "罷工"],
+      ["罷工", "要求", "加薪"],
+      ["勞工處", "調停", "罷工"],
+      ["罷工", "中斷", "物流供應鏈"]
+    ]
+  },
+  {
+    "id": "tech_hub",
+    "title": "Tech Hub Vision",
+    "seed_text": "港府撥款 500 億在北部都會區建設新創園。騰訊與阿里宣佈進駐。此舉吸引了大量數據科學家從內地回流香港。",
+    "gold_nodes": [
+      ["北部都會區", "region"],
+      ["新創園", "infrastructure"],
+      ["騰訊", "company"],
+      ["阿里", "company"],
+      ["數據科學家", "stakeholder"]
+    ],
+    "gold_edges": [
+      ["港府", "建設", "新創園"],
+      ["騰訊", "進駐", "新創園"],
+      ["新創園", "吸引", "數據科學家"]
+    ]
+  },
+  {
+    "id": "election_scandal",
+    "title": "Election Scandal",
+    "seed_text": "立法會選舉前夕，有力候選人陳大文被爆出海外房產醜聞。其民調支持度從 40% 暴跌至 15%。對手李小龍乘機拉票。",
+    "gold_nodes": [
+      ["立法會選舉", "event"],
+      ["陳大文", "person"],
+      ["李小龍", "person"],
+      ["民調支持度", "social_metric"],
+      ["海外房產", "entity"]
+    ],
+    "gold_edges": [
+      ["陳大文", "涉及", "海外房產"],
+      ["醜聞", "導致", "民調支持度"],
+      ["李小龍", "攻擊", "陳大文"]
+    ]
+  }
+]

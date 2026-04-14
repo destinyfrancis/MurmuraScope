@@ -510,7 +510,6 @@ class TestHKDemographicPipeline:
             session_id="hk-pipe-test",
             scenario_type="property",
             seed_text=_HK_SEED,
-            hk_data={},
         )
         assert result["graph_id"], "graph_id must be non-empty"
         # kg_nodes rows are keyed by session_id (not graph_id) per schema
@@ -788,7 +787,6 @@ class TestKGDrivenPipeline:
             session_id="kg-pipe-test",
             scenario_type="kg_driven",
             seed_text=_KG_SEED,
-            hk_data={},
         )
         # Verify the graph_id was generated and entities were extracted.
         # Storage relies on get_db patching which is covered by test_db_state_after_sim.

@@ -1,7 +1,8 @@
-"""Step 1: Graph building — pre-defined HK Property Market knowledge graph.
+"""Step 1: Graph building — LLM-driven knowledge graph from seed text.
 
-Stores nodes/edges in kg_nodes / kg_edges (session_id = graph_id),
-then serves them back in D3-compatible format for the force graph.
+Extracts entities and relationships from seed text via TextProcessor +
+SeedGraphInjector, then enriches with implicit stakeholder discovery.
+All writes go through the aiosqlite graph store (no hard-coded data).
 """
 
 from __future__ import annotations
@@ -23,420 +24,10 @@ from backend.app.utils.prompt_security import sanitize_seed_text
 router = APIRouter(prefix="/graph", tags=["graph"])
 logger = get_logger("api.graph")
 
-# ---------------------------------------------------------------------------
-# Pre-defined HK Property Market Knowledge Graph
-# ---------------------------------------------------------------------------
-
-_HK_PROPERTY_NODES: list[dict[str, Any]] = [
-    # Districts (location)
-    {"id": "district_cwb", "type": "location", "label": "中西區", "description": "香港島核心商業及住宅區", "size": 14},
-    {"id": "district_kc", "type": "location", "label": "九龍城", "description": "九龍半島傳統住宅區", "size": 12},
-    {"id": "district_st", "type": "location", "label": "沙田", "description": "新界東新市鎮，發展成熟", "size": 13},
-    {
-        "id": "district_yl",
-        "type": "location",
-        "label": "元朗",
-        "description": "新界西北，北部都會區發展重點",
-        "size": 12,
-    },
-    {
-        "id": "district_lantau",
-        "type": "location",
-        "label": "大嶼山",
-        "description": "機場島，北大嶼山新發展區",
-        "size": 11,
-    },
-    # Banks (organization)
-    {"id": "bank_hsbc", "type": "organization", "label": "滙豐銀行", "description": "香港最大按揭銀行之一", "size": 13},
-    {"id": "bank_hase", "type": "organization", "label": "恒生銀行", "description": "本地最大零售銀行之一", "size": 12},
-    {
-        "id": "bank_bochk",
-        "type": "organization",
-        "label": "中銀香港",
-        "description": "主要發鈔銀行，按揭市場份額大",
-        "size": 12,
-    },
-    {
-        "id": "bank_sc",
-        "type": "organization",
-        "label": "渣打銀行",
-        "description": "國際銀行，提供多元按揭產品",
-        "size": 11,
-    },
-    # Developers (organization)
-    {"id": "dev_shk", "type": "organization", "label": "新鴻基地產", "description": "香港最大地產商之一", "size": 14},
-    {"id": "dev_ck", "type": "organization", "label": "長江實業", "description": "李嘉誠家族旗下地產商", "size": 13},
-    {
-        "id": "dev_henderson",
-        "type": "organization",
-        "label": "恒基地產",
-        "description": "李兆基家族旗下地產商",
-        "size": 12,
-    },
-    # Policies (policy)
-    {"id": "policy_bsd", "type": "policy", "label": "印花稅措施", "description": "BSD/SSD，2024年全面撤辣", "size": 13},
-    {
-        "id": "policy_mip",
-        "type": "policy",
-        "label": "按揭保險計劃",
-        "description": "HKMC按揭保險，提高上車成數",
-        "size": 12,
-    },
-    {
-        "id": "policy_stress",
-        "type": "policy",
-        "label": "壓力測試",
-        "description": "HKMA按揭壓力測試（+2%利率）",
-        "size": 12,
-    },
-    {"id": "policy_vacancy", "type": "policy", "label": "空置稅", "description": "針對一手空置單位嘅稅項", "size": 10},
-    {
-        "id": "policy_ndd",
-        "type": "policy",
-        "label": "北部都會區",
-        "description": "新界北部發展計劃，30萬新住宅單位",
-        "size": 13,
-    },
-    # Economic Indicators (economic)
-    {
-        "id": "econ_hibor",
-        "type": "economic",
-        "label": "HIBOR利率",
-        "description": "銀行同業拆息，影響按揭利率",
-        "size": 14,
-    },
-    {
-        "id": "econ_prime",
-        "type": "economic",
-        "label": "最優惠利率",
-        "description": "Prime Rate，按揭定價基準",
-        "size": 13,
-    },
-    {
-        "id": "econ_ccl",
-        "type": "economic",
-        "label": "中原城市領先指數",
-        "description": "CCL樓價指數，追蹤二手住宅價格",
-        "size": 14,
-    },
-    {
-        "id": "econ_unemp",
-        "type": "economic",
-        "label": "失業率",
-        "description": "香港整體失業率，影響置業信心",
-        "size": 12,
-    },
-    {
-        "id": "econ_cpi",
-        "type": "economic",
-        "label": "通脹率",
-        "description": "消費物價指數，影響實際購買力",
-        "size": 11,
-    },
-    {"id": "econ_gdp", "type": "economic", "label": "GDP增長", "description": "香港本地生產總值增長率", "size": 12},
-    # Person types (person)
-    {
-        "id": "person_ftb",
-        "type": "person",
-        "label": "首置買家",
-        "description": "首次置業人士，主要受按揭保險及印花稅影響",
-        "size": 14,
-    },
-    {
-        "id": "person_upgrader",
-        "type": "person",
-        "label": "換樓客",
-        "description": "現有業主換樓，受SSD及印花稅影響",
-        "size": 13,
-    },
-    {
-        "id": "person_investor",
-        "type": "person",
-        "label": "投資者",
-        "description": "物業投資者，受BSD及租金回報影響",
-        "size": 12,
-    },
-    {
-        "id": "person_renter",
-        "type": "person",
-        "label": "租客",
-        "description": "無力置業人士，主要關注租金走勢",
-        "size": 12,
-    },
-    # Social phenomena (social)
-    {
-        "id": "social_afford",
-        "type": "social",
-        "label": "上車難問題",
-        "description": "年輕人置業困難，樓價收入比全球最高",
-        "size": 14,
-    },
-    {
-        "id": "social_emigrate",
-        "type": "social",
-        "label": "移民潮",
-        "description": "香港居民淨移出，影響樓市需求",
-        "size": 13,
-    },
-    {
-        "id": "social_confidence",
-        "type": "social",
-        "label": "置業信心",
-        "description": "市場對樓市走勢嘅整體信心指標",
-        "size": 13,
-    },
-    # External — US / Global (economic)
-    {
-        "id": "ext_fed",
-        "type": "economic",
-        "label": "美聯儲利率",
-        "description": "聯邦基金利率，透過聯繫匯率直接影響HIBOR及按揭利率",
-        "size": 15,
-    },
-    {
-        "id": "ext_usd_hkd",
-        "type": "economic",
-        "label": "聯繫匯率",
-        "description": "美元/港元7.75-7.85聯繫匯率制度，港元利率跟隨美元",
-        "size": 13,
-    },
-    {
-        "id": "ext_us_recession",
-        "type": "economic",
-        "label": "美國衰退風險",
-        "description": "美國經濟衰退機率，影響全球資金風險偏好",
-        "size": 11,
-    },
-    # External — China economy (economic)
-    {
-        "id": "ext_china_gdp",
-        "type": "economic",
-        "label": "中國GDP增長",
-        "description": "中國實際GDP增長率，影響北水流入及內地買家能力",
-        "size": 14,
-    },
-    {
-        "id": "ext_china_property",
-        "type": "economic",
-        "label": "內房危機",
-        "description": "恒大/碧桂園等內房危機，衝擊內地買家信心及資金",
-        "size": 13,
-    },
-    {
-        "id": "ext_rmb",
-        "type": "economic",
-        "label": "人民幣匯率",
-        "description": "RMB/HKD匯率，影響內地資金購買香港資產嘅成本",
-        "size": 12,
-    },
-    {
-        "id": "ext_northbound",
-        "type": "economic",
-        "label": "北水流入",
-        "description": "滬深港通北向資金流入，反映內地資金對港股偏好",
-        "size": 13,
-    },
-    # External — China politics (policy)
-    {
-        "id": "ext_china_policy",
-        "type": "policy",
-        "label": "中國內地政策",
-        "description": "內地政治方向、監管政策、對港政策等",
-        "size": 13,
-    },
-    {
-        "id": "ext_us_china_trade",
-        "type": "policy",
-        "label": "中美貿易關係",
-        "description": "中美貿易戰/科技戰，影響香港作為國際金融中心地位",
-        "size": 13,
-    },
-    # External — Geopolitical (social)
-    {
-        "id": "ext_taiwan_strait",
-        "type": "social",
-        "label": "台海局勢",
-        "description": "台海緊張程度，地緣政治風險影響國際資金去向及移民潮",
-        "size": 14,
-    },
-    # External — Shenzhen / GBA (location)
-    {
-        "id": "ext_shenzhen",
-        "type": "location",
-        "label": "深圳低成本生活",
-        "description": "深圳生活成本僅香港38%，吸引港人跨境居住返港上班",
-        "size": 14,
-    },
-    {
-        "id": "ext_gba",
-        "type": "location",
-        "label": "大灣區發展",
-        "description": "粵港澳大灣區整合，30分鐘生活圈，推動北部都會區價值",
-        "size": 13,
-    },
-    {
-        "id": "ext_crossborder",
-        "type": "social",
-        "label": "跨境生活模式",
-        "description": "港人北上居住、深圳工作，影響香港租務及置業需求",
-        "size": 12,
-    },
-]
-
-_HK_PROPERTY_EDGES: list[dict[str, Any]] = [
-    # Interest rates chain
-    {"source": "econ_hibor", "target": "econ_prime", "label": "影響", "weight": 2.0},
-    {"source": "econ_prime", "target": "bank_hsbc", "label": "定價基準", "weight": 1.5},
-    {"source": "econ_prime", "target": "bank_hase", "label": "定價基準", "weight": 1.5},
-    {"source": "econ_prime", "target": "bank_bochk", "label": "定價基準", "weight": 1.5},
-    {"source": "econ_prime", "target": "bank_sc", "label": "定價基準", "weight": 1.5},
-    # Banks implement policies
-    {"source": "bank_hsbc", "target": "policy_stress", "label": "執行", "weight": 1.5},
-    {"source": "bank_hase", "target": "policy_stress", "label": "執行", "weight": 1.5},
-    {"source": "bank_bochk", "target": "policy_mip", "label": "參與", "weight": 1.2},
-    {"source": "bank_hsbc", "target": "policy_mip", "label": "參與", "weight": 1.2},
-    # Banks lend to person types
-    {"source": "bank_hsbc", "target": "person_ftb", "label": "提供按揭", "weight": 2.0},
-    {"source": "bank_hase", "target": "person_ftb", "label": "提供按揭", "weight": 1.8},
-    {"source": "bank_bochk", "target": "person_upgrader", "label": "提供按揭", "weight": 1.5},
-    {"source": "bank_sc", "target": "person_investor", "label": "提供按揭", "weight": 1.2},
-    # Policies → Person types
-    {"source": "policy_mip", "target": "person_ftb", "label": "協助置業", "weight": 2.0},
-    {"source": "policy_stress", "target": "person_ftb", "label": "限制借貸", "weight": 1.5},
-    {"source": "policy_bsd", "target": "person_investor", "label": "增加成本", "weight": 2.0},
-    {"source": "policy_bsd", "target": "person_upgrader", "label": "影響換樓", "weight": 1.5},
-    {"source": "policy_vacancy", "target": "dev_shk", "label": "規管", "weight": 1.0},
-    {"source": "policy_vacancy", "target": "dev_ck", "label": "規管", "weight": 1.0},
-    {"source": "policy_ndd", "target": "district_yl", "label": "發展計劃", "weight": 2.0},
-    {"source": "policy_ndd", "target": "dev_henderson", "label": "土地機遇", "weight": 1.5},
-    {"source": "policy_ndd", "target": "person_ftb", "label": "增加供應", "weight": 1.5},
-    # Developers → Districts
-    {"source": "dev_shk", "target": "district_cwb", "label": "發展項目", "weight": 1.5},
-    {"source": "dev_shk", "target": "district_st", "label": "發展項目", "weight": 1.5},
-    {"source": "dev_ck", "target": "district_lantau", "label": "發展項目", "weight": 1.2},
-    {"source": "dev_henderson", "target": "district_kc", "label": "發展項目", "weight": 1.2},
-    {"source": "dev_henderson", "target": "district_yl", "label": "發展項目", "weight": 1.5},
-    # Economic indicators → CCL
-    {"source": "econ_hibor", "target": "econ_ccl", "label": "負相關", "weight": 2.0},
-    {"source": "econ_unemp", "target": "econ_ccl", "label": "影響樓價", "weight": 1.5},
-    {"source": "econ_gdp", "target": "econ_ccl", "label": "正相關", "weight": 1.5},
-    {"source": "econ_cpi", "target": "econ_prime", "label": "通脹壓力", "weight": 1.2},
-    # CCL → Districts
-    {"source": "econ_ccl", "target": "district_cwb", "label": "反映樓價", "weight": 1.5},
-    {"source": "econ_ccl", "target": "district_kc", "label": "反映樓價", "weight": 1.2},
-    {"source": "econ_ccl", "target": "district_st", "label": "反映樓價", "weight": 1.2},
-    {"source": "econ_ccl", "target": "district_yl", "label": "反映樓價", "weight": 1.0},
-    # Economic → Social
-    {"source": "econ_unemp", "target": "social_confidence", "label": "削弱信心", "weight": 1.5},
-    {"source": "econ_hibor", "target": "social_afford", "label": "增加負擔", "weight": 2.0},
-    {"source": "econ_ccl", "target": "social_afford", "label": "樓價高企", "weight": 2.0},
-    {"source": "social_emigrate", "target": "econ_ccl", "label": "減少需求", "weight": 1.5},
-    # Social → Person types
-    {"source": "social_afford", "target": "person_ftb", "label": "困境", "weight": 2.0},
-    {"source": "social_afford", "target": "person_renter", "label": "被迫租住", "weight": 1.8},
-    {"source": "social_emigrate", "target": "person_renter", "label": "加劇趨勢", "weight": 1.2},
-    {"source": "social_confidence", "target": "person_investor", "label": "影響決策", "weight": 1.5},
-    {"source": "social_confidence", "target": "person_upgrader", "label": "影響決策", "weight": 1.2},
-    # Person types → Districts
-    {"source": "person_ftb", "target": "district_yl", "label": "首選置業", "weight": 1.5},
-    {"source": "person_ftb", "target": "district_st", "label": "首選置業", "weight": 1.2},
-    {"source": "person_investor", "target": "district_cwb", "label": "投資核心區", "weight": 1.5},
-    {"source": "person_upgrader", "target": "district_kc", "label": "換樓目標", "weight": 1.2},
-    {"source": "person_renter", "target": "district_kc", "label": "租住", "weight": 1.0},
-    # ---- External factor edges ----
-    # US Fed → HK interest rates (via peg)
-    {"source": "ext_fed", "target": "ext_usd_hkd", "label": "聯繫匯率傳導", "weight": 2.0},
-    {"source": "ext_fed", "target": "econ_hibor", "label": "利率傳導（聯繫匯率）", "weight": 2.5},
-    {"source": "ext_fed", "target": "econ_prime", "label": "間接影響", "weight": 2.0},
-    {"source": "ext_us_recession", "target": "ext_fed", "label": "觸發減息", "weight": 1.5},
-    {"source": "ext_fed", "target": "social_confidence", "label": "加息打壓信心", "weight": 1.5},
-    {"source": "ext_fed", "target": "social_afford", "label": "加劇負擔", "weight": 2.0},
-    # China economy → HK market
-    {"source": "ext_china_gdp", "target": "econ_ccl", "label": "內地買家需求", "weight": 1.8},
-    {"source": "ext_china_gdp", "target": "econ_hibor", "label": "資金流向", "weight": 1.2},
-    {"source": "ext_china_property", "target": "ext_china_gdp", "label": "拖累增長", "weight": 1.8},
-    {"source": "ext_china_property", "target": "person_investor", "label": "內地資金撤退", "weight": 1.5},
-    {"source": "ext_rmb", "target": "person_investor", "label": "匯率影響購買力", "weight": 1.5},
-    {"source": "ext_northbound", "target": "econ_hibor", "label": "流動性", "weight": 1.0},
-    {"source": "ext_northbound", "target": "social_confidence", "label": "帶動信心", "weight": 1.3},
-    {"source": "ext_china_policy", "target": "ext_china_gdp", "label": "政策主導", "weight": 1.8},
-    {"source": "ext_china_policy", "target": "ext_northbound", "label": "影響資金流向", "weight": 1.5},
-    # US-China trade tension
-    {"source": "ext_us_china_trade", "target": "ext_china_gdp", "label": "貿易戰衝擊", "weight": 1.8},
-    {"source": "ext_us_china_trade", "target": "social_confidence", "label": "不確定性", "weight": 1.5},
-    {"source": "ext_us_china_trade", "target": "social_emigrate", "label": "前景憂慮", "weight": 1.3},
-    # Taiwan Strait → HK sentiment
-    {"source": "ext_taiwan_strait", "target": "social_emigrate", "label": "加速移民", "weight": 2.0},
-    {"source": "ext_taiwan_strait", "target": "social_confidence", "label": "打壓信心", "weight": 2.0},
-    {"source": "ext_taiwan_strait", "target": "econ_ccl", "label": "資本外流壓樓價", "weight": 1.8},
-    {"source": "ext_taiwan_strait", "target": "person_investor", "label": "投資者撤資", "weight": 1.5},
-    {"source": "ext_taiwan_strait", "target": "ext_us_china_trade", "label": "地緣政治聯動", "weight": 1.5},
-    # Shenzhen / GBA → HK housing demand
-    {"source": "ext_shenzhen", "target": "person_renter", "label": "吸引北上居住", "weight": 2.0},
-    {"source": "ext_shenzhen", "target": "person_ftb", "label": "替代置業選項", "weight": 1.8},
-    {"source": "ext_shenzhen", "target": "social_afford", "label": "紓緩壓力", "weight": 1.5},
-    {"source": "ext_shenzhen", "target": "ext_crossborder", "label": "推動跨境生活", "weight": 2.0},
-    {"source": "ext_crossborder", "target": "econ_ccl", "label": "減少本地需求", "weight": 1.5},
-    {"source": "ext_crossborder", "target": "social_emigrate", "label": "另類移動方式", "weight": 1.2},
-    {"source": "ext_crossborder", "target": "district_yl", "label": "元朗口岸效應", "weight": 1.5},
-    {"source": "ext_gba", "target": "policy_ndd", "label": "政策配合", "weight": 2.0},
-    {"source": "ext_gba", "target": "district_yl", "label": "帶動北區發展", "weight": 1.8},
-    {"source": "ext_gba", "target": "ext_crossborder", "label": "促進跨境生活", "weight": 1.8},
-    {"source": "ext_gba", "target": "person_ftb", "label": "大灣區置業選項", "weight": 1.3},
-    {"source": "ext_china_policy", "target": "ext_gba", "label": "政策推動", "weight": 2.0},
-]
-
 
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
-
-
-async def _persist_graph(graph_id: str, nodes: list[dict], edges: list[dict]) -> None:
-    """Write nodes and edges to kg_nodes / kg_edges (session_id = graph_id).
-
-    Node ids are prefixed with the first 8 chars of graph_id (hex) so each
-    graph gets a unique primary key even though node "types" are shared.
-    Uses executemany for efficient batch insertion.
-    """
-    prefix = graph_id.replace("-", "")[:8]
-
-    node_rows = [
-        (
-            f"{prefix}_{n['id']}",
-            graph_id,
-            n["type"],
-            n["label"],
-            n.get("description", ""),
-            json.dumps({"size": n.get("size", 10)}),
-        )
-        for n in nodes
-    ]
-    edge_rows = [
-        (
-            graph_id,
-            f"{prefix}_{e['source']}",
-            f"{prefix}_{e['target']}",
-            e["label"],
-            e.get("weight", 1.0),
-        )
-        for e in edges
-    ]
-
-    async with get_db() as db:
-        await db.execute("DELETE FROM kg_edges WHERE session_id = ?", (graph_id,))
-        await db.execute("DELETE FROM kg_nodes WHERE session_id = ?", (graph_id,))
-        await db.executemany(
-            "INSERT INTO kg_nodes (id, session_id, entity_type, title, description, properties)"
-            " VALUES (?, ?, ?, ?, ?, ?)",
-            node_rows,
-        )
-        await db.executemany(
-            "INSERT INTO kg_edges (session_id, source_id, target_id, relation_type, weight) VALUES (?, ?, ?, ?, ?)",
-            edge_rows,
-        )
-        await db.commit()
-    logger.info("Persisted graph %s: %d nodes, %d edges", graph_id, len(nodes), len(edges))
 
 
 def _row_to_node(row: Any) -> dict[str, Any]:
@@ -469,45 +60,31 @@ def _row_to_edge(row: Any) -> dict[str, Any]:
 async def build_graph(request: Request, req: GraphBuildRequest) -> APIResponse:
     """Build knowledge graph from scenario type and seed text.
 
-    Step 1: Persist the pre-defined HK Property Market base graph.
-    Step 2: If seed_text is provided, run TextProcessor + SeedGraphInjector
-            to extract entities and inject them ON TOP of the base graph.
+    Runs LLM-based entity extraction from seed text via TextProcessor +
+    SeedGraphInjector, then enriches with implicit stakeholder discovery
+    and memory initialization.  All DB writes go through the aiosqlite
+    graph store — no hard-coded node/edge data.
     """
     graph_id = str(uuid.uuid4())
 
-    # Determine if scenario is HK-specific to gate base graph injection.
-    # Use ZeroConfigService seed-text detection when seed_text is available;
-    # fall back to scenario_type hint only when no seed text is provided.
-    safe_seed_for_detect = sanitize_seed_text(req.seed_text) if req.seed_text else ""
-    if safe_seed_for_detect.strip():
+    # Detect mode (hk_demographic vs kg_driven) — still used by simulation routing.
+    safe_seed = sanitize_seed_text(req.seed_text) if req.seed_text else ""
+    if safe_seed.strip():
         from backend.app.services.zero_config import ZeroConfigService  # noqa: PLC0415
 
-        _detected_mode = await ZeroConfigService().detect_mode_async(safe_seed_for_detect)
+        _detected_mode = await ZeroConfigService().detect_mode_async(safe_seed)
         _is_hk = _detected_mode == "hk_demographic"
     else:
         _HK_SCENARIO_TYPES = {"property", "emigration", "fertility", "career", "education", "macro"}
         _is_hk = req.scenario_type in _HK_SCENARIO_TYPES
-
-    # --- Step 1: base graph (HK-only) ---
-    base_node_count = 0
-    base_edge_count = 0
-    if _is_hk:
-        try:
-            await _persist_graph(graph_id, _HK_PROPERTY_NODES, _HK_PROPERTY_EDGES)
-        except Exception:
-            logger.exception("Failed to persist base graph %s", graph_id)
-            raise HTTPException(status_code=500, detail="Graph persistence failed")
-        base_node_count = len(_HK_PROPERTY_NODES)
-        base_edge_count = len(_HK_PROPERTY_EDGES)
 
     seed_nodes = 0
     seed_edges = 0
     implicit_nodes = 0
     mem_result = None
 
-    # --- Step 2: seed injection (best-effort, never blocks the response) ---
-    safe_seed = safe_seed_for_detect  # already sanitized above
-    if safe_seed and safe_seed.strip():
+    # --- Unified seed injection: single write path for all modes ---
+    if safe_seed.strip():
         try:
             from backend.app.services.seed_graph_injector import SeedGraphInjector  # noqa: PLC0415
             from backend.app.services.text_processor import TextProcessor  # noqa: PLC0415
@@ -527,37 +104,27 @@ async def build_graph(request: Request, req: GraphBuildRequest) -> APIResponse:
             )
         except Exception:
             logger.exception(
-                "Seed injection failed for graph %s — continuing with base graph",
+                "Seed injection failed for graph %s — continuing",
                 graph_id,
             )
 
-        # --- Implicit stakeholder discovery (best-effort, Option A) ---
+        # --- Implicit stakeholder discovery (best-effort) ---
         try:
             implicit_svc = ImplicitStakeholderService()
             existing_for_dedup: list[dict[str, str]] = []
-            if _is_hk:
-                existing_for_dedup = [
-                    {
-                        "id": str(n.get("id", "")),
-                        "label": str(n.get("label") or n.get("title") or ""),
-                        "entity_type": str(n.get("type") or n.get("entity_type") or ""),
-                    }
-                    for n in _HK_PROPERTY_NODES
-                ]
-            else:
-                # For kg_driven: query seed-injected nodes for dedup
-                try:
-                    async with get_db() as db:
-                        cursor = await db.execute(
-                            "SELECT id, label, entity_type FROM kg_nodes WHERE session_id = ?",
-                            (graph_id,),
-                        )
-                        existing_for_dedup = [
-                            {"id": str(r[0]), "label": str(r[1] or ""), "entity_type": str(r[2] or "")}
-                            for r in await cursor.fetchall()
-                        ]
-                except Exception:
-                    logger.warning("Failed to load existing nodes for dedup graph=%s", graph_id)
+            try:
+                async with get_db() as db:
+                    cursor = await db.execute(
+                        "SELECT id, title, entity_type FROM kg_nodes WHERE session_id = ?",
+                        (graph_id,),
+                    )
+                    existing_for_dedup = [
+                        {"id": str(r[0]), "label": str(r[1] or ""), "entity_type": str(r[2] or "")}
+                        for r in await cursor.fetchall()
+                    ]
+            except Exception:
+                logger.warning("Failed to load existing nodes for dedup graph=%s", graph_id)
+
             discovery = await implicit_svc.discover(graph_id, safe_seed, existing_for_dedup)
             implicit_nodes = discovery.nodes_added
             logger.info(
@@ -571,8 +138,7 @@ async def build_graph(request: Request, req: GraphBuildRequest) -> APIResponse:
                 graph_id,
             )
 
-        # Memory initialization (best-effort, never blocks graph build response)
-        mem_result = None
+        # --- Memory initialization (best-effort) ---
         try:
             from backend.app.services.memory_initialization import MemoryInitializationService  # noqa: PLC0415
 
@@ -591,34 +157,27 @@ async def build_graph(request: Request, req: GraphBuildRequest) -> APIResponse:
                 graph_id,
             )
 
-    total_nodes = base_node_count + seed_nodes
-    total_edges = base_edge_count + seed_edges
-
-    # Build entity/relation type lists — for HK use base graph, for kg_driven query DB
-    if _is_hk:
-        _entity_types = list({n["type"] for n in _HK_PROPERTY_NODES})
-        _relation_types = list({e["label"] for e in _HK_PROPERTY_EDGES})
-    else:
-        try:
-            async with get_db() as db:
-                et_cursor = await db.execute(
-                    "SELECT DISTINCT entity_type FROM kg_nodes WHERE session_id = ? AND entity_type IS NOT NULL",
-                    (graph_id,),
-                )
-                _entity_types = [r[0] for r in await et_cursor.fetchall()]
-                rt_cursor = await db.execute(
-                    "SELECT DISTINCT relation_type FROM kg_edges WHERE session_id = ? AND relation_type IS NOT NULL",
-                    (graph_id,),
-                )
-                _relation_types = [r[0] for r in await rt_cursor.fetchall()]
-        except Exception:
-            _entity_types = []
-            _relation_types = []
+    # --- Build entity/relation type lists from DB (uniform for all modes) ---
+    try:
+        async with get_db() as db:
+            et_cursor = await db.execute(
+                "SELECT DISTINCT entity_type FROM kg_nodes WHERE session_id = ? AND entity_type IS NOT NULL",
+                (graph_id,),
+            )
+            _entity_types = [r[0] for r in await et_cursor.fetchall()]
+            rt_cursor = await db.execute(
+                "SELECT DISTINCT relation_type FROM kg_edges WHERE session_id = ? AND relation_type IS NOT NULL",
+                (graph_id,),
+            )
+            _relation_types = [r[0] for r in await rt_cursor.fetchall()]
+    except Exception:
+        _entity_types = []
+        _relation_types = []
 
     result = GraphBuildResponse(
         graph_id=graph_id,
-        node_count=total_nodes,
-        edge_count=total_edges,
+        node_count=seed_nodes + implicit_nodes,
+        edge_count=seed_edges,
         entity_types=_entity_types,
         relation_types=_relation_types,
     )
@@ -628,8 +187,8 @@ async def build_graph(request: Request, req: GraphBuildRequest) -> APIResponse:
         meta={
             "scenario_type": req.scenario_type,
             "detected_mode": "hk_demographic" if _is_hk else "kg_driven",
-            "base_nodes": base_node_count,
-            "base_edges": base_edge_count,
+            "base_nodes": 0,
+            "base_edges": 0,
             "seed_nodes": seed_nodes,
             "seed_edges": seed_edges,
             "implicit_nodes": implicit_nodes,
@@ -846,11 +405,10 @@ async def analyze_seed(request: Request, req: GraphBuildRequest) -> APIResponse:
                 "entities": [{"name": e.name, "type": e.type, "relevance": e.relevance} for e in result.entities],
                 "timeline": [{"date_hint": t.date_hint, "event": t.event} for t in result.timeline],
                 "stakeholders": [
-                    {"group": s.group, "impact": s.impact, "description": s.description} for s in result.stakeholders
+                    {"group": s.group, "description": s.description, "impact": s.impact}
+                    for s in result.stakeholders
                 ],
-                "sentiment": result.sentiment,
-                "key_claims": list(result.key_claims),
-                "suggested_scenario": result.suggested_scenario,
+                "key_claims": result.key_claims,
                 "suggested_regions": list(result.suggested_regions),
                 "suggested_districts": list(result.suggested_regions),  # backward compat
                 "confidence": result.confidence,
@@ -1206,7 +764,9 @@ async def get_node_evidence(graph_id: str, node_id: str) -> APIResponse:
             # Find agent memories mentioning this node's label
             memory_rows = await (
                 await db.execute(
-                    "SELECT agent_id, memory_text, memory_type, salience_score, round_number, created_at FROM agent_memories WHERE session_id = ? AND memory_text LIKE ? ORDER BY salience_score DESC LIMIT 20",
+                    "SELECT agent_id, memory_text, memory_type, salience_score, round_number, created_at"
+                    " FROM agent_memories WHERE session_id = ? AND memory_text LIKE ?"
+                    " ORDER BY salience_score DESC LIMIT 20",
                     (graph_id, f"%{node_label}%"),
                 )
             ).fetchall()
@@ -1216,7 +776,8 @@ async def get_node_evidence(graph_id: str, node_id: str) -> APIResponse:
             try:
                 provenance_rows = await (
                     await db.execute(
-                        "SELECT category, metric, source_type, source_url, last_updated FROM data_provenance WHERE metric LIKE ? OR category LIKE ? LIMIT 10",
+                        "SELECT category, metric, source_type, source_url, last_updated"
+                        " FROM data_provenance WHERE metric LIKE ? OR category LIKE ? LIMIT 10",
                         (f"%{node_label}%", f"%{node_label}%"),
                     )
                 ).fetchall()

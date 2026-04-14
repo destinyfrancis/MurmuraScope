@@ -403,61 +403,31 @@ class ReportAgent:
 
 
 async def _handle_query_graph(session_id: str, params: dict[str, Any], _ipc: SimulationIPC) -> str:
-    """Semantic knowledge graph query via GraphRAG (with legacy fallback)."""
+    """Strict semantic knowledge graph query via GraphRAG (No SQL fallback)."""
     query = params.get("query", "")
     if not query:
         return "Error: 'query' parameter is required."
 
-    # Try GraphRAG semantic subgraph query first
+    # Force GraphRAG semantic subgraph query
     try:
         from backend.app.services.graph_rag import GraphRAGService  # noqa: PLC0415
 
         service = GraphRAGService()
         insight = await service.semantic_subgraph_query(session_id, query)
         return (
-            f"## 語義子圖分析\n\n"
+            f"## 語義子圖分析 (Strict GraphRAG)\n\n"
             f"**查詢：** {insight.query}\n"
             f"**相關社群：** {insight.relevant_communities}\n"
             f"**子圖規模：** {insight.node_count} 節點, {insight.edge_count} 條邊\n\n"
-            f"{insight.insight_report}"
+            f"{insight.insight_report}\n\n"
+            f"**證據清單 (Evidence X-ray):**\n"
+            f"- Nodes: {', '.join(insight.evidence_node_ids[:10])}\n"
+            f"- Edges: {', '.join(map(str, insight.evidence_edge_ids[:10]))}"
         )
     except Exception as exc:
-        logger.debug("GraphRAG query failed (%s), falling back to legacy LIKE search", exc)
+        logger.error("Strict GraphRAG query failed for session %s: %s", session_id, exc)
+        return f"Error: GraphRAG analysis failed. No SQL fallback allowed. Details: {exc}"
 
-    # Legacy fallback: SQL LIKE search
-    return await _handle_query_graph_legacy(session_id, params, _ipc)
-
-
-async def _handle_query_graph_legacy(session_id: str, params: dict[str, Any], _ipc: SimulationIPC) -> str:
-    """Legacy knowledge graph query using SQL LIKE search."""
-    query = params.get("query", "")
-    entity_type = params.get("entity_type", "")
-
-    async with get_db() as db:
-        cursor = await db.execute(
-            """SELECT source_id, target_id, relation_type, weight
-               FROM kg_edges
-               WHERE session_id = ?
-               AND (source_id LIKE ? OR target_id LIKE ? OR relation_type LIKE ?)
-               ORDER BY weight DESC
-               LIMIT 50""",
-            (session_id, f"%{query}%", f"%{query}%", f"%{entity_type}%"),
-        )
-        rows = await cursor.fetchall()
-
-    if not rows:
-        return "No matching graph relationships found."
-
-    results = [
-        {
-            "source_id": r["source_id"],
-            "target_id": r["target_id"],
-            "relation_type": r["relation_type"],
-            "weight": r["weight"],
-        }
-        for r in rows
-    ]
-    return json.dumps(results, indent=2)
 
 
 async def _handle_global_narrative(session_id: str, params: dict[str, Any], _ipc: SimulationIPC) -> str:
@@ -478,7 +448,10 @@ async def _handle_global_narrative(session_id: str, params: dict[str, Any], _ipc
             f"**工作階段：** {narrative.session_id}\n"
             f"**第 {narrative.round_number} 輪，{narrative.community_count} 個社群**\n\n"
             f"### 社會斷層線\n{fault_lines_text}\n\n"
-            f"### 詳細分析\n{narrative.narrative_text}"
+            f"### 詳細分析\n{narrative.narrative_text}\n\n"
+            f"**證據標記 (X-ray):**\n"
+            f"- 節點: {narrative.session_id} 等\n"
+            f"- 社群: {narrative.community_count} 個" # Global narrative is higher level, but we can add more later
         )
     except Exception as exc:
         logger.exception("get_global_narrative failed for session %s", session_id)

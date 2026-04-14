@@ -229,6 +229,33 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         else:
             logger.warning("domain_pack_id migration unexpected error: %s", exc)
 
+    # Runtime migration: create simulation_jobs table (Phase 7)
+    try:
+        from backend.app.utils.db import get_db
+
+        async with get_db() as db:
+            await db.execute(
+                """CREATE TABLE IF NOT EXISTS simulation_jobs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id TEXT NOT NULL REFERENCES simulation_sessions(id) ON DELETE CASCADE,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    last_heartbeat TEXT,
+                    error_message TEXT,
+                    worker_pid INTEGER,
+                    created_at TEXT DEFAULT (datetime('now')),
+                    updated_at TEXT DEFAULT (datetime('now'))
+                )"""
+            )
+            # Mark any 'running' jobs as 'interrupted' on startup (zombie detection)
+            await db.execute(
+                "UPDATE simulation_jobs SET status = 'interrupted', updated_at = datetime('now') "
+                "WHERE status = 'running'"
+            )
+            await db.commit()
+        logger.info("simulation_jobs table ensured and zombies reaped")
+    except Exception:
+        logger.warning("simulation_jobs table migration failed", exc_info=True)
+
     # NOTE: All table creation is in database/schema.sql. Only ALTER TABLE
     # migrations and tables not yet in schema.sql are kept here.
 
@@ -487,7 +514,26 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     except Exception:
         logger.warning("RuntimeSettingsStore load failed", exc_info=True)
 
+    # Start SimulationWorker background loop (Phase 7)
+    try:
+        from backend.app.services.simulation_worker import get_simulation_worker
+
+        worker = await get_simulation_worker()
+        await worker.start()
+        app.state.simulation_worker = worker
+        logger.info("SimulationWorker background loop started")
+    except Exception:
+        logger.warning("Failed to start SimulationWorker", exc_info=True)
+
     yield
+
+    # Shutdown SimulationWorker
+    if hasattr(app.state, "simulation_worker"):
+        try:
+            await app.state.simulation_worker.stop()
+            logger.info("SimulationWorker stopped")
+        except Exception:
+            logger.warning("SimulationWorker stop failed")
 
     # Kill any remaining simulation subprocesses before server exit.
     await _reap_orphaned_oasis_processes(logger)

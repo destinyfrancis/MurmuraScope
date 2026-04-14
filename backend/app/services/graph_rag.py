@@ -57,6 +57,8 @@ class SubgraphInsight:
     node_count: int
     edge_count: int
     insight_report: str
+    evidence_node_ids: list[str]
+    evidence_edge_ids: list[int]
 
 
 @dataclass(frozen=True)
@@ -419,6 +421,8 @@ class GraphRAGService:
     ) -> SubgraphInsight:
         """Semantic subgraph retrieval: query → top-3 communities → 2-hop CTE → LLM insight.
 
+        Includes multi-perspective contradiction detection (Truth vs Belief).
+
         Args:
             session_id: Simulation session UUID.
             query: Natural language query.
@@ -432,10 +436,11 @@ class GraphRAGService:
         relevant_summaries = await self._search_community_summaries(session_id, query, top_k=3)
 
         if not relevant_summaries:
-            raise ValueError("No community summaries available for semantic query")
+            logger.info("No community summaries found for query: %s", query)
+            # We don't raise error here, we try to fall back to node search
 
         # Collect seed nodes from relevant communities
-        cluster_ids = [s["cluster_id"] for s in relevant_summaries]
+        cluster_ids = [s["cluster_id"] for s in relevant_summaries or []]
 
         # Get member agent IDs from echo chamber snapshots
         seed_nodes: list[str] = []
@@ -471,20 +476,21 @@ class GraphRAGService:
         if seed_nodes:
             placeholders = ",".join("?" * len(seed_nodes))
             async with get_db() as db:
+                # Upgraded query to include dual-layer fields
                 cursor = await db.execute(
                     f"""WITH RECURSIVE subgraph AS (
-                        SELECT source_id, target_id, relation_type, weight, 1 AS depth
+                        SELECT source_id, target_id, relation_type, weight, layer_type, confidence_score, source_agent_id, 1 AS depth
                         FROM kg_edges
                         WHERE session_id = ? AND source_id IN ({placeholders})
                         UNION ALL
-                        SELECT e.source_id, e.target_id, e.relation_type, e.weight, s.depth + 1
+                        SELECT e.source_id, e.target_id, e.relation_type, e.weight, e.layer_type, e.confidence_score, e.source_agent_id, s.depth + 1
                         FROM kg_edges e
                         JOIN subgraph s ON e.source_id = s.target_id
                         WHERE e.session_id = ? AND s.depth < ?
                     )
-                    SELECT DISTINCT source_id, target_id, relation_type, weight
+                    SELECT source_id, target_id, relation_type, weight, layer_type, confidence_score, source_agent_id
                     FROM subgraph
-                    ORDER BY weight DESC
+                    ORDER BY weight DESC, confidence_score DESC
                     LIMIT ?""",
                     (session_id, *seed_nodes, session_id, max_depth, max_edges),
                 )
@@ -495,9 +501,46 @@ class GraphRAGService:
                         "target": r["target_id"],
                         "relation": r["relation_type"],
                         "weight": r["weight"],
+                        "layer": r["layer_type"],
+                        "confidence": r["confidence_score"],
+                        "source_agent": r["source_agent_id"],
+                        "edge_id": r.get("id", -1) # Ensure we get the edge ID
                     }
                     for r in rows
                 ]
+
+        # Multi-perspective Contradiction Detection
+        # Group by (source, target) to detect conflicting relations across agents/layers
+        edge_groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
+        for edge in subgraph_edges:
+            pair = (edge["source"], edge["target"])
+            if pair not in edge_groups:
+                edge_groups[pair] = []
+            edge_groups[pair].append(edge)
+
+        contradictions: list[str] = []
+        for pair, group in edge_groups.items():
+            # Find Truth layer relation if any
+            truth_edges = [e for e in group if e["layer"] == "truth"]
+            belief_edges = [e for e in group if e["layer"] == "belief"]
+
+            if not truth_edges and not belief_edges:
+                continue
+
+            unique_relations = {e["relation"] for e in group}
+            if len(unique_relations) > 1:
+                # We have a contradiction in relation types
+                truth_str = f"Truth: {truth_edges[0]['relation']}" if truth_edges else "Truth: (Missing)"
+                beliefs: dict[str, list[str]] = {}
+                for b in belief_edges:
+                    rel = b["relation"]
+                    agent = b["source_agent"] or "Unknown"
+                    if rel not in beliefs:
+                        beliefs[rel] = []
+                    beliefs[rel].append(agent)
+
+                belief_str = ", ".join([f"{rel} (Agents: {', '.join(agents)})" for rel, agents in beliefs.items()])
+                contradictions.append(f"Conflict at {pair[0]} -> {pair[1]}: {truth_str} vs {belief_str}")
 
         # Collect unique nodes
         nodes: set[str] = set()
@@ -512,19 +555,31 @@ class GraphRAGService:
         )
 
         community_text = "\n".join(
-            f"- 社群 #{s['cluster_id']}（{s['member_count']} 人）：{s['core_narrative']}" for s in relevant_summaries
+            f"- 社群 #{s['cluster_id']}（{s['member_count']} 人）：{s['core_narrative']}"
+            for s in (relevant_summaries or [])
         )
-        edge_text = "\n".join(
-            f"- {e['source']} --[{e['relation']}]--> {e['target']} (w={e['weight']:.2f})" for e in subgraph_edges[:30]
-        )
+        # Format edges with layer info
+        edge_text_lines: list[str] = []
+        for e in subgraph_edges[:40]:
+            layer_tag = f"[{e['layer'].upper()}]"
+            src_tag = f" (src={e['source_agent']})" if e['source_agent'] else ""
+            edge_text_lines.append(
+                f"- {e['source']} --[{e['relation']}]--> {e['target']} {layer_tag}{src_tag} (w={e['weight']:.2f}, c={e['confidence']:.2f})"
+            )
+
+        contradiction_text = "\n".join(f"- {c}" for c in contradictions) if contradictions else "(無明顯多視角衝突)"
 
         user_prompt = SUBGRAPH_INSIGHT_USER.format(
             query=query,
             community_summaries=community_text or "(無社群摘要)",
             node_count=len(nodes),
             edge_count=len(subgraph_edges),
-            subgraph_edges=edge_text or "(無子圖邊)",
+            subgraph_edges="\n".join(edge_text_lines) or "(無子圖邊)",
         )
+
+        # Inject contradictions into prompt if not already handled by SUBGRAPH_INSIGHT_USER
+        # Note: We append it to the end of user prompt to ensure LLM notes the conflicts.
+        user_prompt += f"\n\n### 多視角衝突檢測 (Contradiction Detection)\n{contradiction_text}"
 
         async with _LLM_SEMAPHORE:
             response = await self._llm.chat(
@@ -542,6 +597,8 @@ class GraphRAGService:
             node_count=len(nodes),
             edge_count=len(subgraph_edges),
             insight_report=response.content,
+            evidence_node_ids=list(nodes),
+            evidence_edge_ids=[e["edge_id"] for e in subgraph_edges if e.get("edge_id") != -1],
         )
 
     async def _search_community_summaries(
@@ -779,7 +836,8 @@ class GraphRAGService:
             )
 
         # Detect conflicts
-        conflicts = await self.detect_triple_conflicts(session_id)
+        triple_conflicts = await self.detect_triple_conflicts(session_id)
+        dual_layer_conflicts = await self._detect_dual_layer_conflicts(session_id)
 
         # Format for prompt
         from backend.prompts.report_prompts import (  # noqa: PLC0415
@@ -795,21 +853,27 @@ class GraphRAGService:
             for s in summaries_data
         )
 
-        conflict_text = (
+        triple_conflict_text = (
             "\n".join(
-                f"- **{c.entity}**：{len(c.agent_ids_a)} 人認為 [{c.predicate_a}→{c.object_a}] "
-                f"vs {len(c.agent_ids_b)} 人認為 [{c.predicate_b}→{c.object_b}]（衝突分數 {c.conflict_score:.2f}）"
-                for c in conflicts[:10]
+                f"- [三元組] **{c.entity}**：{len(c.agent_ids_a)} 人認為 [{c.predicate_a}] vs {len(c.agent_ids_b)} 人認為 [{c.predicate_b}]"
+                for c in triple_conflicts[:8]
             )
-            or "(無明顯觀點衝突)"
+            or "(無三元組衝突)"
         )
+        
+        dual_layer_text = (
+            "\n".join(f"- [圖譜] {c}" for c in dual_layer_conflicts[:8])
+            or "(無事實與信念衝突)"
+        )
+
+        all_conflicts_text = f"#### 記憶三元組衝突：\n{triple_conflict_text}\n\n#### 圖譜層次衝突 (事實 vs 個人信念)：\n{dual_layer_text}"
 
         user_prompt = GLOBAL_NARRATIVE_USER.format(
             session_id=session_id,
             round_number=round_number,
             community_count=len(summaries_data),
             all_community_summaries=all_summaries_text,
-            conflict_data=conflict_text,
+            conflict_data=all_conflicts_text,
         )
 
         async with _LLM_SEMAPHORE:
@@ -841,3 +905,55 @@ class GraphRAGService:
             narrative_text=narrative,
             fault_lines=fault_lines,
         )
+
+    async def _detect_dual_layer_conflicts(self, session_id: str, limit: int = 20) -> list[str]:
+        """Detect Truth vs Belief conflicts across the entire session's KG edges."""
+        async with get_db() as db:
+            # Group edges by (source_id, target_id) to find multiple relations
+            cursor = await db.execute(
+                """SELECT source_id, target_id, relation_type, layer_type, source_agent_id
+                   FROM kg_edges
+                   WHERE session_id = (SELECT graph_id FROM simulation_sessions WHERE id = ? OR graph_id = ?)
+                   OR session_id = ?
+                   ORDER BY source_id, target_id""",
+                (session_id, session_id, session_id),
+            )
+            rows = await cursor.fetchall()
+
+        if not rows:
+            return []
+
+        # Grouping logic
+        edge_groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
+        for r in rows:
+            pair = (r["source_id"], r["target_id"])
+            if pair not in edge_groups:
+                edge_groups[pair] = []
+            edge_groups[pair].append(dict(r))
+
+        contradictions: list[str] = []
+        for pair, group in edge_groups.items():
+            truth_edges = [e for e in group if e["layer_type"] == "truth"]
+            belief_edges = [e for e in group if e["layer_type"] == "belief"]
+
+            if not truth_edges or not belief_edges:
+                continue
+
+            # If the belief relation differs from the truth relation
+            truth_rel = truth_edges[0]["relation_type"]
+            conflicting_beliefs: dict[str, list[str]] = {}
+            
+            for b in belief_edges:
+                if b["relation_type"] != truth_rel:
+                    rel = b["relation_type"]
+                    agent = b["source_agent_id"] or "Unknown"
+                    if rel not in conflicting_beliefs:
+                        conflicting_beliefs[rel] = []
+                    conflicting_beliefs[rel].append(agent)
+
+            if conflicting_beliefs:
+                belief_str = ", ".join([f"Agent {', '.join(agents)} 誤以為是 {rel}" for rel, agents in conflicting_beliefs.items()])
+                contradictions.append(f"事實為 {pair[0]} -> {pair[1]} 是 {truth_rel}，但 {belief_str}")
+
+        return contradictions[:limit]
+

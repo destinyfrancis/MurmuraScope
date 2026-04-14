@@ -10,7 +10,7 @@ const props = defineProps({
   scenarioQuestion: { type: String, default: '' },
 })
 
-const emit = defineEmits(['report-generated', 'update:session'])
+const emit = defineEmits(['report-generated', 'update:session', 'switch-step'])
 
 // Sanitize HTML to prevent XSS from LLM-generated markdown.
 // Strips <script>, <iframe>, javascript: URIs, and inline event handlers.
@@ -109,9 +109,40 @@ const isTyping = ref(false)
 let typewriterTimer = null
 
 const renderedDisplayReport = computed(() => {
+  if (!renderedMarkdown.value) return ''
+  let html = renderedMarkdown.value
+  
+  // Replace [[N:node_id]] with evidence tag
+  html = html.replace(/\[\[N:([^\]]+)\]\]/g, (match, id) => {
+    return `<span class="evidence-tag node-tag" data-id="${id}">🔍 核心節點</span>`
+  })
+  
+  // Replace [[E:edge_id]] with evidence tag
+  html = html.replace(/\[\[E:([^\]]+)\]\]/g, (match, id) => {
+    return `<span class="evidence-tag edge-tag" data-id="${id}">🔍 關聯證據</span>`
+  })
+  
+  return html
+})
+
+const renderedMarkdown = computed(() => {
   if (!displayedReport.value) return ''
   return sanitize(marked.parse(displayedReport.value))
 })
+
+function handleReportClick(e) {
+  const tag = e.target.closest('.evidence-tag')
+  if (tag) {
+    const id = tag.dataset.id
+    const type = tag.classList.contains('node-tag') ? 'node' : 'edge'
+    
+    // Set target in shared session
+    props.session.targetHighlight = { id, type }
+    
+    // Ask parent to switch to graph step
+    emit('switch-step', 1)
+  }
+}
 
 watch(reportContent, (newContent) => {
   if (!newContent) return
@@ -503,8 +534,8 @@ async function runXaiTool(toolName) {
           <button class="retry-btn" @click="startGeneration">重試</button>
         </div>
 
-        <div v-else class="report-body">
-          <span v-html="renderedDisplayReport" />
+        <div v-else class="report-body" @click="handleReportClick">
+          <div v-html="renderedDisplayReport" />
           <span v-if="isTyping" class="typing-cursor">_</span>
         </div>
 

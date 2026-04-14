@@ -45,6 +45,14 @@ const typeLabels = {
   location: '地點',
   default: '其他',
 }
+
+defineExpose({
+  focusNode(nodeId) {
+    if (canvasRef.value) {
+      canvasRef.value.focusNode(nodeId)
+    }
+  }
+})
 </script>
 
 <template>

@@ -51,6 +51,13 @@ CREATE TABLE IF NOT EXISTS kg_nodes (
     title TEXT NOT NULL,
     description TEXT,
     properties TEXT,
+    -- Dual-layer graph support (Phase 2)
+    -- layer_type: 'truth' = fact from seed text; 'belief' = agent-held belief
+    layer_type TEXT NOT NULL DEFAULT 'truth',
+    -- confidence_score: 0.0–1.0; bootstrapped nodes start at 0.1
+    confidence_score REAL NOT NULL DEFAULT 1.0,
+    -- source_agent_id: which agent holds this belief (NULL for truth layer)
+    source_agent_id TEXT DEFAULT NULL,
     created_at TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_kg_session ON kg_nodes(session_id);
@@ -65,6 +72,13 @@ CREATE TABLE IF NOT EXISTS kg_edges (
     description TEXT,
     weight REAL DEFAULT 1.0,
     round_number INTEGER NOT NULL DEFAULT 0,
+    -- Dual-layer graph support (Phase 2)
+    -- layer_type: 'truth' = fact from seed; 'belief' = written by simulation agent
+    layer_type TEXT NOT NULL DEFAULT 'truth',
+    -- confidence_score: 0.0–1.0; lower = more speculative
+    confidence_score REAL NOT NULL DEFAULT 1.0,
+    -- source_agent_id: agent whose action created this belief edge (NULL on truth layer)
+    source_agent_id TEXT DEFAULT NULL,
     created_at TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_edge_session ON kg_edges(session_id);
@@ -126,6 +140,22 @@ CREATE TABLE IF NOT EXISTS simulation_sessions (
     scenario_question TEXT DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_session_status ON simulation_sessions(status);
+
+-- ============================================================
+-- simulation_jobs: Infrastructure execution state (Phase 7)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS simulation_jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL REFERENCES simulation_sessions(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'pending', -- pending, running, completed, failed, interrupted, cancelled
+    last_heartbeat TEXT,
+    error_message TEXT,
+    worker_pid INTEGER,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_jobs_status ON simulation_jobs(status);
+CREATE INDEX IF NOT EXISTS idx_jobs_session ON simulation_jobs(session_id);
 
 -- ============================================================
 -- agent_profiles

@@ -188,17 +188,15 @@ class EntityExtractor:
     async def extract(
         self,
         seed_text: str,
-        hk_data: dict[str, Any],
         entity_types: list[str],
         relation_types: list[str],
         *,
         enrich_aliases: bool = True,
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-        """Extract nodes and edges from seed text and HK data.
+        """Extract nodes and edges from seed text.
 
         Args:
             seed_text: Scenario narrative text.
-            hk_data: Supplementary structured HK data.
             entity_types: Allowed entity types from the ontology.
             relation_types: Allowed relation types from the ontology.
             enrich_aliases: If True (default), auto-generate dynamic aliases for
@@ -217,7 +215,6 @@ class EntityExtractor:
                     entity_types=", ".join(entity_types),
                     relation_types=", ".join(relation_types),
                     seed_text=sanitize_seed_text(seed_text),
-                    hk_data_json=json.dumps(hk_data, ensure_ascii=False, indent=2),
                 ),
             },
         ]

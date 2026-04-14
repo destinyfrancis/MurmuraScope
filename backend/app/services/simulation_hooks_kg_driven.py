@@ -1646,8 +1646,70 @@ class KGDrivenHooksMixin:
             )
 
         except Exception:
-            logger.exception(
-                "_maybe_inject_regulatory_event failed session=%s round=%d",
-                session_id,
-                round_num,
-            )
+            logger.exception("_maybe_inject_regulatory_event failed session=%s", session_id)
+
+    async def _kg_graph_feedback_loop(self, session_id: str, round_num: int) -> None:
+        """Phase 5: write dynamic belief shifts and trust updates back to the KG.
+        
+        Monitors agent_beliefs and relationship_states for significant shifts.
+        Writes 'belief' layer edges into kg_edges, attributed to the source agent.
+        """
+        kg_state = self._kg_sessions.get(session_id)
+        if kg_state is None:
+            return
+
+        from backend.app.utils.db import get_db # noqa: PLC0415
+        
+        # 1. Capture significant trust as 'allied_with' or 'hostile_to' belief edges
+        all_rels = kg_state.relationship_states
+        belief_edges = []
+        
+        for (src_id, tgt_id), state in all_rels.items():
+            trust = getattr(state, "trust", 0.0)
+            relation_type = None
+            
+            if trust > 0.7:
+                relation_type = "perceived_ally"
+            elif trust < -0.7:
+                relation_type = "perceived_threat"
+                
+            if relation_type:
+                belief_edges.append((
+                    f"{session_id}_{src_id}_{tgt_id}_{round_num}",
+                    src_id, # Source ID
+                    tgt_id, # Target ID
+                    relation_type,
+                    "belief",
+                    abs(trust),
+                    src_id # source_agent_id
+                ))
+
+        if not belief_edges:
+            return
+
+        try:
+            async with get_db() as db:
+                # Resolve graph_id
+                cursor = await db.execute("SELECT graph_id FROM simulation_sessions WHERE id = ?", (session_id,))
+                row = await cursor.fetchone()
+                graph_id = row["graph_id"] if row else session_id
+
+                # Format rows for kg_edges (id, session_id, source_id, target_id, relation_type, layer_type, confidence_score, source_agent_id)
+                final_edges = [
+                    (e[0], graph_id, e[1], e[2], e[3], e[4], e[5], e[6]) 
+                    for e in belief_edges
+                ]
+
+                await db.executemany(
+                    """INSERT INTO kg_edges 
+                       (id, session_id, source_id, target_id, relation_type, layer_type, confidence_score, source_agent_id)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                       ON CONFLICT(id) DO UPDATE SET confidence_score = excluded.confidence_score""",
+                    final_edges
+                )
+                await db.commit()
+                
+            logger.info("Micro-Macro Loop: Written %d belief edges for session %s", len(final_edges), session_id)
+        except Exception:
+            logger.exception("Micro-Macro Loop failed for session %s", session_id)
+

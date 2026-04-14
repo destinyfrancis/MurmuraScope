@@ -137,32 +137,29 @@ class KGAgentFactory:
 
         If ``target_count`` exceeds the number of eligible nodes the LLM is
         instructed to invent additional plausible agents implied by the
-        scenario.
+        scenario (only if Cold Start conditions are met).
 
         Args:
-            nodes: KG node dicts (must contain at minimum ``id`` and ``label``
-                   keys; additional properties such as ``entity_type`` and
-                   ``description`` improve output quality).
-            edges: KG edge dicts (``source``, ``target``, ``relation`` keys).
-            seed_text: Original scenario description used as context.
-            target_count: Desired total number of agents.  ``None`` means
-                          generate one agent per eligible node.
+            nodes: KG node dicts.
+            edges: KG edge dicts.
+            seed_text: Original scenario description.
+            target_count: Desired total number of agents.
 
         Returns:
             A list of frozen ``UniversalAgentProfile`` instances.
-
-        Raises:
-            ValueError: If ``nodes`` is empty.
-            RuntimeError: If both LLM stages fail and no fallback is possible.
         """
         if not nodes:
             raise ValueError("nodes must not be empty")
 
+        total_nodes = len(nodes)
+        is_cold_start = total_nodes < 50
+
         logger.info(
-            "generate_from_kg: %d nodes, %d edges, target_count=%s",
-            len(nodes),
+            "generate_from_kg: %d nodes, %d edges, target_count=%s, cold_start=%s",
+            total_nodes,
             len(edges),
             target_count,
+            is_cold_start
         )
 
         # Stage 1 — eligibility filter
@@ -173,242 +170,21 @@ class KGAgentFactory:
                 "No agent-eligible nodes found among %d KG nodes; falling back to all nodes",
                 len(nodes),
             )
-            # Last-resort: treat all nodes as eligible so we always produce
-            # at least some agents rather than returning an empty list.
             eligible_nodes = nodes
 
         resolved_target = target_count if target_count is not None else len(eligible_nodes)
-        logger.info(
-            "Stage 1 complete: %d eligible nodes, resolved target=%d",
-            len(eligible_nodes),
-            resolved_target,
-        )
-
+        
         # Stage 2 — profile generation
         profiles = await self._generate_profiles(
             eligible_nodes=eligible_nodes,
             edges=edges,
             seed_text=seed_text,
             target_count=resolved_target,
+            is_cold_start=is_cold_start
         )
 
         logger.info("generate_from_kg complete: produced %d profiles", len(profiles))
         return profiles
-
-    @staticmethod
-    def mark_stakeholders(
-        profiles: list[UniversalAgentProfile],
-        stakeholder_entity_types: tuple[str, ...] | list[str],
-    ) -> list[UniversalAgentProfile]:
-        """Mark profiles whose entity_type is in stakeholder_entity_types.
-
-        Returns a new list with ``is_stakeholder=True`` set on matching
-        profiles.  Also boosts ``activity_level`` to at least 0.8 for
-        stakeholders.  Uses ``dataclasses.replace`` to preserve immutability.
-
-        Args:
-            profiles: Agent profiles to classify.
-            stakeholder_entity_types: Entity types that qualify as stakeholders.
-
-        Returns:
-            New list of ``UniversalAgentProfile`` with stakeholder flags set.
-        """
-        from dataclasses import replace as dc_replace  # noqa: PLC0415
-
-        stakeholder_set = frozenset(stakeholder_entity_types)
-        if not stakeholder_set:
-            return profiles
-
-        result: list[UniversalAgentProfile] = []
-        for profile in profiles:
-            entity_type = getattr(profile, "entity_type", "") or ""
-            is_stakeholder = entity_type in stakeholder_set
-            if is_stakeholder:
-                result.append(
-                    dc_replace(
-                        profile,
-                        is_stakeholder=True,
-                        activity_level=max(profile.activity_level, 0.8),
-                    )
-                )
-            else:
-                result.append(profile)
-
-        stakeholder_count = sum(1 for p in result if p.is_stakeholder)
-        logger.info(
-            "mark_stakeholders: %d/%d profiles marked as stakeholders (types=%s)",
-            stakeholder_count,
-            len(result),
-            list(stakeholder_set),
-        )
-        return result
-
-    def infer_attachment_styles(
-        self,
-        profiles: list[UniversalAgentProfile],
-    ) -> dict[str, AttachmentStyle]:
-        """Stage 2.5 — derive attachment styles from Big Five (pure function, no LLM).
-
-        Args:
-            profiles: Agent profiles with Big Five traits.
-
-        Returns:
-            Dict mapping agent_id → AttachmentStyle.
-        """
-        result: dict[str, AttachmentStyle] = {}
-        for p in profiles:
-            result[p.id] = infer_attachment_style(
-                agent_id=p.id,
-                neuroticism=p.neuroticism,
-                agreeableness=p.agreeableness,
-                openness=p.openness,
-            )
-        logger.debug("infer_attachment_styles: %d styles generated", len(result))
-        return result
-
-    def generate_agents_csv(
-        self,
-        profiles: list[UniversalAgentProfile],
-        output_path: str,
-    ) -> str:
-        """Write OASIS-compatible agents.csv to ``output_path``.
-
-        The CSV has three columns: ``userid``, ``user_char``, ``username``.
-        The file is created (or overwritten) at the given path.
-
-        Args:
-            profiles: Agent profiles to serialise.
-            output_path: Absolute or relative path for the output CSV.
-
-        Returns:
-            The resolved absolute path of the written file.
-
-        Raises:
-            ValueError: If ``profiles`` is empty.
-            OSError: If the file cannot be written.
-        """
-        if not profiles:
-            raise ValueError("profiles must not be empty to write agents.csv")
-
-        abs_path = os.path.abspath(output_path)
-        os.makedirs(os.path.dirname(abs_path), exist_ok=True)
-
-        rows = []
-        for p in profiles:
-            oasis_row = p.to_oasis_row()
-            # OASIS agents_generator expects a 'description' column alongside user_char
-            oasis_row["description"] = oasis_row["user_char"]
-            rows.append(oasis_row)
-        fieldnames = ["userid", "user_char", "username", "description"]
-
-        with open(abs_path, "w", newline="", encoding="utf-8") as fh:
-            writer = csv.DictWriter(fh, fieldnames=fieldnames)
-            writer.writeheader()
-            writer.writerows(rows)
-
-        logger.info("agents.csv written: %d rows → %s", len(rows), abs_path)
-        return abs_path
-
-    # ------------------------------------------------------------------
-    # Stage 1: eligibility filter
-    # ------------------------------------------------------------------
-
-    async def _filter_agent_eligible_nodes(
-        self,
-        nodes: list[dict[str, Any]],
-    ) -> list[dict[str, Any]]:
-        """Use LLM to identify which KG nodes should become simulation agents.
-
-        Falls back to a fast heuristic filter if the LLM call fails.
-
-        Args:
-            nodes: All KG nodes from GraphBuilder.
-
-        Returns:
-            Filtered list of node dicts (eligible agents only).
-        """
-        nodes_json = json.dumps(nodes, ensure_ascii=False, indent=2)
-
-        try:
-            result = await self._llm.chat_json(
-                messages=[
-                    {"role": "system", "content": AGENT_ELIGIBLE_FILTER_SYSTEM},
-                    {
-                        "role": "user",
-                        "content": AGENT_ELIGIBLE_FILTER_USER.format(nodes_json=nodes_json),
-                    },
-                ],
-                temperature=0.2,
-                max_tokens=4096,
-            )
-            eligible_ids: set[str] = {entry["node_id"] for entry in result.get("eligible", [])}
-            eligible = [n for n in nodes if str(n.get("id", "")) in eligible_ids]
-
-            if not eligible:
-                logger.warning("LLM filter returned 0 eligible nodes; using heuristic fallback")
-                return self._heuristic_filter(nodes)
-
-            return eligible
-
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(
-                "LLM eligibility filter failed (%s); using heuristic fallback",
-                exc,
-            )
-            return self._heuristic_filter(nodes)
-
-    @staticmethod
-    def _heuristic_filter(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Fast heuristic fallback when the LLM filter is unavailable.
-
-        Keeps nodes whose ``entity_type`` is in the eligible set, or whose
-        ``label`` / ``type`` field contains actor-like keywords.
-
-        Args:
-            nodes: All KG nodes.
-
-        Returns:
-            Subset likely to be concrete actors.
-        """
-        _ACTOR_KEYWORDS = frozenset(
-            {
-                "person",
-                "people",
-                "country",
-                "nation",
-                "government",
-                "military",
-                "army",
-                "organization",
-                "organisation",
-                "company",
-                "corporation",
-                "media",
-                "outlet",
-                "party",
-                "movement",
-                "institution",
-                "leader",
-                "minister",
-                "president",
-                "figure",
-            }
-        )
-
-        def _is_actor(node: dict[str, Any]) -> bool:
-            entity_type = str(node.get("entity_type", "")).lower()
-            label = str(node.get("label", "")).lower()
-            node_type = str(node.get("type", "")).lower()
-            combined = f"{entity_type} {label} {node_type}"
-            return any(kw in combined for kw in _ACTOR_KEYWORDS)
-
-        filtered = [n for n in nodes if _is_actor(n)]
-        # If heuristic also returns nothing, accept all nodes as a last resort
-        return filtered if filtered else nodes
-
-    # ------------------------------------------------------------------
-    # Stage 2: profile generation
-    # ------------------------------------------------------------------
 
     async def _generate_profiles(
         self,
@@ -416,30 +192,37 @@ class KGAgentFactory:
         edges: list[dict[str, Any]],
         seed_text: str,
         target_count: int,
+        is_cold_start: bool = False,
     ) -> list[UniversalAgentProfile]:
         """Call LLM to generate full agent profiles for eligible nodes.
-
-        Args:
-            eligible_nodes: Agent-eligible KG nodes (from Stage 1).
-            edges: All KG edges (used for relationship inference).
-            seed_text: Original scenario description.
-            target_count: Desired number of agents (LLM may add inferred ones).
-
-        Returns:
-            List of ``UniversalAgentProfile`` instances.
-
-        Raises:
-            RuntimeError: If LLM call fails and no profiles can be produced.
+        
+        Includes Cold Start intervention:
+        - If is_cold_start=True: LLM is permitted to invent plausible agents (conf=0.1).
+        - If is_cold_start=False: LLM MUST strictly use evidence from KG.
         """
         eligible_json = json.dumps(eligible_nodes, ensure_ascii=False, indent=2)
         edges_json = json.dumps(edges, ensure_ascii=False, indent=2)
+
+        if is_cold_start:
+            cold_start_instruction = (
+                "\n\n[COLD START PROTOCOL: ACTIVE]\n"
+                "The current knowledge graph is sparse. You are PERMITTED to hallucinate/invent "
+                "plausible agents that are logically implied by the scenario but not explicitly in the KG nodes. "
+                "For invented agents, use `confidence_score=0.1` in your internal reasoning."
+            )
+        else:
+            cold_start_instruction = (
+                "\n\n[COLD START PROTOCOL: INACTIVE]\n"
+                "The knowledge graph is well-populated. You MUST STRICTLY limit your agents to those "
+                "supported by explicit KG nodes or very direct evidence. Do NOT invent new characters."
+            )
 
         user_message = AGENT_GENERATION_USER.format(
             seed_text=seed_text,
             eligible_nodes_json=eligible_json,
             edges_json=edges_json,
             target_count=target_count,
-        )
+        ) + cold_start_instruction
 
         # If persona keys are available, constrain agent type assignment
         if self._persona_keys:
@@ -479,6 +262,7 @@ class KGAgentFactory:
             raise RuntimeError("No valid agent profiles could be parsed from LLM response")
 
         return profiles
+
 
     # ------------------------------------------------------------------
     # Stage 3: cognitive fingerprint generation

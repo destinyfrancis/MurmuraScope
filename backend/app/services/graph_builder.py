@@ -51,13 +51,12 @@ class GraphBuilderService:
         session_id: str,
         scenario_type: str,
         seed_text: str,
-        hk_data: dict[str, Any],
     ) -> dict[str, Any]:
-        """Build a knowledge graph from scenario + seed text + HK data.
+        """Build a knowledge graph from scenario + seed text via LLM extraction.
 
         Steps:
             1. Generate ontology (entity types + relation types).
-            2. Extract entities from seed text + HK data.
+            2. Extract entities from seed text using LLM.
             3. Store nodes and edges in the database.
             4. Detect and store communities.
 
@@ -72,8 +71,8 @@ class GraphBuilderService:
         # Step 1 — Ontology
         entity_types, relation_types = await self._ontology_gen.generate(scenario_type, seed_text)
 
-        # Step 2 — Entity extraction
-        nodes, edges = await self._entity_ext.extract(seed_text, hk_data, entity_types, relation_types)
+        # Step 2 — Entity extraction (LLM-only, no static data)
+        nodes, edges = await self._entity_ext.extract(seed_text, entity_types, relation_types)
 
         if not nodes:
             logger.warning("No entities extracted for session %s", session_id)

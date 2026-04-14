@@ -113,12 +113,12 @@ class RelationshipMemoryService:
             async with get_db() as db:
                 cursor = await db.execute(
                     """
-                    SELECT content, round_number, salience, metadata
+                    SELECT memory_text, round_number, salience_score, metadata
                     FROM agent_memories
                     WHERE session_id = ?
                       AND agent_id = ?
                       AND metadata LIKE ?
-                    ORDER BY salience DESC, round_number DESC
+                    ORDER BY salience_score DESC, round_number DESC
                     LIMIT ?
                     """,
                     (
@@ -145,9 +145,9 @@ class RelationshipMemoryService:
                 meta = {}
             result.append(
                 {
-                    "content": row[0],
+                    "content": row[0],      # memory_text aliased to 'content' for callers
                     "round_number": row[1],
-                    "salience": row[2],
+                    "salience": row[2],     # salience_score aliased to 'salience' for callers
                     "metadata": meta,
                 }
             )

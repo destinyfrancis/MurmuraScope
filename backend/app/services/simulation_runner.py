@@ -439,6 +439,10 @@ class SimulationRunner(
         if self._profiler:
             self._profiler.end_hook("group_2", round_num, _t_g2)
 
+        # Phase 5: Micro-Macro Graph Feedback Loop
+        if self._kg_mode.get(session_id):
+            await self._kg_graph_feedback_loop(session_id, round_num)
+
         # Group 3: Periodic hooks (fire-and-forget, tracked for cleanup)
         logger.debug(
             "hook=group3_fired session=%s round=%d",

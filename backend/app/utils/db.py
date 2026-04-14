@@ -101,6 +101,13 @@ async def apply_migrations() -> None:
         "ALTER TABLE agent_profiles ADD COLUMN big5_neuroticism REAL",
         "ALTER TABLE agent_profiles ADD COLUMN goals TEXT DEFAULT '[]'",
         "ALTER TABLE agent_profiles ADD COLUMN nationality TEXT DEFAULT ''",
+        # Phase 2: Dual-layer graph (Truth vs Belief)
+        "ALTER TABLE kg_nodes ADD COLUMN layer_type TEXT NOT NULL DEFAULT 'truth'",
+        "ALTER TABLE kg_nodes ADD COLUMN confidence_score REAL NOT NULL DEFAULT 1.0",
+        "ALTER TABLE kg_nodes ADD COLUMN source_agent_id TEXT DEFAULT NULL",
+        "ALTER TABLE kg_edges ADD COLUMN layer_type TEXT NOT NULL DEFAULT 'truth'",
+        "ALTER TABLE kg_edges ADD COLUMN confidence_score REAL NOT NULL DEFAULT 1.0",
+        "ALTER TABLE kg_edges ADD COLUMN source_agent_id TEXT DEFAULT NULL",
     ]
     # Idempotent index creation — CREATE INDEX IF NOT EXISTS is always safe
     index_migrations = [

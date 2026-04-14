@@ -1,5 +1,7 @@
 services:
   backend:
+    image: ghcr.io/destinyfrancis/murmurascope-backend:latest
+    pull_policy: always
     build:
       context: .
       dockerfile: Dockerfile
@@ -30,6 +32,8 @@ services:
     pids_limit: 100
 
   frontend:
+    image: ghcr.io/destinyfrancis/murmurascope-frontend:latest
+    pull_policy: always
     build:
       context: ./frontend
       dockerfile: Dockerfile

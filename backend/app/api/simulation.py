@@ -350,7 +350,6 @@ async def _run_quick_start(
         session_id="quick",
         scenario_type=config.domain_pack_id,
         seed_text=seed_text,
-        hk_data={},
     )
     graph_id = graph_result.get("graph_id", "")
 
@@ -537,6 +536,78 @@ async def quick_start_upload(
 # IMPORTANT: These static routes MUST be registered BEFORE /{session_id}
 # to avoid FastAPI matching "admin" as a session_id.
 # ---------------------------------------------------------------------------
+
+
+@router.get("/admin/queue", response_model=APIResponse)
+@_limiter.limit("30/minute")
+async def list_simulation_queue(
+    request: Request,
+    limit: int = 50,
+    user: UserProfile = Depends(require_admin),
+) -> APIResponse:
+    """List simulation jobs in the persistent queue."""
+    from backend.app.utils.db import get_db
+
+    try:
+        async with get_db() as db:
+            rows = await (
+                await db.execute(
+                    """SELECT j.*, s.name as session_name 
+                       FROM simulation_jobs j
+                       JOIN simulation_sessions s ON j.session_id = s.id
+                       ORDER BY j.created_at DESC
+                       LIMIT ?""",
+                    (min(limit, 200),),
+                )
+            ).fetchall()
+        return APIResponse(
+            success=True,
+            data={"jobs": [dict(r) for r in (rows or [])], "count": len(rows or [])},
+        )
+    except Exception as exc:
+        logger.exception("list_simulation_queue failed")
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
+
+
+@router.post("/admin/jobs/{job_id}/cancel", response_model=APIResponse)
+@_limiter.limit("10/minute")
+async def cancel_simulation_job(
+    job_id: int,
+    user: UserProfile = Depends(require_admin),
+) -> APIResponse:
+    """Cancel a pending or running simulation job."""
+    from backend.app.services.simulation_manager import get_simulation_manager
+    from backend.app.utils.db import get_db
+
+    try:
+        async with get_db() as db:
+            cursor = await db.execute(
+                "SELECT session_id, status FROM simulation_jobs WHERE id = ?",
+                (job_id,)
+            )
+            job = await cursor.fetchone()
+            if not job:
+                raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+
+            session_id = job["session_id"]
+            status = job["status"]
+
+            if status == "running":
+                manager = get_simulation_manager()
+                await manager.stop_session(session_id)
+            
+            await db.execute(
+                "UPDATE simulation_jobs SET status = 'cancelled', updated_at = datetime('now') WHERE id = ?",
+                (job_id,)
+            )
+            await db.commit()
+
+        return APIResponse(success=True, data={"message": f"Job {job_id} cancelled"})
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("cancel_simulation_job failed")
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @router.get("/admin/benchmarks", response_model=APIResponse)

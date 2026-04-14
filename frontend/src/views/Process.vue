@@ -280,6 +280,7 @@ watch(
         @simulation-created="onSimulationCreated"
         @simulation-complete="onSimulationComplete"
         @report-generated="onReportGenerated"
+        @switch-step="goToStep"
       />
     </div>
   </div>

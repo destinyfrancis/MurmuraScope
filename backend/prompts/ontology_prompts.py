@@ -119,9 +119,6 @@ Relation types to detect: {relation_types}
 Source text:
 {seed_text}
 
-Supplementary HK data:
-{hk_data_json}
-
 Extract all entities and relationships. Return ONLY valid JSON:
 
 {{

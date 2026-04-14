@@ -81,7 +81,7 @@ class ImplicitStakeholderService:
         seed_text: str,
         existing_nodes: list[dict[str, Any]],
     ) -> DiscoveryResult:
-        """Discover implicit stakeholders and inject them into the KG.
+        """Discover implicit stakeholders via LLM analysis of seed text.
 
         Args:
             graph_id: The graph/session identifier for DB operations.
@@ -90,7 +90,6 @@ class ImplicitStakeholderService:
 
         Returns:
             DiscoveryResult with discovered stakeholders and nodes_added count.
-            Never raises — returns empty result on any failure.
         """
         if not seed_text or not seed_text.strip():
             return DiscoveryResult(stakeholders=(), nodes_added=0)
@@ -101,6 +100,84 @@ class ImplicitStakeholderService:
             logger.exception("ImplicitStakeholderService: LLM call failed for graph %s", graph_id)
             return DiscoveryResult(stakeholders=(), nodes_added=0)
 
+        return await self._process_and_persist(graph_id, raw_actors, existing_nodes)
+
+    async def discover_from_topology(
+        self,
+        graph_id: str,
+    ) -> DiscoveryResult:
+        """Discover implicit stakeholders based on graph topological anomalies (structural holes).
+
+        Args:
+            graph_id: The session identifier.
+
+        Returns:
+            DiscoveryResult.
+        """
+        async with get_db() as db:
+            cursor = await db.execute(
+                "SELECT source_id as source, target_id as target, weight FROM kg_edges WHERE session_id = ?",
+                (graph_id,),
+            )
+            edges = [dict(r) for r in await cursor.fetchall()]
+            
+            cursor = await db.execute(
+                "SELECT id, title, description FROM kg_nodes WHERE session_id = ?",
+                (graph_id,),
+            )
+            nodes = [dict(r) for r in await cursor.fetchall()]
+
+        if not edges:
+            return DiscoveryResult(stakeholders=(), nodes_added=0)
+
+        from backend.app.utils.graph_metrics import calculate_topological_metrics # noqa: PLC0415
+        
+        metrics = calculate_topological_metrics(edges)
+        if "error" in metrics:
+            return DiscoveryResult(stakeholders=(), nodes_added=0)
+
+        # Identify 'Structural Holes' - nodes acting as critical bridges
+        betweenness = metrics.get("betweenness", {})
+        top_bridges = sorted(betweenness.items(), key=lambda x: x[1], reverse=True)[:5]
+        bridge_ids = [node_id for node_id, score in top_bridges if score > 0.1]
+
+        if not bridge_ids:
+            return DiscoveryResult(stakeholders=(), nodes_added=0)
+
+        # Call LLM to see if these bridges imply a 'hidden' actor
+        # e.g. if A and B are connected only via a bridge, maybe there's a third party mediating.
+        bridge_nodes = [n for n in nodes if n["id"] in bridge_ids]
+        
+        try:
+            user_content = (
+                f"Graph Topology Analysis for session: {graph_id}\n\n"
+                f"The following nodes have high Betweenness Centrality (critical bridges):\n"
+                f"{json.dumps(bridge_nodes, ensure_ascii=False, indent=2)}\n\n"
+                "Based on the fact that these actors are bridging disparate communities, "
+                "identify any 'Latent Actors' (e.g. regulators, competitors, or covert influencers) "
+                "that are likely operating in the background but are not yet in the graph."
+            )
+            
+            messages = [
+                {"role": "system", "content": IMPLICIT_STAKEHOLDER_SYSTEM + " (Focus on Topological Structural Holes)"},
+                {"role": "user", "content": user_content},
+            ]
+            
+            raw = await self._llm.chat_json(messages, max_tokens=2048, temperature=0.3)
+            raw_actors = raw.get("implied_actors", [])
+            
+            return await self._process_and_persist(graph_id, raw_actors, nodes)
+        except Exception:
+            logger.exception("Topo-Auditor discovery failed for graph %s", graph_id)
+            return DiscoveryResult(stakeholders=(), nodes_added=0)
+
+    async def _process_and_persist(
+        self,
+        graph_id: str,
+        raw_actors: list[dict[str, Any]],
+        existing_nodes: list[dict[str, Any]],
+    ) -> DiscoveryResult:
+        """Helper to deduplicate and save discovered stakeholders."""
         # Load all current node titles for dedup
         current_titles = await self._load_kg_nodes(graph_id)
         existing_titles_norm = {
@@ -143,6 +220,7 @@ class ImplicitStakeholderService:
             stakeholders=tuple(new_stakeholders),
             nodes_added=nodes_added,
         )
+
 
     # ------------------------------------------------------------------
     # Private helpers

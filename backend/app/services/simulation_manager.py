@@ -181,21 +181,10 @@ class SimulationManager:
         return _session_to_dict(session)
 
     async def start_session(self, session_id: str) -> None:
-        """Start simulation via SimulationRunner in a background task.
-
-        Validates state transition (created → running), updates DB status
-        to running, then launches the runner asynchronously so the HTTP
-        response returns immediately.
-
-        A per-session asyncio.Lock serialises concurrent calls so two
-        simultaneous POST /simulation/start requests for the same session
-        cannot both pass the idempotency check and spawn duplicate runners.
-
-        Args:
-            session_id: UUID of the session to start.
-
-        Raises:
-            ValueError: If session not found or invalid state transition.
+        """Enqueue simulation job instead of starting immediately.
+        
+        Validates state transition and idempotently adds to simulation_jobs.
+        The execution is picked up by SimulationWorker.
         """
         if session_id not in _SESSION_START_LOCKS:
             _SESSION_START_LOCKS[session_id] = asyncio.Lock()
@@ -203,100 +192,145 @@ class SimulationManager:
         async with _SESSION_START_LOCKS[session_id]:
             session = await _load_session(session_id)
 
-            # Idempotent: if already running, just let the client reconnect via WS
-            if session.status == SessionStatus.RUNNING:
-                logger.info("Session %s already running — skipping restart", session_id)
-                return
+            # Idempotent: check if already queued or running
+            async with get_db() as db:
+                cursor = await db.execute(
+                    "SELECT status FROM simulation_jobs WHERE session_id = ? AND status IN ('pending', 'running')",
+                    (session_id,)
+                )
+                existing = await cursor.fetchone()
+                if existing:
+                    logger.info("Session %s is already %s — skipping enqueue", session_id, existing["status"])
+                    return
 
             _validate_transition(session.status, SessionStatus.RUNNING)
 
-            updated = session.with_status(SessionStatus.RUNNING)
-            await _update_session_status(updated, started_at=datetime.utcnow().isoformat())
+            async with get_db() as db:
+                await db.execute(
+                    "INSERT INTO simulation_jobs (session_id, status, worker_pid) VALUES (?, 'pending', ?)",
+                    (session_id, os.getpid())
+                )
+                await db.commit()
+            
+            logger.info("Session %s enqueued in simulation_jobs", session_id)
 
-            config = await _build_runner_config(session)
+    async def start_session_from_job(self, session_id: str, job_id: int) -> None:
+        """Actual execution of a simulation triggered by SimulationWorker.
+        
+        This method replaces the old immediate execution logic and is called only
+        by the background worker.
+        """
+        session = await _load_session(session_id)
+        
+        # Internal transition from CREATED to RUNNING on the session record
+        updated = session.with_status(SessionStatus.RUNNING)
+        await _update_session_status(updated, started_at=datetime.utcnow().isoformat())
 
-            logger.info("Starting session %s in background", session_id)
+        # Update Job status
+        async with get_db() as db:
+            await db.execute(
+                "UPDATE simulation_jobs SET status = 'running', updated_at = datetime('now'), last_heartbeat = datetime('now') "
+                "WHERE id = ?",
+                (job_id,)
+            )
+            await db.commit()
 
-            async def _run_and_finalize() -> None:
-                async def on_progress(update: dict[str, Any]) -> None:
-                    data = update.get("data", update)
-                    current_round = data.get("round", 0)
-                    if current_round:
-                        await _update_session_round(session_id, current_round)
+        config = await _build_runner_config(session)
+        logger.info("Executing job %d (session=%s) in worker background", job_id, session_id)
 
+        async def _run_and_finalize() -> None:
+            async def on_progress(update: dict[str, Any]) -> None:
+                data = update.get("data", update)
+                current_round = data.get("round", 0)
+                if current_round:
+                    await _update_session_round(session_id, current_round)
+                
+                # Update job heartbeat periodically during progress
+                async with get_db() as db:
+                    await db.execute(
+                        "UPDATE simulation_jobs SET last_heartbeat = datetime('now'), updated_at = datetime('now') "
+                        "WHERE id = ?",
+                        (job_id,)
+                    )
+                    await db.commit()
+
+            try:
+                await self._runner.run(
+                    session_id=session_id,
+                    config=config,
+                    progress_callback=on_progress,
+                )
+                
+                # 1. Update session status
+                completed = updated.with_status(SessionStatus.COMPLETED)
+                await _update_session_status(completed, completed_at=datetime.utcnow().isoformat())
+                
+                # 2. Update job status
+                async with get_db() as db:
+                    await db.execute(
+                        "UPDATE simulation_jobs SET status = 'completed', updated_at = datetime('now') WHERE id = ?",
+                        (job_id,)
+                    )
+                    await db.commit()
+                
+                logger.info("Job %d (session=%s) completed successfully", job_id, session_id)
+
+            except Exception as exc:
+                # 1. Update session status
+                failed = updated.with_status(SessionStatus.FAILED, error_message=str(exc))
+                await _update_session_status(failed)
+                
+                # 2. Update job status
+                async with get_db() as db:
+                    await db.execute(
+                        "UPDATE simulation_jobs SET status = 'failed', error_message = ?, updated_at = datetime('now') "
+                        "WHERE id = ?",
+                        (str(exc), job_id)
+                    )
+                    await db.commit()
+                
+                logger.error("Job %d (session=%s) failed: %s", job_id, session_id, exc)
+
+                # Push error event
                 try:
-                    await self._runner.run(
-                        session_id=session_id,
-                        config=config,
-                        progress_callback=on_progress,
-                    )
-                    completed = updated.with_status(SessionStatus.COMPLETED)
-                    await _update_session_status(
-                        completed,
-                        completed_at=datetime.utcnow().isoformat(),
-                    )
-                    logger.info("Session %s completed", session_id)
-                except Exception as exc:
-                    failed = updated.with_status(SessionStatus.FAILED, error_message=str(exc))
-                    await _update_session_status(failed)
-                    logger.error("Session %s failed: %s", session_id, exc)
+                    from backend.app.api.ws import push_progress
+                    await push_progress(session_id, {"type": "error", "data": {"message": str(exc)}})
+                except Exception:
+                    logger.warning("Failed to push errors for session %s", session_id)
 
-                    # Push an error event so WebSocket clients know it failed.
-                    try:
-                        from backend.app.api.ws import push_progress  # noqa: PLC0415
-
-                        await push_progress(
-                            session_id,
-                            {"type": "error", "data": {"message": str(exc)}},
-                        )
-                    except Exception:
-                        logger.warning(
-                            "Failed to push error event for session %s",
-                            session_id,
-                            exc_info=True,
-                        )
-                finally:
-                    # Release buffered progress memory to prevent unbounded growth.
-                    try:
-                        from backend.app.api.ws import clear_progress  # noqa: PLC0415
-
-                        clear_progress(session_id)
-                    except Exception:
-                        logger.warning(
-                            "Failed to clear progress for session %s",
-                            session_id,
-                            exc_info=True,
-                        )
-
-            def _on_task_done(task: asyncio.Task) -> None:
-                self._session_tasks.pop(session_id, None)
-                if task.cancelled():
-                    logger.info("Session %s task was cancelled", session_id)
-                elif task.exception():
-                    logger.error(
-                        "Session %s task raised unhandled exception: %s",
-                        session_id,
-                        task.exception(),
-                        exc_info=task.exception(),
-                    )
-
-            async def _run_with_timeout() -> None:
-                timeout_s = float(os.environ.get("SIM_TASK_TIMEOUT_S", "7200"))  # 2h default
+            finally:
                 try:
-                    await asyncio.wait_for(_run_and_finalize(), timeout=timeout_s)
-                except asyncio.TimeoutError:
-                    logger.critical("Simulation %s timed out after %.0fs", session_id, timeout_s)
-                    async with get_db() as db:
-                        await db.execute(
-                            "UPDATE simulation_sessions SET status='failed', "
-                            "error_message='Simulation timed out' WHERE id=?",
-                            (session_id,),
-                        )
-                        await db.commit()
+                    from backend.app.api.ws import clear_progress
+                    clear_progress(session_id)
+                except Exception:
+                    pass
 
-            task = asyncio.create_task(_run_with_timeout(), name=f"sim-{session_id}")
-            self._session_tasks[session_id] = task
-            task.add_done_callback(_on_task_done)
+        def _on_task_done(task: asyncio.Task) -> None:
+            self._session_tasks.pop(session_id, None)
+            if task.cancelled():
+                logger.info("Job %d (session=%s) was cancelled", job_id, session_id)
+
+        async def _run_with_timeout() -> None:
+            timeout_s = float(os.environ.get("SIM_TASK_TIMEOUT_S", "7200"))
+            try:
+                await asyncio.wait_for(_run_and_finalize(), timeout=timeout_s)
+            except asyncio.TimeoutError:
+                logger.critical("Job %d timed out after %.0fs", job_id, timeout_s)
+                async with get_db() as db:
+                    await db.execute(
+                        "UPDATE simulation_jobs SET status = 'failed', error_message = 'Timeout', updated_at = datetime('now') "
+                        "WHERE id = ?",
+                        (job_id,)
+                    )
+                    await db.execute(
+                        "UPDATE simulation_sessions SET status = 'failed', error_message = 'Simulation timed out' WHERE id = ?",
+                        (session_id,)
+                    )
+                    await db.commit()
+
+        task = asyncio.create_task(_run_with_timeout(), name=f"job-{job_id}")
+        self._session_tasks[session_id] = task
+        task.add_done_callback(_on_task_done)
 
     async def stop_session(self, session_id: str) -> None:
         """Stop a running simulation.

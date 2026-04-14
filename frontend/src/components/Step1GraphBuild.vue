@@ -237,6 +237,24 @@ async function startBuild() {
     building.value = false
   }
 }
+
+// Evidence X-ray: watch for highlight requests from other steps (e.g. Report)
+import { onMounted as onMountedWatch, watch } from 'vue'
+const graphPanelRef = ref(null)
+
+watch(() => props.session.targetHighlight, (newVal) => {
+  if (newVal && newVal.id && graphData.value) {
+    // Wait a bit for the tab/component to be ready if we just switched
+    setTimeout(() => {
+      if (graphPanelRef.value) {
+        graphPanelRef.value.focusNode(newVal.id)
+        // Clear it so it can be re-triggered
+        // props.session.targetHighlight = null
+      }
+    }, 500)
+  }
+}, { immediate: true })
+
 </script>
 
 <template>
@@ -245,6 +263,7 @@ async function startBuild() {
       <div class="graph-area">
         <GraphPanel
           v-if="graphData"
+          ref="graphPanelRef"
           :nodes="graphData.nodes"
           :edges="graphData.edges"
         />
