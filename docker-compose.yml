@@ -13,6 +13,7 @@ services:
       - .env
     environment:
       - DATABASE_PATH=/app/data/murmuroscope.db
+      - DEMO_MODE=${DEMO_MODE:-true}
     restart: unless-stopped
     init: true
     healthcheck:
@@ -30,6 +31,9 @@ services:
           cpus: '1'
           memory: 1G
     pids_limit: 100
+    profiles:
+      - default
+      - demo
 
   frontend:
     image: ghcr.io/destinyfrancis/murmurascope-frontend:latest
@@ -43,6 +47,9 @@ services:
       backend:
         condition: service_healthy
     restart: unless-stopped
+    profiles:
+      - default
+      - demo
 
   # ---------------------------------------------------------------------------
   # Observability stack — run with: docker compose --profile observability up -d

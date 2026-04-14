@@ -25,6 +25,7 @@ from typing import Any
 
 import httpx
 
+from backend.app.config import get_settings
 from backend.app.utils.logger import get_logger
 from backend.app.utils.telemetry import get_tracer
 
@@ -319,6 +320,24 @@ class LLMClient:
         if breaker.is_open():
             raise CircuitBreakerOpenError(provider)
 
+        # Demo Mode Routing (L2)
+        settings = get_settings()
+        if settings.DEMO_MODE:
+            from backend.app.utils.demo_llm_provider import get_demo_client # noqa: PLC0415
+            demo_client = get_demo_client()
+            
+            # Extract main prompt for routing
+            prompt = messages[-1]["content"] if messages else ""
+            content = await demo_client.generate_response(prompt)
+            
+            logger.info("LLM demo/%s | simulated response | $0.00", provider)
+            return LLMResponse(
+                content=content,
+                model=f"demo-{provider}",
+                usage={"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+                cost_usd=0.0
+            )
+
         cfg = self._get_provider_config(provider)
         resolved_model = model or cfg["default_model"]
 
@@ -461,7 +480,8 @@ class LLMClient:
             # Priority: RuntimeSettingsStore → .env
             rs_key = f"api_key_{provider}"
             api_key = _rs_get(rs_key) or os.environ.get(env_key, "")
-            if not api_key:
+            settings = get_settings()
+            if not api_key and not settings.DEMO_MODE:
                 raise ValueError(f"API key env var '{env_key}' is not set for provider '{provider}'")
         else:
             # Local providers (vllm, ollama) — allow custom base_url via env var

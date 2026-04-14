@@ -1,5 +1,6 @@
 <script setup>
 import { useRouter } from 'vue-router'
+import DemoModeBanner from '@/components/DemoModeBanner.vue'
 
 const router = useRouter()
 
@@ -10,6 +11,7 @@ function goHome() {
 
 <template>
   <div class="app-shell">
+    <DemoModeBanner />
     <header class="app-header">
       <div class="header-left" @click="goHome">
         <span class="logo">⬡</span>

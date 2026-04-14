@@ -6,6 +6,7 @@ import importlib
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -130,6 +131,16 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.warning("The application is running in LIVE mode but has no LLM provider.")
         logger.warning("Simulations will fail. Please set the key in .env or use DEMO_MODE=true.")
         logger.warning("=" * 60)
+
+    # Demo Seed DB (L2)
+    if settings.DEMO_MODE:
+        db_path = Path(settings.DATABASE_PATH)
+        seed_path = Path("data/demo/seed.db")
+        if not db_path.exists() and seed_path.exists():
+            logger.info("Demo Mode: Seeding database from %s", seed_path)
+            db_path.parent.mkdir(parents=True, exist_ok=True)
+            import shutil # noqa: PLC0415
+            shutil.copy(str(seed_path), str(db_path))
 
     # Reap orphaned OASIS simulation subprocesses from a previous server instance.
     await _reap_orphaned_oasis_processes(logger)

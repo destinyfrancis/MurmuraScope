@@ -1,0 +1,5 @@
+[
+  {"entity": "Hang Seng Index", "type": "financial_index", "sentiment": 0.2},
+  {"entity": "Central District", "type": "location", "sentiment": 0.0},
+  {"entity": "Retail Sales", "type": "economic_indicator", "sentiment": -0.1}
+]
