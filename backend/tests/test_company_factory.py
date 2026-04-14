@@ -15,6 +15,7 @@ from dataclasses import replace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from starlette.requests import Request
 
 from backend.app.models.company import CompanyProfile, CompanyType
 from backend.app.services.company_factory import (
@@ -569,7 +570,8 @@ class TestCreateSimulationB2BIntegration:
             patch("backend.app.utils.db.get_db") as mock_get_db,
         ):
             _wire_mocks(mock_af, mock_pg, mock_mc, mock_sm, mock_get_db)
-            await create_simulation(req)
+            mock_request = Request(scope={"type": "http", "path": "/api/simulation"})
+            await create_simulation(mock_request, req)
 
         mock_cf.assert_not_called()
         mock_scb.assert_not_called()
@@ -597,7 +599,8 @@ class TestCreateSimulationB2BIntegration:
         ):
             _wire_mocks(mock_af, mock_pg, mock_mc, mock_sm, mock_get_db)
             _wire_b2b_mocks(mock_cf, mock_scb, mock_companies)
-            result = await create_simulation(req)
+            mock_request = Request(scope={"type": "http", "path": "/api/simulation"})
+            result = await create_simulation(mock_request, req)
 
         mock_cf.return_value.generate_companies.assert_awaited_once()
         call_kwargs = mock_cf.return_value.generate_companies.call_args
@@ -634,7 +637,8 @@ class TestCreateSimulationB2BIntegration:
         ):
             _wire_mocks(mock_af, mock_pg, mock_mc, mock_sm, mock_get_db)
             _wire_b2b_mocks(mock_cf, mock_scb, mock_companies)
-            result = await create_simulation(req)
+            mock_request = Request(scope={"type": "http", "path": "/api/simulation"})
+            result = await create_simulation(mock_request, req)
 
         mock_cf.return_value.generate_companies.assert_awaited_once()
         # Verify count passed matches request
@@ -664,7 +668,8 @@ class TestCreateSimulationB2BIntegration:
             _wire_mocks(mock_af, mock_pg, mock_mc, mock_sm, mock_get_db)
             # Make generate_companies raise an error
             mock_cf.return_value.generate_companies = AsyncMock(side_effect=RuntimeError("DB connection failed"))
-            result = await create_simulation(req)
+            mock_request = Request(scope={"type": "http", "path": "/api/simulation"})
+            result = await create_simulation(mock_request, req)
 
         # Should still succeed — B2B generation is non-fatal
         assert result.success is True
@@ -691,7 +696,8 @@ class TestCreateSimulationB2BIntegration:
         ):
             _wire_mocks(mock_af, mock_pg, mock_mc, mock_sm, mock_get_db)
             _wire_b2b_mocks(mock_cf, mock_scb, mock_companies)
-            result = await create_simulation(req)
+            mock_request = Request(scope={"type": "http", "path": "/api/simulation"})
+            result = await create_simulation(mock_request, req)
 
         mock_cf.return_value.generate_companies.assert_awaited_once()
         assert result.success is True
@@ -723,7 +729,8 @@ class TestCreateSimulationB2BIntegration:
         ):
             _wire_mocks(mock_af, mock_pg, mock_mc, mock_sm, mock_get_db)
             _wire_b2b_mocks(mock_cf, mock_scb, mock_companies, edge_count=7)
-            result = await create_simulation(req)
+            mock_request = Request(scope={"type": "http", "path": "/api/simulation"})
+            result = await create_simulation(mock_request, req)
 
         assert result.meta is not None
         assert result.meta.get("company_count") == 5

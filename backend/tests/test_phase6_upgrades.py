@@ -39,7 +39,7 @@ async def test_interview_endpoint():
         "personality": "{}",
     }
 
-    with patch("backend.app.utils.db.get_db") as mock_db:
+    with patch("backend.app.services.interview_engine.get_db") as mock_db:
         mock_conn = AsyncMock()
         mock_cursor = AsyncMock()
         # fetchone calls: agent profile, then round_number query

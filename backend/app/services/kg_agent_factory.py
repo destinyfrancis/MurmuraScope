@@ -186,6 +186,150 @@ class KGAgentFactory:
         logger.info("generate_from_kg complete: produced %d profiles", len(profiles))
         return profiles
 
+    def generate_agents_csv(
+        self,
+        profiles: list[UniversalAgentProfile],
+        output_path: str,
+    ) -> str:
+        """Write OASIS-compatible agents.csv to ``output_path``.
+
+        The CSV has three columns: ``userid``, ``user_char``, ``username``.
+        The file is created (or overwritten) at the given path.
+
+        Args:
+            profiles: Agent profiles to serialise.
+            output_path: Absolute or relative path for the output CSV.
+
+        Returns:
+            The resolved absolute path of the written file.
+
+        Raises:
+            ValueError: If ``profiles`` is empty.
+            OSError: If the file cannot be written.
+        """
+        if not profiles:
+            raise ValueError("profiles must not be empty to write agents.csv")
+
+        abs_path = os.path.abspath(output_path)
+        os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+
+        rows = []
+        for p in profiles:
+            oasis_row = p.to_oasis_row()
+            # OASIS agents_generator expects a 'description' column alongside user_char
+            oasis_row["description"] = oasis_row["user_char"]
+            rows.append(oasis_row)
+        fieldnames = ["userid", "user_char", "username", "description"]
+
+        with open(abs_path, "w", newline="", encoding="utf-8") as fh:
+            writer = csv.DictWriter(fh, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(rows)
+
+        logger.info("agents.csv written: %d rows → %s", len(rows), abs_path)
+        return abs_path
+
+    # ------------------------------------------------------------------
+    # Stage 1: eligibility filter
+    # ------------------------------------------------------------------
+
+    async def _filter_agent_eligible_nodes(
+        self,
+        nodes: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Use LLM to identify which KG nodes should become simulation agents.
+
+        Falls back to a fast heuristic filter if the LLM call fails.
+
+        Args:
+            nodes: All KG nodes from GraphBuilder.
+
+        Returns:
+            Filtered list of node dicts (eligible agents only).
+        """
+        nodes_json = json.dumps(nodes, ensure_ascii=False, indent=2)
+
+        try:
+            result = await self._llm.chat_json(
+                messages=[
+                    {"role": "system", "content": AGENT_ELIGIBLE_FILTER_SYSTEM},
+                    {
+                        "role": "user",
+                        "content": AGENT_ELIGIBLE_FILTER_USER.format(nodes_json=nodes_json),
+                    },
+                ],
+                temperature=0.2,
+                max_tokens=4096,
+            )
+            eligible_ids: set[str] = {str(entry["node_id"]) for entry in result.get("eligible", []) if "node_id" in entry}
+            eligible = [n for n in nodes if str(n.get("id", "")) in eligible_ids]
+
+            if not eligible:
+                logger.warning("LLM filter returned 0 eligible nodes; using heuristic fallback")
+                return self._heuristic_filter(nodes)
+
+            return eligible
+
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "LLM eligibility filter failed (%s); using heuristic fallback",
+                exc,
+            )
+            return self._heuristic_filter(nodes)
+
+    @staticmethod
+    def _heuristic_filter(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Fast heuristic fallback when the LLM filter is unavailable.
+
+        Keeps nodes whose ``entity_type`` is in the eligible set, or whose
+        ``label`` / ``type`` field contains actor-like keywords.
+
+        Args:
+            nodes: All KG nodes.
+
+        Returns:
+            Subset likely to be concrete actors.
+        """
+        _ACTOR_KEYWORDS = frozenset(
+            {
+                "person",
+                "people",
+                "country",
+                "nation",
+                "government",
+                "military",
+                "army",
+                "organization",
+                "organisation",
+                "company",
+                "corporation",
+                "media",
+                "outlet",
+                "party",
+                "movement",
+                "institution",
+                "leader",
+                "minister",
+                "president",
+                "figure",
+            }
+        )
+
+        def _is_actor(node: dict[str, Any]) -> bool:
+            entity_type = str(node.get("entity_type", "")).lower()
+            label = str(node.get("label", "")).lower()
+            node_type = str(node.get("type", "")).lower()
+            combined = f"{entity_type} {label} {node_type}"
+            return any(kw in combined for kw in _ACTOR_KEYWORDS)
+
+        filtered = [n for n in nodes if _is_actor(n)]
+        # If heuristic also returns nothing, accept all nodes as a last resort
+        return filtered if filtered else nodes
+
+    # ------------------------------------------------------------------
+    # Stage 2: profile generation
+    # ------------------------------------------------------------------
+
     async def _generate_profiles(
         self,
         eligible_nodes: list[dict[str, Any]],

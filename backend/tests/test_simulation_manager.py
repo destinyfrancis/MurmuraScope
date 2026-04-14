@@ -340,7 +340,14 @@ class TestStartSession:
             created = await mgr.create_session(valid_request)
         sid = created["session_id"]
 
-        await mgr.start_session(sid)
+        # We must insert a job mock so start_session_from_job can update it
+        await sim_db.execute(
+            "INSERT INTO simulation_jobs (id, session_id, status, worker_pid) VALUES (1, ?, 'pending', 1234)",
+            (sid,)
+        )
+        await sim_db.commit()
+
+        await mgr.start_session_from_job(sid, 1)
         await asyncio.sleep(0.05)
 
         assert sid in mgr._session_tasks
@@ -355,7 +362,7 @@ class TestStartSession:
             pass
 
     @pytest.mark.asyncio
-    async def test_start_completed_session_raises(self, sim_db, mock_runner, valid_request, tmp_path):
+    async def test_start_completed_session_is_idempotent(self, sim_db, mock_runner, valid_request, tmp_path):
         mgr = SimulationManager(runner=mock_runner)
         with patch("backend.app.services.simulation_manager._PROJECT_ROOT", tmp_path):
             created = await mgr.create_session(valid_request)
@@ -367,8 +374,8 @@ class TestStartSession:
         )
         await sim_db.commit()
 
-        with pytest.raises(ValueError, match="Invalid transition"):
-            await mgr.start_session(sid)
+        await mgr.start_session(sid)
+        mock_runner.run.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------

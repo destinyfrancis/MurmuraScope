@@ -192,6 +192,10 @@ class SimulationManager:
         async with _SESSION_START_LOCKS[session_id]:
             session = await _load_session(session_id)
 
+            if session.status in (SessionStatus.RUNNING, SessionStatus.COMPLETED):
+                logger.info("Session %s is already %s — ignoring start request", session_id, session.status.value)
+                return
+
             # Idempotent: check if already queued or running
             async with get_db() as db:
                 cursor = await db.execute(

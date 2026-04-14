@@ -572,6 +572,7 @@ async def list_simulation_queue(
 @router.post("/admin/jobs/{job_id}/cancel", response_model=APIResponse)
 @_limiter.limit("10/minute")
 async def cancel_simulation_job(
+    request: Request,
     job_id: int,
     user: UserProfile = Depends(require_admin),
 ) -> APIResponse:

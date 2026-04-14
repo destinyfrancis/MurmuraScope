@@ -74,6 +74,8 @@ def test_subgraph_insight_frozen() -> None:
         node_count=5,
         edge_count=3,
         insight_report="report",
+        evidence_node_ids=(),
+        evidence_edge_ids=(),
     )
     with pytest.raises(FrozenInstanceError):
         s.query = "mutated"  # type: ignore[misc]
