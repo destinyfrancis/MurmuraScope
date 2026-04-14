@@ -617,8 +617,12 @@ def create_app() -> FastAPI:
 
     # Health check
     @app.get("/api/health")
-    async def health_check() -> dict[str, str]:
-        return {"status": "ok"}
+    async def health_check() -> dict[str, Any]:
+        from backend.app.services.oasis_compatibility import get_capabilities
+        return {
+            "status": "ok",
+            "capabilities": get_capabilities()
+        }
 
     # Mount routers (skip gracefully if module not yet implemented)
     for module_name in _ROUTER_MODULES:

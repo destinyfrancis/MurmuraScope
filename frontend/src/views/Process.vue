@@ -2,6 +2,7 @@
 import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { cleanupSession } from '../api/simulation.js'
+import { apiGet } from '../api/client.js'
 import PresetSelector from '../components/PresetSelector.vue'
 import Step1GraphBuild from '../components/Step1GraphBuild.vue'
 import Step2EnvSetup from '../components/Step2EnvSetup.vue'
@@ -54,6 +55,9 @@ const session = reactive({
     platforms: ['facebook', 'instagram'],
     shocks: [],
   },
+  capabilities: {
+    simulation: true,
+  }
 })
 
 const stepConfig = {
@@ -80,6 +84,7 @@ const currentComponent = computed(() => {
 })
 
 function canGoToStep(step) {
+  if (step > 2 && !session.capabilities.simulation) return false
   if (step <= 1) return true
   if (step === 2) return session.graphId !== null
   if (step === 3) return session.sessionId !== null
@@ -89,6 +94,7 @@ function canGoToStep(step) {
 }
 
 function stepLockedReason(step) {
+  if (step > 2 && !session.capabilities.simulation) return 'Simulation engine unavailable — use Docker for full features'
   if (step === 2) return '請先完成圖譜構建'
   if (step === 3) return '請先完成環境設置並啟動模擬'
   if (step === 4) return '模擬完成後才可生成報告'
@@ -180,6 +186,15 @@ onUnmounted(() => {
 })
 
 onMounted(async () => {
+  try {
+    const health = await apiGet('/api/health')
+    if (health.capabilities) {
+      session.capabilities = { ...session.capabilities, ...health.capabilities }
+    }
+  } catch (err) {
+    console.error('Failed to fetch capabilities', err)
+  }
+
   if (!expressMode.value) return
   _expressAdvanceCancelled = false
 
@@ -265,6 +280,10 @@ watch(
 
     <!-- Express mode indicator -->
     <div v-if="expressMode" class="express-badge">⚡ 快速模式 · 已自動配置</div>
+
+    <div v-if="!session.capabilities.simulation" class="capability-warning">
+      ⚠️ Simulation engine unavailable — use Docker for full features. The workflow will stop after Environment Setup.
+    </div>
 
     <!-- Step content — preserve existing PresetSelector + component bindings -->
     <div class="step-content" :style="stepStyle">
@@ -415,5 +434,17 @@ watch(
   font-size: 0.8rem;
   font-weight: 600;
   margin-bottom: 0.5rem;
+}
+
+.capability-warning {
+  margin: 16px 24px;
+  padding: 12px 16px;
+  background: #FFF4E5;
+  color: #663C00;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  border: 1px solid #FFD8A8;
 }
 </style>
