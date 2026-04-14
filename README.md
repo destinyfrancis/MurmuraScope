@@ -46,6 +46,12 @@ MurmuraScope 是一個多智能體社會模擬引擎，能將任意 seed text（
 
 ## Quick Start · 快速啟動
 
+### 1-Minute Bootstrap · 一分鐘一鍵啟動（最快）
+**Requirements · 需求：** Docker & Git
+```bash
+curl -fsSL https://raw.githubusercontent.com/destinyfrancis/MurmuraScope/main/scripts/install.sh | bash
+```
+
 ### Option A — Local Development · 本地開發（推薦）
 
 **Requirements · 需求：** Python 3.10 or 3.11 · Node.js 18+
