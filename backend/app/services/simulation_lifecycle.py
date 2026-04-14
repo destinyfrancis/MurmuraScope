@@ -22,8 +22,30 @@ logger = get_logger("simulation_runner")
 # This file lives at: backend/app/services/simulation_lifecycle.py
 # Project root is 4 levels up: services → app → backend → project_root
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-_VENV_PYTHON = _PROJECT_ROOT / ".venv311" / "bin" / "python"
-_PYTHON_BIN = _VENV_PYTHON if _VENV_PYTHON.exists() else Path(sys.executable)
+
+def _find_compatible_python() -> Path:
+    """Find a Python 3.10 or 3.11 binary to satisfy OASIS requirements."""
+    # 1. Check local .venv311
+    venv_python = _PROJECT_ROOT / ".venv311" / "bin" / "python"
+    if venv_python.exists():
+        return venv_python
+    
+    # 2. Check current executable
+    major, minor = sys.version_info[:2]
+    if major == 3 and minor in (10, 11):
+        return Path(sys.executable)
+    
+    # 3. Search in PATH
+    import shutil # noqa: PLC0415
+    for ver in ("3.11", "3.10"):
+        found = shutil.which(f"python{ver}")
+        if found:
+            return Path(found)
+            
+    # 4. Fallback to current (and hope for the best)
+    return Path(sys.executable)
+
+_PYTHON_BIN = _find_compatible_python()
 _SCRIPT_PATH = _PROJECT_ROOT / "backend" / "scripts" / "run_twitter_simulation.py"
 _PARALLEL_SCRIPT = _PROJECT_ROOT / "backend" / "scripts" / "run_parallel_simulation.py"
 _FACEBOOK_SCRIPT = _PROJECT_ROOT / "backend" / "scripts" / "run_facebook_simulation.py"
@@ -73,7 +95,6 @@ class SimulationLifecycleMixin:
         from backend.app.services.simulation_helpers import (  # noqa: PLC0415
             _build_full_config,
             _get_api_key,
-            _require_path,
             _try_parse_jsonl,
         )
 
@@ -107,8 +128,17 @@ class SimulationLifecycleMixin:
         # Late import to avoid circular dependency: ws imports nothing from here.
         from backend.app.api.ws import push_progress  # noqa: PLC0415
 
-        # Validate prerequisites.
-        _require_path(_PYTHON_BIN, "Python venv binary")
+        # Validate prerequisites (L5).
+        if not _PYTHON_BIN.exists():
+            logger.error("Python binary NOT FOUND at %s", _PYTHON_BIN)
+            raise RuntimeError(
+                f"Python binary missing: {_PYTHON_BIN}. "
+                "OASIS requires Python 3.10/3.11. "
+                "Please run 'make quickstart' or set up a compatible virtual environment."
+            )
+        
+        # Log which python we are using for visibility
+        logger.info("Using Python: %s", _PYTHON_BIN)
 
         agent_csv = config.get("agent_csv_path", "")
         if not agent_csv or not Path(agent_csv).is_file():
@@ -136,7 +166,11 @@ class SimulationLifecycleMixin:
             script_to_run = _SCRIPT_PATH
         else:
             script_to_run = _SCRIPT_PATH  # fallback
-        _require_path(script_to_run, "Simulation script")
+        if not script_to_run.exists():
+            raise RuntimeError(
+                f"Simulation script NOT FOUND at {script_to_run}. "
+                "Ensure you are running from the project root and the 'backend/scripts' directory is intact."
+            )
 
         # Phase 1B: Load temporal activity profiles for this session.
         self._load_activity_profiles(session_id)
